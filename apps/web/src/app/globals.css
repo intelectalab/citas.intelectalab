@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta Base del ERP */
+  --color-bg-app: #F2F2F2;
+  --color-sidebar-bg: #022340;
+  --color-sidebar-hover: #012840;
+  --color-accent-cyan: #84D0D9;
+  --color-accent-blue: #3F768C;
+
+  /* Colores de Acento y Estados */
+  --color-cta-orange: #FF7A00;
+  --color-status-success: #10B981;
+  --color-status-warning: #FBBF24;
+
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+}
+
+:root {
+  --bg-app: #F2F2F2;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: #1F2937;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

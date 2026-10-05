@@ -1,0 +1,43 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background-color: rgba(15, 23, 42, 0.15); /* Oscurecido sutil sin blur */
+  transition: opacity 0.3s ease;
+}
+
+.drawerContainer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  max-width: 100%;
+  display: flex;
+  padding-left: 2.5rem;
+}
+
+.drawerContent {
+  width: 100vw;
+  max-width: 28rem; /* max-w-md equivalente */
+  background-color: #ffffff;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  border-left: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  background-color: rgba(248, 250, 252, 0.85);
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}

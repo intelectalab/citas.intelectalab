@@ -1,0 +1,845 @@
+/* ==========================================
+   1. CONTENEDOR PRINCIPAL
+   ========================================== */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-top-left-radius: 0.375rem;
+  border-top-right-radius: 1.5rem;
+  border-bottom-left-radius: 1.5rem;
+  border-bottom-right-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  font-family: inherit;
+}
+
+/* ==========================================
+   2. HEADER SUPERIOR
+   ========================================== */
+.header {
+  padding: 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #022340;
+  letter-spacing: -0.025em;
+}
+
+.actionsGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.actionBtnSecondary {
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  color: #3f768c;
+  background-color: #ffffff;
+  transition: all 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionBtnSecondary:hover {
+  background-color: #f8fafc;
+  color: #022340;
+}
+
+.btnPrimary {
+  background-color: #022340;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  border: none;
+  border-top-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+  border-top-right-radius: 0.125rem;
+  border-bottom-left-radius: 0.125rem;
+}
+
+.btnPrimary:hover {
+  background-color: #012840;
+}
+
+/* ==========================================
+   3. SUBMENÚ / PESTAÑAS (PILL CONTROL)
+   ========================================== */
+.tabsContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background-color: #f1f5f9;
+  padding: 0.375rem;
+  border-radius: 0.875rem;
+  border: 1px solid #e2e8f0;
+  width: fit-content;
+}
+
+.tabsList {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  position: relative;
+}
+
+.tabBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  border-radius: 0.625rem;
+  transition: color 0.2s ease;
+}
+
+.tabBtn:hover {
+  color: #022340;
+  background-color: rgba(255, 255, 255, 0.6);
+}
+
+.activeIndicator {
+  position: absolute;
+  inset: 0;
+  background-color: #ffffff;
+  border-top-left-radius: 0.625rem;
+  border-bottom-right-radius: 0.625rem;
+  border-top-right-radius: 0.25rem;
+  border-bottom-left-radius: 0.25rem;
+  box-shadow: 0 1px 3px rgba(2, 35, 64, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  z-index: 1;
+}
+
+.tabText,
+.tabTextActive,
+.tabCount {
+  position: relative;
+  z-index: 2;
+}
+
+.tabText {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.tabTextActive {
+  font-weight: 700;
+  color: #022340;
+}
+
+.tabCount {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background-color: #e2e8f0;
+  color: #475569;
+  transition: all 0.2s ease;
+}
+
+.tabCountActive {
+  background-color: rgba(132, 208, 217, 0.25);
+  color: #022340;
+}
+
+.addTabBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: 1px dashed #cbd5e1;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.addTabBtn:hover {
+  background-color: #ffffff;
+  color: #022340;
+  border-color: #3f768c;
+}
+
+/* ==========================================
+   4. BARRA DE BÚSQUEDA Y FILTROS
+   ========================================== */
+.filterSection {
+  padding: 0.875rem 1.25rem;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.filterTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.filterLeftGroup,
+.filterRightGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.searchInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background-color: #ffffff;
+  padding: 0.4375rem 0.875rem;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  width: 16rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.searchInputWrapper:focus-within {
+  border-color: #3f768c;
+  box-shadow: 0 0 0 3px rgba(63, 118, 140, 0.15);
+}
+
+.searchInput {
+  background: transparent;
+  outline: none;
+  border: none;
+  width: 100%;
+  color: #022340;
+  font-weight: 500;
+  font-size: 0.8125rem;
+}
+
+.kbdHint {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #64748b;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  font-family: monospace;
+}
+
+.filterActionBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #ffffff;
+  padding: 0.4375rem 0.875rem;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  color: #022340;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.filterActionBtn:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.filterActionBtnActive {
+  background-color: #022340;
+  color: #ffffff;
+  border-color: #022340;
+}
+
+.filterActionBtnActive:hover {
+  background-color: #115a9b;
+  border-color: #3f768c;
+  color: #ffffff;
+}
+
+
+
+.activeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #84d0d9;
+}
+
+.exportBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.4375rem 0.875rem;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  color: #022340;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.exportBtn:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.filterActionBtn,
+.exportBtn {
+  white-space: nowrap; 
+  flex-shrink: 0;
+}
+
+.btnText {
+  display: inline-block;
+  transition: opacity 0.2s ease;
+}
+
+.viewToggleGroup {
+  display: flex;
+  align-items: center;
+  background-color: #e2e8f0;
+  padding: 0.1875rem;
+  border-radius: 0.5rem;
+}
+
+.viewToggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewToggleActive {
+  background-color: #ffffff;
+  color: #022340;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.filterDrawer {
+  margin-top: 0.25rem;
+  padding: 0.625rem 0.875rem;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pillsList {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.drawerLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: #64748b;
+  margin-right: 0.25rem;
+}
+
+.filterChip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #ffffff;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  color: #022340;
+  font-size: 0.78125rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+
+.filterChip:hover {
+  border-color: #3f768c;
+  box-shadow: 0 2px 4px rgba(2, 35, 64, 0.06);
+  color: #3f768c;
+}
+
+.chipDivider {
+  height: 1.25rem;
+  width: 1px;
+  background-color: #cbd5e1;
+  margin: 0 0.125rem;
+}
+
+.iconCircleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.iconCircleBtn:hover {
+  border-color: #022340;
+  color: #022340;
+}
+
+.drawerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.advancedFiltersBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: transparent;
+  border: none;
+  color: #3f768c;
+  font-size: 0.78125rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.advancedFiltersBtn:hover {
+  color: #022340;
+  text-decoration: underline;
+}
+
+.closeDrawerBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.closeDrawerBtn:hover {
+  background-color: #e2e8f0;
+  color: #022340;
+}
+
+/* ==========================================
+   5. TABLA DE DATOS
+   ========================================== */
+.tableContainer {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  text-align: left;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+}
+
+.thead {
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  color: #3f768c;
+  font-weight: 700;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.th {
+  padding: 0.875rem 1rem;
+}
+
+.thCheckbox {
+  padding: 0.875rem 1rem;
+  width: 2.5rem;
+  text-align: center;
+}
+
+.tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.15s;
+  cursor: pointer;
+}
+
+.tr:hover {
+  background-color: rgba(132, 208, 217, 0.08);
+}
+
+.td {
+  padding: 0.875rem 1rem;
+  color: #334155;
+  font-weight: 500;
+}
+
+.tdCode {
+  padding: 0.875rem 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  color: #3f768c;
+  font-size: 0.75rem;
+}
+
+.customerCell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  background-color: #022340;
+  color: #84d0d9;
+}
+
+.customerName {
+  font-weight: 700;
+  color: #022340;
+  transition: color 0.2s;
+}
+
+.tr:hover .customerName {
+  color: #3f768c;
+}
+
+.badgeSegment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.badgeVip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: rgba(132, 208, 217, 0.2);
+  color: #022340;
+  border: 1px solid rgba(132, 208, 217, 0.5);
+}
+
+.badgeActive {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.badgeInactive {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+.statusDotActive {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  margin-right: 0.375rem;
+  background-color: #10b981;
+}
+
+.statusDotInactive {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  margin-right: 0.375rem;
+  background-color: #f43f5e;
+}
+
+/* ==========================================
+   6. FOOTER
+   ========================================== */
+.footer {
+  padding: 0.75rem 1.25rem;
+  background-color: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.counterBadge {
+  background-color: #e2e8f0;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  color: #022340;
+}
+
+.paginationGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pageInfo {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.paginationBtns {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pageBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  background-color: #ffffff;
+  color: #022340;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pageBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f1f5f9;
+}
+
+.pageBtn:not(:disabled):hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+}
+
+
+/* 3. Ocultar textos cuando el espacio horizontal se comprima */
+@media (max-width: 1024px) {
+  .btnTextCollapse {
+    display: none;
+  }
+
+  .filterActionBtn,
+  .exportBtn {
+    padding: 0.4375rem 0.625rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .btnText {
+    display: none;
+  }
+}
+
+/* ==========================================
+   7. VISTA PANEL / KANBAN (HUBSPOT STYLE)
+   ========================================== */
+.boardContainer {
+  flex: 1;
+  overflow-x: auto;
+  padding: 1rem;
+  background-color: #f8fafc;
+}
+
+.boardTrack {
+  display: flex;
+  gap: 1rem;
+  min-height: 480px;
+  width: max-content;
+}
+
+.boardColumn {
+  width: 17.5rem;
+  background-color: #f1f5f9;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
+.stageBadge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
+  color: #ffffff;
+}
+
+.stageCount {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.cardsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.boardCard {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.boardCard:hover {
+  border-color: #3f768c;
+  box-shadow: 0 4px 6px -1px rgba(2, 35, 64, 0.1);
+}
+
+.cardTitle {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #022340;
+}
+
+.cardTitle:hover {
+  color: #3f768c;
+  text-decoration: underline;
+}
+
+.cardEmail {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: #64748b;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.activityBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.badgeSuscriptor { background-color: #f59e0b; }
+.badgeLead { background-color: #f97316; }
+.badgeMql { background-color: #059669; }
+.badgeSql { background-color: #db2777; }
+.badgeOportunidad { background-color: #d97706; }
+.badgeCliente { background-color: #9333ea; }

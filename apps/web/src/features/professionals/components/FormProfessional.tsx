@@ -1,0 +1,319 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { UserPlus } from 'lucide-react';
+import { api } from '@/lib/axios';
+import FormDrawer from '@/app/components/ui/forms/FormDrawer';
+import Select from '@/app/components/common/Select';
+
+interface Professional {
+  id: string;
+  display_name: string;
+  document_number?: string;
+  type_document_id?: string;
+  license_number?: string;
+  phone?: string;
+  status_id?: string;
+  first_name?: string;
+  last_name?: string;
+  status?: {
+    id: string;
+    name: string;
+    slug?: string;
+  };
+  user?: {
+    id: string;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  specialties?: Array<{
+    id: string;
+    name: string;
+  }>;
+}
+
+interface FormProfessionalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialData?: Professional | null;
+  onSubmitSuccess: (credentials?: { email: string; tempPassword?: string }) => void;
+}
+
+export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, initialData }: FormProfessionalProps) {
+  const [form, setForm] = useState({
+    display_name: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    type_document_id: '',
+    document_number: '',
+    license_number: '',
+    phone: '',
+    status_id: '',
+    specialties: [] as string[],
+  });
+
+  const [typeDocuments, setTypeDocuments] = useState<any[]>([]);
+  const [statuses, setStatuses] = useState<any[]>([]);
+  const [specialtiesList, setSpecialtiesList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      Promise.all([
+        api.get('/type-documents'),
+        api.get('/statuses', { params: { module: 'professionals' } }),
+        api.get('/specialties')
+      ])
+        .then(([docRes, statusRes, specRes]) => {
+          setTypeDocuments(docRes.data);
+          setStatuses(statusRes.data);
+          setSpecialtiesList(specRes.data);
+        })
+        .catch(err => console.error('Error cargando catálogos', err));
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        display_name: initialData.display_name || '',
+        first_name: initialData.first_name || initialData.user?.first_name || '',
+        last_name: initialData.last_name || initialData.user?.last_name || '',
+        email: initialData.user?.email || '',
+        type_document_id: initialData.type_document_id || '',
+        document_number: initialData.document_number || '',
+        license_number: initialData.license_number || '',
+        phone: initialData.phone || '',
+        status_id: initialData.status_id || '',
+        specialties: initialData.specialties ? initialData.specialties.map((s: any) => s.id) : [],
+      });
+    } else {
+      setForm({
+        display_name: '',
+        first_name: '',
+        last_name: '',
+        email: '',
+        type_document_id: '',
+        document_number: '',
+        license_number: '',
+        phone: '',
+        status_id: '',
+        specialties: [],
+      });
+    }
+  }, [initialData, isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      
+      const payload = {
+        display_name: form.display_name,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        type_document_id: form.type_document_id || null,
+        document_number: form.document_number || null,
+        license_number: form.license_number || null,
+        phone: form.phone || null,
+        status_id: form.status_id || null,
+        specialties: form.specialties,
+      };
+
+      if (initialData) {
+        await api.put(`/professionals/${initialData.id}`, payload);
+        onClose();
+      } else {
+        const res = await api.post('/professionals', payload);
+        
+        console.log("Respuesta del servidor:", res.data);
+
+        const responseData = res.data;
+        const tempPassword = responseData?.temporary_password;
+        const userEmail = responseData?.professional?.user?.email || form.email;
+        onClose();
+        
+        onSubmitSuccess({ email: userEmail, tempPassword });
+      }
+    } catch (error) {
+      console.error('Error al guardar profesional:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isEditing = Boolean(initialData);
+
+  return (
+    <FormDrawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditing ? 'Editar Profesional' : 'Nuevo Profesional'}
+      subtitle={isEditing ? 'Actualiza los datos del especialista' : 'Registra un profesional y crea su cuenta de acceso'}
+      icon={<UserPlus size={20} />}
+    >
+      <div className="flex flex-col h-full justify-between">
+        <form 
+          id="professional-form" 
+          onSubmit={handleSubmit} 
+          className="space-y-4 overflow-y-auto flex-1 pr-1 pb-4"
+        >
+          <Select
+            label="Tipo de Documento"
+            placeholder="Seleccione..."
+            value={form.type_document_id}
+            onChange={(e) => setForm({ ...form, type_document_id: String(e.target.value) })}
+            options={typeDocuments.map(doc => ({
+              value: doc.id,
+              label: doc.name,
+            }))}
+          />
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nro. de Documento</label>
+            <input 
+              type="text"
+              placeholder="Ej. 45879632"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 font-mono"
+              value={form.document_number}
+              onChange={e => setForm({...form, document_number: e.target.value})}
+            />
+            <span className="text-[10px] text-slate-400 mt-1 block">Se usará como contraseña inicial.</span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nro. de Colegiatura</label>
+            <input 
+              type="text"
+              placeholder="Ej. CMP-12345"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 font-mono"
+              value={form.license_number}
+              onChange={e => setForm({...form, license_number: e.target.value})}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombre Público / Visual *</label>
+            <input 
+              type="text" required
+              placeholder="Ej. Dr. Carlos Pérez"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              value={form.display_name}
+              onChange={e => setForm({...form, display_name: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombres *</label>
+            <input 
+              type="text" required
+              placeholder="Carlos Alberto"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              value={form.first_name}
+              onChange={e => setForm({...form, first_name: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Apellidos *</label>
+            <input 
+              type="text" required
+              placeholder="Pérez Gómez"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              value={form.last_name}
+              onChange={e => setForm({...form, last_name: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Correo Electrónico (Acceso) *</label>
+            <input 
+              type="email" required
+              placeholder="carlos.perez@clinica.com"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              value={form.email}
+              onChange={e => setForm({...form, email: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Teléfono / Celular</label>
+            <input 
+              type="text"
+              placeholder="+51 999888777"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              value={form.phone}
+              onChange={e => setForm({...form, phone: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+              Especialidades Médicas (Puedes seleccionar varias)
+            </label>
+            <div className="border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-white">
+              {specialtiesList.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No hay especialidades registradas.</p>
+              ) : (
+                specialtiesList.map(spec => {
+                  const isSelected = form.specialties.includes(spec.id);
+                  return (
+                    <label 
+                      key={spec.id} 
+                      className="flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 hover:bg-slate-50 p-1.5 rounded transition-colors"
+                    >
+                      <input 
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          const updated = isSelected
+                            ? form.specialties.filter(id => id !== spec.id)
+                            : [...form.specialties, spec.id];
+                          setForm({ ...form, specialties: updated });
+                        }}
+                        className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                      />
+                      <span>{spec.name}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <Select
+            label="Estado del Profesional"
+            placeholder="Seleccione estado..."
+            value={form.status_id}
+            onChange={(e) => setForm({ ...form, status_id: String(e.target.value) })}
+            options={statuses.map(st => ({
+              value: st.id,
+              label: st.name,
+            }))}
+          />
+        </form>
+
+        <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">
+          <button 
+            type="button" 
+            onClick={onClose}
+            className="px-4 py-2.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            form="professional-form"
+            disabled={loading}
+            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Profesional')}
+          </button>
+        </div>
+      </div>
+    </FormDrawer>
+  );
+}

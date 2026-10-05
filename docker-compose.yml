@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL 17
+  postgres:
+    image: postgres:17-alpine
+    container_name: erp_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: erp_saas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      LANG: es_ES.UTF-8
+      LC_ALL: es_ES.UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/api/infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Redis
+  redis:
+    image: redis:alpine
+    container_name: erp_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

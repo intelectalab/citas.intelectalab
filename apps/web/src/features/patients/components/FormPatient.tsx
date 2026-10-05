@@ -1,0 +1,403 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import FormDrawer from '@/app/components/ui/forms/FormDrawer';
+import { api } from '@/lib/axios';
+import { User, ChevronDown } from 'lucide-react';
+
+interface FormPatientProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialData?: any | null;
+  onSubmitSuccess: () => void;
+}
+
+export default function FormPatient({ isOpen, onClose, initialData, onSubmitSuccess }: FormPatientProps) {
+  const [loading, setLoading] = useState(false);
+  const [stages, setStages] = useState<any[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<any[]>([]);
+  const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
+  const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const [form, setForm] = useState({
+    code: '',
+    first_name: '',
+    last_name: '',
+    birth_date: '',
+    biological_sex: 'M',
+    blood_type: '',
+    type_document_id: '',
+    document_number: '',
+    email: '',
+    phone: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    address: '',
+    district: '',
+    department: '',
+    postal_code: '',
+    medical_notes: '',
+    pipeline_stage_id: '',
+  });
+
+  const sections = [
+    { id: 1, title: '1. Información Personal' },
+    { id: 2, title: '2. Identificación' },
+    { id: 3, title: '3. Contacto y Ubicación' },
+    { id: 4, title: '4. Notas Médicas y Estado' },
+  ];
+
+  const bloodTypes = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        code: initialData.code || '',
+        first_name: initialData.first_name || '',
+        last_name: initialData.last_name || '',
+        birth_date: initialData.birth_date ? initialData.birth_date.split('T')[0] : '',
+        biological_sex: initialData.biological_sex || 'M',
+        blood_type: initialData.blood_type || '',
+        type_document_id: initialData.type_document_id || '',
+        document_number: initialData.document_number || '',
+        email: initialData.email || '',
+        phone: initialData.phone || '',
+        emergency_contact_name: initialData.emergency_contact_name || '',
+        emergency_contact_phone: initialData.emergency_contact_phone || '',
+        address: initialData.address || '',
+        district: initialData.district || '',
+        department: initialData.department || '',
+        postal_code: initialData.postal_code || '',
+        medical_notes: initialData.medical_notes || '',
+        pipeline_stage_id: initialData.pipeline_stage_id || '',
+      });
+    } else {
+      setForm({
+        code: '',
+        first_name: '',
+        last_name: '',
+        birth_date: '',
+        biological_sex: 'M',
+        blood_type: '',
+        type_document_id: '',
+        document_number: '',
+        email: '',
+        phone: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        address: '',
+        district: '',
+        department: '',
+        postal_code: '',
+        medical_notes: '',
+        pipeline_stage_id: '',
+      });
+    }
+  }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // 1. Cargar etapas del pipeline
+      api.get('/pipeline-stages', {
+        params: { pipeline_id: 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01' }
+      })
+        .then(res => setStages(res.data))
+        .catch(err => console.error('Error cargando etapas de pacientes:', err));
+
+      // 2. Cargar tipos de documento usando la ruta correcta del backend
+      api.get('/type-documents')
+        .then(res => {
+          setDocumentTypes(res.data);
+          if (!form.type_document_id && res.data.length > 0) {
+            setForm(prev => ({ ...prev, type_document_id: res.data[0].id }));
+          }
+        })
+        .catch(err => console.error('Error cargando tipos de documento:', err));
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      if (initialData?.id) {
+        await api.put(`/patients/${initialData.id}`, form);
+      } else {
+        await api.post('/patients', form);
+      }
+      onSubmitSuccess();
+      onClose();
+    } catch (error) {
+      console.error('Error guardando paciente:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isEditing = Boolean(initialData?.id);
+
+  return (
+    <FormDrawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditing ? 'Editar Paciente' : 'Nuevo Paciente'}
+      subtitle="Complete la información personal, clínica y de contacto del paciente."
+      icon={<User size={20} />}
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col h-full justify-between">
+        <div className="divide-y divide-slate-200 pb-24 overflow-y-auto px-1">
+          {sections.map((sec) => {
+            const isOpenSection = activeAccordion === sec.id;
+
+            return (
+              <div
+                key={sec.id}
+                ref={(el) => {
+                  sectionRefs.current[sec.id] = el;
+                }}
+                className="bg-white transition-all duration-300"
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveAccordion(isOpenSection ? 0 : sec.id)}
+                  className="w-full flex items-center justify-between py-4 px-2 bg-white hover:bg-slate-50/85 transition-colors text-left"
+                >
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">{sec.title}</span>
+                  <div className={`p-1 rounded-full bg-slate-100 text-slate-600 transition-transform duration-200 ${isOpenSection ? 'rotate-180' : ''}`}>
+                    <ChevronDown size={14} />
+                  </div>
+                </button>
+
+                <div
+                  className={`grid transition-all duration-300 ease-in-out overflow-hidden ${
+                    isOpenSection ? 'grid-rows-[1fr] opacity-100 pb-6 pt-2 px-2' : 'grid-rows-[0fr] opacity-0'
+                  }`}
+                >
+                  <div className="overflow-hidden space-y-4">
+                    {sec.id === 1 && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Código Interno</label>
+                          <input
+                            type="text"
+                            value={form.code}
+                            onChange={(e) => setForm({ ...form, code: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Ej. PAT-001"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombres *</label>
+                          <input
+                            type="text"
+                            required
+                            value={form.first_name}
+                            onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Ej. Juliana"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Apellidos *</label>
+                          <input
+                            type="text"
+                            required
+                            value={form.last_name}
+                            onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Ej. Díaz"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">F. Nacimiento</label>
+                          <input
+                            type="date"
+                            value={form.birth_date}
+                            onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Sexo Biológico</label>
+                          <select
+                            value={form.biological_sex}
+                            onChange={(e) => setForm({ ...form, biological_sex: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                          >
+                            <option value="M">Masculino</option>
+                            <option value="F">Femenino</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Sangre</label>
+                          <select
+                            value={form.blood_type}
+                            onChange={(e) => setForm({ ...form, blood_type: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                          >
+                            <option value="">Seleccione tipo...</option>
+                            {bloodTypes.map((bt) => (
+                              <option key={bt} value={bt}>{bt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {sec.id === 2 && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Documento</label>
+                          <select
+                            value={form.type_document_id}
+                            onChange={(e) => setForm({ ...form, type_document_id: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                          >
+                            <option value="">Seleccione documento...</option>
+                            {documentTypes.map((dt) => (
+                              <option key={dt.id} value={dt.id}>{dt.name || dt.display_name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">N° de Documento</label>
+                          <input
+                            type="text"
+                            value={form.document_number}
+                            onChange={(e) => setForm({ ...form, document_number: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Número de documento..."
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {sec.id === 3 && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Correo Electrónico</label>
+                          <input
+                            type="email"
+                            value={form.email}
+                            onChange={(e) => setForm({ ...form, email: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="correo@ejemplo.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Teléfono</label>
+                          <input
+                            type="text"
+                            value={form.phone}
+                            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="+51 ..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Dirección</label>
+                          <input
+                            type="text"
+                            value={form.address}
+                            onChange={(e) => setForm({ ...form, address: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Av. Principal 123"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Distrito</label>
+                          <input
+                            type="text"
+                            value={form.district}
+                            onChange={(e) => setForm({ ...form, district: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Distrito"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Departamento</label>
+                          <input
+                            type="text"
+                            value={form.department}
+                            onChange={(e) => setForm({ ...form, department: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Departamento"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombre de Contacto de Emergencia</label>
+                          <input
+                            type="text"
+                            value={form.emergency_contact_name}
+                            onChange={(e) => setForm({ ...form, emergency_contact_name: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Nombre del contacto"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Teléfono de Contacto de Emergencia</label>
+                          <input
+                            type="text"
+                            value={form.emergency_contact_phone}
+                            onChange={(e) => setForm({ ...form, emergency_contact_phone: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="+51 ..."
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {sec.id === 4 && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Notas Médicas</label>
+                          <textarea
+                            rows={3}
+                            value={form.medical_notes}
+                            onChange={(e) => setForm({ ...form, medical_notes: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            placeholder="Observaciones o antecedentes relevantes..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Etapa del Pipeline</label>
+                          <select
+                            value={form.pipeline_stage_id}
+                            onChange={(e) => setForm({ ...form, pipeline_stage_id: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                          >
+                            <option value="">Seleccione una etapa...</option>
+                            {stages.map((stage) => (
+                              <option key={stage.id} value={stage.id}>{stage.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex items-center justify-end gap-3 z-10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+          >
+            {loading ? 'Guardando...' : isEditing ? 'Actualizar paciente' : 'Crear paciente'}
+          </button>
+        </div>
+      </form>
+    </FormDrawer>
+  );
+}
