@@ -3,16 +3,25 @@
 import { useState, useEffect, useRef } from 'react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
+import CustomerDependents, { type CustomerDependent } from './CustomerDependents';
 import { User, ChevronDown } from 'lucide-react';
 
-interface FormPatientProps {
+interface FormCustomerProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: any | null;
   onSubmitSuccess: () => void;
 }
 
-export default function FormPatient({ isOpen, onClose, initialData, onSubmitSuccess }: FormPatientProps) {
+export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuccess }: FormCustomerProps) {
+  const vocab = useVocabulary();
+  const clientLower = vocab.client.toLowerCase();
+  const { user } = useAuth();
+  // Mascotas u otros dependientes: solo en los rubros que los usan.
+  const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
+  const [pendingDependents, setPendingDependents] = useState<CustomerDependent[]>([]);
   const [loading, setLoading] = useState(false);
   const [stages, setStages] = useState<any[]>([]);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
@@ -44,7 +53,8 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
     { id: 1, title: '1. Información Personal' },
     { id: 2, title: '2. Identificación' },
     { id: 3, title: '3. Contacto y Ubicación' },
-    { id: 4, title: '4. Notas Médicas y Estado' },
+    { id: 4, title: '4. Observaciones y Estado' },
+    ...(usesDependents ? [{ id: 5, title: `5. ${vocab.dependents}` }] : []),
   ];
 
   const bloodTypes = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
@@ -93,6 +103,7 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
         pipeline_stage_id: '',
       });
     }
+    setPendingDependents([]);
   }, [initialData, isOpen]);
 
   useEffect(() => {
@@ -102,7 +113,7 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
         params: { pipeline_id: 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01' }
       })
         .then(res => setStages(res.data))
-        .catch(err => console.error('Error cargando etapas de pacientes:', err));
+        .catch(err => console.error('Error cargando etapas de clientes:', err));
 
       // 2. Cargar tipos de documento usando la ruta correcta del backend
       api.get('/type-documents')
@@ -121,14 +132,14 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
     try {
       setLoading(true);
       if (initialData?.id) {
-        await api.put(`/patients/${initialData.id}`, form);
+        await api.put(`/customers/${initialData.id}`, form);
       } else {
-        await api.post('/patients', form);
+        await api.post('/customers', usesDependents ? { ...form, dependents: pendingDependents } : form);
       }
       onSubmitSuccess();
       onClose();
     } catch (error) {
-      console.error('Error guardando paciente:', error);
+      console.error('Error guardando cliente:', error);
     } finally {
       setLoading(false);
     }
@@ -140,8 +151,8 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
     <FormDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Editar Paciente' : 'Nuevo Paciente'}
-      subtitle="Complete la información personal, clínica y de contacto del paciente."
+      title={isEditing ? `Editar ${vocab.client}` : `Nuevo ${vocab.client}`}
+      subtitle={`Complete la información personal y de contacto del ${clientLower}.`}
       icon={<User size={20} />}
     >
       <form onSubmit={handleSubmit} className="flex flex-col h-full justify-between">
@@ -350,7 +361,7 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
                     {sec.id === 4 && (
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Notas Médicas</label>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Observaciones</label>
                           <textarea
                             rows={3}
                             value={form.medical_notes}
@@ -374,6 +385,13 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
                         </div>
                       </div>
                     )}
+
+                    {sec.id === 5 && isOpen && (
+                      <CustomerDependents
+                        customerId={initialData?.id ?? null}
+                        onPendingChange={setPendingDependents}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -394,7 +412,7 @@ export default function FormPatient({ isOpen, onClose, initialData, onSubmitSucc
             disabled={loading}
             className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
           >
-            {loading ? 'Guardando...' : isEditing ? 'Actualizar paciente' : 'Crear paciente'}
+            {loading ? 'Guardando...' : isEditing ? `Actualizar ${clientLower}` : `Crear ${clientLower}`}
           </button>
         </div>
       </form>

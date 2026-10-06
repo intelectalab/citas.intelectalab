@@ -3,22 +3,22 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Role;
-use App\Models\Branch;
-use App\Models\Company;
-use App\Models\Subscription;
-use App\Models\Tenant;
-use App\Models\TenantContact;
-use App\Models\User;
+use App\Models\PlatformSetting;
+use App\Support\TenantProvisioner;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class RegisterTenantController extends Controller
 {
     public function register(Request $request)
     {
+        if (!PlatformSetting::value('allow_tenant_signup')) {
+            return response()->json([
+                'message' => 'El registro de empresas nuevas está cerrado por ahora. Escríbenos para crear tu cuenta.',
+                'code'    => 'SIGNUP_CLOSED',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'ruc'             => 'required|string|max:30',
             'company_name'    => 'required|string|max:200', 
@@ -29,104 +29,40 @@ class RegisterTenantController extends Controller
             'district'        => 'nullable|string|max:100',
             'first_name'      => 'required|string|max:150',
             'last_name'       => 'required|string|max:150',
-            'email'           => 'required|email|unique:users,email',
+            // El correo solo debe ser único dentro de un tenant, y este tenant es nuevo.
+            'email'           => 'required|email|max:190',
+            // Si no llega, la empresa queda en el rubro genérico.
+            'business_type_id' => ['nullable', 'uuid', Rule::exists('business_types', 'id')->where('status', 'active')],
             'password'        => 'required|string|min:8',
-            'plan_id'         => 'required|uuid|exists:saas_plans,id',
+            'plan_id'         => ['required', 'uuid', Rule::exists('saas_plans', 'id')->where('status', 'active')->where('is_public_catalog', true)],
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            $tenantId = (string) Str::uuid();
-            $slug = Str::slug($validated['company_name']) . '-' . Str::random(4);
-            
-            $tenant = Tenant::create([
-                'id'       => $tenantId,
-                'name'     => $validated['company_name'],
-                'slug'     => $slug,
-                'timezone' => 'America/Lima',
-                'status'   => 'active',
-            ]);
+        $result = TenantProvisioner::provision([
+            'name'             => $validated['company_name'],
+            'legal_name'       => $validated['company_name'],
+            'trade_name'       => $validated['commercial_name'] ?? $validated['company_name'],
+            'tax_id'           => $validated['ruc'],
+            'phone'            => $validated['phone'] ?? null,
+            'address'          => $validated['address'] ?? null,
+            'department'       => $validated['department'],
+            'district'         => $validated['district'] ?? null,
+            'business_type_id' => $validated['business_type_id'] ?? null,
+            'plan_id'          => $validated['plan_id'],
+            'start_trial'      => true,
+            'first_name'       => $validated['first_name'],
+            'last_name'        => $validated['last_name'],
+            'email'            => $validated['email'],
+            'password'         => $validated['password'],
+        ]);
 
-            $company = Company::create([
-                'id'          => (string) Str::uuid(),
-                'tenant_id'   => $tenantId,
-                'legal_name'  => $validated['company_name'],
-                'trade_name'  => $validated['commercial_name'] ?? $validated['company_name'],
-                'tax_id'      => $validated['ruc'],
-                'phone'       => $validated['phone'],
-                'address'     => $validated['address'],
-                'department'  => $validated['department'],
-                'district'    => $validated['district'],
-            ]);
+        $token = $result['user']->createToken('auth_token')->plainTextToken;
 
-            TenantContact::create([
-                'id'         => (string) Str::uuid(),
-                'tenant_id'  => $tenantId,
-                'first_name' => $validated['first_name'],
-                'last_name'  => $validated['last_name'],
-                'email'      => $validated['email'],
-                'phone'      => $validated['phone'],
-                'position'   => 'Dueño',
-            ]);
-
-            Branch::create([
-                'id'         => (string) Str::uuid(),
-                'tenant_id'  => $tenantId,
-                'company_id' => $company->id,
-                'name'       => 'Sede Principal',
-                'timezone'   => 'America/Lima',
-                'status'     => 'active',
-            ]);
-
-            $userId = (string) Str::uuid();
-            $user = User::create([
-                'id'            => $userId,
-                'tenant_id'     => $tenantId,
-                'first_name'    => $validated['first_name'],
-                'last_name'     => $validated['last_name'],
-                'email'         => $validated['email'],
-                'password_hash' => Hash::make($validated['password']),
-                'is_owner'      => true,
-                'status'        => 'active',
-            ]);
-
-            $ownerRole = Role::firstOrCreate(
-                [
-                    'tenant_id' => $tenantId,
-                    'slug'      => 'owner',
-                ],
-                [
-                    'id'          => (string) Str::uuid(),
-                    'name'        => 'Dueño',
-                    'description' => 'Administrador principal del negocio',
-                    'is_system'   => true,
-                ]
-            );
-
-            DB::table('user_roles')->insert([
-                'tenant_id' => $tenantId,
-                'user_id'   => $userId,
-                'role_id'   => $ownerRole->id,
-            ]);
-
-            Subscription::create([
-                'id'            => (string) Str::uuid(),
-                'tenant_id'     => $tenantId,
-                'plan_id'       => $validated['plan_id'],
-                'status'        => 'trialing',
-                'billing_cycle' => 'monthly',
-                'starts_at'     => now(),
-                'trial_ends_at' => now()->addDays(14),
-                'ends_at'       => now()->addDays(14),
-            ]);
-
-            $token = $user->createToken('auth_token')->plainTextToken;
-
-            return response()->json([
-                'message'      => 'Tenant registrado con éxito',
-                'access_token' => $token,
-                'token_type'   => 'Bearer',
-                'user'         => $user,
-            ], 201);
-        });
+        return response()->json([
+            'message'      => 'Tenant registrado con éxito',
+            'access_token' => $token,
+            'token_type'   => 'Bearer',
+            'user'         => $result['user'],
+            'installed'    => $result['installed'],
+        ], 201);
     }
 }

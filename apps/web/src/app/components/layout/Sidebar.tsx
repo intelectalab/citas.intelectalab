@@ -5,7 +5,9 @@ import { Dispatch, SetStateAction, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, TenantVocabulary } from '@/hooks/useAuth';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { usePlatform } from '@/hooks/usePlatform';
 import { 
   Home, 
   Users, 
@@ -23,6 +25,15 @@ import {
   Layers,
   ShieldCheck,
   Wrench,
+  ListOrdered,
+  CalendarDays,
+  ClipboardList,
+  ShoppingCart,
+  Package,
+  Gift,
+  Boxes,
+  BadgeCheck,
+  Megaphone,
   LucideIcon
 } from 'lucide-react';
 
@@ -33,6 +44,9 @@ interface MenuItem {
   feature?: string;     
   requireAdmin?: boolean; 
   requireProfessional?: boolean;
+  module?: string;
+  // Solo administrador SaaS; el soporte SaaS no lo ve.
+  saasAdminOnly?: boolean;
 }
 
 interface MenuGroup {
@@ -44,7 +58,10 @@ interface MenuGroup {
   items: MenuItem[];
 }
 
-const menuGroups: MenuGroup[] = [
+// El menú se arma con el vocabulario del rubro. Cada ítem con `module` solo se
+// muestra si el tenant tiene ese módulo activo (plan, rubro y configuración).
+// Los que apuntan a /modules/<clave> aún no tienen pantalla propia.
+const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   {
     id: 'home',
     items: [
@@ -58,28 +75,44 @@ const menuGroups: MenuGroup[] = [
     requireAdmin: true,
     items: [
       { name: 'Tenants', href: '/admin/tenants', icon: Building2 },
-      { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket },
-      { name: 'Contactos', href: '/admin/contacts', icon: Users },
+      { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket, saasAdminOnly: true },
+      { name: 'Plantillas de rubros', href: '/admin/business-types', icon: Layers, saasAdminOnly: true },
+      { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },
     ]
   },
   {
     id: 'clinical',
-    groupName: 'GESTIÓN CLÍNICA',
+    groupName: 'ATENCIÓN',
     groupIcon: Layers,
     items: [
-      { name: 'Pacientes', href: '/patients', icon: Users },
-      { name: 'Citas', href: '/appointments', icon: Ticket },
-      { name: 'Servicios Médicos', href: '/services', icon: Wrench },
+      { name: vocab.clients, href: '/customers', icon: Users, module: 'crm' },
+      { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda' },
+      { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
+      { name: 'Clases', href: '/modules/classes', icon: CalendarDays, module: 'classes' },
+      { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda' },
+      { name: 'Fichas de atención', href: '/modules/records', icon: ClipboardList, module: 'records' },
     ]
   },
   {
     id: 'crm',
-    groupName: 'CRM',
+    groupName: 'VENTAS',
     groupIcon: Briefcase,
-    feature: 'crm',
     items: [
-      { name: 'Oportunidades', href: '/opportunities', icon: Target },
-      { name: 'Cotizaciones', href: '/quotes', icon: FileText },
+      { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm' },
+      { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes' },
+      { name: 'Punto de venta', href: '/modules/pos', icon: ShoppingCart, module: 'pos' },
+      { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory' },
+    ]
+  },
+  {
+    id: 'loyalty',
+    groupName: 'FIDELIZACIÓN',
+    groupIcon: Gift,
+    items: [
+      { name: 'Paquetes', href: '/modules/packages', icon: Boxes, module: 'packages' },
+      { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships' },
+      { name: 'Puntos y gift cards', href: '/modules/loyalty', icon: Gift, module: 'loyalty' },
+      { name: 'Marketing', href: '/modules/marketing', icon: Megaphone, module: 'marketing' },
     ]
   },
   {
@@ -88,7 +121,7 @@ const menuGroups: MenuGroup[] = [
     groupIcon: Building2,
     requireAdmin: true,
     items: [
-      { name: 'Profesionales', href: '/professionals', icon: Contact },
+      { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda' },
       { name: 'Sucursales', href: '/branches', icon: Store },
       { name: 'Empresa', href: '/companies', icon: Building2 },
     ]
@@ -102,12 +135,16 @@ interface SidebarProps {
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
-  const { user, hasFeature, loading } = useAuth();
+  const { user, hasFeature, hasModule, loading } = useAuth();
+  const vocab = useVocabulary();
+  const { platform } = usePlatform();
+  const menuGroups = buildMenuGroups(vocab);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     'saas-admin': true,
     clinical: true,
     crm: true,
+    loyalty: true,
     'clinic-admin': true,
   });
 
@@ -117,10 +154,9 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   if (loading) return <div className="w-60 bg-[#031B33] h-screen" />;
 
-  const isSuperAdmin = Boolean(
-    user?.is_saas_admin || 
-    user?.roles?.some((r: any) => r.slug === 'saas_admin')
-  );
+  // Equipo de la plataforma: administrador SaaS o soporte SaaS.
+  const isSaasAdmin = Boolean(user?.is_saas_admin);
+  const isSuperAdmin = Boolean(isSaasAdmin || user?.is_saas_support);
 
   const isProfessional = Boolean(
     user?.roles?.some((r: any) => r.slug === 'professional')
@@ -133,11 +169,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       
       <div className={`p-4 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
         <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white font-black shadow-md shadow-sky-500/20 shrink-0">
-          C
+          {platform.product_name.charAt(0).toUpperCase() || 'C'}
         </div>
         {!isCollapsed && (
           <span className="font-extrabold text-lg text-white tracking-wide truncate">
-            CoreERP
+            {platform.product_name}
           </span>
         )}
       </div>
@@ -171,7 +207,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
               if (group.id === 'saas-admin') return null;
 
               if (isProfessional) {
-                if (group.id === 'clinic-admin' || group.id === 'crm') return null;
+                if (group.id === 'clinic-admin' || group.id === 'crm' || group.id === 'loyalty') return null;
               } else {
                 if (group.requireAdmin && !user?.is_owner && !user?.roles?.some((r: any) => r.slug === 'admin')) {
                   if (group.id === 'clinic-admin') return null;
@@ -183,7 +219,9 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             if (group.feature && !hasFeature(group.feature)) return null;
 
             const visibleItems = group.items.filter((item) => {
+              if (item.saasAdminOnly && !isSaasAdmin) return false;
               if (item.feature && !hasFeature(item.feature)) return false;
+              if (item.module && !hasModule(item.module)) return false;
               return true;
             });
 
@@ -194,7 +232,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                 <div key={group.id} className="space-y-1">
                   {visibleItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive = pathname === item.href;
+                    const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                     return (
                       <Link
                         key={item.name}
@@ -219,7 +257,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
             const isGroupOpen = openGroups[group.id] ?? true;
             const GroupIcon = group.groupIcon;
-            const containsActiveChild = visibleItems.some((item) => pathname === item.href);
+            const containsActiveChild = visibleItems.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
 
             return (
               <div key={group.id} className="space-y-1">
@@ -256,7 +294,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                     >
                       {visibleItems.map((item) => {
                         const Icon = item.icon;
-                        const isActive = pathname === item.href;
+                        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
                         return (
                           <Link
@@ -287,14 +325,32 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
       {/* Footer */}
       <div className="p-3 border-t border-slate-800/80 space-y-1">
-        <Link
-          href="/settings"
-          title={isCollapsed ? 'Configuración' : undefined}
-          className="group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:bg-slate-800/40 hover:text-slate-100"
-        >
-          <Settings className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-200" />
-          {!isCollapsed && <span className="truncate">Configuración</span>}
-        </Link>
+        {/* Abajo va la configuración que le toca a cada quien: la de la plataforma
+            para el administrador SaaS y la de su empresa para su administrador. */}
+        {isSaasAdmin && (
+          <Link
+            href="/admin/configuration"
+            title={isCollapsed ? 'Configuración' : undefined}
+            className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${isCollapsed ? 'justify-center' : ''} ${
+              pathname.startsWith('/admin/configuration')
+                ? 'bg-sky-500/15 text-white border-l-4 border-sky-400 pl-2.5 shadow-sm'
+                : 'text-slate-300 hover:bg-slate-800/40 hover:text-slate-100 border-l-4 border-transparent'
+            }`}
+          >
+            <Settings className={`w-4 h-4 shrink-0 ${pathname.startsWith('/admin/configuration') ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-200'}`} />
+            {!isCollapsed && <span className="truncate">Configuración</span>}
+          </Link>
+        )}
+        {user?.is_tenant_admin && (
+          <Link
+            href="/settings"
+            title={isCollapsed ? 'Configuración' : undefined}
+            className="group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:bg-slate-800/40 hover:text-slate-100"
+          >
+            <Settings className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-200" />
+            {!isCollapsed && <span className="truncate">Configuración</span>}
+          </Link>
+        )}
 
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}

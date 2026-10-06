@@ -24,6 +24,8 @@ interface SaaSPlan {
     sedes?: number;
     clients?: number;
     services?: number;
+    professionals?: number;
+    appointments_month?: number;
     [key: string]: any;
   };
   trial_config?: {
@@ -222,13 +224,13 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
                   </div>
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center flex flex-col items-center justify-center gap-1">
                     <FileText size={16} className="text-slate-400" />
-                    <span className="text-slate-400 text-[11px]">Clientes</span>
-                    {renderLimitValue(plan.limits?.clients)}
+                    <span className="text-slate-400 text-[11px]">Profesionales</span>
+                    {renderLimitValue(plan.limits?.professionals)}
                   </div>
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center flex flex-col items-center justify-center gap-1">
                     <Briefcase size={16} className="text-slate-400" />
-                    <span className="text-slate-400 text-[11px]">Servicios</span>
-                    {renderLimitValue(plan.limits?.services)}
+                    <span className="text-slate-400 text-[11px]">Citas por mes</span>
+                    {renderLimitValue(plan.limits?.appointments_month)}
                   </div>
                 </div>
               </div>

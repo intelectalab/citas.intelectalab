@@ -178,7 +178,7 @@ export function DataTable<T extends Record<string, any>>({
       {/* Contenedor Padre Exclusivo para las Tarjetas de Métricas (Espaciado equilibrado) */}
       {metricCards && metricCards.length > 0 && (
         <div className="mt-5 mb-5 px-4 relative z-10">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div className={`grid grid-cols-1 sm:grid-cols-3 ${metricCards.length > 3 ? "xl:grid-cols-6 gap-4" : "gap-5"}`}>
             {metricCards.map((card, idx) => (
               <div
                 key={idx}

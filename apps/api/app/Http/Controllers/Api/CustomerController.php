@@ -3,33 +3,54 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Patient;
+use App\Models\Customer;
+use App\Models\CustomerDependent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class PatientController extends Controller
+class CustomerController extends Controller
 {
 
     /**
-     * Consulta base de pacientes limitada al tenant del usuario autenticado.
-     * Garantiza que ningún tenant pueda ver ni manipular pacientes de otro.
+     * Consulta base de clientes limitada al tenant del usuario autenticado.
+     * Garantiza que ningún tenant pueda ver ni manipular clientes de otro.
      */
     private function tenantQuery(Request $request)
     {
-        return Patient::where('tenant_id', $request->user()->tenant_id);
+        return Customer::where('tenant_id', $request->user()->tenant_id);
     }
 
     /**
-     * Obtiene un paciente por id dentro del tenant actual o responde 404.
+     * Obtiene un cliente por id dentro del tenant actual o responde 404.
      */
-    private function findForTenant(Request $request, string $id): Patient
+    private function findForTenant(Request $request, string $id): Customer
     {
         return $this->tenantQuery($request)->findOrFail($id);
     }
 
+    /**
+     * Relaciones que acompañan al cliente. Los dependientes solo viajan si el
+     * rubro del tenant los usa.
+     */
+    private function relations(Request $request): array
+    {
+        $relations = ['typeDocument', 'status'];
+
+        if ($this->usesDependents($request)) {
+            $relations[] = 'dependents';
+        }
+
+        return $relations;
+    }
+
+    private function usesDependents(Request $request): bool
+    {
+        return (bool) $request->user()->tenant?->dependents()['enabled'];
+    }
+
     public function index(Request $request)
     {
-        $query = $this->tenantQuery($request)->with(['typeDocument', 'status']);
+        $query = $this->tenantQuery($request)->with($this->relations($request));
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -49,9 +70,9 @@ class PatientController extends Controller
             $query->where('status_id', $statusId);
         }
 
-        $patients = $query->orderBy('created_at', 'desc')->paginate(10);
+        $customers = $query->orderBy('created_at', 'desc')->paginate(10);
 
-        return response()->json($patients);
+        return response()->json($customers);
     }
 
     public function store(Request $request)
@@ -76,55 +97,60 @@ class PatientController extends Controller
             'department' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
             'medical_notes' => 'nullable|string',
-        ]);
+            // Mascotas u otros dependientes registrados junto con el cliente.
+            'dependents' => 'sometimes|array|max:20',
+        ] + CustomerDependent::rules('dependents.*.'));
+
+        $dependents = $validated['dependents'] ?? [];
+        unset($validated['dependents']);
 
         try {
             DB::beginTransaction();
 
             $tenantId = $request->user()->tenant_id ?? null;
             
-            $lastPatient = Patient::where('tenant_id', $tenantId)
-                ->orderBy('created_at', 'desc')
-                ->first();
 
-            $nextNumber = 1;
-            if ($lastPatient && preg_match('/PAC-(\d+)/', $lastPatient->code, $matches)) {
-                $nextNumber = intval($matches[1]) + 1;
-            }
-            
-            $validated['code'] = 'PAC-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            $validated['code'] = Customer::nextCode($tenantId);
             $validated['tenant_id'] = $tenantId;
 
-            $patient = Patient::create($validated);
+            $customer = Customer::create($validated);
+
+            if ($this->usesDependents($request)) {
+                $kind = $request->user()->tenant->dependents()['kind'];
+
+                foreach ($dependents as $dependent) {
+                    $customer->dependents()->create($dependent + ['tenant_id' => $tenantId, 'kind' => $kind]);
+                }
+            }
 
             DB::commit();
 
             return response()->json([
-                'message' => 'Paciente registrado con éxito',
-                'patient' => $patient->load(['typeDocument', 'status'])
+                'message' => 'Cliente registrado con éxito',
+                'customer' => $customer->load($this->relations($request))
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Error al registrar el paciente',
+                'message' => 'Error al registrar el cliente',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    public function show(Request $request, string $patient)
+    public function show(Request $request, string $customer)
     {
-        $patient = $this->findForTenant($request, $patient);
+        $customer = $this->findForTenant($request, $customer);
 
         return response()->json([
-            'patient' => $patient->load(['typeDocument', 'status'])
+            'customer' => $customer->load($this->relations($request))
         ]);
     }
 
-    public function update(Request $request, string $patient)
+    public function update(Request $request, string $customer)
     {
-        $patient = $this->findForTenant($request, $patient);
+        $customer = $this->findForTenant($request, $customer);
 
         $validated = $request->validate([
             'first_name' => 'sometimes|required|string|max:255',
@@ -148,22 +174,22 @@ class PatientController extends Controller
             'medical_notes' => 'nullable|string',
         ]);
 
-        $patient->update($validated);
+        $customer->update($validated);
 
         return response()->json([
-            'message' => 'Paciente actualizado con éxito',
-            'patient' => $patient->load(['typeDocument', 'status'])
+            'message' => 'Cliente actualizado con éxito',
+            'customer' => $customer->load($this->relations($request))
         ]);
     }
 
 
-    public function destroy(Request $request, string $patient)
+    public function destroy(Request $request, string $customer)
     {
-        $patient = $this->findForTenant($request, $patient);
-        $patient->delete();
+        $customer = $this->findForTenant($request, $customer);
+        $customer->delete();
 
         return response()->json([
-            'message' => 'Paciente eliminado correctamente'
+            'message' => 'Cliente eliminado correctamente'
         ]);
     }
 }

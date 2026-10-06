@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
 import { X, ArrowRight, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
@@ -10,6 +10,13 @@ interface Plan {
   name: string;
   price_monthly: number;
   features?: Record<string, any>;
+}
+
+interface BusinessType {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
 }
 
 interface RegisterModalProps {
@@ -25,7 +32,10 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
+
   const [formData, setFormData] = useState({
+    business_type_id: '',
     ruc: '',
     company_name: '',
     commercial_name: '',
@@ -39,7 +49,15 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
     password: '',
   });
 
+  useEffect(() => {
+    api.get('/business-types')
+      .then((res) => setBusinessTypes(res.data))
+      .catch((err) => console.error('Error al cargar rubros:', err));
+  }, []);
+
   if (!isOpen || !selectedPlan) return null;
+
+  const selectedBusinessType = businessTypes.find((type) => type.id === formData.business_type_id);
 
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +141,26 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
 
         {modalStep === 1 && (
           <form onSubmit={handleNextStep} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#022340] uppercase">Rubro del negocio</label>
+              <select
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#3F768C] focus:bg-white font-medium"
+                value={formData.business_type_id}
+                onChange={(e) => setFormData({ ...formData, business_type_id: e.target.value })}
+                required
+              >
+                <option value="" disabled>Selecciona tu rubro</option>
+                {businessTypes.map((type) => (
+                  <option key={type.id} value={type.id}>{type.name}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {selectedBusinessType?.description
+                  ? `${selectedBusinessType.description} Tu cuenta empieza con servicios y una ficha de ejemplo de este rubro; luego puedes cambiarlos.`
+                  : 'Define los nombres, los módulos y el catálogo inicial de tu cuenta.'}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-[#022340] uppercase">RUC</label>

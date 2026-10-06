@@ -7,6 +7,8 @@ import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import FormProfessional from './FormProfessional';
 import { api } from '@/lib/axios';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Professional {
   id: string;
@@ -31,6 +33,9 @@ interface Professional {
 }
 
 export default function ProfessionalsTable() {
+  const vocab = useVocabulary();
+  const { user } = useAuth();
+  const proLower = vocab.pro.toLowerCase();
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -118,8 +123,8 @@ export default function ProfessionalsTable() {
       isOpen: true,
       type: 'confirm',
       variant: 'danger',
-      title: '¿Eliminar profesional?',
-      message: '¿Estás seguro de eliminar este profesional? Esta acción no se puede deshacer.',
+      title: `¿Eliminar ${proLower}?`,
+      message: `¿Estás seguro de eliminar este registro de ${proLower}? Esta acción no se puede deshacer.`,
       confirmText: 'Sí, eliminar',
       cancelText: 'Cancelar',
       onConfirm: async () => {
@@ -144,11 +149,11 @@ export default function ProfessionalsTable() {
         isOpen: true,
         type: 'alert',
         variant: 'default',
-        title: '¡Profesional creado con éxito!',
+        title: `¡${vocab.pro} creado con éxito!`,
         message: (
           <div className="space-y-4 pt-1">
             <p className="text-sm text-slate-600">
-              Se ha registrado el perfil y las credenciales de acceso para este profesional:
+              Se ha registrado el perfil y las credenciales de acceso de este registro:
             </p>
             
             <div className="space-y-2.5 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
@@ -186,7 +191,7 @@ export default function ProfessionalsTable() {
 
   const metricCards: MetricCardItem[] = [
     {
-      title: 'Profesionales Activos',
+      title: `${vocab.pros}: activos`,
       value: totalActive,
       icon: <CheckCircle size={18} />,
       iconColorClass: 'text-emerald-500',
@@ -194,7 +199,7 @@ export default function ProfessionalsTable() {
       onClick: () => handleMetricCardClick('active'),
     },
     {
-      title: 'Profesionales Inactivos',
+      title: `${vocab.pros}: inactivos`,
       value: totalInactive,
       icon: <XCircle size={18} />,
       iconColorClass: 'text-rose-500',
@@ -203,9 +208,12 @@ export default function ProfessionalsTable() {
     }
   ];
 
-  const columns: Column<Professional>[] = [
+  // La columna de colegiatura solo aparece en los rubros que la usan.
+  const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
+
+  const allColumns: (Column<Professional> | null)[] = [
     {
-      header: 'Profesional',
+      header: vocab.pro,
       cell: (prof) => (
         <div key={`name-${prof.id}`} className={styles.customerCell}>
           <div className={styles.avatar}>
@@ -220,14 +228,14 @@ export default function ProfessionalsTable() {
         </div>
       ),
     },
-    {
-      header: 'Licencia',
+    usesLicense ? {
+      header: 'Colegiatura',
       cell: (prof) => (
         <div key={`license-${prof.id}`} className="text-sm font-medium text-slate-700 font-mono">
           {prof.license_number ? prof.license_number : <span className="text-slate-400 italic font-normal">No registrada</span>}
         </div>
       ),
-    },
+    } : null,
     {
       header: 'Especialidades',
       cell: (prof) => (
@@ -274,14 +282,14 @@ export default function ProfessionalsTable() {
           </button>
           <button 
             onClick={() => { setEditingProfessional(prof); setShowFormModal(true); }}
-            title="Editar profesional"
+            title={`Editar ${proLower}`}
             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           >
             <Pencil size={16} />
           </button>
           <button 
             onClick={() => handleDelete(prof.id)}
-            title="Eliminar profesional"
+            title={`Eliminar ${proLower}`}
             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
             <Trash2 size={16} />
@@ -291,14 +299,16 @@ export default function ProfessionalsTable() {
     },
   ];
 
+  const columns = allColumns.filter((column): column is Column<Professional> => column !== null);
+
   return (
     <div className="space-y-6 mb-8">
       <div className="mb-6">
         <DataTable<Professional>
-          title="Gestión de Profesionales"
-          primaryActionLabel="Nuevo Profesional"
+          title={`Gestión de ${vocab.pros}`}
+          primaryActionLabel={`Nuevo ${vocab.pro}`}
           onPrimaryAction={() => { setEditingProfessional(null); setShowFormModal(true); }}
-          tabs={[{ id: 'all', label: 'Todos los profesionales', count: safeProfessionals.length }]}
+          tabs={[{ id: 'all', label: 'Todos', count: safeProfessionals.length }]}
           activeTab={activeTab}
           onTabChange={setActiveTab}
           searchTerm={searchTerm}
@@ -309,7 +319,7 @@ export default function ProfessionalsTable() {
           columns={columns}
           data={safeProfessionals}
           getItemKey={(p) => p.id}
-          entityLabel="profesionales registrados"
+          entityLabel="registros"
           metricCards={metricCards}
         />
       </div>

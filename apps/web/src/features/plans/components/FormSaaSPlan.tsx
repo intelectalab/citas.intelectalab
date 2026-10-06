@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Package, ChevronDown, Check } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
+import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
 
 interface SaaSPlan {
   id?: string;
@@ -29,8 +30,9 @@ interface SaaSPlan {
   limits?: {
     users?: number;
     branches?: number;
-    clients?: number;
-    services?: number;
+    professionals?: number;
+    appointments_month?: number;
+    whatsapp_month?: number;
     [key: string]: number | undefined;
   };
   consumption?: {
@@ -72,32 +74,14 @@ const defaultFormState = {
   auto_renew: true,
   default_period: 'monthly',
 
-  modules: {
-    clients: false,
-    services: false,
-    agenda: false,
-    finances: false,
-    payments: false,
-    electronic_billing: false,
-    personal: false,
-    support: false,
-    pos: false,
-    advanced_reports: false,
-    mfa: false,
-    api: false,
-    custom_domain: false,
-    crm: false,
-    whatsapp_notifications: false,
-    priority_support: false,
-    documents: false,
-    suppliers: false,
-  } as Record<string, boolean>,
+  modules: Object.fromEntries(OPTIONAL_MODULE_KEYS.map((key) => [key, false])) as Record<string, boolean>,
 
   limits: {
     users: 0,
     branches: 0,
-    clients: 0,
-    services: 0,
+    professionals: 0,
+    appointments_month: 0,
+    whatsapp_month: 0,
   },
 
   consumption: {
@@ -137,11 +121,8 @@ export default function FormSaaSPlan({
   const sectionRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({
-    core: false,
-    finanzas: false,
-    operaciones: false,
-    portal: false,
-    especializados: false,
+    agenda: true,
+    sales: true,
   });
 
   const toggleModuleAccordion = (section: string) => {
@@ -156,13 +137,9 @@ export default function FormSaaSPlan({
       console.log("📥 Mapeando datos reales desde la BD:", initialData);
 
       const rawModules = initialData.modules || {};
-      const flattenedModules: Record<string, boolean> = {
-        clients: false, services: false, agenda: false, finances: false,
-        payments: false, electronic_billing: false, personal: false, support: false,
-        pos: false, advanced_reports: false, mfa: false, api: false,
-        custom_domain: false, crm: false, whatsapp_notifications: false,
-        priority_support: false, documents: false, suppliers: false,
-      };
+      const flattenedModules: Record<string, boolean> = Object.fromEntries(
+        OPTIONAL_MODULE_KEYS.map((key) => [key, false])
+      );
 
       Object.values(rawModules).forEach((val) => {
         if (Array.isArray(val)) {
@@ -209,8 +186,9 @@ export default function FormSaaSPlan({
         limits: {
           users: initialData.limits?.users ?? 0,
           branches: initialData.limits?.branches ?? 0,
-          clients: initialData.limits?.clients ?? 0,
-          services: initialData.limits?.services ?? 0,
+          professionals: initialData.limits?.professionals ?? 0,
+          appointments_month: initialData.limits?.appointments_month ?? 0,
+          whatsapp_month: initialData.limits?.whatsapp_month ?? 0,
         },
 
         consumption: {
@@ -248,24 +226,12 @@ export default function FormSaaSPlan({
         .replace(/[^\w\s-]/g, '')
         .replace(/[\s_-]+/g, '-');
 
-      const coreModules = Object.keys(formData.modules).filter(
-        (k) => ['clients', 'services', 'agenda', 'documents'].includes(k) && formData.modules[k]
-      );
-      const financeModules = Object.keys(formData.modules).filter(
-        (k) => ['finances', 'payments', 'electronic_billing'].includes(k) && formData.modules[k]
-      );
-      const operationsModules = Object.keys(formData.modules).filter(
-        (k) => ['personal', 'suppliers', 'support'].includes(k) && formData.modules[k]
-      );
-      const crmModules = Object.keys(formData.modules).filter(
-        (k) => ['crm'].includes(k) && formData.modules[k]
-      );
-
+      // Se guardan agrupados por categoría, solo con las claves marcadas.
       const modulesPayload: Record<string, string[]> = {};
-      if (coreModules.length > 0) modulesPayload.core = coreModules;
-      if (financeModules.length > 0) modulesPayload.finance = financeModules;
-      if (operationsModules.length > 0) modulesPayload.operations = operationsModules;
-      if (crmModules.length > 0) modulesPayload.crm = crmModules;
+      MODULE_GROUPS.forEach((group) => {
+        const selected = group.items.map((item) => item.key).filter((key) => formData.modules[key]);
+        if (selected.length > 0) modulesPayload[group.key] = selected;
+      });
 
       const payload = {
         name: formData.name,
@@ -291,8 +257,9 @@ export default function FormSaaSPlan({
         limits: {
           users: Number(formData.limits.users),
           branches: Number(formData.limits.branches),
-          clients: Number(formData.limits.clients),
-          services: Number(formData.limits.services),
+          professionals: Number(formData.limits.professionals),
+          appointments_month: Number(formData.limits.appointments_month),
+          whatsapp_month: Number(formData.limits.whatsapp_month),
         },
         consumption: {
           storage_gb: Number(formData.consumption.storage_gb),
@@ -536,45 +503,10 @@ export default function FormSaaSPlan({
 
                     {sec.id === 3 && (
                       <div className="space-y-3">
-                        {[
-                          {
-                            key: 'core',
-                            title: 'Core',
-                            items: [
-                              { key: 'clients', label: 'Clientes (clients)' },
-                              { key: 'services', label: 'Servicios (services)' },
-                              { key: 'agenda', label: 'Agenda (agenda)' },
-                              { key: 'documents', label: 'Documentos (documents)' },
-                            ],
-                          },
-                          {
-                            key: 'finanzas',
-                            title: 'Finanzas y facturación',
-                            items: [
-                              { key: 'finances', label: 'Finanzas (finances)' },
-                              { key: 'payments', label: 'Pagos (payments)' },
-                              { key: 'electronic_billing', label: 'Facturación Electrónica (electronic_billing)' },
-                            ],
-                          },
-                          {
-                            key: 'operaciones',
-                            title: 'Operaciones y servicio',
-                            items: [
-                              { key: 'personal', label: 'Personal (personal)' },
-                              { key: 'suppliers', label: 'Proveedores (suppliers)' },
-                              { key: 'support', label: 'Soporte (support)' },
-                            ],
-                          },
-                          {
-                            key: 'especializados',
-                            title: 'Especializados y CRM',
-                            items: [
-                              { key: 'crm', label: 'CRM (crm)' },
-                              { key: 'pos', label: 'POS (pos)' },
-                              { key: 'advanced_reports', label: 'Reportes avanzados (advanced_reports)' },
-                            ],
-                          },
-                        ].map((group) => (
+                        {MODULE_GROUPS.map((group) => ({
+                          ...group,
+                          items: group.items.map((item) => ({ key: item.key, label: `${item.label} (${item.key})` })),
+                        })).map((group) => (
                           <div key={group.key} className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden">
                             <button
                               type="button"
@@ -625,8 +557,9 @@ export default function FormSaaSPlan({
                           {[
                             { key: 'users', label: 'Usuarios (users)' },
                             { key: 'branches', label: 'Sucursales (branches)' },
-                            { key: 'clients', label: 'Clientes (clients)' },
-                            { key: 'services', label: 'Servicios (services)' },
+                            { key: 'professionals', label: 'Profesionales (professionals)' },
+                            { key: 'appointments_month', label: 'Citas por mes (appointments_month)' },
+                            { key: 'whatsapp_month', label: 'Mensajes de WhatsApp por mes (whatsapp_month)' },
                           ].map((limit) => (
                             <div key={limit.key}>
                               <label className="block text-xs text-slate-600 mb-1">{limit.label}</label>

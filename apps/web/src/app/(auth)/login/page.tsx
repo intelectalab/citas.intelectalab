@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth'; // Ruta correcta
 import { motion, AnimatePresence } from 'framer-motion';
+import { TenantSelectModal, LoginAccount } from '@/features/auth/components/TenantSelectModal';
 import { 
   Building2, 
   Lock, 
@@ -17,7 +18,8 @@ import {
   Sparkles,
   UserPlus,
   User,
-  LogIn
+  LogIn,
+  KeyRound
 } from 'lucide-react';
 
 export default function AuthPage() {
@@ -32,13 +34,55 @@ export default function AuthPage() {
 
   // Campos de Login
   const [loginEmail, setLoginEmail] = useState('admin@luxuryspa.pe');
+
+  // Al venir de "Cambiar de cuenta" el correo ya llega puesto: si tiene cuenta
+  // en varias empresas, al ingresar se elige a cuál entrar.
+  useEffect(() => {
+    const switchEmail = sessionStorage.getItem('switch_account_email');
+    if (switchEmail) {
+      setLoginEmail(switchEmail);
+      sessionStorage.removeItem('switch_account_email');
+    }
+  }, []);
   const [loginPassword, setLoginPassword] = useState('Admin123456!');
 
-  // Campos de Registro (Persona + Empresa)
-  const [regName, setRegName] = useState('');
+  // Campos de registro de cliente (cuenta del portal con código de empresa)
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regCompanyName, setRegCompanyName] = useState('');
+  const [regTenantCode, setRegTenantCode] = useState('');
+
+  // Selector de empresa: el mismo correo y contraseña son válidos en varias
+  const [accounts, setAccounts] = useState<LoginAccount[]>([]);
+  const [loadingAccountId, setLoadingAccountId] = useState<string | null>(null);
+  const [selectError, setSelectError] = useState<string | null>(null);
+
+  // Guarda la sesión y lleva al portal de cliente o al panel de la empresa.
+  const completeSession = async (data: any) => {
+    const token = data.access_token || data.token;
+    const userData = data.user || data.data;
+
+    if (!token) {
+      throw new Error('Respuesta inválida del servidor');
+    }
+
+    localStorage.setItem('auth_token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    if (userData) {
+      localStorage.setItem('user', JSON.stringify(userData));
+    }
+
+    if (typeof authContextLogin === 'function') {
+      try {
+        await authContextLogin(token, userData);
+      } catch {
+        // Si el login del contexto no requiere argumentos
+      }
+    }
+
+    router.push(userData?.account_type === 'customer' ? '/portal' : '/home');
+  };
 
   // Manejador de Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -47,85 +91,70 @@ export default function AuthPage() {
     setErrorMessage(null);
 
     try {
-      const response = await api.post('/login', { 
-        email: loginEmail, 
-        password: loginPassword 
+      const response = await api.post('/login', {
+        email: loginEmail,
+        password: loginPassword
       });
 
-      const token = response.data.access_token || response.data.token;
-      const userData = response.data.user || response.data.data;
-
-      if (!token) {
-        setErrorMessage('Respuesta inválida del servidor');
+      if (response.data.requires_tenant_selection) {
+        setSelectError(null);
+        setAccounts(response.data.accounts ?? []);
         return;
       }
 
-      localStorage.setItem('auth_token', token);
-      if (userData) {
-        localStorage.setItem('user', JSON.stringify(userData));
-      }
-
-      if (typeof authContextLogin === 'function') {
-        try {
-          await authContextLogin(token, userData);
-        } catch {
-          // Si el login del contexto no requiere argumentos
-        }
-      }
-
-      router.push('/home');
+      await completeSession(response.data);
     } catch (err: any) {
       setErrorMessage(
-        err.response?.data?.message || 'Credenciales incorrectas o error al conectar con el servidor'
+        err.response?.data?.message || err.message || 'Credenciales incorrectas o error al conectar con el servidor'
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Manejador de Registro
+  // El usuario eligió empresa: se reutilizan el correo y la contraseña ya
+  // ingresados (solo viven en memoria) para autenticar en esa empresa.
+  const handleSelectAccount = async (account: LoginAccount) => {
+    setLoadingAccountId(account.account_id);
+    setSelectError(null);
+
+    try {
+      const response = await api.post('/login', {
+        email: loginEmail,
+        password: loginPassword,
+        account_id: account.account_id,
+      });
+
+      await completeSession(response.data);
+    } catch (err: any) {
+      setSelectError(
+        err.response?.data?.message || err.message || 'No se pudo ingresar a la empresa seleccionada'
+      );
+      setLoadingAccountId(null);
+    }
+  };
+
+  // Manejador de registro de cliente
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      const response = await api.post('/register-tenant', {
-        name: regName,
+      const response = await api.post('/register-customer', {
+        tenant_code: regTenantCode,
+        first_name: regFirstName,
+        last_name: regLastName,
         email: regEmail,
         password: regPassword,
-        company_name: regCompanyName,
       });
 
-      const token = response.data.token || response.data.access_token;
-      const userData = response.data.user;
-
-      if (token) {
-        localStorage.setItem('auth_token', token);
-        
-        // 👇 AGREGAR ESTA LÍNEA PARA CONFIGURAR AXIOS DE INMEDIATO
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-        if (userData) {
-          localStorage.setItem('user', JSON.stringify(userData));
-        }
-
-        if (typeof authContextLogin === 'function') {
-          try {
-            await authContextLogin(token, userData);
-          } catch {
-            // Manejo silencioso si difiere la firma
-          }
-        }
-
-        router.push('/home');
-      } else {
-        setAuthMode('login');
-        setLoginEmail(regEmail);
-      }
+      await completeSession(response.data);
     } catch (err: any) {
+      const errors = err.response?.data?.errors;
+      const firstError = errors ? (Object.values(errors)[0] as string[])?.[0] : null;
       setErrorMessage(
-        err.response?.data?.message || 'Error al completar el registro. Inténtalo nuevamente.'
+        firstError || err.response?.data?.message || err.message || 'Error al completar el registro. Inténtalo nuevamente.'
       );
     } finally {
       setIsLoading(false);
@@ -163,12 +192,12 @@ export default function AuthPage() {
               <h2 className="text-2xl font-extrabold tracking-tight text-white leading-snug">
                 {authMode === 'login'
                   ? 'Gestiona tus operaciones en un solo lugar.'
-                  : 'Empieza a hacer crecer tu empresa hoy.'}
+                  : 'Crea tu cuenta con el código de tu empresa.'}
               </h2>
               <p className="text-slate-300 text-xs leading-relaxed font-medium">
                 {authMode === 'login'
                   ? 'Acceso centralizado para finanzas, inventario, clientes y servicios especializados.'
-                  : 'Crea tu cuenta corporativa en segundos sin necesidad de tarjeta de crédito.'}
+                  : 'La empresa que te atiende te entrega un código de 8 dígitos para registrarte.'}
               </p>
             </div>
           </div>
@@ -177,13 +206,13 @@ export default function AuthPage() {
             <div className="flex items-center gap-2.5 text-xs font-semibold text-[#84D0D9]">
               <ShieldCheck className="w-4 h-4" />
               <span>
-                {authMode === 'login' ? 'Todo tu negocio conectado' : 'Prueba libre y rápida'}
+                {authMode === 'login' ? 'Todo tu negocio conectado' : 'Una cuenta por empresa'}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 leading-normal">
               {authMode === 'login'
                 ? 'Mantén el control de tus ventas, sucursales y citas en una sola plataforma.'
-                : 'Registra tu negocio ahora. Podrás configurar tus planes o módulos en cualquier momento.'}
+                : 'Puedes usar el mismo correo en varias empresas. Tus datos de cada una se mantienen separados.'}
             </p>
           </div>
 
@@ -221,7 +250,7 @@ export default function AuthPage() {
                     Iniciar Sesión
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                    Ingresa tus credenciales para acceder al panel de control de tu empresa.
+                    Ingresa con tu correo y contraseña.
                   </p>
                 </div>
 
@@ -234,7 +263,7 @@ export default function AuthPage() {
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-[#022340] uppercase tracking-wider">
-                      Correo corporativo
+                      Correo electrónico
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -302,7 +331,18 @@ export default function AuthPage() {
                   </button>
                 </form>
 
-                <div className="border-t border-slate-100 pt-4">
+                <div className="border-t border-slate-100 pt-4 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                    <span>¿Tienes un código de empresa?</span>
+                    <button
+                      type="button"
+                      onClick={() => switchMode('register')}
+                      className="inline-flex items-center gap-1 text-[#3F768C] hover:text-[#022340] font-bold transition-colors cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      Crear cuenta de cliente
+                    </button>
+                  </div>
                   <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>¿No tienes una cuenta de empresa?</span>
                     <button 
@@ -328,16 +368,15 @@ export default function AuthPage() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-[#3F768C] uppercase tracking-wider">
-                      Registro de Empresa
+                      Registro de Cliente
                     </span>
-                    <span className="text-xs text-slate-400 font-medium">Paso 1 de 1</span>
                   </div>
 
                   <h1 className="text-2xl font-black text-[#022340] tracking-tight">
                     Crea tu cuenta
                   </h1>
                   <p className="text-xs text-slate-500 font-medium">
-                    Ingresa tus datos personales y los de tu negocio para comenzar.
+                    Ingresa tus datos y el código que te entregó la empresa.
                   </p>
                 </div>
 
@@ -349,46 +388,74 @@ export default function AuthPage() {
 
                 <form onSubmit={handleRegisterSubmit} className="space-y-3">
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-bold text-[#022340] uppercase tracking-wider">
-                      Tu Nombre Completo
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={regName}
-                        onChange={(e) => setRegName(e.target.value)}
-                        placeholder="Juan Pérez"
-                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-hidden focus:border-[#3F768C] focus:bg-white focus:ring-2 focus:ring-[#3F768C]/20 transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-bold text-[#022340] uppercase tracking-wider">
-                      Nombre de la Empresa / Marca
+                    <label htmlFor="reg-tenant-code" className="block text-[11px] font-bold text-[#022340] uppercase tracking-wider">
+                      Código de Empresa
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                         <Building2 className="w-4 h-4" />
                       </div>
                       <input
+                        id="reg-tenant-code"
                         type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         required
-                        value={regCompanyName}
-                        onChange={(e) => setRegCompanyName(e.target.value)}
-                        placeholder="Mi Negocio S.A.C."
+                        pattern="[0-9]{8}"
+                        maxLength={8}
+                        value={regTenantCode}
+                        onChange={(e) => setRegTenantCode(e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder="8 dígitos"
                         className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-hidden focus:border-[#3F768C] focus:bg-white focus:ring-2 focus:ring-[#3F768C]/20 transition-all"
                       />
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label htmlFor="reg-first-name" className="block text-[11px] font-bold text-[#022340] uppercase tracking-wider">
+                        Nombres
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <input
+                          id="reg-first-name"
+                          type="text"
+                          required
+                          value={regFirstName}
+                          onChange={(e) => setRegFirstName(e.target.value)}
+                          placeholder="Juan"
+                          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-hidden focus:border-[#3F768C] focus:bg-white focus:ring-2 focus:ring-[#3F768C]/20 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="reg-last-name" className="block text-[11px] font-bold text-[#022340] uppercase tracking-wider">
+                        Apellidos
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <input
+                          id="reg-last-name"
+                          type="text"
+                          required
+                          value={regLastName}
+                          onChange={(e) => setRegLastName(e.target.value)}
+                          placeholder="Pérez"
+                          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-hidden focus:border-[#3F768C] focus:bg-white focus:ring-2 focus:ring-[#3F768C]/20 transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-[#022340] uppercase tracking-wider">
-                      Correo Corporativo
+                      Correo Electrónico
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -399,7 +466,7 @@ export default function AuthPage() {
                         required
                         value={regEmail}
                         onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="admin@minegocio.com"
+                        placeholder="tucorreo@gmail.com"
                         className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-hidden focus:border-[#3F768C] focus:bg-white focus:ring-2 focus:ring-[#3F768C]/20 transition-all"
                       />
                     </div>
@@ -416,6 +483,7 @@ export default function AuthPage() {
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
+                        minLength={8}
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
                         placeholder="••••••••"
@@ -440,7 +508,7 @@ export default function AuthPage() {
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Crear mi Empresa e Ingresar</span>
+                        <span>Crear mi cuenta e Ingresar</span>
                         <ArrowRight className="w-4 h-4 text-[#84D0D9]" />
                       </>
                     )}
@@ -449,7 +517,7 @@ export default function AuthPage() {
 
                 <div className="border-t border-slate-100 pt-3">
                   <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                    <span>¿Ya registraste tu empresa?</span>
+                    <span>¿Ya tienes una cuenta?</span>
                     <button 
                       type="button"
                       onClick={() => switchMode('login')}
@@ -466,6 +534,15 @@ export default function AuthPage() {
 
         </div>
       </div>
+
+      <TenantSelectModal
+        isOpen={accounts.length > 0}
+        accounts={accounts}
+        loadingAccountId={loadingAccountId}
+        errorMessage={selectError}
+        onSelect={handleSelectAccount}
+        onClose={() => setAccounts([])}
+      />
     </div>
   );
 }

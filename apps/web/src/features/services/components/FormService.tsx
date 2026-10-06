@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
+import { useAuth } from '@/hooks/useAuth';
 import { Briefcase, ChevronDown, Plus } from 'lucide-react';
 import FormServiceCategory from './FormServiceCategory';
 
@@ -20,7 +21,35 @@ interface Service {
   buffer_after_minutes: number;
   price: number;
   status_id?: string | null;
+  code?: string | null;
+  requires_deposit?: boolean;
+  online_booking?: boolean;
+  is_virtual?: boolean;
+  kind?: 'individual' | 'group';
+  capacity?: number;
+  recall_label?: string | null;
+  recall_days?: number | null;
+  recall_service_id?: string | null;
 }
+
+const EMPTY_FORM = {
+  name: '',
+  code: '',
+  category_id: '',
+  duration_minutes: 30,
+  buffer_before_minutes: 0,
+  buffer_after_minutes: 0,
+  price: 0,
+  status_id: '',
+  requires_deposit: false,
+  online_booking: true,
+  is_virtual: false,
+  kind: 'individual' as 'individual' | 'group',
+  capacity: 1,
+  recall_label: '',
+  recall_days: '' as number | '',
+  recall_service_id: '',
+};
 
 interface FormServiceProps {
   isOpen: boolean;
@@ -43,20 +72,18 @@ export default function FormService({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
 
-  const [form, setForm] = useState({
-    name: '',
-    category_id: '',
-    duration_minutes: 30,
-    buffer_before_minutes: 0,
-    buffer_after_minutes: 0,
-    price: 0,
-    status_id: '',
-  });
+  const { hasModule } = useAuth();
+  // Las clases con cupo dependen del módulo de clases grupales del tenant.
+  const canUseClasses = hasModule('classes');
+  const [otherServices, setOtherServices] = useState<{ id: string; name: string }[]>([]);
+
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const sections = [
     { id: 1, title: '1. Información del Servicio' },
     { id: 2, title: '2. Tiempos y Tiempos de Espera (Buffers)' },
     { id: 3, title: '3. Precios y Estado' },
+    { id: 4, title: '4. Reserva y Seguimiento' },
   ];
 
   useEffect(() => {
@@ -67,25 +94,35 @@ export default function FormService({
     if (initialData) {
       setForm({
         name: initialData.name || '',
+        code: initialData.code || '',
         category_id: initialData.category_id || '',
         duration_minutes: initialData.duration_minutes || 30,
         buffer_before_minutes: initialData.buffer_before_minutes || 0,
         buffer_after_minutes: initialData.buffer_after_minutes || 0,
         price: initialData.price || 0,
         status_id: initialData.status_id || '',
+        requires_deposit: Boolean(initialData.requires_deposit),
+        online_booking: initialData.online_booking ?? true,
+        is_virtual: Boolean(initialData.is_virtual),
+        kind: initialData.kind || 'individual',
+        capacity: initialData.capacity || 1,
+        recall_label: initialData.recall_label || '',
+        recall_days: initialData.recall_days ?? '',
+        recall_service_id: initialData.recall_service_id || '',
       });
     } else {
-      setForm({
-        name: '',
-        category_id: '',
-        duration_minutes: 30,
-        buffer_before_minutes: 0,
-        buffer_after_minutes: 0,
-        price: 0,
-        status_id: '',
-      });
+      setForm(EMPTY_FORM);
     }
   }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Servicios con los que se puede agendar el control de seguimiento.
+    api.get('/services')
+      .then((res) => setOtherServices((res.data as { id: string; name: string }[]).filter((item) => item.id !== initialData?.id)))
+      .catch((err) => console.error('Error cargando servicios:', err));
+  }, [isOpen, initialData]);
 
   useEffect(() => {
     if (isOpen) {
@@ -130,10 +167,19 @@ export default function FormService({
     e.preventDefault();
     try {
       setLoading(true);
+      const hasRecall = form.recall_label.trim() !== '' && form.recall_days !== '';
+      const payload = {
+        ...form,
+        capacity: form.kind === 'group' ? form.capacity : 1,
+        recall_label: hasRecall ? form.recall_label.trim() : null,
+        recall_days: hasRecall ? form.recall_days : null,
+        recall_service_id: hasRecall ? form.recall_service_id || null : null,
+      };
+
       if (initialData?.id) {
-        await api.put(`/services/${initialData.id}`, form);
+        await api.put(`/services/${initialData.id}`, payload);
       } else {
-        await api.post('/services', form);
+        await api.post('/services', payload);
       }
       onSubmitSuccess?.();
       onClose();
@@ -190,6 +236,18 @@ export default function FormService({
                               onChange={(e) => setForm({ ...form, name: e.target.value })}
                               className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
                               placeholder="Ej. Corte y Peinado"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Código interno</label>
+                            <input
+                              type="text"
+                              maxLength={30}
+                              value={form.code}
+                              onChange={(e) => setForm({ ...form, code: e.target.value })}
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 font-mono focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              placeholder="Ej. COR-01"
                             />
                           </div>
 
@@ -290,6 +348,105 @@ export default function FormService({
                                 </option>
                               ))}
                             </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {sec.id === 4 && (
+                        <div className="space-y-4">
+                          <div className="space-y-2.5">
+                            {[
+                              { key: 'online_booking' as const, label: 'Se puede reservar en línea', hint: 'Aparece en el portal del cliente y en la reserva pública.' },
+                              { key: 'requires_deposit' as const, label: 'Exige adelanto', hint: 'La reserva se confirma cuando el cliente paga el adelanto.' },
+                              { key: 'is_virtual' as const, label: 'Atención por videollamada', hint: 'No ocupa sala ni equipo.' },
+                            ].map((option) => (
+                              <label key={option.key} className="flex items-start gap-2.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={form[option.key]}
+                                  onChange={(e) => setForm({ ...form, [option.key]: e.target.checked })}
+                                  className="mt-0.5 rounded border-slate-300 text-[#030336] focus:ring-[#030336]"
+                                />
+                                <span>
+                                  <span className="block text-sm font-medium text-slate-800">{option.label}</span>
+                                  <span className="block text-xs text-slate-400">{option.hint}</span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+
+                          {(canUseClasses || form.kind === 'group') && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Modalidad</label>
+                                <select
+                                  value={form.kind}
+                                  onChange={(e) => setForm({ ...form, kind: e.target.value as 'individual' | 'group' })}
+                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                >
+                                  <option value="individual">Individual</option>
+                                  <option value="group">Clase grupal</option>
+                                </select>
+                              </div>
+                              {form.kind === 'group' && (
+                                <div>
+                                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Cupo por clase</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={form.capacity}
+                                    onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })}
+                                    className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="border-t border-slate-100 pt-4 space-y-3">
+                            <div>
+                              <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Control de seguimiento</span>
+                              <span className="block text-xs text-slate-400">Se sugiere al completar la atención. Déjalo vacío si el servicio no lo necesita.</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="col-span-2">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombre del control</label>
+                                <input
+                                  type="text"
+                                  maxLength={150}
+                                  required={form.recall_days !== ''}
+                                  value={form.recall_label}
+                                  onChange={(e) => setForm({ ...form, recall_label: e.target.value })}
+                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                  placeholder="Ej. Profilaxis semestral"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">En (días)</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  required={form.recall_label.trim() !== ''}
+                                  value={form.recall_days}
+                                  onChange={(e) => setForm({ ...form, recall_days: e.target.value === '' ? '' : Number(e.target.value) })}
+                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                  placeholder="180"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Servicio del control</label>
+                              <select
+                                value={form.recall_service_id}
+                                onChange={(e) => setForm({ ...form, recall_service_id: e.target.value })}
+                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              >
+                                <option value="">Este mismo servicio</option>
+                                {otherServices.map((item) => (
+                                  <option key={item.id} value={item.id}>{item.name}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
                         </div>
                       )}

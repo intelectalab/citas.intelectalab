@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
 import { UserPlus } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
@@ -41,6 +43,10 @@ interface FormProfessionalProps {
 }
 
 export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, initialData }: FormProfessionalProps) {
+  const vocab = useVocabulary();
+  const { user } = useAuth();
+  // La colegiatura solo se pide en los rubros que la usan (regla del rubro).
+  const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
   const [form, setForm] = useState({
     display_name: '',
     first_name: '',
@@ -117,7 +123,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         email: form.email,
         type_document_id: form.type_document_id || null,
         document_number: form.document_number || null,
-        license_number: form.license_number || null,
+        ...(usesLicense ? { license_number: form.license_number || null } : {}),
         phone: form.phone || null,
         status_id: form.status_id || null,
         specialties: form.specialties,
@@ -151,8 +157,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     <FormDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Editar Profesional' : 'Nuevo Profesional'}
-      subtitle={isEditing ? 'Actualiza los datos del especialista' : 'Registra un profesional y crea su cuenta de acceso'}
+      title={isEditing ? `Editar ${vocab.pro}` : `Nuevo ${vocab.pro}`}
+      subtitle={isEditing ? 'Actualiza sus datos' : 'Registra sus datos y crea su cuenta de acceso'}
       icon={<UserPlus size={20} />}
     >
       <div className="flex flex-col h-full justify-between">
@@ -184,17 +190,19 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             <span className="text-[10px] text-slate-400 mt-1 block">Se usará como contraseña inicial.</span>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nro. de Colegiatura</label>
-            <input 
-              type="text"
-              placeholder="Ej. CMP-12345"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 font-mono"
-              value={form.license_number}
-              onChange={e => setForm({...form, license_number: e.target.value})}
-            />
-          </div>
-          
+          {usesLicense && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nro. de Colegiatura</label>
+              <input
+                type="text"
+                placeholder="Ej. CMP-12345"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 font-mono"
+                value={form.license_number}
+                onChange={e => setForm({...form, license_number: e.target.value})}
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombre Público / Visual *</label>
             <input 
@@ -252,7 +260,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
-              Especialidades Médicas (Puedes seleccionar varias)
+              Especialidades (Puedes seleccionar varias)
             </label>
             <div className="border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-white">
               {specialtiesList.length === 0 ? (
@@ -285,7 +293,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
           </div>
 
           <Select
-            label="Estado del Profesional"
+            label="Estado"
             placeholder="Seleccione estado..."
             value={form.status_id}
             onChange={(e) => setForm({ ...form, status_id: String(e.target.value) })}
@@ -310,7 +318,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             disabled={loading}
             className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
           >
-            {loading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Profesional')}
+            {loading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : `Crear ${vocab.pro}`)}
           </button>
         </div>
       </div>

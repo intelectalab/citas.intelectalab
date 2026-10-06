@@ -26,3 +26,100 @@ body {
   color: #1F2937;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* ------------------------------------------------------------------
+   Color de acento de la plataforma: lo que está "encendido" o "bien"
+   (interruptores, anillos de uso). El administrador SaaS lo cambia en
+   /admin/configuration; usePlatform lo aplica sobre :root.
+------------------------------------------------------------------- */
+:root {
+  --accent: #10B981;
+  --brand-ink: #022340;
+  --brand-solid: #022340;
+  --brand-solid-hover: #012840;
+  --brand-link: #3f768c;
+  --ring-track: #ffffff;
+}
+
+/* ------------------------------------------------------------------
+   Tema oscuro. Se aplica al panel (clase .theme-scope), no al menú
+   lateral, que ya es oscuro. En lugar de reescribir cada pantalla se
+   redefine la paleta que usan las utilidades de Tailwind: lo claro pasa
+   a ser superficie oscura y los textos oscuros pasan a claros.
+------------------------------------------------------------------- */
+html[data-theme='dark'] body {
+  background-color: #0a1626;
+}
+
+html[data-theme='dark'] .theme-scope {
+  color-scheme: dark;
+  color: #dbe3ec;
+
+  --color-white: #101f33;
+  --color-slate-50: #15273d;
+  --color-slate-100: #1b3049;
+  --color-slate-200: #263f5d;
+  --color-slate-300: #36557a;
+  --color-slate-400: #7f95ae;
+  --color-slate-500: #98abc1;
+  --color-slate-600: #b7c5d5;
+  --color-slate-700: #cfd9e4;
+  --color-slate-800: #e3eaf2;
+  --color-slate-900: #f2f6fa;
+
+  --color-gray-100: #1b3049;
+  --color-gray-200: #263f5d;
+  --color-gray-400: #7f95ae;
+  --color-gray-600: #b7c5d5;
+  --color-gray-700: #cfd9e4;
+
+  /* Tonos pastel de avisos y etiquetas: fondo translúcido y texto claro. */
+  --color-emerald-50: #10b9811f; --color-emerald-100: #10b98133; --color-emerald-200: #10b98159;
+  --color-emerald-600: #34d399; --color-emerald-700: #6ee7b7; --color-emerald-800: #a7f3d0;
+  --color-amber-50: #f59e0b1f; --color-amber-100: #f59e0b33; --color-amber-200: #f59e0b59;
+  --color-amber-600: #fbbf24; --color-amber-700: #fcd34d; --color-amber-800: #fde68a;
+  --color-rose-50: #f43f5e1f; --color-rose-100: #f43f5e33; --color-rose-200: #f43f5e59;
+  --color-rose-700: #fda4af;
+  --color-red-50: #ef44441f; --color-red-100: #ef444433; --color-red-200: #ef444459;
+  --color-red-600: #f87171; --color-red-700: #fca5a5;
+  --color-sky-50: #0ea5e91f; --color-sky-100: #0ea5e933; --color-sky-200: #0ea5e959;
+  --color-sky-600: #38bdf8; --color-sky-700: #7dd3fc;
+  --color-blue-50: #3b82f61f; --color-blue-100: #3b82f633; --color-blue-600: #60a5fa; --color-blue-700: #93c5fd;
+  --color-indigo-50: #6366f11f; --color-indigo-600: #818cf8;
+  --color-violet-50: #8b5cf61f; --color-violet-100: #8b5cf633; --color-violet-600: #a78bfa;
+  --color-teal-50: #14b8a61f; --color-teal-100: #14b8a633; --color-teal-600: #2dd4bf;
+  --color-pink-50: #ec48991f; --color-pink-600: #f472b6;
+
+  --brand-ink: #dbe7f3;
+  --brand-solid: #2f6f9f;
+  --brand-solid-hover: #3a80b5;
+  --brand-link: #84d0d9;
+  --ring-track: #1b3049;
+}
+
+/* El blanco de la paleta ahora es la superficie; el texto blanco sigue siendo blanco. */
+html[data-theme='dark'] .theme-scope .text-white {
+  color: #ffffff;
+}
+
+/* Colores de marca escritos como valor fijo en las pantallas. */
+html[data-theme='dark'] .theme-scope,
+html[data-theme='dark'] .theme-scope [class*='bg-[#F2F2F2]'] { background-color: #0a1626; }
+html[data-theme='dark'] .theme-scope [class~='text-[#022340]'],
+html[data-theme='dark'] .theme-scope [class~='text-[#030336]'],
+html[data-theme='dark'] .theme-scope [class~='text-[#1F2937]'],
+html[data-theme='dark'] .theme-scope [class~='hover:text-[#022340]']:hover { color: var(--brand-ink); }
+html[data-theme='dark'] .theme-scope [class*='fill-[#022340]'] { fill: var(--brand-ink); }
+html[data-theme='dark'] .theme-scope [class~='text-[#3F768C]'],
+html[data-theme='dark'] .theme-scope [class~='hover:text-[#3F768C]']:hover { color: var(--brand-link); }
+html[data-theme='dark'] .theme-scope [class~='bg-[#022340]'],
+html[data-theme='dark'] .theme-scope [class~='bg-[#030336]'] { background-color: var(--brand-solid); }
+html[data-theme='dark'] .theme-scope [class~='bg-[#022340]']:hover:not(:disabled),
+html[data-theme='dark'] .theme-scope [class~='bg-[#030336]']:hover:not(:disabled) { background-color: var(--brand-solid-hover); }
+html[data-theme='dark'] .theme-scope [class~='bg-[#022340]/5'],
+html[data-theme='dark'] .theme-scope [class~='bg-[#022340]/10'],
+html[data-theme='dark'] .theme-scope [class~='bg-[#030336]/10'] { background-color: #84d0d91f; }
+html[data-theme='dark'] .theme-scope [class~='border-[#022340]'],
+html[data-theme='dark'] .theme-scope [class~='border-[#030336]'],
+html[data-theme='dark'] .theme-scope [class~='focus:border-[#022340]']:focus,
+html[data-theme='dark'] .theme-scope [class~='focus:border-[#030336]']:focus { border-color: #5aa0d0; }

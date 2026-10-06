@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Contact;
+use App\Models\Customer;
 use Illuminate\Http\Request;
 
 class ContactController extends Controller
@@ -11,7 +11,7 @@ class ContactController extends Controller
 {
     $currentUser = $request->user();
 
-    $query = Contact::where('tenant_id', $currentUser->tenant_id);
+    $query = Customer::where('tenant_id', $currentUser->tenant_id);
 
     if ($request->filled('search')) {
         $search = $request->search;
@@ -58,7 +58,7 @@ class ContactController extends Controller
             'postal_code'       => 'nullable|string|max:20',
         ]);
 
-        $contact = Contact::create([
+        $contact = Customer::create([
             'tenant_id'         => $user->tenant_id,
             'type_document_id'  => $validated['type_document_id'] ?? null,
             'document_number'   => $validated['document_number'] ?? null,
@@ -85,7 +85,7 @@ class ContactController extends Controller
     {
         $user = $request->user();
 
-        $contact = Contact::where('tenant_id', $user->tenant_id)->where('id', $id)->firstOrFail();
+        $contact = Customer::where('tenant_id', $user->tenant_id)->where('id', $id)->firstOrFail();
 
         $validated = $request->validate([
             'type_document_id'  => 'nullable|uuid|exists:type_documents,id',
@@ -114,7 +114,7 @@ class ContactController extends Controller
     {
         $user = $request->user();
 
-        $contact = Contact::where('tenant_id', $user->tenant_id)->where('id', $id)->firstOrFail();
+        $contact = Customer::where('tenant_id', $user->tenant_id)->where('id', $id)->firstOrFail();
         $contact->delete();
 
         return response()->json([

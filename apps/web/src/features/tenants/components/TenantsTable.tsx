@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, Clock, Pencil, Trash2, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { Building2, Pencil, Trash2, Eye, CheckCircle, XCircle, LogIn } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormTenant from './FormTenant';
-import TenantDetailsModal from './TenantDetailsModal';
+import Link from 'next/link';
+import { TENANT_STATUS } from '../tenantStatus';
+import { useAuth } from '@/hooks/useAuth';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
 
@@ -16,9 +18,15 @@ interface Tenant {
   timezone: string;
   status: string;
   created_at: string;
+  business_type?: { name: string; short_name: string } | null;
+  subscription?: { status?: string; plan?: { name?: string; is_public_catalog?: boolean } | null } | null;
+  users?: Array<{ is_owner?: boolean; account_type?: string }>;
 }
 
 export default function TenantsTable() {
+  const { user, startImpersonation } = useAuth();
+  // El soporte SaaS solo consulta y entra al panel; crear, editar y eliminar es del administrador SaaS.
+  const canManage = Boolean(user?.is_saas_admin);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -26,7 +34,6 @@ export default function TenantsTable() {
 
   // Iniciamos los filtros limpios
   const [filters, setFilters] = useState<Record<string, any>>({ status: '' });
-  const [viewingTenant, setViewingTenant] = useState<Tenant | null>(null);
 
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -36,7 +43,7 @@ export default function TenantsTable() {
     type?: 'confirm' | 'alert';
     variant?: 'default' | 'danger';
     title: string;
-    message: string;
+    message: string | React.ReactNode;
     confirmText?: string;
     cancelText?: string;
     onConfirm?: () => void;
@@ -54,6 +61,7 @@ export default function TenantsTable() {
       type: 'select',
       options: [
         { label: 'Activo', value: 'active' },
+        { label: 'Suspendido', value: 'suspended' },
         { label: 'Inactivo', value: 'inactive' },
       ]
     }
@@ -103,7 +111,7 @@ export default function TenantsTable() {
 
   // Conteos calculados para las tarjetas
   const totalActiveTenants = safeTenants.filter(t => t.status === 'active').length;
-  const totalInactiveTenants = safeTenants.filter(t => t.status === 'inactive').length;
+  const totalInactiveTenants = safeTenants.filter(t => t.status !== 'active').length;
 
   // Configuración de métricas con el diseño tenue y comportamiento de toggle exacto
   const metricCards: MetricCardItem[] = [
@@ -116,12 +124,12 @@ export default function TenantsTable() {
       borderColorClass: filters.status === 'active' ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-sm' : 'hover:border-emerald-300',
     },
     {
-      title: 'Tenants inactivos',
+      title: 'Tenants suspendidos o inactivos',
       value: totalInactiveTenants,
       icon: <XCircle size={18} />,
       iconColorClass: 'text-slate-400',
-      onClick: () => handleFilterChange('status', filters.status === 'inactive' ? '' : 'inactive'),
-      borderColorClass: filters.status === 'inactive' ? 'border-slate-500 ring-2 ring-slate-100 shadow-sm' : 'hover:border-slate-300',
+      onClick: () => handleFilterChange('status', filters.status === 'suspended' ? '' : 'suspended'),
+      borderColorClass: filters.status === 'suspended' ? 'border-slate-500 ring-2 ring-slate-100 shadow-sm' : 'hover:border-slate-300',
     }
   ];
 
@@ -135,19 +143,47 @@ export default function TenantsTable() {
     setShowFormModal(true);
   };
 
+  // Si la API rechaza algo, el error sube al formulario, que lo muestra.
   const handleFormSubmit = async (formData: any) => {
-    try {
-      if (editingTenant) {
-        await api.put(`/tenants/${editingTenant.id}`, formData);
-      } else {
-        await api.post('/tenants', formData);
-      }
+    if (editingTenant) {
+      const { name, slug, timezone, status } = formData;
+      await api.put(`/tenants/${editingTenant.id}`, { name, slug, timezone, status });
+    } else {
+      const res = await api.post('/tenants', formData);
+      const owner = res.data?.owner;
 
-      setShowFormModal(false);
-      fetchTenants(searchTerm, filters);
-    } catch (error) {
-      console.error('Error al guardar tenant:', error);
+      if (owner?.temporary_password) {
+        setModalConfig({
+          isOpen: true,
+          type: 'alert',
+          title: '¡Empresa creada!',
+          message: (
+            <span className="block space-y-4 pt-1">
+              <span className="block text-sm text-slate-600">
+                {res.data?.data?.name} quedó lista para operar. Estas son las credenciales de su administrador:
+              </span>
+              <span className="block space-y-2.5 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                <span className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-500">Correo</span>
+                  <span className="text-xs font-mono font-semibold text-slate-800 bg-white px-3 py-1.5 rounded-lg border border-slate-200 select-all">{owner.email}</span>
+                </span>
+                <span className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-500">Contraseña</span>
+                  <span className="text-xs font-mono font-bold text-slate-900 bg-white px-3 py-1.5 rounded-lg border border-slate-200 select-all">{owner.temporary_password}</span>
+                </span>
+              </span>
+              <span className="block text-xs text-slate-500 bg-slate-100/80 border border-slate-200/60 p-3 rounded-xl font-medium">
+                Cópiala ahora: no se vuelve a mostrar.
+              </span>
+            </span>
+          ),
+          confirmText: 'Entendido',
+        });
+      }
     }
+
+    setShowFormModal(false);
+    fetchTenants(searchTerm, filters);
   };
 
   const handleDelete = (id: string) => {
@@ -174,6 +210,31 @@ export default function TenantsTable() {
     });
   };
 
+  const handleImpersonate = (tenant: Tenant) => {
+    setModalConfig({
+      isOpen: true,
+      type: 'confirm',
+      title: `¿Entrar al panel de ${tenant.name}?`,
+      message: 'Vas a ver y usar su panel como su administrador para darle soporte. El ingreso queda registrado y la sesión se cierra sola a las 2 horas.',
+      confirmText: 'Entrar',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          setIsActionLoading(true);
+          await startImpersonation(tenant.id);
+        } catch (error: any) {
+          setIsActionLoading(false);
+          setModalConfig({
+            isOpen: true,
+            type: 'alert',
+            title: 'No se pudo entrar',
+            message: error.response?.data?.message || 'No se pudo abrir el panel de la empresa.',
+          });
+        }
+      }
+    });
+  };
+
   const columns: Column<Tenant>[] = [
     {
       header: 'Nombre del Tenant',
@@ -183,7 +244,9 @@ export default function TenantsTable() {
             <Building2 size={16} />
           </div>
           <div>
-            <span className={styles.customerName}>{tenant.name}</span>
+            <Link href={`/admin/tenants/${tenant.id}`} className={`${styles.customerName} hover:text-[#3F768C] hover:underline`}>
+              {tenant.name}
+            </Link>
             <span className="block text-xs text-slate-400 font-mono">
               slug: {tenant.slug}
             </span>
@@ -192,49 +255,78 @@ export default function TenantsTable() {
       ),
     },
     {
-      header: 'Zona Horaria',
+      header: 'Rubro',
       cell: (tenant) => (
-        <div key={`timezone-${tenant.id}`} className="flex items-center gap-1.5 text-xs text-slate-600">
-          <Clock size={14} className="text-slate-400" />
-          <span>{tenant.timezone}</span>
+        <span key={`type-${tenant.id}`} className="text-xs text-slate-600">
+          {tenant.business_type?.short_name ?? <span className="text-slate-400 italic">Sin rubro</span>}
+        </span>
+      ),
+    },
+    {
+      header: 'Plan',
+      cell: (tenant) => (
+        <div key={`plan-${tenant.id}`} className="text-xs">
+          {tenant.subscription?.plan?.name ? (
+            <>
+              <span className="font-semibold text-slate-700">{tenant.subscription.plan.name}</span>
+              {tenant.subscription.plan.is_public_catalog === false && <span className="text-slate-400"> · a medida</span>}
+              <span className="block text-[11px] text-slate-400">
+                {({ active: 'Activa', trialing: 'En prueba', past_due: 'Pago vencido', expired: 'Prueba vencida', canceled: 'Cancelada' } as Record<string, string>)[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
+              </span>
+            </>
+          ) : (
+            <span className="text-slate-400 italic">Sin plan</span>
+          )}
         </div>
       ),
     },
     {
       header: 'Estado',
-      cell: (tenant) => (
-        <span key={`status-${tenant.id}`} className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-          tenant.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
-        }`}>
-          {tenant.status === 'active' ? 'Activo' : 'Inactivo'}
-        </span>
-      ),
+      cell: (tenant) => {
+        const status = TENANT_STATUS[tenant.status] ?? TENANT_STATUS.inactive;
+        return (
+          <span key={`status-${tenant.id}`} className={`px-2 py-0.5 text-xs rounded-full font-medium ${status.className}`}>
+            {status.label}
+          </span>
+        );
+      },
     },
     {
       header: 'Acciones',
       cell: (tenant) => (
         <div key={`actions-${tenant.id}`} className="flex items-center gap-2">
-          <button 
-            onClick={() => setViewingTenant(tenant)}
+          <Link
+            href={`/admin/tenants/${tenant.id}`}
             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
             title="Ver detalles"
           >
             <Eye size={16} />
-          </button>
-          <button 
-            onClick={() => openEditModal(tenant)}
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Editar"
+          </Link>
+          <button
+            onClick={() => handleImpersonate(tenant)}
+            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+            title="Entrar al panel de la empresa"
           >
-            <Pencil size={16} />
+            <LogIn size={16} />
           </button>
-          <button 
-            onClick={() => handleDelete(tenant.id)}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Eliminar"
-          >
-            <Trash2 size={16} />
-          </button>
+          {canManage && (
+            <>
+              <button
+                onClick={() => openEditModal(tenant)}
+                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Editar"
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(tenant.id)}
+                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Eliminar"
+              >
+                <Trash2 size={16} />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -244,8 +336,8 @@ export default function TenantsTable() {
     <div className="space-y-6 mb-8">
       <DataTable<Tenant>
         title="Gestión de Tenants"
-        primaryActionLabel="Nuevo Tenant"
-        onPrimaryAction={openCreateModal}
+        primaryActionLabel={canManage ? 'Nuevo Tenant' : undefined}
+        onPrimaryAction={canManage ? openCreateModal : undefined}
         metricCards={metricCards}
         tabs={[
           { id: 'all', label: 'Todos los tenants', count: safeTenants.length },
@@ -268,12 +360,6 @@ export default function TenantsTable() {
         onClose={() => setShowFormModal(false)}
         onSubmit={handleFormSubmit}
         initialData={editingTenant}
-      />
-
-      <TenantDetailsModal
-        isOpen={Boolean(viewingTenant)}
-        onClose={() => setViewingTenant(null)}
-        tenant={viewingTenant}
       />
 
       <AppModal

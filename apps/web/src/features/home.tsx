@@ -48,7 +48,8 @@ export default function HomePage() {
     currentUser?.tenant?.subscription?.status === 'active' ||
     Boolean(currentUser?.has_active_subscription) ||
     Boolean(currentUser?.plan_slug) ||
-    Boolean(currentUser?.is_saas_admin);
+    Boolean(currentUser?.is_saas_admin) ||
+    Boolean(currentUser?.is_saas_support);
 
   // Vista de selección de plan si la cuenta está inactiva
   if (!hasActiveSubscription) {
@@ -86,6 +87,12 @@ export default function HomePage() {
           <p className="text-slate-500 text-sm font-medium">
             Resumen operativo general e indicadores clave de tu sistema ERP.
           </p>
+          {currentUser?.tenant?.code && (
+            <p className="text-xs text-slate-500 font-medium">
+              Código de empresa para el registro de tus {currentUser.tenant.vocabulary?.clients?.toLowerCase() ?? 'clientes'}:{' '}
+              <span className="font-mono font-bold text-[#022340] tracking-widest">{currentUser.tenant.code}</span>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -259,7 +266,7 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Nuevo Cliente', icon: Users, href: '/customers/new' },
+            { label: `Nuevo ${currentUser?.tenant?.vocabulary?.client ?? 'Cliente'}`, icon: Users, href: '/customers' },
             { label: 'Registrar Empresa', icon: Building2, href: '/companies/new' },
             { label: 'Añadir Producto', icon: Package, href: '/products/new' },
             { label: 'Crear Ticket', icon: Ticket, href: '/tickets/new' },

@@ -35,10 +35,6 @@ Verificación: `php -l` sin errores de sintaxis.
 
 `apps/web/eslint.config.mjs` y `apps/web/next.config.ts` son los archivos por defecto de la plantilla `create-next-app`. Se revisaron y **no se modificaron**: no hay requisitos actuales que exijan reglas o configuración adicional. Queda anotado para cuando se definan convenciones del equipo.
 
-## Pendientes detectados (no abordados en este avance)
+## Pendientes
 
-- Otros controladores sin filtro por tenant: `PipelineController`, `PipelineStageController`, `TenantController`, `TypeDocumentController`. Evaluar cuáles deben ser globales y cuáles por tenant.
-- Rutas del menú lateral sin página: `/appointments`, `/opportunities`, `/quotes`, `/branches`, `/settings`, `/subscribe`.
-- Archivos duplicados en frontend: `ContactsTable1.tsx`, `FormContact1.tsx`.
-- Esquema de base de datos en SQL crudo; no hay migraciones Laravel que lo reconstruyan.
-- El repositorio no tiene commits todavía.
+Los pendientes detectados en esta revisión están en `Documentación/Pendientes/pendientes.md`.

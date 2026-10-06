@@ -34,6 +34,21 @@ class Subscription extends Model
         'canceled_at' => 'datetime',
     ];
 
+    /**
+     * Vigente: en prueba o activa y sin haber pasado su fecha de fin.
+     * Una suscripción sin fecha de fin no vence.
+     */
+    public function isCurrent(): bool
+    {
+        return in_array($this->status, ['active', 'trialing'], true)
+            && (is_null($this->ends_at) || $this->ends_at->isFuture());
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(SubscriptionInvoice::class, 'subscription_id');
+    }
+
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class, 'tenant_id');
