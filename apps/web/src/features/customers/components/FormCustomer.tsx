@@ -12,7 +12,7 @@ interface FormCustomerProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: any | null;
-  onSubmitSuccess: () => void;
+  onSubmitSuccess: (customer?: any) => void;
 }
 
 export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuccess }: FormCustomerProps) {
@@ -133,10 +133,12 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
       setLoading(true);
       if (initialData?.id) {
         await api.put(`/customers/${initialData.id}`, form);
+        onSubmitSuccess();
       } else {
-        await api.post('/customers', usesDependents ? { ...form, dependents: pendingDependents } : form);
+        const res = await api.post('/customers', usesDependents ? { ...form, dependents: pendingDependents } : form);
+        // Quien abrió el formulario puede necesitar al cliente recién creado (p. ej. para agendarle una cita).
+        onSubmitSuccess(res.data?.customer);
       }
-      onSubmitSuccess();
       onClose();
     } catch (error) {
       console.error('Error guardando cliente:', error);

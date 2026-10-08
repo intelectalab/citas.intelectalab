@@ -24,6 +24,7 @@ class TenantSetting extends Model
         'brand_color',
         'logo_url',
         'allow_customer_signup',
+        'appointment_statuses',
     ];
 
     protected $casts = [
@@ -31,6 +32,7 @@ class TenantSetting extends Model
         'modules_off'           => 'array',
         'rules'                 => 'array',
         'allow_customer_signup' => 'boolean',
+        'appointment_statuses'  => 'array',
     ];
 
     public function tenant(): BelongsTo

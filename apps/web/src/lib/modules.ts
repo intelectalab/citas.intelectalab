@@ -73,6 +73,14 @@ export const OPTIONAL_MODULE_KEYS: string[] = MODULE_GROUPS.flatMap((group) =>
   group.items.map((item) => item.key)
 );
 
+// Secciones del menú que aún no tienen pantalla: nombre y módulo del que dependen.
+// La página provisional /modules/<clave> las muestra igual que a un módulo.
+export const PENDING_SECTIONS: Record<string, { label: string; module: string }> = {
+  waitlist: { label: 'Lista de espera', module: 'agenda' },
+  recalls: { label: 'Controles y seguimiento', module: 'records' },
+  blocks: { label: 'Bloqueos y ausencias', module: 'agenda' },
+};
+
 export const MODULE_LABELS: Record<string, string> = {
   ...CORE_MODULE_LABELS,
   ...Object.fromEntries(MODULE_GROUPS.flatMap((group) => group.items.map((item) => [item.key, item.label]))),

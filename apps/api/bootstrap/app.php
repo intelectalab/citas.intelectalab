@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'staff' => \App\Http\Middleware\EnsureStaffAccount::class,
+            'customer' => \App\Http\Middleware\EnsureCustomerAccount::class,
             'module' => \App\Http\Middleware\EnsureModuleEnabled::class,
             'saas' => \App\Http\Middleware\EnsurePlatformStaff::class,
         ]);

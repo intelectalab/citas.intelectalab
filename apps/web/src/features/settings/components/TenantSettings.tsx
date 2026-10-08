@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Check, Loader2, Lock, Puzzle, Type } from 'lucide-react';
+import { Building2, CalendarCheck, Check, Loader2, Lock, Puzzle, Type } from 'lucide-react';
 import { api } from '@/lib/axios';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
 
 interface SettingsModule {
@@ -22,6 +22,7 @@ interface SettingsPayload {
   vocabulary: { defaults: Record<string, string>; overrides: Record<string, string> };
   // Los términos de dependientes solo se editan si el rubro los usa.
   dependents?: { enabled: boolean };
+  appointment_statuses?: AppointmentStatus[];
 }
 
 const VOCABULARY_FIELDS: { key: string; label: string }[] = [
@@ -49,6 +50,7 @@ export default function TenantSettings() {
   const [data, setData] = useState<SettingsPayload | null>(null);
   const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [vocabulary, setVocabulary] = useState<Record<string, string>>({});
+  const [statusNames, setStatusNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -59,6 +61,10 @@ export default function TenantSettings() {
     setData(payload);
     setModulesOff(payload.modules.filter((m) => m.can_toggle && !m.enabled).map((m) => m.key));
     setVocabulary({ ...payload.vocabulary.overrides });
+    // Solo los nombres que la empresa cambió; el resto queda vacío y usa el de por defecto.
+    setStatusNames(Object.fromEntries(
+      (payload.appointment_statuses ?? []).filter((s) => s.name !== s.default_name).map((s) => [s.key, s.name]),
+    ));
   };
 
   useEffect(() => {
@@ -84,7 +90,7 @@ export default function TenantSettings() {
     try {
       setSaving(true);
       setMessage(null);
-      const res = await api.put('/tenant-settings', { modules_off: modulesOff, vocabulary });
+      const res = await api.put('/tenant-settings', { modules_off: modulesOff, vocabulary, appointment_statuses: statusNames });
       apply(res.data);
       // El menú y los nombres dependen de estos datos.
       await refetchUser();
@@ -231,6 +237,37 @@ export default function TenantSettings() {
           ))}
         </div>
       </section>
+
+      {(data.appointment_statuses?.length ?? 0) > 0 && (
+        <section className={cardClass}>
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+              <CalendarCheck className="w-4 h-4 text-[#3F768C]" /> Fases de la cita
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Las fases por las que pasa una cita son fijas. Puedes cambiar el nombre con que las ve tu equipo; deja un campo vacío para usar el nombre de siempre.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {data.appointment_statuses!.map((status, index) => (
+              <div key={status.key}>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  {index + 1}. {status.default_name}
+                </label>
+                <input
+                  type="text"
+                  maxLength={30}
+                  aria-label={`Nombre de la fase ${status.default_name}`}
+                  value={statusNames[status.key] ?? ''}
+                  onChange={(e) => { setMessage(null); setStatusNames({ ...statusNames, [status.key]: e.target.value }); }}
+                  placeholder={status.default_name}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] outline-none"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="flex items-center justify-end gap-4">
         {message && (

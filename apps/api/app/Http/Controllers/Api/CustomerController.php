@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerDependent;
+use App\Support\Search;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -54,11 +55,12 @@ class CustomerController extends Controller
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('document_number', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%");
+                // Sin distinguir mayúsculas ni tildes, y también por nombre completo.
+                Search::contains($q, "coalesce(first_name, '') || ' ' || coalesce(last_name, '')", $search);
+
+                foreach (['document_number', 'phone', 'email', 'code'] as $column) {
+                    Search::orContains($q, $column, $search);
+                }
             });
         }
 

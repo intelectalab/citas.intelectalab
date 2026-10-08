@@ -77,6 +77,7 @@ CREATE TABLE tenant_settings (
     brand_color varchar(7) NULL,
     logo_url varchar(255) NULL,
     allow_customer_signup boolean NOT NULL DEFAULT true, -- Registro de clientes con el código de empresa
+    appointment_statuses jsonb NOT NULL DEFAULT '{}'::jsonb, -- Nombre propio de las fases de la cita: {"checked_in": "En sala"}
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -347,6 +348,7 @@ CREATE INDEX idx_blocks_tenant_time ON availability_blocks(tenant_id, starts_at,
 CREATE TABLE appointments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    code varchar(20) NOT NULL, -- Correlativo por empresa (C-0001)
     branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     room_id uuid NULL REFERENCES rooms(id) ON DELETE SET NULL,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -356,26 +358,46 @@ CREATE TABLE appointments (
     professional_id uuid NOT NULL REFERENCES professionals(id) ON DELETE RESTRICT,
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
-    status_id uuid NULL REFERENCES statuses(id),
+    -- Fase de la cita. Son fijas: el flujo y los permisos dependen de ellas.
+    -- Cada empresa solo cambia el nombre con que las ve (tenant_settings.appointment_statuses).
+    status varchar(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show')),
     source varchar(30) NOT NULL DEFAULT 'staff',
+    price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0), -- Precio del servicio al reservar
     notes text,
+    reschedule_count integer NOT NULL DEFAULT 0,
+    override_reason varchar(255) NULL, -- Motivo cuando se agendó fuera del horario (sobre-agenda)
+    cancel_reason varchar(255) NULL,
+    cancelled_by varchar(20) NULL, -- staff, customer
+    confirmed_at timestamptz NULL,
+    checked_in_at timestamptz NULL,
+    started_at timestamptz NULL,
+    completed_at timestamptz NULL,
+    cancelled_at timestamptz NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    CHECK (ends_at > starts_at)
+    CHECK (ends_at > starts_at),
+    UNIQUE (tenant_id, code)
 );
 --
 CREATE INDEX idx_appt_tenant_start ON appointments(tenant_id, starts_at);
 CREATE INDEX idx_appt_tenant_branch_date ON appointments(tenant_id, branch_id, starts_at);
 CREATE INDEX idx_appt_prof_time ON appointments(tenant_id, professional_id, starts_at, ends_at);
+CREATE INDEX idx_appt_customer ON appointments(tenant_id, customer_id, starts_at);
+
+-- Cada cambio de fase y cada reprogramación (en ese caso la fase no cambia).
 CREATE TABLE appointment_status_history (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id),
-    appointment_id uuid NOT NULL REFERENCES appointments(id),
-    from_status_id uuid REFERENCES statuses(id),
-    to_status_id uuid NOT NULL REFERENCES statuses(id),
-    actor_user_id uuid REFERENCES users(id),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    appointment_id uuid NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+    from_status varchar(20) NULL,
+    to_status varchar(20) NOT NULL,
+    reason varchar(255) NULL,
+    actor_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_appt_history ON appointment_status_history(appointment_id, created_at);
 
 CREATE TABLE medical_records (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1276,13 +1298,18 @@ CREATE TABLE care_records (
     signature_url varchar(255) NULL,
     is_private boolean NOT NULL DEFAULT false, -- visible solo para su autor
     status varchar(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'signed', 'locked')),
-    locked_at timestamptz NULL, -- tras el bloqueo solo se admiten adendas
+    template_name varchar(150) NULL, -- nombre de la plantilla al llenar la ficha
+    consent_text text NULL, -- texto de consentimiento que se aceptó
+    signed_at timestamptz NULL,
+    signed_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    locked_at timestamptz NULL, -- desde ese momento solo se admiten notas (adendas)
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_care_records_customer ON care_records(tenant_id, customer_id, created_at);
-CREATE INDEX idx_care_records_appointment ON care_records(appointment_id);
+-- Una sola ficha por cita.
+CREATE UNIQUE INDEX idx_care_records_appointment ON care_records(appointment_id) WHERE appointment_id IS NOT NULL;
 
 CREATE TABLE care_record_addenda (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

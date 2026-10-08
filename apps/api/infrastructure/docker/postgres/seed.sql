@@ -33,7 +33,6 @@ ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO status_modules (id, name, description) VALUES
   ('e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'customers', 'Estados para la ficha de clientes'),
-  ('e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'appointments', 'Estados del flujo de citas médicas'),
   ('e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'sales', 'Estados de ventas y comprobantes'),
   ('e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a04', 'payments', 'Estados de transacciones y pagos de facturas'),
   ('e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'professionals', 'Estados para la ficha de profesionales'),
@@ -50,10 +49,6 @@ INSERT INTO statuses (id, module_id, name, slug, color, is_default) VALUES
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Activo', 'active', '#28A745', true),
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Inactivo', 'inactive', '#6C757D', false),
 
-  -- Módulo: appointments (e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02)
-  ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Programada', 'scheduled', '#00A3D9', true),
-  ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Completada', 'completed', '#28A745', false),
-  
   -- Módulo: professionals (e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05)
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a31', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'Activo', 'active', '#28A745', true),
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a32', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'Inactivo', 'inactive', '#6C757D', false),
@@ -426,9 +421,21 @@ INSERT INTO professional_specialties (tenant_id, professional_id, specialty_id) 
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', '10eebc99-9c0b-4ef8-bb6d-6bb9bd380a02')
 ON CONFLICT DO NOTHING;
 
+-- Horario semanal de ejemplo (0 = domingo ... 6 = sábado). Dr. Pérez: lunes a
+-- viernes en dos tramos. Dra. Gómez: lunes, miércoles y viernes, y sábado por la mañana.
+INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekday, starts_local, ends_local)
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', d, t.starts_local, t.ends_local
+FROM generate_series(1, 5) AS d, (VALUES ('09:00'::time, '13:00'::time), ('15:00'::time, '19:00'::time)) AS t(starts_local, ends_local);
+
+INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekday, starts_local, ends_local) VALUES
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 1, '08:00', '14:00'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 3, '08:00', '14:00'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 5, '08:00', '14:00'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 6, '09:00', '13:00');
+
 INSERT INTO customers (
     id, tenant_id, code, first_name, last_name, birth_date, biological_sex, document_number, email, phone, address, district, department, medical_notes
-) VALUES  
+) VALUES
 (
     '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0001', 'Juliana', 'Díaz', '1992-05-14', 'F', '72819043', 'juliana.diaz@gmail.com', '+51 912 345 678', 'Calle Los Pinos 145', 'Miraflores', 'Lima', 'Alergica a la penicilina'
 ),

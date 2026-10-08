@@ -1,0 +1,536 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Loader2, PawPrint, Plus, Search, UserRound, Video } from 'lucide-react';
+import { api } from '@/lib/axios';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { addDays, dateOf, formatDate, timeOf, todayISO } from '@/features/appointments/appointments';
+import { portalError, type PortalAppointment, type PortalAvailability, type PortalCatalog, type PortalDependent, type PortalOverview } from '../portal';
+
+interface BookingFlowProps {
+  overview: PortalOverview;
+  catalog: PortalCatalog;
+  // Con una cita, el flujo solo pide la nueva fecha y hora.
+  reschedule?: PortalAppointment | null;
+  onDone: () => void;
+  onExit: () => void;
+  onDependentAdded: (dependent: PortalDependent) => void;
+}
+
+type Step = 'who' | 'service' | 'branch' | 'professional' | 'when' | 'review';
+
+const STEP_TITLES: Record<Step, string> = {
+  who: '¿Para quién es la cita?',
+  service: '¿Qué servicio necesitas?',
+  branch: '¿En qué sede?',
+  professional: '¿Con quién?',
+  when: '¿Cuándo?',
+  review: 'Revisa y confirma',
+};
+
+const DAYS_PER_PAGE = 7;
+// Cuántos días hacia adelante se revisan al buscar el próximo con horarios.
+const SEARCH_DAYS = 21;
+
+const optionClass = (active: boolean, disabled = false) =>
+  `w-full flex items-center gap-3 p-4 rounded-2xl border text-left transition-colors ${
+    active ? 'border-[#022340] bg-[#022340]/5 ring-2 ring-[#022340]/15' : 'border-slate-200 bg-white'
+  } ${disabled ? 'opacity-60 cursor-not-allowed' : active ? '' : 'hover:border-[#3F768C]'}`;
+
+const inputClass =
+  'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
+
+// Reserva en línea, paso a paso: para quién, qué servicio, con quién y cuándo.
+// También sirve para cambiar la fecha de una cita que el cliente ya tiene.
+export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded }: BookingFlowProps) {
+  const vocab = useVocabulary();
+  const policies = overview.policies;
+  const isReschedule = Boolean(reschedule);
+
+  const [dependentId, setDependentId] = useState(overview.dependents.items.length === 1 ? overview.dependents.items[0].id : '');
+  const [serviceId, setServiceId] = useState(reschedule?.service?.id ?? '');
+  const [branchId, setBranchId] = useState(reschedule?.branch?.id ?? (catalog.branches.length === 1 ? catalog.branches[0].id : ''));
+  // '' = cualquiera disponible.
+  const [professionalId, setProfessionalId] = useState(reschedule?.professional?.id ?? '');
+  const [date, setDate] = useState(todayISO());
+  const [time, setTime] = useState('');
+  const [notes, setNotes] = useState('');
+  const [pageStart, setPageStart] = useState(todayISO());
+
+  const [availability, setAvailability] = useState<PortalAvailability | null>(null);
+  const [loadingTimes, setLoadingTimes] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState<PortalAppointment | null>(null);
+
+  const [addingPet, setAddingPet] = useState(overview.dependents.enabled && overview.dependents.items.length === 0);
+  const [pet, setPet] = useState({ name: '', species: '' });
+  const [savingPet, setSavingPet] = useState(false);
+
+  const service = catalog.services.find((s) => s.id === serviceId) ?? null;
+
+  // Quién puede atender el servicio en la sede elegida.
+  const professionals = useMemo(
+    () => catalog.professionals.filter((p) =>
+      (!branchId || p.branch_ids.includes(branchId)) &&
+      (!service || service.professional_ids.length === 0 || service.professional_ids.includes(p.id)),
+    ),
+    [catalog.professionals, branchId, service],
+  );
+
+  const steps = useMemo<Step[]>(() => {
+    if (isReschedule) return ['when', 'review'];
+
+    const list: Step[] = [];
+    if (overview.dependents.enabled) list.push('who');
+    list.push('service');
+    if (catalog.branches.length > 1) list.push('branch');
+    if (policies.choose_professional && professionals.length > 1) list.push('professional');
+    list.push('when', 'review');
+    return list;
+  }, [isReschedule, overview.dependents.enabled, catalog.branches.length, policies.choose_professional, professionals.length]);
+
+  const [stepIndex, setStepIndex] = useState(0);
+  const step = steps[Math.min(stepIndex, steps.length - 1)];
+  const lastDay = addDays(todayISO(), Math.max(1, policies.max_days_ahead));
+
+  const loadTimes = (day: string) =>
+    api.get('/portal/availability', {
+      params: {
+        service_id: serviceId,
+        branch_id: branchId,
+        date: day,
+        ...(professionalId ? { professional_id: professionalId } : {}),
+        ...(reschedule ? { ignore_id: reschedule.id } : {}),
+      },
+    }).then((res) => res.data as PortalAvailability);
+
+  // Horarios del día elegido.
+  useEffect(() => {
+    if (step !== 'when' || !serviceId || !branchId) return;
+
+    setLoadingTimes(true);
+    setAvailability(null);
+    loadTimes(date)
+      .then((data) => { setAvailability(data); setError(''); })
+      .catch((err) => setError(portalError(err, 'No se pudieron cargar los horarios.')))
+      .finally(() => setLoadingTimes(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, date, serviceId, branchId, professionalId]);
+
+  const pickDate = (day: string) => {
+    setDate(day);
+    setTime('');
+    setError('');
+  };
+
+  // Recorre los días siguientes hasta dar con uno que tenga horarios.
+  const findNextDay = async () => {
+    setSearching(true);
+    setError('');
+
+    try {
+      for (let offset = 1; offset <= SEARCH_DAYS; offset++) {
+        const day = addDays(date, offset);
+        if (day > lastDay) break;
+
+        const data = await loadTimes(day);
+        if (data.times.length > 0) {
+          setPageStart(day);
+          pickDate(day);
+          return;
+        }
+      }
+      setError('No encontramos horarios libres en las próximas semanas. Comunícate con la sede.');
+    } catch (err) {
+      setError(portalError(err, 'No se pudieron buscar horarios.'));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const savePet = async () => {
+    try {
+      setSavingPet(true);
+      setError('');
+      const res = await api.post('/portal/dependents', { name: pet.name, species: pet.species || null });
+      onDependentAdded(res.data);
+      setDependentId(res.data.id);
+      setAddingPet(false);
+      setPet({ name: '', species: '' });
+    } catch (err) {
+      setError(portalError(err, 'No se pudo guardar.'));
+    } finally {
+      setSavingPet(false);
+    }
+  };
+
+  const canContinue = (() => {
+    switch (step) {
+      case 'who': return Boolean(dependentId) || !overview.dependents.required;
+      case 'service': return Boolean(service) && !service?.needs_deposit;
+      case 'branch': return Boolean(branchId);
+      case 'professional': return true;
+      case 'when': return Boolean(time);
+      default: return true;
+    }
+  })();
+
+  const goNext = () => { setError(''); setStepIndex((index) => Math.min(index + 1, steps.length - 1)); };
+  const goBack = () => { setError(''); if (stepIndex === 0) onExit(); else setStepIndex((index) => index - 1); };
+
+  const submit = async () => {
+    try {
+      setSaving(true);
+      setError('');
+      const startsAt = `${date}T${time}`;
+      const res = reschedule
+        ? await api.post(`/portal/appointments/${reschedule.id}/reschedule`, { starts_at: startsAt })
+        : await api.post('/portal/appointments', {
+            service_id: serviceId,
+            branch_id: branchId,
+            professional_id: professionalId || null,
+            customer_dependent_id: dependentId || null,
+            starts_at: startsAt,
+            notes: notes.trim() || null,
+          });
+      setDone(res.data);
+    } catch (err: any) {
+      setError(portalError(err, 'No se pudo completar la reserva.'));
+      // El horario se ocupó mientras tanto: se vuelve a elegir.
+      if (err?.response?.data?.code === 'SLOT_UNAVAILABLE') {
+        setTime('');
+        setStepIndex(steps.indexOf('when'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 text-center space-y-4" data-booking-done>
+        <span className="w-14 h-14 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><Check size={28} /></span>
+        <div className="space-y-1">
+          <h2 className="text-xl font-black text-[#022340]">{isReschedule ? '¡Listo! Cambiamos tu cita' : '¡Tu cita está reservada!'}</h2>
+          <p className="text-sm text-slate-600 first-letter:uppercase">
+            {formatDate(dateOf(done.starts_at))}, a las {timeOf(done.starts_at)}
+          </p>
+          <p className="text-sm text-slate-500">
+            {done.service?.name}{done.professional ? ` · ${done.professional.display_name}` : ''} · Código {done.code}
+          </p>
+        </div>
+        <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
+          {done.status === 'confirmed'
+            ? 'Tu cita quedó confirmada.'
+            : 'Tu cita quedó pendiente: confirma tu asistencia desde "Mis citas" cuando lo tengas claro.'}
+          {policies.cancel_allowed && ` Puedes cambiarla o cancelarla hasta ${policies.cancel_window_hours} horas antes.`}
+        </p>
+        <button
+          type="button"
+          data-action="done"
+          onClick={onDone}
+          className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors"
+        >
+          Ver mis citas
+        </button>
+      </section>
+    );
+  }
+
+  const days = Array.from({ length: DAYS_PER_PAGE }, (_, i) => addDays(pageStart, i)).filter((day) => day <= lastDay);
+  const times = availability?.times ?? [];
+  const groups: [string, string[]][] = [
+    ['Mañana', times.filter((t) => t < '12:00')],
+    ['Tarde', times.filter((t) => t >= '12:00' && t < '18:00')],
+    ['Noche', times.filter((t) => t >= '18:00')],
+  ];
+  const chosenProfessional = catalog.professionals.find((p) => p.id === professionalId);
+  const chosenDependent = overview.dependents.items.find((d) => d.id === dependentId);
+
+  return (
+    <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden" data-booking-step={step}>
+      <header className="px-5 sm:px-6 pt-5 pb-4 border-b border-slate-100 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            {isReschedule ? `Cambiar cita ${reschedule!.code}` : 'Reservar cita'} · Paso {stepIndex + 1} de {steps.length}
+          </span>
+          <button type="button" onClick={onExit} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+            Salir
+          </button>
+        </div>
+        <div className="flex gap-1.5">
+          {steps.map((item, index) => (
+            <span key={item} className={`h-1.5 flex-1 rounded-full ${index <= stepIndex ? 'bg-[#022340]' : 'bg-slate-200'}`} />
+          ))}
+        </div>
+        <h2 className="text-lg font-black text-[#022340] tracking-tight">{STEP_TITLES[step]}</h2>
+      </header>
+
+      <div className="px-5 sm:px-6 py-5 space-y-3">
+        {step === 'who' && (
+          <>
+            {overview.dependents.items.map((item) => (
+              <button key={item.id} type="button" data-dependent={item.name} aria-pressed={dependentId === item.id} onClick={() => setDependentId(item.id)} className={optionClass(dependentId === item.id)}>
+                <span className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0"><PawPrint size={18} /></span>
+                <span className="flex-1">
+                  <span className="block text-sm font-bold text-slate-800">{item.name}</span>
+                  {(item.species || item.breed) && <span className="block text-xs text-slate-500">{[item.species, item.breed].filter(Boolean).join(' · ')}</span>}
+                </span>
+              </button>
+            ))}
+
+            {!overview.dependents.required && (
+              <button type="button" aria-pressed={dependentId === ''} onClick={() => setDependentId('')} className={optionClass(dependentId === '' && !addingPet)}>
+                <span className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0"><UserRound size={18} /></span>
+                <span className="text-sm font-bold text-slate-800">Para mí</span>
+              </button>
+            )}
+
+            {addingPet ? (
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3" data-new-dependent>
+                <span className="block text-sm font-bold text-slate-800">Registrar {vocab.dependent.toLowerCase()}</span>
+                <input type="text" maxLength={150} aria-label="Nombre" placeholder="Nombre" className={inputClass} value={pet.name} onChange={(e) => setPet({ ...pet, name: e.target.value })} />
+                <input type="text" maxLength={80} aria-label="Especie" placeholder="Especie (opcional). Ej. Perro" className={inputClass} value={pet.species} onChange={(e) => setPet({ ...pet, species: e.target.value })} />
+                <div className="flex justify-end gap-2">
+                  {overview.dependents.items.length > 0 && (
+                    <button type="button" onClick={() => setAddingPet(false)} className="px-4 py-2 text-sm font-semibold border border-slate-200 bg-white text-slate-600 rounded-xl hover:bg-slate-50">
+                      Cancelar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    data-action="save-dependent"
+                    disabled={savingPet || !pet.name.trim()}
+                    onClick={savePet}
+                    className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                  >
+                    {savingPet ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" data-action="add-dependent" onClick={() => setAddingPet(true)} className="inline-flex items-center gap-1.5 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <Plus size={15} /> Registrar otro
+              </button>
+            )}
+          </>
+        )}
+
+        {step === 'service' && (
+          catalog.services.length === 0
+            ? <p className="text-sm text-slate-500">Por ahora no hay servicios para reservar en línea. Comunícate con la sede.</p>
+            : catalog.services.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                data-service={item.name}
+                aria-pressed={serviceId === item.id}
+                disabled={item.needs_deposit}
+                onClick={() => { setServiceId(item.id); setProfessionalId(''); setTime(''); }}
+                className={optionClass(serviceId === item.id, item.needs_deposit)}
+              >
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                    {item.name}
+                    {item.is_virtual && <span title="Por videollamada"><Video size={14} className="text-[#3F768C]" /></span>}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                    <Clock size={12} /> {item.duration_minutes} min{item.category ? ` · ${item.category}` : ''}
+                  </span>
+                  {item.needs_deposit && (
+                    <span className="block text-xs font-medium text-amber-700 mt-1">Se reserva con un adelanto. Comunícate con la sede para agendarlo.</span>
+                  )}
+                </span>
+                <span className="text-sm font-extrabold text-[#022340] shrink-0">S/ {Number(item.price).toFixed(2)}</span>
+              </button>
+            ))
+        )}
+
+        {step === 'branch' && catalog.branches.map((item) => (
+          <button key={item.id} type="button" data-branch={item.name} aria-pressed={branchId === item.id} onClick={() => { setBranchId(item.id); setProfessionalId(''); setTime(''); }} className={optionClass(branchId === item.id)}>
+            <span className="text-sm font-bold text-slate-800">{item.name}</span>
+          </button>
+        ))}
+
+        {step === 'professional' && (
+          <>
+            <button type="button" data-professional="any" aria-pressed={professionalId === ''} onClick={() => { setProfessionalId(''); setTime(''); }} className={optionClass(professionalId === '')}>
+              <span className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0"><Search size={18} /></span>
+              <span>
+                <span className="block text-sm font-bold text-slate-800">Cualquiera disponible</span>
+                <span className="block text-xs text-slate-500">Verás más horarios para elegir</span>
+              </span>
+            </button>
+            {professionals.map((item) => (
+              <button key={item.id} type="button" data-professional={item.display_name} aria-pressed={professionalId === item.id} onClick={() => { setProfessionalId(item.id); setTime(''); }} className={optionClass(professionalId === item.id)}>
+                <span className="w-10 h-10 rounded-xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><UserRound size={18} /></span>
+                <span className="text-sm font-bold text-slate-800">{item.display_name}</span>
+              </button>
+            ))}
+          </>
+        )}
+
+        {step === 'when' && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                title="Días anteriores"
+                disabled={pageStart <= todayISO()}
+                onClick={() => setPageStart(addDays(pageStart, -DAYS_PER_PAGE) < todayISO() ? todayISO() : addDays(pageStart, -DAYS_PER_PAGE))}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 shrink-0"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex-1 grid grid-cols-7 gap-1.5" data-days>
+                {days.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    data-day={day}
+                    aria-pressed={date === day}
+                    onClick={() => pickDate(day)}
+                    className={`flex flex-col items-center py-2 rounded-xl border transition-colors ${
+                      date === day ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-[#3F768C]'
+                    }`}
+                  >
+                    <span className="text-[10px] font-semibold uppercase opacity-80">{formatDate(day, { weekday: 'short' }).replace('.', '')}</span>
+                    <span className="text-lg font-black leading-tight">{day.slice(8, 10)}</span>
+                    <span className="text-[10px] opacity-80">{formatDate(day, { month: 'short' }).replace('.', '')}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                title="Días siguientes"
+                disabled={addDays(pageStart, DAYS_PER_PAGE) > lastDay}
+                onClick={() => setPageStart(addDays(pageStart, DAYS_PER_PAGE))}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 shrink-0"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            <p className="text-sm font-semibold text-slate-700 first-letter:uppercase">{formatDate(date)}</p>
+
+            {loadingTimes ? (
+              <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 size={15} className="animate-spin" /> Buscando horarios...</p>
+            ) : times.length === 0 ? (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3" data-no-times>
+                <p className="text-sm text-slate-600">No hay horarios libres este día.</p>
+                <button
+                  type="button"
+                  data-action="next-day"
+                  disabled={searching}
+                  onClick={findNextDay}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                >
+                  {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                  {searching ? 'Buscando...' : 'Buscar el próximo día con horarios'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3" data-times>
+                {groups.filter(([, list]) => list.length > 0).map(([label, list]) => (
+                  <div key={label}>
+                    <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{label}</span>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+                      {list.map((slot) => (
+                        <button
+                          key={slot}
+                          type="button"
+                          data-time={slot}
+                          aria-pressed={time === slot}
+                          onClick={() => { setTime(slot); setError(''); }}
+                          className={`py-2 text-sm font-semibold rounded-xl border transition-colors ${
+                            time === slot ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-[#3F768C]'
+                          }`}
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === 'review' && (
+          <div className="space-y-4">
+            <dl className="rounded-2xl border border-slate-200 divide-y divide-slate-100" data-summary>
+              {([
+                ['Servicio', reschedule?.service?.name ?? service?.name],
+                [vocab.dependent, isReschedule ? reschedule?.dependent?.name : chosenDependent?.name],
+                ['Fecha', formatDate(date)],
+                ['Hora', time],
+                [vocab.pro, chosenProfessional?.display_name ?? 'El primero disponible'],
+                ['Sede', catalog.branches.find((b) => b.id === branchId)?.name],
+                ['Precio', service ? `S/ ${Number(service.price).toFixed(2)}` : reschedule ? `S/ ${Number(reschedule.price).toFixed(2)}` : null],
+              ] as [string, string | null | undefined][]).filter(([, value]) => value).map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+                  <dt className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</dt>
+                  <dd className="text-sm font-semibold text-slate-800 text-right first-letter:uppercase">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {isReschedule ? (
+              <p className="text-xs text-slate-500">
+                Ahora tu cita es el {formatDate(dateOf(reschedule!.starts_at), { weekday: 'long', day: 'numeric', month: 'long' })} a las {timeOf(reschedule!.starts_at)}.
+              </p>
+            ) : (
+              <textarea
+                rows={2}
+                maxLength={1000}
+                aria-label="Comentario para la sede"
+                placeholder="¿Algo que debamos saber? (opcional)"
+                className={inputClass}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            )}
+
+            {policies.cancel_allowed && (
+              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
+                Podrás cambiar o cancelar tu cita desde aquí hasta {policies.cancel_window_hours} horas antes.
+              </p>
+            )}
+          </div>
+        )}
+
+        {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>}
+      </div>
+
+      <footer className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/60">
+        <button type="button" data-action="back" onClick={goBack} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border border-slate-200 bg-white text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
+          <ArrowLeft size={15} /> {stepIndex === 0 ? 'Salir' : 'Atrás'}
+        </button>
+        {step === 'review' ? (
+          <button
+            type="button"
+            data-action="submit"
+            disabled={saving}
+            onClick={submit}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+          >
+            <CalendarCheck size={16} /> {saving ? 'Guardando...' : isReschedule ? 'Cambiar mi cita' : 'Reservar cita'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-action="next"
+            disabled={!canContinue}
+            onClick={goNext}
+            className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-40"
+          >
+            Continuar <ArrowRight size={15} />
+          </button>
+        )}
+      </footer>
+    </section>
+  );
+}

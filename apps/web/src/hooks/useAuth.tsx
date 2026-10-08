@@ -33,6 +33,15 @@ export interface UserTenant {
   modules?: string[];
   rules?: Record<string, string | number | boolean>;
   dependents?: { enabled: boolean; kind: string | null; required: boolean };
+  // Fases de la cita con el nombre que usa la empresa.
+  appointment_statuses?: AppointmentStatus[];
+}
+
+export interface AppointmentStatus {
+  key: string;
+  name: string;
+  default_name: string;
+  tone: 'warn' | 'info' | 'accent' | 'ok' | 'muted' | 'bad';
 }
 
 export interface User {

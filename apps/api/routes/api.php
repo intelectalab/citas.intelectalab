@@ -14,6 +14,12 @@ use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\SaaSPlanController;
 use App\Http\Controllers\Api\TenantContactController;
 use App\Http\Controllers\Api\ProfessionalController;
+use App\Http\Controllers\Api\ProfessionalScheduleController;
+use App\Http\Controllers\Api\AvailabilityBlockController;
+use App\Http\Controllers\Api\AppointmentController;
+use App\Http\Controllers\Api\RecordTemplateController;
+use App\Http\Controllers\Api\CareRecordController;
+use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\Api\SpecialtyController;
 use App\Http\Controllers\Api\CustomerController;
@@ -92,6 +98,23 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
     });
 });
 
+// Portal del cliente: solo cuentas de cliente, y cada una ve únicamente lo suyo.
+Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(function () {
+    Route::get('/overview', [PortalController::class, 'overview']);
+    Route::put('/profile', [PortalController::class, 'updateProfile']);
+    Route::post('/dependents', [PortalController::class, 'storeDependent']);
+
+    // Reservar, cancelar y reprogramar en línea depende del plan de la empresa.
+    Route::middleware('module:booking')->group(function () {
+        Route::get('/catalog', [PortalController::class, 'catalog']);
+        Route::get('/availability', [PortalController::class, 'portalAvailability']);
+        Route::post('/appointments', [PortalController::class, 'book']);
+        Route::post('/appointments/{appointment}/confirm', [PortalController::class, 'confirm']);
+        Route::post('/appointments/{appointment}/cancel', [PortalController::class, 'cancel']);
+        Route::post('/appointments/{appointment}/reschedule', [PortalController::class, 'move']);
+    });
+});
+
 // Backoffice: solo personal del tenant y admin SaaS. Las cuentas de cliente no entran.
 Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::post('/subscriptions/subscribe', [SubscriptionController::class, 'subscribe']);
@@ -109,6 +132,29 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::apiResource('services', ServiceController::class);
         Route::apiResource('service-categories', ServiceCategoryController::class);
         Route::apiResource('professionals', ProfessionalController::class);
+        Route::get('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'show']);
+        Route::put('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'update']);
+        Route::apiResource('availability-blocks', AvailabilityBlockController::class)->only(['index', 'store', 'destroy']);
+
+        Route::get('/appointments/availability', [AppointmentController::class, 'availability']);
+        Route::get('/appointments/context', [AppointmentController::class, 'context']);
+        Route::get('/appointments/day', [AppointmentController::class, 'day']);
+        Route::get('/appointments/metrics', [AppointmentController::class, 'metrics']);
+        Route::apiResource('appointments', AppointmentController::class)->except(['destroy']);
+        Route::post('/appointments/{appointment}/status', [AppointmentController::class, 'changeStatus']);
+        Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule']);
+    });
+
+    // Fichas de atención: plantillas de la empresa y fichas llenadas en cada cita.
+    Route::middleware('module:records')->group(function () {
+        Route::apiResource('record-templates', RecordTemplateController::class)->except(['show']);
+        Route::get('/appointments/{appointment}/record', [CareRecordController::class, 'forAppointment']);
+        Route::put('/appointments/{appointment}/record', [CareRecordController::class, 'save']);
+        Route::get('/care-records', [CareRecordController::class, 'index']);
+        Route::get('/care-records/{careRecord}', [CareRecordController::class, 'show']);
+        Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum']);
+        Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess']);
+        Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf']);
     });
 
     Route::middleware('module:crm')->group(function () {

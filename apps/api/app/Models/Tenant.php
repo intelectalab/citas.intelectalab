@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class Tenant extends Model
@@ -235,7 +236,10 @@ class Tenant extends Model
             'users'              => DB::table('users')->where('tenant_id', $this->id)->where('account_type', User::TYPE_STAFF)->count(),
             'branches'           => DB::table('branches')->where('tenant_id', $this->id)->count(),
             'professionals'      => DB::table('professionals')->where('tenant_id', $this->id)->count(),
-            'appointments_month' => DB::table('appointments')->where('tenant_id', $this->id)->where('starts_at', '>=', $monthStart)->count(),
+            // Las canceladas no cuentan contra el límite del plan.
+            'appointments_month' => DB::table('appointments')->where('tenant_id', $this->id)->where('starts_at', '>=', $monthStart)
+                ->when(Schema::hasColumn('appointments', 'status'), fn ($q) => $q->where('status', '!=', 'cancelled'))
+                ->count(),
             'whatsapp_month'     => DB::table('customer_messages')->where('tenant_id', $this->id)->where('channel', 'whatsapp')->where('created_at', '>=', $monthStart)->count(),
         ];
     }

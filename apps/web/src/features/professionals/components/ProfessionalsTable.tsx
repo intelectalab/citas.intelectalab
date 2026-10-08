@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Contact, Pencil, Trash2, CheckCircle, XCircle, Award, FileBadge, UserCheck, Eye } from 'lucide-react';
+import { Contact, Pencil, Trash2, CheckCircle, XCircle, Award, FileBadge, UserCheck, Eye, CalendarClock } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import FormProfessional from './FormProfessional';
+import ProfessionalSchedule from './ProfessionalSchedule';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +46,7 @@ export default function ProfessionalsTable() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [viewingProfessional, setViewingProfessional] = useState<Professional | null>(null);
+  const [scheduleProfessional, setScheduleProfessional] = useState<Professional | null>(null);
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -280,6 +282,13 @@ export default function ProfessionalsTable() {
           >
             <Eye size={16} />
           </button>
+          <button
+            onClick={() => setScheduleProfessional(prof)}
+            title="Horario y ausencias"
+            className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+          >
+            <CalendarClock size={16} />
+          </button>
           <button 
             onClick={() => { setEditingProfessional(prof); setShowFormModal(true); }}
             title={`Editar ${proLower}`}
@@ -329,6 +338,12 @@ export default function ProfessionalsTable() {
         onClose={() => { setShowFormModal(false); setEditingProfessional(null); }}
         initialData={editingProfessional}
         onSubmitSuccess={handleCreationSuccess}
+      />
+
+      <ProfessionalSchedule
+        isOpen={scheduleProfessional !== null}
+        onClose={() => setScheduleProfessional(null)}
+        professional={scheduleProfessional}
       />
 
       <AppModal

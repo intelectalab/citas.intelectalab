@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Pencil, Trash2, Users, Mars, Venus, Phone, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import { User, Pencil, Trash2, Users, Mars, Venus, Phone, MapPin, Eye } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -181,7 +182,10 @@ export default function CustomersTable() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className={styles.customerName}>{`${pat.first_name} ${pat.last_name}`}</span>
+              {/* El nombre lleva a la página del cliente, con su historia. */}
+              <Link href={`/customers/${pat.id}`} data-customer-link={pat.id} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>
+                {`${pat.first_name} ${pat.last_name}`}
+              </Link>
             </div>
             <span className="block text-xs text-slate-400 font-mono">
               {pat.email ? pat.email : 'Sin correo electrónico'}
@@ -246,6 +250,13 @@ export default function CustomersTable() {
       header: 'Acciones',
       cell: (pat) => (
         <div key={`actions-${pat.id}`} className="flex items-center gap-1">
+          <Link
+            href={`/customers/${pat.id}`}
+            title={`Ver la historia de este ${clientLower}`}
+            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          >
+            <Eye size={16} />
+          </Link>
           <button 
             onClick={() => { setEditingCustomer(pat); setShowFormModal(true); }}
             title={`Editar ${clientLower}`}

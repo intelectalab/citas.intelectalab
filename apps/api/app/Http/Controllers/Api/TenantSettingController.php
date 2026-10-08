@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\SaasModule;
 use App\Models\Tenant;
 use App\Models\TenantSetting;
+use App\Support\AppointmentFlow;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /**
@@ -40,8 +42,12 @@ class TenantSettingController extends Controller
             // Solo se aceptan módulos que la empresa tiene por su plan y su rubro.
             'modules_off.*' => ['string', 'distinct', Rule::in($toggleable)],
             'vocabulary'    => 'sometimes|array',
+            'appointment_statuses' => 'sometimes|array',
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
+            ->all()
+          + collect(AppointmentFlow::keys())
+            ->mapWithKeys(fn ($key) => ["appointment_statuses.$key" => 'nullable|string|max:30'])
             ->all(), [
             'modules_off.*.in' => 'Ese módulo no está disponible para tu plan y rubro.',
         ]);
@@ -59,6 +65,16 @@ class TenantSettingController extends Controller
             // Un término vacío vuelve al del rubro.
             $settings->vocabulary = collect($validated['vocabulary'])
                 ->only(array_keys(Tenant::DEFAULT_VOCABULARY))
+                ->map(fn ($value) => trim((string) $value))
+                ->filter()
+                ->all();
+        }
+
+        // Nombre propio de las fases de la cita. Vacío = el nombre por defecto.
+        // En una base sin resetear la columna aún no existe: el resto se guarda igual.
+        if (array_key_exists('appointment_statuses', $validated) && Schema::hasColumn('tenant_settings', 'appointment_statuses')) {
+            $settings->appointment_statuses = collect($validated['appointment_statuses'])
+                ->only(AppointmentFlow::keys())
                 ->map(fn ($value) => trim((string) $value))
                 ->filter()
                 ->all();
@@ -115,6 +131,7 @@ class TenantSettingController extends Controller
                 'overrides' => (object) ($tenant->settings?->vocabulary ?? []),
             ],
             'dependents' => $tenant->dependents(),
+            'appointment_statuses' => AppointmentFlow::forTenant($tenant),
         ];
     }
 }

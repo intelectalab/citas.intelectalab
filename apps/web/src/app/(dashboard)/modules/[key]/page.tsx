@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Construction, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { MODULE_LABELS } from '@/lib/modules';
+import { MODULE_LABELS, PENDING_SECTIONS } from '@/lib/modules';
 
 // Página provisional de los módulos que ya se activan por plan y rubro pero
 // todavía no tienen pantallas. Se reemplaza por la ruta real de cada módulo.
@@ -12,7 +12,8 @@ export default function ModulePage() {
   const params = useParams<{ key: string }>();
   const { hasModule, loading } = useAuth();
   const moduleKey = params.key;
-  const label = MODULE_LABELS[moduleKey];
+  const section = PENDING_SECTIONS[moduleKey];
+  const label = section?.label ?? MODULE_LABELS[moduleKey];
 
   if (loading) {
     return (
@@ -22,7 +23,7 @@ export default function ModulePage() {
     );
   }
 
-  const isAvailable = Boolean(label) && hasModule(moduleKey);
+  const isAvailable = Boolean(label) && hasModule(section?.module ?? moduleKey);
 
   return (
     <div className="max-w-2xl mx-auto pt-10 font-sans text-[#1F2937]">
@@ -36,8 +37,8 @@ export default function ModulePage() {
           </h1>
           <p className="text-sm text-slate-500 font-medium leading-relaxed">
             {isAvailable
-              ? 'Este módulo está activo para tu empresa. Sus pantallas aún están en construcción.'
-              : 'Este módulo no está disponible para tu empresa. Depende de tu plan y del rubro de tu negocio.'}
+              ? 'Está activo para tu empresa. Sus pantallas aún están en construcción.'
+              : 'No está disponible para tu empresa. Depende de tu plan y del rubro de tu negocio.'}
           </p>
           <Link href="/home" className="inline-block text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
             Volver al inicio

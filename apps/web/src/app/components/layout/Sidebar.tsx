@@ -34,6 +34,11 @@ import {
   Boxes,
   BadgeCheck,
   Megaphone,
+  CalendarClock,
+  CalendarOff,
+  Hourglass,
+  Repeat,
+  Timer,
   LucideIcon
 } from 'lucide-react';
 
@@ -81,16 +86,28 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     ]
   },
   {
+    id: 'agenda',
+    groupName: 'AGENDA',
+    groupIcon: CalendarDays,
+    items: [
+      { name: 'Agenda', href: '/agenda', icon: CalendarDays, module: 'agenda' },
+      { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda' },
+      { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
+      { name: 'Lista de espera', href: '/modules/waitlist', icon: Hourglass, module: 'agenda' },
+      { name: 'Controles y seguimiento', href: '/modules/recalls', icon: Repeat, module: 'records' },
+      { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes' },
+      { name: 'Bloqueos y ausencias', href: '/modules/blocks', icon: CalendarOff, module: 'agenda' },
+      { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda' },
+    ]
+  },
+  {
     id: 'clinical',
     groupName: 'ATENCIÓN',
     groupIcon: Layers,
     items: [
       { name: vocab.clients, href: '/customers', icon: Users, module: 'crm' },
-      { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda' },
-      { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
-      { name: 'Clases', href: '/modules/classes', icon: CalendarDays, module: 'classes' },
       { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda' },
-      { name: 'Fichas de atención', href: '/modules/records', icon: ClipboardList, module: 'records' },
+      { name: 'Fichas de atención', href: '/records', icon: ClipboardList, module: 'records' },
     ]
   },
   {
@@ -142,6 +159,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     'saas-admin': true,
+    agenda: true,
     clinical: true,
     crm: true,
     loyalty: true,

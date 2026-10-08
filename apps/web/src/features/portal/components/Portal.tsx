@@ -1,0 +1,320 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { Building2, CalendarDays, CalendarPlus, Home, Loader2, LogOut, PawPrint, Phone } from 'lucide-react';
+import { api } from '@/lib/axios';
+import { useAuth } from '@/hooks/useAuth';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { AppModal } from '@/app/components/ui/modals/AppModal';
+import BookingFlow from './BookingFlow';
+import PortalAppointmentCard from './PortalAppointmentCard';
+import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview } from '../portal';
+
+type Tab = 'home' | 'book' | 'appointments';
+
+// Portal del cliente: su próxima cita, reservar en línea y sus citas.
+export default function Portal() {
+  const { user, loading: authLoading, logout } = useAuth();
+  const vocab = useVocabulary();
+  const isStaff = !!user && user.account_type !== 'customer';
+
+  const [overview, setOverview] = useState<PortalOverview | null>(null);
+  const [catalog, setCatalog] = useState<PortalCatalog | null>(null);
+  const [tab, setTab] = useState<Tab>('home');
+  const [rescheduling, setRescheduling] = useState<PortalAppointment | null>(null);
+  const [cancelling, setCancelling] = useState<PortalAppointment | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [phone, setPhone] = useState('');
+  const [editingPhone, setEditingPhone] = useState(false);
+
+  // El portal es solo para cuentas de cliente; el personal vuelve a su panel.
+  useEffect(() => {
+    if (isStaff) window.location.replace('/home');
+  }, [isStaff]);
+
+  const load = useCallback(() => {
+    api.get('/portal/overview')
+      .then((res) => { setOverview(res.data); setPhone(res.data.customer.phone ?? ''); setError(''); })
+      .catch((err) => setError(portalError(err, 'No se pudo cargar tu información.')));
+  }, []);
+
+  useEffect(() => {
+    if (!user || isStaff) return;
+    load();
+  }, [user, isStaff, load]);
+
+  // El catálogo solo existe si la empresa ofrece reserva en línea.
+  useEffect(() => {
+    if (!overview?.policies.booking_enabled || catalog) return;
+
+    api.get('/portal/catalog')
+      .then((res) => setCatalog(res.data))
+      .catch(() => setCatalog(null));
+  }, [overview?.policies.booking_enabled, catalog]);
+
+  if (authLoading || !user || isStaff || (!overview && !error)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <p className="text-sm font-medium text-slate-500">Cargando tu portal...</p>
+      </div>
+    );
+  }
+
+  const tenant = user.tenant;
+  const policies = overview?.policies;
+  const appointments = overview?.appointments ?? [];
+  // Vienen de la más nueva a la más antigua: las próximas se muestran al revés.
+  const upcoming = appointments.filter((a) => a.is_upcoming).reverse();
+  const past = appointments.filter((a) => !a.is_upcoming);
+  const next = upcoming[0] ?? null;
+  const canBook = Boolean(policies?.booking_enabled);
+
+  const act = async (run: () => Promise<unknown>, done: string) => {
+    try {
+      setBusy(true);
+      setError('');
+      setNotice('');
+      await run();
+      setNotice(done);
+      load();
+    } catch (err) {
+      setError(portalError(err, 'No se pudo completar. Inténtalo otra vez.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirm = (appointment: PortalAppointment) =>
+    act(() => api.post(`/portal/appointments/${appointment.id}/confirm`), 'Gracias: tu asistencia quedó confirmada.');
+
+  const cancel = async () => {
+    if (!cancelling) return;
+    const appointment = cancelling;
+    await act(() => api.post(`/portal/appointments/${appointment.id}/cancel`), 'Tu cita fue cancelada.');
+    setCancelling(null);
+  };
+
+  const startReschedule = (appointment: PortalAppointment) => {
+    setRescheduling(appointment);
+    setNotice('');
+    setError('');
+    setTab('book');
+  };
+
+  const openTab = (target: Tab) => {
+    setRescheduling(null);
+    setNotice('');
+    setError('');
+    setTab(target);
+  };
+
+  const savePhone = () => act(() => api.put('/portal/profile', { phone }), 'Actualizamos tu celular.').then(() => setEditingPhone(false));
+
+  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling };
+
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
+    ...(canBook ? [{ id: 'book' as Tab, label: 'Reservar', icon: <CalendarPlus size={16} /> }] : []),
+    { id: 'appointments', label: 'Mis citas', icon: <CalendarDays size={16} /> },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-100/70 font-sans text-[#1F2937]">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0" style={{ backgroundColor: tenant?.color ?? '#022340' }}>
+              <Building2 className="w-5 h-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-base font-black text-[#022340] tracking-tight truncate">{tenant?.name}</p>
+              <p className="text-[11px] text-slate-500 font-medium truncate">Portal de {vocab.client.toLowerCase()}</p>
+            </div>
+          </div>
+          <button type="button" onClick={logout} className="inline-flex items-center gap-2 text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors cursor-pointer shrink-0">
+            <LogOut className="w-4 h-4" /> Cerrar sesión
+          </button>
+        </div>
+
+        <nav className="max-w-3xl mx-auto px-4 sm:px-6 flex gap-1" aria-label="Secciones del portal">
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              data-tab={item.id}
+              aria-current={tab === item.id ? 'page' : undefined}
+              onClick={() => openTab(item.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors ${
+                tab === item.id ? 'border-[#022340] text-[#022340]' : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {item.icon} {item.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+        {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
+        {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">{notice}</p>}
+
+        {overview && tab === 'home' && (
+          <>
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-black text-[#022340] tracking-tight">Hola, {overview.customer.first_name}</h1>
+              <p className="text-sm text-slate-500 font-medium">
+                {next ? 'Esta es tu próxima cita.' : 'No tienes citas próximas.'}
+              </p>
+            </div>
+
+            {next ? (
+              <PortalAppointmentCard appointment={next} featured {...cardActions} />
+            ) : (
+              <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 flex items-start gap-4">
+                <span className="p-2.5 bg-[#84D0D9]/20 text-[#022340] rounded-xl shrink-0"><CalendarDays className="w-5 h-5" /></span>
+                <div className="space-y-1">
+                  <h2 className="text-sm font-bold text-[#022340]">{canBook ? 'Reserva cuando quieras' : 'Reserva de citas'}</h2>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    {canBook
+                      ? 'Elige el servicio, el día y la hora que te acomoden.'
+                      : `Para agendar una cita, comunícate con ${tenant?.name}. Aquí verás las que tengas.`}
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {canBook && (
+              <button
+                type="button"
+                data-action="book"
+                onClick={() => openTab('book')}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold bg-[#022340] text-white rounded-2xl hover:bg-[#03315a] shadow-sm transition-colors"
+              >
+                <CalendarPlus size={18} /> Reservar una cita
+              </button>
+            )}
+
+            {upcoming.length > 1 && (
+              <button type="button" onClick={() => openTab('appointments')} className="text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                Tienes {upcoming.length - 1} {upcoming.length - 1 === 1 ? 'cita más' : 'citas más'} · Ver todas
+              </button>
+            )}
+
+            <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="profile">
+              <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Tus datos</h2>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nombre</dt>
+                  <dd className="font-semibold text-slate-800">{overview.customer.first_name} {overview.customer.last_name}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Código</dt>
+                  <dd className="font-semibold text-slate-800 font-mono">{overview.customer.code}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Celular</dt>
+                  {editingPhone ? (
+                    <dd className="flex items-center gap-2 mt-1">
+                      <input
+                        type="tel"
+                        aria-label="Tu celular"
+                        maxLength={30}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="flex-1 text-sm border border-slate-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340]"
+                      />
+                      <button type="button" data-action="save-phone" disabled={busy} onClick={savePhone} className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] disabled:opacity-50">
+                        Guardar
+                      </button>
+                    </dd>
+                  ) : (
+                    <dd className="flex items-center gap-3 font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5"><Phone size={14} className="text-slate-400" /> {overview.customer.phone || 'Sin registrar'}</span>
+                      <button type="button" data-action="edit-phone" onClick={() => setEditingPhone(true)} className="text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                        Cambiar
+                      </button>
+                    </dd>
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">Lo usamos para avisarte de tus citas.</p>
+                </div>
+              </dl>
+
+              {overview.dependents.enabled && (
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider"><PawPrint size={13} /> {vocab.dependents}</span>
+                  {overview.dependents.items.length === 0 ? (
+                    <p className="text-sm text-slate-500">Aún no registras ninguno. Podrás hacerlo al reservar.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {overview.dependents.items.map((item) => (
+                        <span key={item.id} className="px-2.5 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
+                          {item.name}{item.species ? ` · ${item.species}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {overview && tab === 'book' && (
+          !catalog ? (
+            <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 size={15} className="animate-spin" /> Cargando servicios...</p>
+          ) : (
+            <BookingFlow
+              key={rescheduling?.id ?? 'new'}
+              overview={overview}
+              catalog={catalog}
+              reschedule={rescheduling}
+              onDone={() => { load(); openTab('appointments'); }}
+              onExit={() => openTab(rescheduling ? 'appointments' : 'home')}
+              onDependentAdded={(dependent) => setOverview({ ...overview, dependents: { ...overview.dependents, items: [...overview.dependents.items, dependent] } })}
+            />
+          )
+        )}
+
+        {overview && tab === 'appointments' && (
+          <>
+            <section className="space-y-3" data-list="upcoming">
+              <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Próximas ({upcoming.length})</h2>
+              {upcoming.length === 0
+                ? <p className="text-sm text-slate-500">No tienes citas próximas.</p>
+                : upcoming.map((appointment) => <PortalAppointmentCard key={appointment.id} appointment={appointment} {...cardActions} />)}
+            </section>
+
+            {policies?.booking_enabled && policies.cancel_allowed && upcoming.length > 0 && (
+              <p className="text-xs text-slate-500">
+                Puedes cambiar o cancelar una cita hasta {policies.cancel_window_hours} horas antes. Después, comunícate con la sede.
+              </p>
+            )}
+
+            <section className="space-y-3 pt-2" data-list="past">
+              <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Anteriores ({past.length})</h2>
+              {past.length === 0
+                ? <p className="text-sm text-slate-500">Aquí verás tus citas pasadas.</p>
+                : past.map((appointment) => <PortalAppointmentCard key={appointment.id} appointment={appointment} />)}
+            </section>
+          </>
+        )}
+      </main>
+
+      <AppModal
+        isOpen={cancelling !== null}
+        type="confirm"
+        variant="danger"
+        title="¿Cancelar tu cita?"
+        message={cancelling ? `${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.` : ''}
+        confirmText="Sí, cancelar"
+        cancelText="No, mantenerla"
+        isLoading={busy}
+        onConfirm={cancel}
+        onClose={() => setCancelling(null)}
+      />
+    </div>
+  );
+}

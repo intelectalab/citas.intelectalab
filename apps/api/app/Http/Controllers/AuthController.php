@@ -76,6 +76,7 @@ class AuthController extends Controller
                 'modules' => $tenant->modules(),
                 'rules' => (object) $tenant->rules(),
                 'dependents' => $tenant->dependents(),
+                'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
             ] : null,
             'customer' => $customer ? [
                 'id' => $customer->id,
