@@ -433,6 +433,17 @@ INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekd
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 5, '08:00', '14:00'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 6, '09:00', '13:00');
 
+-- Bloqueos de ejemplo, con fechas relativas para que sigan vigentes tras un
+-- reseteo: vacaciones de la Dra. Gómez, una capacitación del Dr. Pérez el miércoles
+-- de la semana siguiente (se puede forzar) y el feriado de Año Nuevo en la sede.
+INSERT INTO availability_blocks (tenant_id, branch_id, professional_id, starts_at, ends_at, reason, kind) VALUES
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', NULL, '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02',
+   (current_date + 14)::timestamp AT TIME ZONE 'America/Lima', (current_date + 21)::timestamp AT TIME ZONE 'America/Lima', 'Vacaciones', 'vacation'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', NULL, '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01',
+   (date_trunc('week', current_date)::date + 9 + time '15:00') AT TIME ZONE 'America/Lima', (date_trunc('week', current_date)::date + 9 + time '17:00') AT TIME ZONE 'America/Lima', 'Capacitación interna', 'other'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', NULL,
+   (date_trunc('year', current_date)::date + interval '1 year') AT TIME ZONE 'America/Lima', (date_trunc('year', current_date)::date + interval '1 year 1 day') AT TIME ZONE 'America/Lima', 'Año Nuevo', 'holiday');
+
 INSERT INTO customers (
     id, tenant_id, code, first_name, last_name, birth_date, biological_sex, document_number, email, phone, address, district, department, medical_notes
 ) VALUES
@@ -447,19 +458,27 @@ INSERT INTO customers (
 )
 ON CONFLICT DO NOTHING;
 
--- Cuentas del portal de cliente. El mismo correo y la misma contraseña existen en
--- dos tenants para probar el selector de empresa al iniciar sesión.
-INSERT INTO users (id, tenant_id, first_name, last_name, email, password_hash, is_owner, account_type, status) VALUES
-  ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380c01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Juliana', 'Díaz', 'juliana.diaz@gmail.com', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'customer', 'active'),
-  ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Juliana', 'Díaz', 'juliana.diaz@gmail.com', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'customer', 'active')
+-- Controles de ejemplo, con fechas relativas: uno vencido, uno para esta semana y uno más adelante.
+INSERT INTO recalls (tenant_id, customer_id, service_id, professional_id, label, due_date, status, notes) VALUES
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Control de presión arterial', current_date - 6, 'pending', 'Traer sus últimos resultados de laboratorio.'),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Chequeo anual', current_date + 4, 'pending', NULL),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Revisión de tratamiento', current_date + 40, 'pending', NULL);
+
+-- Acceso al portal. Los clientes ingresan con su correo; no tienen fila en users.
+-- Juliana Díaz existe en dos empresas con la misma contraseña (la de las cuentas
+-- de prueba) para probar el selector de empresa al iniciar sesión.
+INSERT INTO customers (id, tenant_id, code, first_name, last_name, email, phone) VALUES
+  ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'CLI-0001', 'Juliana', 'Díaz', 'juliana.diaz@gmail.com', '+51 912 345 678')
 ON CONFLICT DO NOTHING;
 
-UPDATE customers SET user_id = 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380c01'
-WHERE id = '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
+UPDATE customers SET password_hash = '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', must_change_password = false
+WHERE id IN ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01');
 
-INSERT INTO customers (id, tenant_id, code, first_name, last_name, email, phone, user_id) VALUES
-  ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'CLI-0001', 'Juliana', 'Díaz', 'juliana.diaz@gmail.com', '+51 912 345 678', 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02')
-ON CONFLICT DO NOTHING;
+-- El resto de clientes con correo y documento entra con su número de documento
+-- como contraseña inicial y debe cambiarla al ingresar, igual que los que registra el personal.
+UPDATE customers
+SET password_hash = replace(crypt(document_number, gen_salt('bf', 10)), '$2a$', '$2y$'), must_change_password = true
+WHERE password_hash IS NULL AND email IS NOT NULL AND document_number IS NOT NULL;
 
 -- =====================================================================
 -- MÓDULOS AMPLIADOS: inventario, fidelización, marketing y fichas

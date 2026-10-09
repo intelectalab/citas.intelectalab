@@ -117,6 +117,10 @@ class CustomerController extends Controller
 
             $customer = Customer::create($validated);
 
+            // Con correo y documento ya puede entrar a su portal: su contraseña
+            // inicial es su número de documento y la cambia al ingresar.
+            $customer->syncPortalPassword();
+
             if ($this->usesDependents($request)) {
                 $kind = $request->user()->tenant->dependents()['kind'];
 
@@ -178,6 +182,10 @@ class CustomerController extends Controller
 
         $customer->update($validated);
 
+        // Si recién ahora tiene correo y documento, recibe su acceso. Mientras no
+        // haya creado su contraseña, esta sigue a su número de documento.
+        $customer->syncPortalPassword($customer->wasChanged('document_number'));
+
         return response()->json([
             'message' => 'Cliente actualizado con éxito',
             'customer' => $customer->load($this->relations($request))
@@ -185,9 +193,57 @@ class CustomerController extends Controller
     }
 
 
+    /**
+     * El personal enciende o apaga el acceso del cliente a su portal. Al
+     * apagarlo se cierran sus sesiones abiertas.
+     */
+    public function portalAccess(Request $request, string $customer)
+    {
+        $customer = $this->findForTenant($request, $customer);
+        $validated = $request->validate(['enabled' => 'required|boolean']);
+
+        $customer->forceFill(['portal_enabled' => $validated['enabled']])->save();
+
+        if (!$validated['enabled']) {
+            $customer->tokens()->delete();
+        } else {
+            $customer->syncPortalPassword();
+        }
+
+        return response()->json([
+            'message'  => $validated['enabled'] ? 'Acceso al portal encendido' : 'Acceso al portal apagado',
+            'customer' => $customer->load($this->relations($request)),
+        ]);
+    }
+
+    /**
+     * Vuelve a dejar como contraseña el número de documento (olvidó la suya)
+     * y cierra sus sesiones. Tendrá que crear una nueva al ingresar.
+     */
+    public function resetPortalPassword(Request $request, string $customer)
+    {
+        $customer = $this->findForTenant($request, $customer);
+
+        if (!$customer->resetPortalPassword()) {
+            return response()->json([
+                'message' => 'Para darle acceso al portal, registra su correo y su número de documento.',
+                'code'    => 'MISSING_DATA',
+            ], 422);
+        }
+
+        $customer->tokens()->delete();
+
+        return response()->json([
+            'message'  => 'Su contraseña volvió a ser su número de documento.',
+            'customer' => $customer->load($this->relations($request)),
+        ]);
+    }
+
     public function destroy(Request $request, string $customer)
     {
         $customer = $this->findForTenant($request, $customer);
+        // Un cliente eliminado ya no entra a su portal.
+        $customer->tokens()->delete();
         $customer->delete();
 
         return response()->json([

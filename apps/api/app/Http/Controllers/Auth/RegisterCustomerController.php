@@ -5,16 +5,15 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Tenant;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class RegisterCustomerController extends Controller
 {
     /**
-     * Registro de una cuenta de cliente con el código de empresa.
+     * Una persona se registra como cliente con el código de empresa. Crea su
+     * ficha, que es también su cuenta del portal: no hay fila en users.
      * El correo se valida solo dentro del tenant del código: que exista en
      * otra empresa no impide registrarse en esta.
      */
@@ -25,7 +24,7 @@ class RegisterCustomerController extends Controller
             'first_name'  => 'required|string|max:100',
             'last_name'   => 'required|string|max:100',
             'email'       => 'required|email|max:190',
-            'password'    => 'required|string|min:8',
+            'password'    => 'required|string|min:8|max:72',
             'phone'       => 'nullable|string|max:30',
         ]);
 
@@ -41,45 +40,44 @@ class RegisterCustomerController extends Controller
             ], 422);
         }
 
-        $alreadyRegistered = User::where('tenant_id', $tenant->id)->where('email', $validated['email'])->exists()
-            || Customer::where('tenant_id', $tenant->id)->where('email', $validated['email'])->exists();
+        $email = trim($validated['email']);
+
+        // Quien ya fue registrado por el personal tiene acceso con su correo y su
+        // número de documento: no se crea una segunda ficha.
+        $alreadyRegistered = Customer::where('tenant_id', $tenant->id)
+            ->whereRaw('lower(email) = ?', [mb_strtolower($email)])
+            ->exists();
 
         if ($alreadyRegistered) {
             return response()->json([
-                'message' => 'Ya tienes una cuenta registrada en esta empresa. Ingresa con tus credenciales.',
+                'message' => 'Ya estás registrado en esta empresa. Ingresa con tu correo y tu contraseña; si es tu primer ingreso, tu contraseña es tu número de documento.',
             ], 409);
         }
 
-        return DB::transaction(function () use ($validated, $tenant) {
-            $user = User::create([
-                'id'            => (string) Str::uuid(),
-                'tenant_id'     => $tenant->id,
-                'first_name'    => $validated['first_name'],
-                'last_name'     => $validated['last_name'],
-                'email'         => $validated['email'],
-                'password_hash' => Hash::make($validated['password']),
-                'phone'         => $validated['phone'] ?? null,
-                'is_owner'      => false,
-                'account_type'  => User::TYPE_CUSTOMER,
-                'status'        => 'active',
-            ]);
-
-            Customer::create([
+        return DB::transaction(function () use ($validated, $tenant, $email) {
+            $customer = Customer::create([
                 'tenant_id'  => $tenant->id,
-                'user_id'    => $user->id,
                 'first_name' => $validated['first_name'],
                 'last_name'  => $validated['last_name'],
-                'email'      => $validated['email'],
+                'email'      => $email,
                 'phone'      => $validated['phone'] ?? null,
             ]);
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+            // Eligió su contraseña al registrarse: no tiene que cambiarla.
+            $customer->forceFill([
+                'password_hash'        => Hash::make($validated['password']),
+                'must_change_password' => false,
+                'password_changed_at'  => now(),
+                'last_login_at'        => now(),
+            ])->save();
+
+            $token = $customer->createToken('auth_token')->plainTextToken;
 
             return response()->json([
                 'message'      => 'Cuenta creada con éxito',
                 'access_token' => $token,
                 'token_type'   => 'Bearer',
-                'user'         => $user,
+                'user'         => LoginController::sessionUser($customer),
             ], 201);
         });
     }

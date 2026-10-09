@@ -11,6 +11,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormCustomer from './FormCustomer';
+import CustomerPortalAccess, { type PortalAccess } from './CustomerPortalAccess';
 import RecordPanel from '@/features/records/components/RecordPanel';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
 import { RELEASED, dateOf, formatDate, formatMinutes, statusStyle, timeOf, todayISO, type Appointment } from '@/features/appointments/appointments';
@@ -35,6 +36,8 @@ interface CustomerData {
   emergency_contact_phone?: string | null;
   medical_notes?: string | null;
   created_at?: string;
+  // Acceso al portal: el cliente entra con el correo de su ficha.
+  portal_access?: PortalAccess;
   dependents?: { id: string; name: string; species?: string | null; breed?: string | null }[];
 }
 
@@ -243,6 +246,8 @@ export default function CustomerDetail() {
               )}
             </div>
           )}
+
+          <CustomerPortalAccess customer={customer} clientWord={vocab.client} onChanged={loadCustomer} />
         </section>
 
         {/* Números */}

@@ -42,7 +42,11 @@ export interface PortalDependent {
 }
 
 export interface PortalOverview {
-  customer: { id: string; code: string; first_name: string; last_name: string; phone: string | null; email: string | null };
+  customer: {
+    id: string; code: string; first_name: string; last_name: string; phone: string | null; email: string | null;
+    // Sigue con su contraseña inicial (su número de documento): debe crear la suya.
+    must_change_password?: boolean;
+  };
   policies: PortalPolicies;
   dependents: { enabled: boolean; required: boolean; items: PortalDependent[] };
   appointments: PortalAppointment[];

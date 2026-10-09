@@ -6,6 +6,7 @@ import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
 import Switch from '@/app/components/common/Switch';
+import { AppModal } from '@/app/components/ui/modals/AppModal';
 
 interface Range {
   starts: string;
@@ -25,6 +26,8 @@ interface Branch {
 interface Block {
   id: string;
   reason: string;
+  kind?: string;
+  kind_label?: string;
   starts_at: string;
   ends_at: string;
 }
@@ -45,6 +48,15 @@ const DAYS: { weekday: number; label: string }[] = [
   { weekday: 6, label: 'Sábado' },
   { weekday: 0, label: 'Domingo' },
 ];
+
+// Tipos de ausencia de una persona. Solo el bloqueo de horario admite sobre-agenda.
+const BLOCK_KINDS = [
+  { value: 'vacation', label: 'Vacaciones' },
+  { value: 'leave', label: 'Permiso o descanso médico' },
+  { value: 'other', label: 'Bloqueo de horario' },
+];
+
+const emptyBlock = () => ({ starts_at: '', ends_at: '', reason: '', kind: 'vacation' });
 
 const DEFAULT_RANGE: Range = { starts: '09:00', ends: '18:00' };
 
@@ -74,7 +86,8 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
   const [rows, setRows] = useState<ScheduleRow[]>([]);
   const [week, setWeek] = useState<Record<number, Range[]>>(emptyWeek);
   const [blocks, setBlocks] = useState<Block[]>([]);
-  const [blockForm, setBlockForm] = useState({ starts_at: '', ends_at: '', reason: '' });
+  const [blockForm, setBlockForm] = useState(emptyBlock);
+  const [removing, setRemoving] = useState<Block | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,7 +111,7 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
     setError('');
     setBlockError('');
     setSaved(false);
-    setBlockForm({ starts_at: '', ends_at: '', reason: '' });
+    setBlockForm(emptyBlock());
 
     Promise.all([
       api.get(`/professionals/${professional.id}/schedule`),
@@ -172,7 +185,7 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
       setBlockError('');
       const res = await api.post('/availability-blocks', { professional_id: professional.id, ...blockForm });
       setBlocks((current) => [...current, res.data].sort((a, b) => a.starts_at.localeCompare(b.starts_at)));
-      setBlockForm({ starts_at: '', ends_at: '', reason: '' });
+      setBlockForm(emptyBlock());
     } catch (err) {
       setBlockError(firstError(err, 'No se pudo registrar la ausencia.'));
     } finally {
@@ -187,6 +200,8 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
       setBlocks((current) => current.filter((block) => block.id !== id));
     } catch (err) {
       setBlockError(firstError(err, 'No se pudo quitar la ausencia.'));
+    } finally {
+      setRemoving(null);
     }
   };
 
@@ -314,6 +329,7 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
                   <li key={block.id} className="flex items-center justify-between gap-3 px-4 py-3">
                     <div>
                       <span className="block text-sm font-semibold text-slate-800">{block.reason}</span>
+                      {block.kind_label && <span className="block text-xs text-slate-400">{block.kind_label}</span>}
                       <span className="block text-xs text-slate-500">
                         {formatDateTime(block.starts_at)} — {formatDateTime(block.ends_at)}
                       </span>
@@ -321,7 +337,7 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
                     <button
                       type="button"
                       title="Quitar ausencia"
-                      onClick={() => removeBlock(block.id)}
+                      onClick={() => setRemoving(block)}
                       className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 size={16} />
@@ -332,6 +348,12 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
             )}
 
             <form onSubmit={addBlock} className="space-y-3 p-4 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <Select
+                label="Tipo"
+                value={blockForm.kind}
+                onChange={(e) => setBlockForm({ ...blockForm, kind: String(e.target.value) || 'vacation' })}
+                options={BLOCK_KINDS}
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Desde *</label>
@@ -382,6 +404,17 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
           </section>
         </div>
       )}
+
+      <AppModal
+        isOpen={Boolean(removing)}
+        variant="danger"
+        title="Quitar ausencia"
+        message={`Se quitará "${removing?.reason ?? ''}". Ese horario volverá a estar disponible para agendar.`}
+        confirmText="Sí, quitar"
+        cancelText="No, mantenerla"
+        onConfirm={() => removing && removeBlock(removing.id)}
+        onClose={() => setRemoving(null)}
+      />
     </FormDrawer>
   );
 }

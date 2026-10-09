@@ -19,7 +19,7 @@ interface DayProfessional {
   display_name: string;
   color_code: string | null;
   schedules: { starts: string; ends: string }[];
-  blocks: { starts: string; ends: string; reason: string | null }[];
+  blocks: { starts: string; ends: string; reason: string | null; kind?: string }[];
 }
 
 // Cita que se soltó en otro horario y espera confirmación.

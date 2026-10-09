@@ -3,12 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Appointment;
 use App\Models\AvailabilityBlock;
 use App\Models\Branch;
 use App\Models\Professional;
 use App\Models\Tenant;
+use App\Models\User;
+use App\Support\AppointmentFlow;
+use App\Support\AppointmentScheduler;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -19,12 +25,65 @@ class AvailabilityBlockController extends Controller
 {
     private const LOCAL_FORMAT = 'Y-m-d\TH:i';
 
+    // Citas que un bloqueo deja sin quien las atienda: las que aún ocupan horario.
+    private const AFFECTED_STATUSES = [
+        AppointmentFlow::PENDING,
+        AppointmentFlow::CONFIRMED,
+        AppointmentFlow::CHECKED_IN,
+        AppointmentFlow::IN_PROGRESS,
+    ];
+
     private function tenant(Request $request): Tenant
     {
         $tenant = $request->user()->tenant;
         abort_unless($tenant, 403);
 
         return $tenant;
+    }
+
+    private function timezone(Tenant $tenant): string
+    {
+        return $tenant->timezone ?: 'America/Lima';
+    }
+
+    /**
+     * Un usuario con rol de profesional (sin ser administrador) solo maneja
+     * sus propias ausencias. Devuelve su profesional, o null si ve todo.
+     */
+    private function ownProfessionalId(User $user): ?string
+    {
+        if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
+            return null;
+        }
+
+        return Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id') ?? 'none';
+    }
+
+    /**
+     * Lo que necesita el formulario: a quién se puede bloquear y con qué tipos.
+     */
+    public function options(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $own = $this->ownProfessionalId($request->user());
+
+        $kinds = fn (array $keys) => collect($keys)->map(fn (string $key) => ['key' => $key, 'label' => AvailabilityBlock::KINDS[$key]])->values();
+
+        return response()->json([
+            'branches'           => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name']),
+            'professionals'      => Professional::where('tenant_id', $tenant->id)
+                ->when($own, fn ($q) => $q->where('id', $own))
+                ->with('status')
+                ->orderBy('display_name')
+                ->get()
+                ->reject(fn (Professional $p) => $p->status?->slug === 'inactive')
+                ->map(fn (Professional $p) => ['id' => $p->id, 'display_name' => $p->display_name])
+                ->values(),
+            'professional_kinds' => $kinds(AvailabilityBlock::PROFESSIONAL_KINDS),
+            'branch_kinds'       => $kinds(AvailabilityBlock::BRANCH_KINDS),
+            // Cerrar una sede completa no es decisión de un profesional.
+            'can_block_branch'   => $own === null,
+        ]);
     }
 
     public function index(Request $request)
@@ -36,44 +95,138 @@ class AvailabilityBlockController extends Controller
             'branch_id'       => 'nullable|uuid',
             'from'            => 'nullable|date',
             'to'              => 'nullable|date',
+            'period'          => 'nullable|in:current,past',
         ]);
 
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $timezone = $this->timezone($tenant);
+        $own = $this->ownProfessionalId($request->user());
+        $past = $request->input('period') === 'past';
 
         // Sin rango, solo los que aún no terminan.
         $from = $request->filled('from') ? Carbon::parse($request->input('from'), $timezone) : now();
 
         $blocks = AvailabilityBlock::where('tenant_id', $tenant->id)
+            ->with(['professional:id,display_name', 'branch:id,name'])
+            // Un profesional ve sus ausencias y los cierres de sede.
+            ->when($own, fn ($q) => $q->where(fn ($q) => $q->where('professional_id', $own)->orWhereNull('professional_id')))
             ->when($request->filled('professional_id'), fn ($q) => $q->where('professional_id', $request->input('professional_id')))
             ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->input('branch_id')))
-            ->where('ends_at', '>', $from->toIso8601String())
+            ->when($past, fn ($q) => $q->where('ends_at', '<=', now()->toIso8601String())->orderByDesc('starts_at')->limit(200))
+            ->when(!$past, fn ($q) => $q->where('ends_at', '>', $from->toIso8601String())->orderBy('starts_at'))
             ->when($request->filled('to'), fn ($q) => $q->where('starts_at', '<', Carbon::parse($request->input('to'), $timezone)->toIso8601String()))
-            ->orderBy('starts_at')
             ->get();
 
-        return response()->json($blocks->map(fn (AvailabilityBlock $block) => $this->present($block, $timezone)));
+        return response()->json($blocks->map(fn (AvailabilityBlock $block) => $this->present($block, $tenant, $own)));
+    }
+
+    /**
+     * Un bloqueo con las citas que caen dentro de él.
+     */
+    public function show(Request $request, string $id)
+    {
+        $tenant = $this->tenant($request);
+        $own = $this->ownProfessionalId($request->user());
+        $block = $this->find($tenant, $id, $own, false);
+
+        return response()->json($this->present($block, $tenant, $own) + [
+            'affected' => $this->affectedList($tenant, $block->professional_id, $block->branch_id, Carbon::parse($block->starts_at), Carbon::parse($block->ends_at)),
+        ]);
+    }
+
+    /**
+     * Citas que quedarían dentro de un bloqueo, antes de guardarlo.
+     */
+    public function affected(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $own = $this->ownProfessionalId($request->user());
+        [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own, false);
+
+        return response()->json($this->affectedList($tenant, $data['professional_id'], $data['branch_id'], $startsAt, $endsAt));
     }
 
     public function store(Request $request)
     {
         $tenant = $this->tenant($request);
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $own = $this->ownProfessionalId($request->user());
+        [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own);
 
+        $block = AvailabilityBlock::create($this->columns($data, $startsAt, $endsAt) + [
+            'tenant_id' => $tenant->id,
+        ] + (AvailabilityBlock::hasKind() ? ['created_by' => $request->user()->id] : []));
+
+        return response()->json($this->present($block->fresh(['professional:id,display_name', 'branch:id,name']), $tenant, $own), 201);
+    }
+
+    public function update(Request $request, string $id)
+    {
+        $tenant = $this->tenant($request);
+        $own = $this->ownProfessionalId($request->user());
+        $block = $this->find($tenant, $id, $own);
+        [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own);
+
+        $block->update($this->columns($data, $startsAt, $endsAt));
+
+        return response()->json($this->present($block->fresh(['professional:id,display_name', 'branch:id,name']), $tenant, $own));
+    }
+
+    public function destroy(Request $request, string $id)
+    {
+        $tenant = $this->tenant($request);
+        $this->find($tenant, $id, $this->ownProfessionalId($request->user()))->delete();
+
+        return response()->json(['message' => 'Bloqueo eliminado correctamente']);
+    }
+
+    /**
+     * @param bool $manage Exige que quien consulta pueda cambiarlo, no solo verlo.
+     */
+    private function find(Tenant $tenant, string $id, ?string $own, bool $manage = true): AvailabilityBlock
+    {
+        $block = AvailabilityBlock::where('tenant_id', $tenant->id)
+            ->with(['professional:id,display_name', 'branch:id,name'])
+            ->findOrFail($id);
+
+        if ($own && $block->professional_id !== $own) {
+            abort_if($manage || $block->professional_id, 403, 'Solo puedes cambiar tus propias ausencias.');
+        }
+
+        return $block;
+    }
+
+    /**
+     * @return array{0: array{professional_id: ?string, branch_id: ?string, kind: string, reason: string}, 1: Carbon, 2: Carbon}
+     */
+    private function validated(Request $request, Tenant $tenant, ?string $own, bool $full = true): array
+    {
         $validated = $request->validate([
             'professional_id' => 'nullable|uuid|required_without:branch_id',
             'branch_id'       => 'nullable|uuid|required_without:professional_id',
             'starts_at'       => 'required|date_format:' . self::LOCAL_FORMAT,
             'ends_at'         => 'required|date_format:' . self::LOCAL_FORMAT,
-            'reason'          => 'required|string|max:255',
+            'reason'          => ($full ? 'required' : 'nullable') . '|string|max:255',
+            'kind'            => ['nullable', Rule::in(array_keys(AvailabilityBlock::KINDS))],
+        ], [
+            'professional_id.required_without' => 'Elige a quién se bloquea la agenda.',
+            'branch_id.required_without'       => 'Elige a quién se bloquea la agenda.',
+            'starts_at.required'               => 'Indica desde cuándo.',
+            'ends_at.required'                 => 'Indica hasta cuándo.',
+            'reason.required'                  => 'Escribe el motivo.',
         ]);
 
-        if (!empty($validated['professional_id'])) {
-            Professional::where('tenant_id', $tenant->id)->findOrFail($validated['professional_id']);
-        }
-        if (!empty($validated['branch_id'])) {
-            Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        $professionalId = $validated['professional_id'] ?? null;
+        // Una ausencia rige en todas las sedes donde atiende esa persona.
+        $branchId = $professionalId ? null : ($validated['branch_id'] ?? null);
+
+        if ($professionalId) {
+            Professional::where('tenant_id', $tenant->id)->findOrFail($professionalId);
+            abort_if($own && $professionalId !== $own, 403, 'Solo puedes registrar tus propias ausencias.');
+        } else {
+            Branch::where('tenant_id', $tenant->id)->findOrFail($branchId);
+            abort_if($own !== null, 403, 'Solo el personal administrativo puede cerrar una sede.');
         }
 
+        $timezone = $this->timezone($tenant);
         $startsAt = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], $timezone)->startOfMinute();
         $endsAt = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['ends_at'], $timezone)->startOfMinute();
 
@@ -81,37 +234,94 @@ class AvailabilityBlockController extends Controller
             throw ValidationException::withMessages(['ends_at' => 'La fecha de fin debe ser posterior a la de inicio.']);
         }
 
-        $block = AvailabilityBlock::create([
-            'tenant_id'       => $tenant->id,
-            'professional_id' => $validated['professional_id'] ?? null,
-            'branch_id'       => $validated['branch_id'] ?? null,
+        $kind = $validated['kind'] ?? AvailabilityBlock::KIND_OTHER;
+        $allowed = $professionalId ? AvailabilityBlock::PROFESSIONAL_KINDS : AvailabilityBlock::BRANCH_KINDS;
+
+        if (!in_array($kind, $allowed, true)) {
+            throw ValidationException::withMessages(['kind' => $professionalId
+                ? 'Ese tipo es para una sede completa, no para una persona.'
+                : 'Ese tipo es para una persona, no para una sede completa.']);
+        }
+
+        return [[
+            'professional_id' => $professionalId,
+            'branch_id'       => $branchId,
+            'kind'            => $kind,
+            'reason'          => trim((string) ($validated['reason'] ?? '')),
+        ], $startsAt, $endsAt];
+    }
+
+    private function columns(array $data, Carbon $startsAt, Carbon $endsAt): array
+    {
+        return [
+            'professional_id' => $data['professional_id'],
+            'branch_id'       => $data['branch_id'],
             'starts_at'       => $startsAt->toIso8601String(),
             'ends_at'         => $endsAt->toIso8601String(),
-            'reason'          => trim($validated['reason']),
-        ]);
-
-        return response()->json($this->present($block->fresh(), $timezone), 201);
+            'reason'          => $data['reason'],
+        ] + (AvailabilityBlock::hasKind() ? ['kind' => $data['kind']] : []);
     }
 
-    public function destroy(Request $request, string $id)
+    private function affectedQuery(Tenant $tenant, ?string $professionalId, ?string $branchId, Carbon $startsAt, Carbon $endsAt): Builder
     {
-        AvailabilityBlock::where('tenant_id', $this->tenant($request)->id)->findOrFail($id)->delete();
-
-        return response()->json(['message' => 'Bloqueo eliminado correctamente']);
+        return Appointment::where('tenant_id', $tenant->id)
+            ->whereIn('status', self::AFFECTED_STATUSES)
+            ->when($professionalId, fn ($q) => $q->where('professional_id', $professionalId))
+            ->when(!$professionalId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('starts_at', '<', $endsAt->toIso8601String())
+            ->where('ends_at', '>', $startsAt->toIso8601String())
+            // Lo que ya pasó no hay que resolverlo.
+            ->where('ends_at', '>', now()->toIso8601String());
     }
 
-    private function present(AvailabilityBlock $block, string $timezone): array
+    private function affectedList(Tenant $tenant, ?string $professionalId, ?string $branchId, Carbon $startsAt, Carbon $endsAt): array
     {
-        $startsAt = Carbon::parse($block->starts_at)->setTimezone($timezone);
-        $endsAt = Carbon::parse($block->ends_at)->setTimezone($timezone);
+        return $this->affectedQuery($tenant, $professionalId, $branchId, $startsAt, $endsAt)
+            ->with(['customer:id,first_name,last_name', 'service:id,name', 'professional:id,display_name', 'branch:id,timezone'])
+            ->orderBy('starts_at')
+            ->limit(100)
+            ->get()
+            ->map(function (Appointment $a) use ($tenant) {
+                $timezone = AppointmentScheduler::timezone($a->branch ?? new Branch(), $tenant);
+
+                return [
+                    'id'           => $a->id,
+                    'code'         => $a->code,
+                    'status'       => $a->status,
+                    'status_name'  => AppointmentFlow::name($tenant, $a->status),
+                    'starts_at'    => $a->starts_at->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+                    'ends_at'      => $a->ends_at->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+                    'customer'     => $a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : null,
+                    'service'      => $a->service?->name,
+                    'professional' => $a->professional?->display_name,
+                ];
+            })
+            ->all();
+    }
+
+    private function present(AvailabilityBlock $block, Tenant $tenant, ?string $own): array
+    {
+        $timezone = $this->timezone($tenant);
+        $startsAt = Carbon::parse($block->starts_at);
+        $endsAt = Carbon::parse($block->ends_at);
+        $kind = $block->kindKey();
 
         return [
             'id'              => $block->id,
             'professional_id' => $block->professional_id,
             'branch_id'       => $block->branch_id,
+            'professional'    => $block->professional ? ['id' => $block->professional->id, 'display_name' => $block->professional->display_name] : null,
+            'branch'          => $block->branch ? ['id' => $block->branch->id, 'name' => $block->branch->name] : null,
+            'scope'           => $block->professional_id ? 'professional' : 'branch',
+            'kind'            => $kind,
+            'kind_label'      => AvailabilityBlock::KINDS[$kind] ?? AvailabilityBlock::KINDS[AvailabilityBlock::KIND_OTHER],
+            'overridable'     => $block->isOverridable(),
             'reason'          => $block->reason,
-            'starts_at'       => $startsAt->format(self::LOCAL_FORMAT),
-            'ends_at'         => $endsAt->format(self::LOCAL_FORMAT),
+            'starts_at'       => $startsAt->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+            'ends_at'         => $endsAt->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+            'state'           => $endsAt->lte(now()) ? 'past' : ($startsAt->lte(now()) ? 'current' : 'upcoming'),
+            'affected_count'  => $this->affectedQuery($tenant, $block->professional_id, $block->branch_id, $startsAt, $endsAt)->count(),
+            'can_manage'      => $own === null || $block->professional_id === $own,
         ];
     }
 }

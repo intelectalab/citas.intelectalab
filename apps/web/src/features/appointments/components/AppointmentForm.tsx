@@ -10,7 +10,7 @@ import Select from '@/app/components/common/Select';
 import FormCustomer from '@/features/customers/components/FormCustomer';
 import { apiError, dateOf, formatDateTime, timeOf, todayISO, type Appointment, type AppointmentContext } from '../appointments';
 
-interface CustomerOption {
+export interface CustomerOption {
   id: string;
   code: string;
   first_name: string;
@@ -30,7 +30,11 @@ interface AppointmentFormProps {
   onClose: () => void;
   onSaved: (appointment: Appointment) => void;
   // Valores con los que abre el formulario (por ejemplo, la casilla de la agenda donde se hizo clic).
-  initial?: { date?: string; time?: string; professional_id?: string; branch_id?: string };
+  initial?: {
+    date?: string; time?: string; professional_id?: string; branch_id?: string;
+    // Cita que nace de un control pendiente: llega con el cliente y el servicio ya elegidos.
+    customer?: CustomerOption; customer_dependent_id?: string; service_id?: string; recall_id?: string; recall_label?: string;
+  };
   // Con una cita, el formulario la reprograma en lugar de crear otra.
   reschedule?: Appointment | null;
 }
@@ -94,7 +98,11 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       setDate(dateOf(reschedule.starts_at));
       setTime('');
     } else {
-      setServiceId('');
+      setServiceId(initial?.service_id ?? '');
+      if (initial?.customer) {
+        setCustomer(initial.customer);
+        setDependentId(initial.customer_dependent_id ?? (initial.customer.dependents?.length === 1 ? initial.customer.dependents[0].id : ''));
+      }
       setBranchId(initial?.branch_id ?? '');
       setProfessionalId(initial?.professional_id ?? '');
       setDate(initial?.date ?? todayISO());
@@ -200,6 +208,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             branch_id: branchId,
             starts_at: startsAt,
             notes: notes.trim() || null,
+            ...(initial?.recall_id ? { recall_id: initial.recall_id } : {}),
             ...force,
           });
 
@@ -232,7 +241,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       title={reschedule ? `Reprogramar cita ${reschedule.code}` : 'Nueva cita'}
       subtitle={reschedule
         ? `${reschedule.customer?.name ?? ''} · ${reschedule.service?.name ?? ''} · ahora: ${formatDateTime(reschedule.starts_at)}`
-        : 'Elige a quién se atiende, el servicio y un horario libre'}
+        : initial?.recall_label ? `Control: ${initial.recall_label}` : 'Elige a quién se atiende, el servicio y un horario libre'}
       icon={reschedule ? <CalendarClock size={20} /> : <CalendarPlus size={20} />}
     >
       <div className="flex flex-col h-full justify-between">

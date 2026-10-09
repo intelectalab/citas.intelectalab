@@ -25,7 +25,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-05 (login multi-tenant y registro de clientes)
 
-- **Clientes con ficha pero sin cuenta.** Si el personal registró a un cliente con su correo, ese correo no puede crear su cuenta con el código: recibe "ya tienes una cuenta" y no tiene credenciales. No se enlaza automáticamente porque, sin verificar el correo, cualquiera con el código podría tomar la ficha de otra persona. Falta un flujo de activación: invitación por correo o contraseña inicial puesta por el personal.
 - **Verificación de correo.** El registro de cliente no confirma que el correo pertenezca a quien se registra. No hay envío de correos configurado.
 - **Recuperación de contraseña con correo repetido.** Cuando se construya `forgot-password`, debe resolver a qué empresa corresponde la cuenta.
 - **El registro revela si un correo ya es cliente.** Con el código de la empresa, la respuesta 409 confirma que ese correo está registrado ahí. El límite de intentos lo reduce; evaluar un mensaje neutro cuando exista verificación por correo.
@@ -49,7 +48,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-05 (servicios, dependientes y configuración de la empresa)
 
-- **Datos nuevos del servicio sin uso.** La reserva en línea ya se aplica en el portal. Adelanto, videollamada, cupo y control de seguimiento se guardan y se editan, pero ningún flujo los aplica todavía.
+- **Datos nuevos del servicio sin uso.** La reserva en línea ya se aplica en el portal y el control de seguimiento crea su control al atender. Adelanto, videollamada y cupo se guardan y se editan, pero ningún flujo los aplica todavía.
 - **Recurso que ocupa el servicio y color de categoría.** El prototipo los define; siguen sin columnas.
 - **Reglas de operación sin pantalla.** `tenant_settings.rules` no se edita en `/settings`. Conviene hacerlo cuando alguna regla ya se aplique.
 - **Resto de la configuración de la empresa.** Color, logo, permitir registro de clientes y regenerar el código de empresa no tienen pantalla.
@@ -99,21 +98,17 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-06 (disponibilidad: horarios y ausencias)
 
-- **Cierres de sede y feriados sin pantalla.** La API ya acepta bloqueos de una sede completa, pero solo hay pantalla para las ausencias de un profesional.
 - **Horario de atención de la sede.** No existe tabla. Hoy el horario de un profesional no se limita al de su sede.
-- **Ausencias frente a citas ya reservadas.** Cuando existan citas, al crear una ausencia hay que listar las citas que caen en ese rango para decidir qué hacer con ellas.
-- **Quitar una ausencia no pide confirmación.**
 - **El ojo de la tabla de profesionales no abre nada.** Guarda el profesional elegido, pero ninguna vista lo muestra. El prototipo tiene una página del profesional con horario, perfil, ausencias y rendimiento.
 - **Mensajes de validación en inglés.** Los que genera Laravel por defecto ("The reason field is required") no están traducidos; solo salen en español los escritos a mano.
 - **Panel de horario sin revisar en tema oscuro.**
 
 ## Detectados el 2026-10-06 (API de citas y menú Agenda)
 
-- **Pantallas del grupo Agenda.** Lista de espera, Controles y seguimiento y Bloqueos y ausencias están en el menú y llevan a la página provisional. Lista de espera y controles tampoco tienen API. Agenda y Citas ya tienen pantalla.
+- **Pantallas del grupo Agenda.** Solo falta Lista de espera: está en el menú, lleva a la página provisional y no tiene API. Agenda, Citas, Bloqueos y ausencias y Controles y seguimiento ya tienen pantalla.
 - **Cargos por cancelar tarde y por no asistir.** La API avisa de la cancelación tardía, pero no cobra nada. Depende de la caja.
 - **Adelanto para reservar.** `requires_deposit` del servicio y las reglas de adelanto no se aplican. Depende de los pagos.
 - **Salas y equipos en la cita.** No se valida que haya una sala libre ni se asigna `room_id`.
-- **Sobre-agenda sin tipo de bloqueo.** El prototipo distingue vacaciones (no se pueden forzar) de otros bloqueos (sí). Aquí ningún bloqueo se puede forzar porque `availability_blocks` no guarda el tipo.
 - **Permisos por acción.** El prototipo separa confirmar, registrar llegada, atender, cancelar, reprogramar y forzar. Hoy cualquier personal con el módulo puede hacerlo todo, salvo forzar (solo el administrador) y las citas ajenas de un profesional.
 - **Avisos al cliente.** Confirmación de reserva, recordatorio y aviso de reprogramación no se envían: no hay envío de mensajes.
 - **Citas recurrentes y clases grupales.** El prototipo las tiene; no se incluyeron.
@@ -155,7 +150,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-08 (fichas de atención)
 
-- **Controles y seguimiento sin pantalla.** El próximo control de cada ficha firmada ya se guarda como control pendiente, pero el ítem del menú sigue en la página provisional.
 - **Ficha sin cita.** Solo se puede llenar una ficha desde una cita. No hay forma de registrar una atención que no pasó por la agenda.
 - **Firma del cliente.** El consentimiento se acepta con una casilla; no hay firma dibujada. El PDF trae las líneas para firmar a mano.
 - **Fotos y archivos en la ficha.** No hay campo para adjuntar (el rubro de estética registra fotos de antes y después).
@@ -185,11 +179,47 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Aviso a la sede.** El personal no recibe ninguna notificación cuando un cliente reserva, cambia o cancela; lo ve en la agenda.
 - **Reserva pública sin cuenta y kiosko.** El prototipo los tiene. Hoy solo reserva quien ya tiene cuenta de cliente.
 - **Lo que el portal aún no muestra.** Sus controles pendientes, sus fichas o indicaciones, sus paquetes, membresías, puntos y pagos.
-- **Datos del cliente.** Solo puede cambiar su celular. No edita correo, dirección, contraseña ni a sus mascotas ya registradas.
+- **Datos del cliente.** Solo puede cambiar su celular. Ya cambia su contraseña. No edita correo, dirección ni a sus mascotas ya registradas.
 - **Reglas de la reserva sin editor.** `booking.enabled`, `booking.min_lead_minutes`, `booking.choose_professional`, `cancel.client_allowed` y `reschedule.max_times` usan su valor por defecto; no están en el editor de reglas ni en `/settings`.
 - **Exigir adelanto tras varias inasistencias** (`noshow.block_after`). Sin aplicar.
-- **Cliente con ficha pero sin cuenta.** Sigue sin flujo de invitación: quien fue registrado por el personal con su correo no puede crear su cuenta.
 - **Logo y color de la empresa en el portal.** Usa el color del rubro; la empresa aún no tiene dónde subir su logo ni elegir su color.
 - **Portal sin tema oscuro.**
 - **El portal no se actualiza solo.** Si la sede cambia la cita, el cliente lo ve al volver a entrar.
 - **Pruebas en pantalla que faltan.** Paso de mascotas, varias sedes, servicio con adelanto, empresa sin reserva en línea, y ver la reserva del portal en la agenda del personal.
+
+## Detectados el 2026-10-08 (bloqueos y ausencias)
+
+- **Resolver varias citas a la vez.** Las citas dentro de un bloqueo se abren una por una. No hay "reprogramar todas" ni "cancelar todas con aviso".
+- **Aviso al cliente cuando su cita queda dentro de un bloqueo.** Depende del envío de mensajes.
+- **Bloqueos que se repiten.** Un feriado anual o una reunión semanal se registran cada vez.
+- **Feriados nacionales precargados.** No hay calendario de feriados; cada empresa los registra.
+- **Bloqueos anteriores sin límite de fecha.** La pestaña trae los últimos 200.
+- **Tipo de bloqueo en la agenda.** La franja dice "No atiende" y el motivo; no distingue con color el bloqueo que se puede forzar.
+- **Bitácora de bloqueos.** Se guarda quién lo creó, pero editar o eliminar no queda en `audit_events`.
+- **Solapes entre bloqueos.** Se pueden registrar dos bloqueos sobre el mismo rango.
+- **Pruebas en pantalla que faltan.** Forzar una cita sobre un bloqueo de horario desde la agenda, empresa con varias sedes, la vista de un profesional, tema oscuro y el aspecto del panel "Nuevo bloqueo".
+
+## Detectados el 2026-10-08 (clientes fuera de `users`)
+
+- **Recuperar la contraseña sin pasar por la empresa.** Hoy el cliente que la olvida debe pedir a la sede que la restablezca. Depende del envío de correos.
+- **Avisar al cliente que ya tiene acceso.** Al registrarlo no recibe nada: la sede debe decirle que entra con su correo y su documento.
+- **Contraseña inicial predecible.** Es el número de documento hasta el primer ingreso. Se exige cambiarla y el login tiene límite de intentos, pero mientras no ingrese, quien conozca su correo y su documento puede entrar por él. Evaluar un enlace de activación cuando haya envío de mensajes.
+- **Correo repetido entre clientes de una misma empresa.** Se permite (familias que comparten correo). Si además comparten contraseña, el selector de ingreso muestra la empresa dos veces sin decir de quién es cada cuenta.
+- **Correo del cliente sin verificar.** El personal puede escribirlo mal y el acceso queda a nombre de otra dirección.
+- **Reglas de contraseña.** Solo se exigen 8 caracteres y que no sea el documento.
+- **`created_by` de las reservas en línea queda vacío.** El autor está en el historial de la cita (`actor_customer_id`).
+- **Bitácora del acceso al portal.** Encender, apagar y restablecer el acceso no quedan en `audit_events`.
+- **Mensaje del primer ingreso.** Si escribe mal su documento al crear la contraseña, el aviso dice "contraseña actual".
+- **Pruebas en pantalla que faltan.** Registrar un cliente desde el formulario y entrar con él, registro con código de empresa, cliente sin correo, aviso de acceso apagado al ingresar, tema oscuro y el aspecto de "Crea tu contraseña" y del bloque "Acceso al portal".
+
+## Detectados el 2026-10-08 (controles y seguimiento)
+
+- **Avisar al cliente de su control.** "Avisado" es una marca manual; no se envía nada. Depende del envío de mensajes.
+- **Controles en la página del cliente y en su portal.** Solo se ven en la pantalla de Controles (la API ya filtra por cliente).
+- **Empresas sin el módulo de fichas.** Controles depende de "Fichas de atención e historia". Una peluquería sin ese módulo no ve la pantalla ni recibe los controles que piden sus servicios (retoques). Evaluar pasarlo al módulo de agenda.
+- **Reprogramar una cita no mueve la fecha del control.** El control sigue enlazado a la cita, que es lo que cuenta.
+- **Controles repetidos.** Se puede registrar a mano el mismo control dos veces para un cliente.
+- **Lista sin paginar.** Trae hasta 500 controles por pestaña. Los cerrados no tienen filtro de fechas.
+- **Dar por realizado sin confirmar.** El check cierra el control de inmediato; se deshace desde "Cerrados".
+- **Controles de un cliente eliminado.** Dejan de listarse, pero siguen en la base.
+- **Pruebas en pantalla que faltan.** Rubro con mascotas, vista de un profesional, un control nacido de una ficha o de un servicio, tema oscuro y el aspecto general de la pantalla.

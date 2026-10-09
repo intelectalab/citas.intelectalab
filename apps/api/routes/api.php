@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\RecordTemplateController;
 use App\Http\Controllers\Api\CareRecordController;
 use App\Http\Controllers\Api\PortalController;
+use App\Http\Controllers\Api\RecallController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\Api\SpecialtyController;
 use App\Http\Controllers\Api\CustomerController;
@@ -98,10 +99,12 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
     });
 });
 
-// Portal del cliente: solo cuentas de cliente, y cada una ve únicamente lo suyo.
+// Portal del cliente: quien inicia sesión es el propio cliente (su ficha es su
+// cuenta), y cada uno ve únicamente lo suyo.
 Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(function () {
     Route::get('/overview', [PortalController::class, 'overview']);
     Route::put('/profile', [PortalController::class, 'updateProfile']);
+    Route::put('/password', [PortalController::class, 'updatePassword']);
     Route::post('/dependents', [PortalController::class, 'storeDependent']);
 
     // Reservar, cancelar y reprogramar en línea depende del plan de la empresa.
@@ -134,7 +137,9 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::apiResource('professionals', ProfessionalController::class);
         Route::get('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'show']);
         Route::put('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'update']);
-        Route::apiResource('availability-blocks', AvailabilityBlockController::class)->only(['index', 'store', 'destroy']);
+        Route::get('/availability-blocks/options', [AvailabilityBlockController::class, 'options']);
+        Route::get('/availability-blocks/affected', [AvailabilityBlockController::class, 'affected']);
+        Route::apiResource('availability-blocks', AvailabilityBlockController::class)->except(['create', 'edit']);
 
         Route::get('/appointments/availability', [AppointmentController::class, 'availability']);
         Route::get('/appointments/context', [AppointmentController::class, 'context']);
@@ -155,11 +160,19 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum']);
         Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess']);
         Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf']);
+
+        // Controles y seguimiento: a quién hay que volver a llamar y para qué.
+        Route::get('/recalls', [RecallController::class, 'index']);
+        Route::post('/recalls', [RecallController::class, 'store']);
+        Route::put('/recalls/{recall}', [RecallController::class, 'update']);
+        Route::post('/recalls/{recall}/status', [RecallController::class, 'changeStatus']);
     });
 
     Route::middleware('module:crm')->group(function () {
         Route::get('/pipeline-stages', [PipelineStageController::class, 'index']);
         Route::apiResource('customers', CustomerController::class);
+        Route::put('/customers/{customer}/portal-access', [CustomerController::class, 'portalAccess']);
+        Route::post('/customers/{customer}/portal-access/reset', [CustomerController::class, 'resetPortalPassword']);
         Route::apiResource('customers.dependents', CustomerDependentController::class)->except(['show']);
         Route::apiResource('pipelines', PipelineController::class);
 

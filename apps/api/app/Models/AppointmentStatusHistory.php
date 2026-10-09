@@ -24,6 +24,7 @@ class AppointmentStatusHistory extends Model
         'to_status',
         'reason',
         'actor_user_id',
+        'actor_customer_id',
     ];
 
     protected $casts = [
@@ -33,5 +34,13 @@ class AppointmentStatusHistory extends Model
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_user_id');
+    }
+
+    /**
+     * El cliente, cuando el paso lo dio él mismo desde el portal.
+     */
+    public function customerActor(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'actor_customer_id')->withTrashed();
     }
 }

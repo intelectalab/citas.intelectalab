@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -26,9 +27,10 @@ use Illuminate\Validation\ValidationException;
  */
 class PortalController extends AppointmentController
 {
+    // Quien inicia sesión en el portal es el propio cliente (su ficha es su cuenta).
     private function customer(Request $request): Customer
     {
-        return $request->user()->customer;
+        return $request->user();
     }
 
     /**
@@ -99,6 +101,8 @@ class PortalController extends AppointmentController
                 'last_name'  => $customer->last_name,
                 'phone'      => $customer->phone,
                 'email'      => $customer->email,
+                // Sigue con su contraseña inicial: la pantalla le pide crear la suya.
+                'must_change_password' => (bool) $customer->must_change_password,
             ],
             'policies'     => $this->policies($tenant),
             'dependents'   => [
@@ -265,7 +269,8 @@ class PortalController extends AppointmentController
                 'price'                 => $service->price,
                 'notes'                 => $validated['notes'] ?? null,
                 'confirmed_at'          => $status === AppointmentFlow::CONFIRMED ? now() : null,
-                'created_by'            => $user->id,
+                // created_by es del personal; la reserva del cliente queda en el historial.
+                'created_by'            => null,
             ]);
 
             $this->log($appointment, null, $status, $user, 'Reserva en línea');
@@ -317,6 +322,8 @@ class PortalController extends AppointmentController
             'cancelled_by'  => 'customer',
         ]);
         $this->log($appointment, $from, AppointmentFlow::CANCELLED, $request->user(), $reason);
+        // Si la cita venía de un control, vuelve a quedar pendiente de agendar.
+        \App\Support\Recalls::appointmentChanged($tenant, $appointment);
 
         return response()->json($this->presentForCustomer($appointment, $tenant));
     }
@@ -392,6 +399,44 @@ class PortalController extends AppointmentController
 
             return response()->json($this->presentForCustomer($appointment->fresh(self::RELATIONS), $tenant));
         });
+    }
+
+    /**
+     * El cliente crea o cambia su contraseña. Con la inicial (su documento) es
+     * obligatorio antes de usar el portal.
+     */
+    public function updatePassword(Request $request)
+    {
+        $customer = $this->customer($request);
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password'         => 'required|string|min:8|max:72|confirmed',
+        ], [
+            'current_password.required' => 'Escribe tu contraseña actual.',
+            'password.required'         => 'Escribe tu nueva contraseña.',
+            'password.min'              => 'La nueva contraseña debe tener al menos 8 caracteres.',
+            'password.confirmed'        => 'Las dos contraseñas no coinciden.',
+        ]);
+
+        if (!Hash::check($validated['current_password'], $customer->password_hash)) {
+            throw ValidationException::withMessages(['current_password' => 'Tu contraseña actual no es correcta.']);
+        }
+
+        if ($validated['password'] === trim((string) $customer->document_number)) {
+            throw ValidationException::withMessages(['password' => 'Elige una contraseña distinta de tu número de documento.']);
+        }
+
+        $customer->forceFill([
+            'password_hash'        => Hash::make($validated['password']),
+            'must_change_password' => false,
+            'password_changed_at'  => now(),
+        ])->save();
+
+        // Las demás sesiones abiertas con la contraseña anterior se cierran.
+        $customer->tokens()->where('id', '!=', $customer->currentAccessToken()->id)->delete();
+
+        return response()->json(['message' => 'Tu contraseña quedó guardada.']);
     }
 
     public function updateProfile(Request $request)

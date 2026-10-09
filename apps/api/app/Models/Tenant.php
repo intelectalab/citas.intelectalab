@@ -233,7 +233,7 @@ class Tenant extends Model
         $monthStart = now()->startOfMonth();
 
         return [
-            'users'              => DB::table('users')->where('tenant_id', $this->id)->where('account_type', User::TYPE_STAFF)->count(),
+            'users'              => DB::table('users')->where('tenant_id', $this->id)->count(),
             'branches'           => DB::table('branches')->where('tenant_id', $this->id)->count(),
             'professionals'      => DB::table('professionals')->where('tenant_id', $this->id)->count(),
             // Las canceladas no cuentan contra el límite del plan.

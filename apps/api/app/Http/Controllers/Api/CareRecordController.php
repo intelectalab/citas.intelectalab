@@ -433,10 +433,18 @@ class CareRecordController extends Controller
     private function syncRecall(CareRecord $record, Appointment $appointment): void
     {
         $control = RecordFields::nextControl($record->template_snapshot ?? [], $record->data ?? []);
-        $existing = DB::table('recalls')->where('care_record_id', $record->id)->whereIn('status', ['pending', 'notified'])->first();
+        // El de esta ficha o, si el servicio ya dejó uno al atender la cita, ese mismo:
+        // una atención deja un solo control.
+        $existing = DB::table('recalls')
+            ->where('tenant_id', $record->tenant_id)
+            ->whereIn('status', ['pending', 'notified'])
+            ->where(fn ($q) => $q->where('care_record_id', $record->id)
+                ->orWhere(fn ($q) => $q->whereNull('care_record_id')->where('source_appointment_id', $appointment->id)))
+            ->first();
 
         if (!$control) {
-            if ($existing) {
+            // Solo se retira el que puso la ficha; el del servicio se queda.
+            if ($existing && $existing->care_record_id) {
                 DB::table('recalls')->where('id', $existing->id)->delete();
             }
             return;
@@ -449,7 +457,7 @@ class CareRecordController extends Controller
         ];
 
         if ($existing) {
-            DB::table('recalls')->where('id', $existing->id)->update($values);
+            DB::table('recalls')->where('id', $existing->id)->update($values + ['care_record_id' => $record->id]);
             return;
         }
 
@@ -458,6 +466,7 @@ class CareRecordController extends Controller
             'customer_id'           => $record->customer_id,
             'customer_dependent_id' => $record->customer_dependent_id,
             'care_record_id'        => $record->id,
+            'source_appointment_id' => $appointment->id,
             // El control se agenda con el servicio que indique el servicio atendido, o con el mismo.
             'service_id'            => $appointment->service?->recall_service_id ?? $appointment->service_id,
             'professional_id'       => $record->professional_id,

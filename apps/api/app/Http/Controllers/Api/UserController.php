@@ -17,7 +17,6 @@ class UserController extends Controller
         }
 
         $users = User::where('tenant_id', $currentUser->tenant_id)
-            ->where('account_type', User::TYPE_STAFF)
             ->select('id', 'first_name', 'last_name','email', 'phone', 'status')
             ->get();
 

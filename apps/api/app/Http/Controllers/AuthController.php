@@ -13,6 +13,11 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
+        // Un cliente inicia sesión con su ficha: no tiene roles ni plan que mostrar.
+        if ($user instanceof \App\Models\Customer) {
+            return $this->customer($user);
+        }
+
         $user->load(['roles', 'tenant.businessType', 'tenant.settings']);
 
         // is_saas_admin se mantiene para todo el equipo de plataforma con permisos
@@ -25,12 +30,11 @@ class AuthController extends Controller
         $impersonator = str_starts_with($tokenName, 'impersonation:')
             ? \App\Models\User::find(substr($tokenName, strlen('impersonation:')))
             : null;
-        $isCustomer = $user->isCustomer();
         $subscriptionFeatures = [];
         $planSlug = null;
 
         // El plan y sus módulos solo interesan al personal del tenant.
-        if (!$isCustomer && $user->tenant_id) {
+        if ($user->tenant_id) {
             $subscription = \App\Models\Subscription::with('plan')
                 ->where('tenant_id', $user->tenant_id)
                 ->whereIn('status', ['active', 'trialing'])
@@ -46,7 +50,6 @@ class AuthController extends Controller
         }
 
         $tenant = $user->tenant;
-        $customer = $isCustomer ? $user->customer : null;
 
         return response()->json([
             'id' => $user->id,
@@ -60,15 +63,14 @@ class AuthController extends Controller
             'impersonator' => $impersonator ? [
                 'name' => trim($impersonator->first_name . ' ' . $impersonator->last_name),
             ] : null,
-            'account_type' => $user->account_type,
+            'account_type' => 'staff',
             'roles' => $user->roles ? $user->roles->pluck('slug') : [],
             'plan_slug' => $planSlug,
             'features' => $subscriptionFeatures,
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
-                // El código de empresa lo reparte el personal; el cliente no lo necesita.
-                'code' => $isCustomer ? null : $tenant->code,
+                'code' => $tenant->code,
                 'business_type' => $tenant->businessType?->slug,
                 'business_type_name' => $tenant->businessType?->short_name,
                 'color' => $tenant->settings?->brand_color ?? $tenant->businessType?->color,
@@ -78,10 +80,51 @@ class AuthController extends Controller
                 'dependents' => $tenant->dependents(),
                 'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
             ] : null,
-            'customer' => $customer ? [
+            'customer' => null,
+        ]);
+    }
+
+    /**
+     * La misma forma que la del personal, con lo que el portal necesita.
+     */
+    private function customer(\App\Models\Customer $customer)
+    {
+        $customer->load(['tenant.businessType', 'tenant.settings']);
+        $tenant = $customer->tenant;
+
+        return response()->json([
+            'id' => $customer->id,
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'email' => $customer->email,
+            'is_owner' => false,
+            'is_saas_admin' => false,
+            'is_saas_support' => false,
+            'is_tenant_admin' => false,
+            'impersonator' => null,
+            'account_type' => 'customer',
+            'must_change_password' => (bool) $customer->must_change_password,
+            'roles' => [],
+            'plan_slug' => null,
+            'features' => [],
+            'tenant' => $tenant ? [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                // El código de empresa lo reparte el personal; el cliente no lo necesita.
+                'code' => null,
+                'business_type' => $tenant->businessType?->slug,
+                'business_type_name' => $tenant->businessType?->short_name,
+                'color' => $tenant->settings?->brand_color ?? $tenant->businessType?->color,
+                'vocabulary' => $tenant->vocabulary(),
+                'modules' => $tenant->modules(),
+                'rules' => (object) $tenant->rules(),
+                'dependents' => $tenant->dependents(),
+                'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
+            ] : null,
+            'customer' => [
                 'id' => $customer->id,
                 'code' => $customer->code,
-            ] : null,
+            ],
         ]);
     }
 }

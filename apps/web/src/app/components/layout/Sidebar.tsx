@@ -94,9 +94,9 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
       { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda' },
       { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
       { name: 'Lista de espera', href: '/modules/waitlist', icon: Hourglass, module: 'agenda' },
-      { name: 'Controles y seguimiento', href: '/modules/recalls', icon: Repeat, module: 'records' },
+      { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'records' },
       { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes' },
-      { name: 'Bloqueos y ausencias', href: '/modules/blocks', icon: CalendarOff, module: 'agenda' },
+      { name: 'Bloqueos y ausencias', href: '/blocks', icon: CalendarOff, module: 'agenda' },
       { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda' },
     ]
   },

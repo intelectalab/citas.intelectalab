@@ -77,8 +77,6 @@ export const OPTIONAL_MODULE_KEYS: string[] = MODULE_GROUPS.flatMap((group) =>
 // La página provisional /modules/<clave> las muestra igual que a un módulo.
 export const PENDING_SECTIONS: Record<string, { label: string; module: string }> = {
   waitlist: { label: 'Lista de espera', module: 'agenda' },
-  recalls: { label: 'Controles y seguimiento', module: 'records' },
-  blocks: { label: 'Bloqueos y ausencias', module: 'agenda' },
 };
 
 export const MODULE_LABELS: Record<string, string> = {

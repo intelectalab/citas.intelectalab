@@ -31,12 +31,14 @@ class AppointmentScheduler
         'TOO_FAR'          => 'Aún no se puede reservar con tanta anticipación',
         'OUT_OF_SCHEDULE'  => ':name no atiende a esa hora',
         'BLOCKED'          => 'Horario bloqueado',
+        'BLOCKED_SOFT'     => 'Horario bloqueado',
         'DOUBLE_BOOKING'   => ':name ya tiene una cita en ese intervalo',
         'BUFFER'           => 'Choca con el tiempo de preparación o limpieza de otra cita',
     ];
 
-    // Lo único que se puede forzar con un motivo (sobre-agenda). Nunca una doble reserva.
-    public const OVERRIDABLE = ['OUT_OF_SCHEDULE', 'BUFFER'];
+    // Lo único que se puede forzar con un motivo (sobre-agenda). Nunca una doble reserva
+    // ni unas vacaciones, un permiso, un feriado o un cierre de sede (BLOCKED).
+    public const OVERRIDABLE = ['OUT_OF_SCHEDULE', 'BUFFER', 'BLOCKED_SOFT'];
 
     /**
      * @param bool $online Reserva hecha por el cliente desde el portal: además
@@ -135,6 +137,7 @@ class AppointmentScheduler
                 'starts' => Carbon::parse($b->starts_at)->setTimezone($timezone),
                 'ends'   => Carbon::parse($b->ends_at)->setTimezone($timezone),
                 'reason' => (string) $b->reason,
+                'soft'   => $b->isOverridable(),
             ])
             ->all();
 
@@ -217,7 +220,7 @@ class AppointmentScheduler
 
         foreach ($day['blocks'] as $block) {
             if ($block['starts']->lt($end) && $start->lt($block['ends'])) {
-                $add('BLOCKED', $block['reason']);
+                $add($block['soft'] ? 'BLOCKED_SOFT' : 'BLOCKED', $block['reason']);
             }
         }
 

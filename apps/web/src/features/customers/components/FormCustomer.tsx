@@ -296,6 +296,9 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
                             placeholder="correo@ejemplo.com"
                           />
+                          <p className="text-xs text-slate-500 mt-1.5" data-hint="portal">
+                            Con su correo y su número de documento podrá ingresar a su portal: la primera vez, su contraseña es su número de documento.
+                          </p>
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Teléfono</label>

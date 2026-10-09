@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, CalendarDays, CalendarPlus, Home, Loader2, LogOut, PawPrint, Phone } from 'lucide-react';
+import { Building2, CalendarDays, CalendarPlus, Home, KeyRound, Loader2, LogOut, PawPrint, Phone } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import BookingFlow from './BookingFlow';
 import PortalAppointmentCard from './PortalAppointmentCard';
+import PortalPassword from './PortalPassword';
 import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview } from '../portal';
 
 type Tab = 'home' | 'book' | 'appointments';
@@ -28,6 +29,7 @@ export default function Portal() {
   const [notice, setNotice] = useState('');
   const [phone, setPhone] = useState('');
   const [editingPhone, setEditingPhone] = useState(false);
+  const [editingPassword, setEditingPassword] = useState(false);
 
   // El portal es solo para cuentas de cliente; el personal vuelve a su panel.
   useEffect(() => {
@@ -45,14 +47,17 @@ export default function Portal() {
     load();
   }, [user, isStaff, load]);
 
+  // Primer ingreso con su número de documento: antes de nada, crea su contraseña.
+  const mustChangePassword = Boolean(overview?.customer.must_change_password);
+
   // El catálogo solo existe si la empresa ofrece reserva en línea.
   useEffect(() => {
-    if (!overview?.policies.booking_enabled || catalog) return;
+    if (!overview?.policies.booking_enabled || catalog || mustChangePassword) return;
 
     api.get('/portal/catalog')
       .then((res) => setCatalog(res.data))
       .catch(() => setCatalog(null));
-  }, [overview?.policies.booking_enabled, catalog]);
+  }, [overview?.policies.booking_enabled, catalog, mustChangePassword]);
 
   if (authLoading || !user || isStaff || (!overview && !error)) {
     return (
@@ -140,7 +145,7 @@ export default function Portal() {
         </div>
 
         <nav className="max-w-3xl mx-auto px-4 sm:px-6 flex gap-1" aria-label="Secciones del portal">
-          {tabs.map((item) => (
+          {!mustChangePassword && tabs.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -161,7 +166,11 @@ export default function Portal() {
         {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
         {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">{notice}</p>}
 
-        {overview && tab === 'home' && (
+        {overview && mustChangePassword && (
+          <PortalPassword forced onDone={() => { setNotice('Tu contraseña quedó guardada. Ya puedes usar tu portal.'); load(); }} />
+        )}
+
+        {overview && !mustChangePassword && tab === 'home' && (
           <>
             <div className="space-y-1">
               <h1 className="text-2xl sm:text-3xl font-black text-[#022340] tracking-tight">Hola, {overview.customer.first_name}</h1>
@@ -240,6 +249,24 @@ export default function Portal() {
                   )}
                   <p className="text-xs text-slate-500 mt-1">Lo usamos para avisarte de tus citas.</p>
                 </div>
+                <div className="sm:col-span-2" data-row="password">
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Contraseña</dt>
+                  {editingPassword ? (
+                    <dd className="mt-1">
+                      <PortalPassword
+                        onDone={() => { setEditingPassword(false); setError(''); setNotice('Tu contraseña quedó guardada.'); }}
+                        onCancel={() => setEditingPassword(false)}
+                      />
+                    </dd>
+                  ) : (
+                    <dd className="flex items-center gap-3 font-semibold text-slate-800">
+                      <span className="flex items-center gap-1.5"><KeyRound size={14} className="text-slate-400" /> ••••••••</span>
+                      <button type="button" data-action="edit-password" onClick={() => setEditingPassword(true)} className="text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                        Cambiar
+                      </button>
+                    </dd>
+                  )}
+                </div>
               </dl>
 
               {overview.dependents.enabled && (
@@ -262,7 +289,7 @@ export default function Portal() {
           </>
         )}
 
-        {overview && tab === 'book' && (
+        {overview && !mustChangePassword && tab === 'book' && (
           !catalog ? (
             <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 size={15} className="animate-spin" /> Cargando servicios...</p>
           ) : (
@@ -278,7 +305,7 @@ export default function Portal() {
           )
         )}
 
-        {overview && tab === 'appointments' && (
+        {overview && !mustChangePassword && tab === 'appointments' && (
           <>
             <section className="space-y-3" data-list="upcoming">
               <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Próximas ({upcoming.length})</h2>

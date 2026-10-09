@@ -57,7 +57,10 @@ export interface User {
   impersonator?: { name: string } | null;
   // Dueño o administrador de su empresa: el único que cambia su configuración.
   is_tenant_admin?: boolean;
+  // Los clientes inician sesión con su ficha (no están en users); el personal es 'staff'.
   account_type?: 'staff' | 'customer';
+  // Cliente que sigue con su contraseña inicial (su número de documento).
+  must_change_password?: boolean;
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
   roles?: string[];

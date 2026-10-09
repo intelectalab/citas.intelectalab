@@ -290,7 +290,9 @@ class TenantController extends Controller
         if (!$tenant->isActive()) {
             // Cierra las sesiones abiertas de todo su personal y sus clientes.
             DB::table('personal_access_tokens')
-                ->whereIn('tokenable_id', DB::table('users')->where('tenant_id', $tenant->id)->select(DB::raw('id::text')))
+                ->where(fn ($q) => $q
+                    ->whereIn('tokenable_id', DB::table('users')->where('tenant_id', $tenant->id)->select(DB::raw('id::text')))
+                    ->orWhereIn('tokenable_id', DB::table('customers')->where('tenant_id', $tenant->id)->select(DB::raw('id::text'))))
                 ->delete();
         }
 
@@ -395,7 +397,7 @@ class TenantController extends Controller
             ]),
             'modules' => $modules,
             'usage'   => $usage,
-            'users'   => $tenant->users->where('account_type', 'staff')->values()->map(fn ($user) => [
+            'users'   => $tenant->users->values()->map(fn ($user) => [
                 'id'         => $user->id,
                 'first_name' => $user->first_name,
                 'last_name'  => $user->last_name,
@@ -415,7 +417,7 @@ class TenantController extends Controller
                 'allow_customer_signup' => $tenant->settings?->allow_customer_signup ?? true,
                 'brand_color'           => $tenant->settings?->brand_color,
             ],
-            'customer_accounts' => $tenant->users->where('account_type', 'customer')->count(),
+            'customer_accounts' => DB::table('customers')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->whereNotNull('password_hash')->count(),
             'can_impersonate'   => (bool) $owner,
         ];
     }

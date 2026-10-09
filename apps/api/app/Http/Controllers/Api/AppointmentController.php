@@ -14,6 +14,7 @@ use App\Models\CustomerDependent;
 use App\Models\Professional;
 use App\Models\Service;
 use App\Models\Tenant;
+use App\Models\Recall;
 use App\Models\User;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
@@ -230,7 +231,7 @@ class AppointmentController extends Controller
                 ])->values(),
                 'blocks'       => $blocks
                     ->filter(fn (AvailabilityBlock $b) => $b->professional_id === $p->id || (!$b->professional_id && $b->branch_id === $branch->id))
-                    ->map(fn (AvailabilityBlock $b) => ['starts' => $clip($b->starts_at), 'ends' => $clip($b->ends_at), 'reason' => $b->reason])
+                    ->map(fn (AvailabilityBlock $b) => ['starts' => $clip($b->starts_at), 'ends' => $clip($b->ends_at), 'reason' => $b->reason, 'kind' => $b->kindKey()])
                     ->values(),
             ])->values();
 
@@ -347,9 +348,12 @@ class AppointmentController extends Controller
             'duration_minutes'      => 'nullable|integer|min:5|max:720',
             'notes'                 => 'nullable|string|max:2000',
             'override_reason'       => 'nullable|string|max:255',
+            // Control pendiente que esta cita viene a cumplir.
+            'recall_id'             => 'nullable|uuid',
         ]);
 
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
+        $recall = $this->recallToBook($tenant, $customer, $validated['recall_id'] ?? null);
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $professional = Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
@@ -367,7 +371,7 @@ class AppointmentController extends Controller
         $duration = (int) ($validated['duration_minutes'] ?? $service->duration_minutes);
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration) {
+        return DB::transaction(function () use ($tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall) {
             // Una cita a la vez por empresa: evita dobles reservas y códigos repetidos.
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
@@ -406,6 +410,10 @@ class AppointmentController extends Controller
             ]);
 
             $this->log($appointment, null, $status, $user, $override ? "Sobre-agenda: {$override}" : null);
+
+            if ($recall) {
+                \App\Support\Recalls::book($recall, $appointment);
+            }
 
             return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true), 201);
         });
@@ -513,6 +521,8 @@ class AppointmentController extends Controller
 
             $appointment->update($changes);
             $this->log($appointment, $from, $to, $user, $reason);
+            // Los controles ligados a la cita siguen su suerte, y un servicio puede dejar el suyo.
+            \App\Support\Recalls::appointmentChanged($tenant, $appointment);
 
             return response()->json($this->present($appointment, $tenant, true) + ['late_cancel' => $lateCancel]);
         });
@@ -654,6 +664,29 @@ class AppointmentController extends Controller
     }
 
     /**
+     * Control que la cita viene a cumplir: de la empresa, del mismo cliente y
+     * todavía sin cita.
+     */
+    protected function recallToBook(Tenant $tenant, Customer $customer, ?string $id): ?Recall
+    {
+        if (!$id) {
+            return null;
+        }
+
+        $recall = Recall::where('tenant_id', $tenant->id)->findOrFail($id);
+
+        if ($recall->customer_id !== $customer->id) {
+            throw ValidationException::withMessages(['recall_id' => 'Ese control es de otra persona.']);
+        }
+
+        if (!$recall->isOpen()) {
+            throw ValidationException::withMessages(['recall_id' => 'Ese control ya está ' . mb_strtolower(Recall::STATUSES[$recall->status]) . '.']);
+        }
+
+        return $recall;
+    }
+
+    /**
      * Motivo de la sobre-agenda si se puede forzar el horario: la regla lo
      * permite, lo pide el administrador de la empresa y no hay doble reserva.
      */
@@ -743,7 +776,10 @@ class AppointmentController extends Controller
         return $appointment->record !== null || in_array($appointment->service_id, $attributes->get('record_services'), true);
     }
 
-    protected function log(Appointment $appointment, ?string $from, string $to, User $user, ?string $reason): void
+    /**
+     * @param User|Customer $actor Quien da el paso: el personal, o el cliente desde su portal.
+     */
+    protected function log(Appointment $appointment, ?string $from, string $to, User|Customer $actor, ?string $reason): void
     {
         AppointmentStatusHistory::create([
             'tenant_id'      => $appointment->tenant_id,
@@ -751,7 +787,8 @@ class AppointmentController extends Controller
             'from_status'    => $from,
             'to_status'      => $to,
             'reason'         => $reason ? mb_substr($reason, 0, 255) : null,
-            'actor_user_id'  => $user->id,
+            'actor_user_id'  => $actor instanceof User ? $actor->id : null,
+            'actor_customer_id' => $actor instanceof Customer ? $actor->id : null,
         ]);
     }
 
@@ -818,13 +855,13 @@ class AppointmentController extends Controller
         ];
 
         if ($withHistory) {
-            $data['history'] = $appointment->history()->with('actor:id,first_name,last_name')->get()
+            $data['history'] = $appointment->history()->with(['actor:id,first_name,last_name', 'customerActor:id,first_name,last_name'])->get()
                 ->map(fn (AppointmentStatusHistory $step) => [
                     'from'      => $step->from_status,
                     'to'        => $step->to_status,
                     'to_name'   => AppointmentFlow::name($tenant, $step->to_status),
                     'reason'    => $step->reason,
-                    'by'        => $step->actor ? trim("{$step->actor->first_name} {$step->actor->last_name}") : null,
+                    'by'        => ($who = $step->actor ?? $step->customerActor) ? trim("{$who->first_name} {$who->last_name}") : null,
                     'at'        => $local($step->created_at),
                 ]);
         }

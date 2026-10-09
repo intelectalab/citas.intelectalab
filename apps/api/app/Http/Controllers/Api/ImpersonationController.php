@@ -23,7 +23,6 @@ class ImpersonationController extends Controller
         $tenant = Tenant::findOrFail($tenant);
 
         $owner = $tenant->users()
-            ->where('account_type', 'staff')
             ->where('status', 'active')
             ->orderByDesc('is_owner')
             ->orderBy('created_at')

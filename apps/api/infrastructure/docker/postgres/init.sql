@@ -144,8 +144,6 @@ CREATE TABLE users (
     phone varchar(30),
     avatar_url varchar(255),
     is_owner boolean NOT NULL DEFAULT false,
-    -- staff = personal del tenant o admin SaaS; customer = cuenta del portal de cliente
-    account_type varchar(20) NOT NULL DEFAULT 'staff' CHECK (account_type IN ('staff', 'customer')),
     status varchar(30) NOT NULL DEFAULT 'active',
     email_verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -194,7 +192,14 @@ CREATE TABLE customers (
     emergency_contact_phone varchar(50) NULL,
     status_id uuid NULL REFERENCES statuses(id), -- Vinculado a módulo 'customers'
     manager_user_id uuid NULL REFERENCES users(id) ON DELETE SET NULL,
-    user_id uuid NULL REFERENCES users(id) ON DELETE SET NULL, -- Cuenta del portal (users.account_type = 'customer')
+    -- Acceso al portal: el cliente ingresa con su correo. La contraseña inicial es su
+    -- número de documento y debe cambiarla en su primer ingreso. Sin correo o sin
+    -- contraseña no hay acceso. Los clientes no tienen fila en users.
+    password_hash varchar(255) NULL,
+    must_change_password boolean NOT NULL DEFAULT false,
+    portal_enabled boolean NOT NULL DEFAULT true,
+    password_changed_at timestamptz NULL,
+    last_login_at timestamptz NULL,
     pipeline_stage_id uuid NULL REFERENCES pipeline_stages(id) ON DELETE SET NULL,
     address varchar(255) NULL,
     district varchar(100) NULL,
@@ -211,7 +216,7 @@ CREATE INDEX idx_customers_tenant_phone ON customers(tenant_id, phone);
 CREATE INDEX idx_customers_tenant_email ON customers(tenant_id, email);
 CREATE INDEX idx_customers_tenant_document ON customers(tenant_id, document_number);
 CREATE INDEX idx_customers_status ON customers(status_id);
-CREATE UNIQUE INDEX idx_customers_user ON customers(user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_customers_login ON customers(lower(email)) WHERE password_hash IS NOT NULL;
 
 -- 5. Resto de tablas operativas
 CREATE TABLE tenant_contacts (
@@ -341,6 +346,10 @@ CREATE TABLE availability_blocks (
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
     reason varchar(255),
+    -- vacation, leave, holiday y closure no se pueden forzar; other (reunión, capacitación) sí, con motivo
+    kind varchar(20) NOT NULL DEFAULT 'other' CHECK (kind IN ('vacation', 'leave', 'holiday', 'closure', 'other')),
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
     CHECK (ends_at > starts_at)
 );
 CREATE INDEX idx_blocks_tenant_time ON availability_blocks(tenant_id, starts_at, ends_at);
@@ -395,6 +404,8 @@ CREATE TABLE appointment_status_history (
     to_status varchar(20) NOT NULL,
     reason varchar(255) NULL,
     actor_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    -- Cuando el paso lo dio el propio cliente desde el portal.
+    actor_customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_appt_history ON appointment_status_history(appointment_id, created_at);
@@ -1321,13 +1332,15 @@ CREATE TABLE care_record_addenda (
 );
 CREATE INDEX idx_care_record_addenda_record ON care_record_addenda(tenant_id, care_record_id);
 
--- Controles que nacen de la ficha (vacuna, profilaxis, retoque, próxima sesión)
+-- Controles y seguimiento (vacuna, profilaxis, retoque, próxima sesión). Nacen de la
+-- ficha de una atención, del servicio atendido (services.recall_*) o los registra el personal.
 CREATE TABLE recalls (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     customer_dependent_id uuid NULL REFERENCES customer_dependents(id) ON DELETE SET NULL,
     care_record_id uuid NULL REFERENCES care_records(id) ON DELETE SET NULL,
+    source_appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL, -- cita de la atención que lo originó
     service_id uuid NULL REFERENCES services(id) ON DELETE SET NULL,
     professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
     label varchar(150) NOT NULL,
@@ -1335,6 +1348,9 @@ CREATE TABLE recalls (
     status varchar(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'notified', 'booked', 'done', 'cancelled')),
     notified_at timestamptz NULL,
     appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL, -- cita en la que se convirtió
+    notes text NULL,
+    closed_reason varchar(255) NULL, -- por qué se descartó o se dio por realizado sin cita
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL, -- solo los registrados a mano
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );

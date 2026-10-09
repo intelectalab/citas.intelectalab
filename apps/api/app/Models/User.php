@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -13,9 +12,6 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
-
-    public const TYPE_STAFF = 'staff';
-    public const TYPE_CUSTOMER = 'customer';
 
     protected $table = 'users';
 
@@ -32,7 +28,6 @@ class User extends Authenticatable
         'phone',
         'avatar_url',
         'is_owner',
-        'account_type',
         'status',
         'email_verified_at',
     ];
@@ -59,14 +54,6 @@ class User extends Authenticatable
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class, 'tenant_id');
-    }
-
-    /**
-     * Ficha de cliente vinculada cuando la cuenta es del portal de cliente.
-     */
-    public function customer(): HasOne
-    {
-        return $this->hasOne(Customer::class, 'user_id');
     }
 
     /**
@@ -105,8 +92,12 @@ class User extends Authenticatable
         return $this->isPlatformUser() && !$this->isSaasSupport();
     }
 
+    /**
+     * Los clientes del portal no están en users: su cuenta es su ficha
+     * (Customer). Se conserva para preguntar lo mismo a quien inició sesión.
+     */
     public function isCustomer(): bool
     {
-        return $this->account_type === self::TYPE_CUSTOMER;
+        return false;
     }
 }
