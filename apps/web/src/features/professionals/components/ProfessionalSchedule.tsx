@@ -36,6 +36,8 @@ interface ProfessionalScheduleProps {
   isOpen: boolean;
   onClose: () => void;
   professional: { id: string; display_name: string } | null;
+  // Sede en la que se abre el panel (por ejemplo, la que se está viendo).
+  initialBranchId?: string | null;
 }
 
 // Lunes primero; el número es el día de la semana que guarda la API (0 = domingo).
@@ -80,7 +82,7 @@ const firstError = (error: any, fallback: string): string => {
 
 // Horario semanal de un profesional (por sede) y sus ausencias. El horario se
 // guarda completo por sede; las ausencias se agregan y se quitan una a una.
-export default function ProfessionalSchedule({ isOpen, onClose, professional }: ProfessionalScheduleProps) {
+export default function ProfessionalSchedule({ isOpen, onClose, professional, initialBranchId }: ProfessionalScheduleProps) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [rows, setRows] = useState<ScheduleRow[]>([]);
@@ -120,7 +122,10 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional }: 
       .then(([scheduleRes, blocksRes]) => {
         const branchList: Branch[] = scheduleRes.data.branches ?? [];
         const allRows: ScheduleRow[] = scheduleRes.data.schedules ?? [];
-        const firstBranch = branchList[0]?.id ?? '';
+        // Abre en la sede pedida; si no, en la primera donde la persona ya atiende.
+        const firstBranch = branchList.find((b) => b.id === initialBranchId)?.id
+          ?? branchList.find((b) => allRows.some((row) => row.branch_id === b.id))?.id
+          ?? branchList[0]?.id ?? '';
 
         setBranches(branchList);
         setRows(allRows);

@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import RecordPreview from '@/features/business-types/components/RecordPreview';
 import FormRecordTemplate from './FormRecordTemplate';
+import RecordSheetEditor from './RecordSheetEditor';
 import type { RecordTemplate, TemplateService } from '../records';
 
 // Las fichas de la empresa: cada una con sus campos y los servicios que la
@@ -25,6 +26,18 @@ export default function RecordTemplates() {
   const [editing, setEditing] = useState<RecordTemplate | null>(null);
   const [deleting, setDeleting] = useState<RecordTemplate | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  // La hoja de la derecha tiene cambios sin guardar.
+  const [sheetDirty, setSheetDirty] = useState(false);
+
+  // Con cambios sin guardar en la hoja no se pasa a otra ficha: se perderían.
+  const guard = (action: () => void) => {
+    if (sheetDirty) {
+      setError('Tienes cambios sin guardar en la ficha. Guárdalos o descártalos antes de continuar.');
+      return;
+    }
+    setError('');
+    action();
+  };
 
   const load = useCallback((selectId?: string) => {
     api.get('/record-templates')
@@ -80,14 +93,14 @@ export default function RecordTemplates() {
         <div>
           <h1 className="text-2xl font-black text-[#022340] tracking-tight">Plantillas de ficha</h1>
           <p className="text-sm text-slate-500 font-medium">
-            Lo que tu equipo llena al atender. {canEdit ? 'Puedes cambiar los campos cuando quieras: las fichas ya llenadas no cambian.' : 'Las define el administrador de tu empresa.'}
+            Lo que tu equipo llena al atender. {canEdit ? 'Edita la ficha directamente sobre la hoja de la derecha: las fichas ya llenadas no cambian.' : 'Las define el administrador de tu empresa.'}
           </p>
         </div>
         {canEdit && (
           <button
             type="button"
             data-action="new-template"
-            onClick={() => { setEditing(null); setFormOpen(true); }}
+            onClick={() => guard(() => { setEditing(null); setFormOpen(true); })}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
           >
             <Plus size={16} className="text-[#84D0D9] stroke-[2.5]" /> Nueva ficha
@@ -114,7 +127,7 @@ export default function RecordTemplates() {
                 <div
                   key={template.id}
                   data-template={template.name}
-                  onClick={() => setSelectedId(template.id)}
+                  onClick={() => { if (template.id !== selectedId) guard(() => setSelectedId(template.id)); }}
                   className={`bg-white rounded-2xl border p-5 space-y-3 cursor-pointer transition-all ${
                     isSelected ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20 shadow-sm' : 'border-slate-200/80 shadow-xs hover:border-slate-300'
                   }`}
@@ -128,8 +141,8 @@ export default function RecordTemplates() {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          title={`Editar ${template.name}`}
-                          onClick={(e) => { e.stopPropagation(); setEditing(template); setFormOpen(true); }}
+                          title={`Servicios y descripción de ${template.name}`}
+                          onClick={(e) => { e.stopPropagation(); guard(() => { setEditing(template); setFormOpen(true); }); }}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Pencil size={16} />
@@ -137,7 +150,7 @@ export default function RecordTemplates() {
                         <button
                           type="button"
                           title={`Eliminar ${template.name}`}
-                          onClick={(e) => { e.stopPropagation(); setDeleting(template); }}
+                          onClick={(e) => { e.stopPropagation(); guard(() => setDeleting(template)); }}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <Trash2 size={16} />
@@ -180,7 +193,16 @@ export default function RecordTemplates() {
           </div>
 
           <div className="xl:col-span-3" data-preview>
-            {selected && (
+            {selected && canEdit && (
+              <RecordSheetEditor
+                template={selected}
+                color={user?.tenant?.color || '#022340'}
+                companyName={user?.tenant?.name ?? ''}
+                onSaved={(template) => load(template.id)}
+                onDirtyChange={setSheetDirty}
+              />
+            )}
+            {selected && !canEdit && (
               <RecordPreview
                 record={{ name: selected.name, consent_text: selected.consent_text, require_consent: selected.require_consent, fields: selected.fields }}
                 color={user?.tenant?.color || '#022340'}

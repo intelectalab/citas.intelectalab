@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Repeat, Search, X } from 'lucide-react';
+import { Plus, Repeat, Search, X } from 'lucide-react';
+import FormCustomer from '@/features/customers/components/FormCustomer';
+import QuickDependent from '@/features/customers/components/QuickDependent';
+import QuickService from '@/features/services/components/QuickService';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -60,6 +63,11 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Lo creado sin salir del panel: un cliente, una mascota o un servicio.
+  const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  const [addingDependent, setAddingDependent] = useState(false);
+  const [serviceFormOpen, setServiceFormOpen] = useState(false);
+  const [newServices, setNewServices] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -131,6 +139,7 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
   const dependentOptions = customer?.dependents ?? [];
 
   return (
+    <>
     <FormDrawer
       isOpen={isOpen}
       onClose={onClose}
@@ -160,16 +169,28 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
                 </div>
               ) : (
                 <>
-                  <div className="relative">
-                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      aria-label={`Buscar ${vocab.client.toLowerCase()}`}
-                      placeholder="Nombre, documento, celular o código"
-                      className={`${inputClass} pl-9`}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        aria-label={`Buscar ${vocab.client.toLowerCase()}`}
+                        placeholder="Nombre, documento, celular o código"
+                        className={`${inputClass} pl-9`}
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      data-new-customer
+                      title={`Nuevo ${vocab.client.toLowerCase()}`}
+                      aria-label={`Nuevo ${vocab.client.toLowerCase()}`}
+                      onClick={() => setCustomerFormOpen(true)}
+                      className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+                    >
+                      <Plus size={18} className="stroke-[2.5]" />
+                    </button>
                   </div>
                   {query.trim().length >= 2 && (
                     <div className="mt-1.5 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto bg-white">
@@ -200,14 +221,29 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
             </div>
           )}
 
-          {!initialData && usesDependents && dependentOptions.length > 0 && (
-            <Select
-              label={vocab.dependent}
-              placeholder="Ninguno"
-              value={dependentId}
-              onChange={(e) => setDependentId(String(e.target.value))}
-              options={dependentOptions.map((d) => ({ value: d.id, label: d.species ? `${d.name} (${d.species})` : d.name }))}
-            />
+          {!initialData && usesDependents && customer && (
+            <div>
+              <Select
+                label={vocab.dependent}
+                placeholder={dependentOptions.length === 0 ? `Aún no tiene ${vocab.dependents.toLowerCase()}: agrégalo con +` : 'Ninguno'}
+                value={dependentId}
+                onChange={(e) => setDependentId(String(e.target.value))}
+                options={dependentOptions.map((d) => ({ value: d.id, label: d.species ? `${d.name} (${d.species})` : d.name }))}
+                onAdd={() => setAddingDependent(true)}
+                addLabel={`Agregar ${vocab.dependent.toLowerCase()}`}
+              />
+              {addingDependent && (
+                <QuickDependent
+                  customerId={customer.id}
+                  onCancel={() => setAddingDependent(false)}
+                  onCreated={(created) => {
+                    setCustomer({ ...customer, dependents: [...(customer.dependents ?? []), created] } as typeof customer);
+                    setDependentId(created.id);
+                    setAddingDependent(false);
+                  }}
+                />
+              )}
+            </div>
           )}
 
           <div>
@@ -255,7 +291,9 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
             placeholder="Se elige al agendar"
             value={serviceId}
             onChange={(e) => setServiceId(String(e.target.value))}
-            options={services.map((s) => ({ value: s.id, label: s.name }))}
+            options={[...services, ...newServices].map((s) => ({ value: s.id, label: s.name }))}
+            onAdd={user?.is_tenant_admin ? () => setServiceFormOpen(true) : undefined}
+            addLabel="Nuevo servicio"
           />
 
           {professionals.length > 1 && (
@@ -303,5 +341,24 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
         </div>
       </div>
     </FormDrawer>
+
+    {/* Cliente o servicio nuevo sin salir del panel: al guardarlo queda elegido. */}
+    <FormCustomer
+      isOpen={isOpen && customerFormOpen}
+      onClose={() => setCustomerFormOpen(false)}
+      onSubmitSuccess={(created) => {
+        if (created?.id) {
+          setCustomer(created);
+          setDependentId('');
+          setQuery('');
+        }
+      }}
+    />
+    <QuickService
+      isOpen={isOpen && serviceFormOpen}
+      onClose={() => setServiceFormOpen(false)}
+      onCreated={(created) => { setNewServices((current) => [...current, created]); setServiceId(created.id); }}
+    />
+    </>
   );
 }

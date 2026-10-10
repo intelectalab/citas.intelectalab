@@ -29,7 +29,9 @@ class AppointmentScheduler
         'NOT_ONLINE'       => 'Este servicio no se reserva en línea',
         'LEAD_TIME'        => 'Ese horario está demasiado cerca para reservarlo en línea',
         'TOO_FAR'          => 'Aún no se puede reservar con tanta anticipación',
+        'BRANCH_CLOSED'    => 'La sede está cerrada a esa hora',
         'OUT_OF_SCHEDULE'  => ':name no atiende a esa hora',
+        'HOLIDAY'          => 'Es feriado',
         'BLOCKED'          => 'Horario bloqueado',
         'BLOCKED_SOFT'     => 'Horario bloqueado',
         'DOUBLE_BOOKING'   => ':name ya tiene una cita en ese intervalo',
@@ -37,8 +39,8 @@ class AppointmentScheduler
     ];
 
     // Lo único que se puede forzar con un motivo (sobre-agenda). Nunca una doble reserva
-    // ni unas vacaciones, un permiso, un feriado o un cierre de sede (BLOCKED).
-    public const OVERRIDABLE = ['OUT_OF_SCHEDULE', 'BUFFER', 'BLOCKED_SOFT'];
+    // ni un feriado (HOLIDAY), unas vacaciones, un permiso o un cierre de sede (BLOCKED).
+    public const OVERRIDABLE = ['BRANCH_CLOSED', 'OUT_OF_SCHEDULE', 'BUFFER', 'BLOCKED_SOFT'];
 
     /**
      * @param bool $online Reserva hecha por el cliente desde el portal: además
@@ -159,7 +161,13 @@ class AppointmentScheduler
             ])
             ->all();
 
-        return compact('schedules', 'blocks', 'appointments');
+        // Feriado en que la sede cierra: ese día no atiende nadie.
+        $holiday = Holidays::on($this->tenant, $branch->id, $dayStart->format('Y-m-d'), true)->first()?->name;
+
+        // Horario de atención de la sede; vacío si no lo tiene definido.
+        $branchHours = BranchHours::of($branch->id);
+
+        return compact('schedules', 'blocks', 'appointments', 'holiday', 'branchHours');
     }
 
     private function evaluate(array $day, Service $service, Professional $professional, Carbon $start, int $duration): array
@@ -216,6 +224,15 @@ class AppointmentScheduler
             $add('OUT_OF_SCHEDULE', $day['schedules']
                 ? 'su horario es ' . collect($day['schedules'])->map(fn (array $range) => "{$range['starts']}–{$range['ends']}")->join(' y ')
                 : 'ese día no atiende en esta sede');
+        }
+
+        if (!empty($day['holiday'])) {
+            $add('HOLIDAY', $day['holiday']);
+        }
+
+        $branchHours = $day['branchHours'] ?? [];
+        if ($branchHours !== [] && !($sameDay && BranchHours::covers($branchHours, $start->dayOfWeek, $startTime, $endTime === '00:00' ? '24:00' : $endTime))) {
+            $add('BRANCH_CLOSED', 'abre ' . BranchHours::describe($branchHours, $start->dayOfWeek));
         }
 
         foreach ($day['blocks'] as $block) {

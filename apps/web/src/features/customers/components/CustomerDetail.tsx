@@ -225,7 +225,9 @@ export default function CustomerDetail() {
 
           {customer.medical_notes && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-              <span className="block text-[11px] font-bold text-amber-700 uppercase tracking-wider">Observaciones</span>
+              <span className="block text-[11px] font-bold text-amber-700 uppercase tracking-wider">
+                {user?.tenant?.rules?.['customers.clinical_fields'] ? 'Antecedentes y observaciones' : 'Observaciones'}
+              </span>
               <p className="text-sm text-amber-800 mt-0.5 whitespace-pre-line">{customer.medical_notes}</p>
             </div>
           )}

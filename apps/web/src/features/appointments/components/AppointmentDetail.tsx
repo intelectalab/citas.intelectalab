@@ -77,8 +77,16 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       apply(res.data);
       setCancelling(false);
       setCancelReason('');
-      if (res.data.late_cancel) {
-        setNotice('Se canceló fuera del plazo sin costo de tu empresa.');
+      // Avisos tras cancelar: fuera de plazo, y si el horario libre le sirve a alguien que espera.
+      const waiting = Number(res.data.waitlist_matches ?? 0);
+      const notices = [
+        res.data.late_cancel ? 'Se canceló fuera del plazo sin costo de tu empresa.' : '',
+        waiting > 0
+          ? `Este horario le sirve a ${waiting === 1 ? '1 persona' : `${waiting} personas`} de la lista de espera. Revísala en Lista de espera.`
+          : '',
+      ].filter(Boolean);
+      if (notices.length) {
+        setNotice(notices.join(' '));
       }
       onChanged(res.data);
     } catch (err) {

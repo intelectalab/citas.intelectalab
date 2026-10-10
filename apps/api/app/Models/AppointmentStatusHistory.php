@@ -31,6 +31,11 @@ class AppointmentStatusHistory extends Model
         'created_at' => 'datetime',
     ];
 
+    public function appointment(): BelongsTo
+    {
+        return $this->belongsTo(Appointment::class, 'appointment_id');
+    }
+
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_user_id');

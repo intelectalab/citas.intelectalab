@@ -54,12 +54,37 @@ class ProfessionalController extends Controller
         return response()->json($professionals);
     }
 
+    /**
+     * Mensaje cuando el plan de la empresa ya no admite otro profesional u otra
+     * cuenta de usuario; null si todavía hay lugar (o el plan no pone tope).
+     */
+    private function planLimitReached(?\App\Models\Tenant $tenant): ?string
+    {
+        $limits = $tenant?->activeSubscription?->plan?->limits ?? [];
+        $usage = $tenant ? $tenant->usage() : [];
+
+        foreach (['professionals' => 'profesionales', 'users' => 'cuentas de usuario además de la del dueño'] as $key => $label) {
+            $limit = $limits[$key] ?? null;
+
+            if (is_numeric($limit) && ($usage[$key] ?? 0) >= (int) $limit) {
+                return "Tu plan permite hasta {$limit} {$label} y ya llegaste a ese número. Para agregar otro, cambia de plan.";
+            }
+        }
+
+        return null;
+    }
+
     public function store(Request $request)
     {
         $currentUser = $request->user();
 
         if (!$currentUser || !$currentUser->tenant_id) {
             return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        // Cada profesional nuevo ocupa un lugar de profesional y una cuenta de usuario del plan.
+        if ($blocked = $this->planLimitReached($currentUser->tenant)) {
+            return response()->json(['message' => $blocked, 'code' => 'PLAN_LIMIT'], 422);
         }
 
         $request->merge([
@@ -96,9 +121,16 @@ class ProfessionalController extends Controller
             'status' => 'active',
         ]);
 
-        $roleProfessional = \App\Models\Role::where('tenant_id', $currentUser->tenant_id)
-            ->where('slug', 'professional')
-            ->first();
+        // Sin este rol la cuenta vería las citas de todos: se crea si la empresa aún no lo tiene.
+        $roleProfessional = \App\Models\Role::firstOrCreate(
+            ['tenant_id' => $currentUser->tenant_id, 'slug' => 'professional'],
+            [
+                'id'          => (string) \Illuminate\Support\Str::uuid(),
+                'name'        => 'Profesional',
+                'description' => 'Atiende sus propias citas',
+                'is_system'   => true,
+            ]
+        );
 
         if ($roleProfessional) {
             \Illuminate\Support\Facades\DB::table('user_roles')->insert([

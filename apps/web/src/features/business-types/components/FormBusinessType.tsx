@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Select from '@/app/components/common/Select';
 import { ChevronDown, Layers } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
@@ -237,10 +238,13 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                           </div>
                           <div>
                             <label className={labelClass}>Estado</label>
-                            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
-                              <option value="active">Activo</option>
-                              <option value="inactive">Inactivo</option>
-                            </select>
+                            <Select
+                              ariaLabel="Estado"
+                              clearable={false}
+                              value={form.status}
+                              onChange={(e) => setForm({ ...form, status: String(e.target.value) })}
+                              options={[{ value: 'active', label: 'Activo' }, { value: 'inactive', label: 'Inactivo' }]}
+                            />
                           </div>
                         </div>
                         <p className="text-xs text-slate-400">Un rubro inactivo no aparece en el registro de empresas, pero las que ya lo usan siguen igual.</p>
@@ -326,11 +330,13 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                           <>
                             <div>
                               <label className={labelClass}>Tipo</label>
-                              <select value={form.dependents_kind} onChange={(e) => setForm({ ...form, dependents_kind: e.target.value })} className={inputClass}>
-                                <option value="">Genérico</option>
-                                <option value="pet">Mascota (pide especie y raza)</option>
-                                <option value="child">Hijo o familiar</option>
-                              </select>
+                              <Select
+                                ariaLabel="Tipo de dependiente"
+                                placeholder="Genérico"
+                                value={form.dependents_kind}
+                                onChange={(e) => setForm({ ...form, dependents_kind: String(e.target.value) })}
+                                options={[{ value: 'pet', label: 'Mascota (pide especie y raza)' }, { value: 'child', label: 'Hijo o familiar' }]}
+                              />
                             </div>
                             <label className="flex items-start gap-2.5 cursor-pointer">
                               <input

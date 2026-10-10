@@ -16,11 +16,15 @@ use App\Http\Controllers\Api\TenantContactController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ProfessionalScheduleController;
 use App\Http\Controllers\Api\AvailabilityBlockController;
+use App\Http\Controllers\Api\BranchController;
+use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\RecordTemplateController;
 use App\Http\Controllers\Api\CareRecordController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\RecallController;
+use App\Http\Controllers\Api\WaitlistController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\Api\SpecialtyController;
 use App\Http\Controllers\Api\CustomerController;
@@ -127,6 +131,20 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
 
     Route::apiResource('statuses', StatusController::class);
 
+    // Sucursales: las ve todo el personal; las cambia el administrador de la empresa.
+    Route::get('/branches', [BranchController::class, 'index']);
+    Route::post('/branches', [BranchController::class, 'store']);
+    Route::get('/branches/{branch}', [BranchController::class, 'show']);
+    Route::put('/branches/{branch}', [BranchController::class, 'update']);
+    Route::post('/branches/{branch}/status', [BranchController::class, 'changeStatus']);
+    Route::put('/branches/{branch}/hours', [BranchController::class, 'updateHours']);
+
+    Route::middleware('module:resources')->group(function () {
+        Route::post('/branches/{branch}/rooms', [RoomController::class, 'store']);
+        Route::put('/rooms/{room}', [RoomController::class, 'update']);
+        Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);
+    });
+
     // Cada grupo exige que el tenant tenga activo el módulo (plan, rubro y
     // configuración propia). Las rutas de módulos nuevos (inventory, quotes,
     // memberships...) deben declararse igual: ->middleware('module:<clave>').
@@ -135,19 +153,39 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::apiResource('services', ServiceController::class);
         Route::apiResource('service-categories', ServiceCategoryController::class);
         Route::apiResource('professionals', ProfessionalController::class);
+        Route::get('/schedules', [ProfessionalScheduleController::class, 'index']);
         Route::get('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'show']);
         Route::put('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'update']);
         Route::get('/availability-blocks/options', [AvailabilityBlockController::class, 'options']);
         Route::get('/availability-blocks/affected', [AvailabilityBlockController::class, 'affected']);
         Route::apiResource('availability-blocks', AvailabilityBlockController::class)->except(['create', 'edit']);
 
+        // Feriados: los ve todo el personal, los cambia el administrador de la empresa.
+        Route::post('/holidays/national', [HolidayController::class, 'loadNational']);
+        Route::apiResource('holidays', HolidayController::class)->except(['create', 'edit']);
+
         Route::get('/appointments/availability', [AppointmentController::class, 'availability']);
         Route::get('/appointments/context', [AppointmentController::class, 'context']);
         Route::get('/appointments/day', [AppointmentController::class, 'day']);
         Route::get('/appointments/metrics', [AppointmentController::class, 'metrics']);
+        Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'show']);
         Route::apiResource('appointments', AppointmentController::class)->except(['destroy']);
         Route::post('/appointments/{appointment}/status', [AppointmentController::class, 'changeStatus']);
         Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule']);
+
+        // Lista de espera: quién quiere una cita y no encontró horario.
+        Route::get('/waitlist', [WaitlistController::class, 'index']);
+        Route::post('/waitlist', [WaitlistController::class, 'store']);
+        Route::put('/waitlist/{entry}', [WaitlistController::class, 'update']);
+        Route::post('/waitlist/{entry}/status', [WaitlistController::class, 'changeStatus']);
+        Route::get('/waitlist/{entry}/slots', [WaitlistController::class, 'slots']);
+
+        // Controles y seguimiento: a quién hay que volver a llamar y para qué. Va con la
+        // agenda (no con las fichas): también nacen del servicio atendido o a mano.
+        Route::get('/recalls', [RecallController::class, 'index']);
+        Route::post('/recalls', [RecallController::class, 'store']);
+        Route::put('/recalls/{recall}', [RecallController::class, 'update']);
+        Route::post('/recalls/{recall}/status', [RecallController::class, 'changeStatus']);
     });
 
     // Fichas de atención: plantillas de la empresa y fichas llenadas en cada cita.
@@ -155,17 +193,12 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::apiResource('record-templates', RecordTemplateController::class)->except(['show']);
         Route::get('/appointments/{appointment}/record', [CareRecordController::class, 'forAppointment']);
         Route::put('/appointments/{appointment}/record', [CareRecordController::class, 'save']);
+        Route::post('/appointments/{appointment}/record/refresh-template', [CareRecordController::class, 'refreshTemplate']);
         Route::get('/care-records', [CareRecordController::class, 'index']);
         Route::get('/care-records/{careRecord}', [CareRecordController::class, 'show']);
         Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum']);
         Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess']);
         Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf']);
-
-        // Controles y seguimiento: a quién hay que volver a llamar y para qué.
-        Route::get('/recalls', [RecallController::class, 'index']);
-        Route::post('/recalls', [RecallController::class, 'store']);
-        Route::put('/recalls/{recall}', [RecallController::class, 'update']);
-        Route::post('/recalls/{recall}/status', [RecallController::class, 'changeStatus']);
     });
 
     Route::middleware('module:crm')->group(function () {
@@ -185,6 +218,10 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     });
 
     // Configuración de la empresa: solo su administrador (el controlador lo valida).
+    // Datos generales de la empresa: los ve su personal; los cambia su administrador.
+    Route::get('/company', [\App\Http\Controllers\Api\CompanyController::class, 'show']);
+    Route::put('/company', [\App\Http\Controllers\Api\CompanyController::class, 'update']);
+
     Route::get('/tenant-settings', [TenantSettingController::class, 'show']);
     Route::put('/tenant-settings', [TenantSettingController::class, 'update']);
     

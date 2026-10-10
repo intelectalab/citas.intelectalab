@@ -87,7 +87,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
 
   const changeScope = (scope: 'professional' | 'branch') => {
     if (scope === form.scope) return;
-    set({ scope, kind: scope === 'professional' ? 'vacation' : 'holiday' });
+    set({ scope, kind: scope === 'professional' ? 'vacation' : 'closure' });
   };
 
   const startsAt = form.allDay ? `${form.startDate}T00:00` : `${form.startDate}T${form.startTime}`;
@@ -209,7 +209,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {scopeButton('professional', vocab.pro, 'Vacaciones, permisos, reuniones', <UserRound size={18} />)}
-                {scopeButton('branch', 'Toda la sede', 'Feriados y cierres', <Building2 size={18} />)}
+                {scopeButton('branch', 'Toda la sede', 'Cierres y mantenimiento', <Building2 size={18} />)}
               </div>
             )}
           </div>
@@ -317,7 +317,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
               type="text"
               required
               maxLength={255}
-              placeholder={form.scope === 'branch' ? 'Ej. Feriado nacional' : 'Ej. Vacaciones de verano'}
+              placeholder={form.scope === 'branch' ? 'Ej. Fumigación' : 'Ej. Vacaciones de verano'}
               className={inputClass}
               value={form.reason}
               onChange={(e) => set({ reason: e.target.value })}

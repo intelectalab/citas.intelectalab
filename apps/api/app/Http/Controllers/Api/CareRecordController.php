@@ -19,6 +19,7 @@ use Dompdf\Options;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -195,9 +196,108 @@ class CareRecordController extends Controller
      */
     public function forAppointment(Request $request, string $appointment)
     {
-        $tenant = $this->tenant($request);
+        return response()->json($this->context($request, $this->appointment($request, $appointment)));
+    }
+
+    /**
+     * Pasa un borrador a la plantilla que hoy tiene su servicio. Conserva lo
+     * escrito en los campos que siguen existiendo. Una ficha firmada no se
+     * actualiza: es el registro de lo que se atendió.
+     */
+    public function refreshTemplate(Request $request, string $appointment)
+    {
         $user = $request->user();
         $appointment = $this->appointment($request, $appointment);
+
+        // Lo que hay en pantalla sin guardar viaja con el pedido, para no perderlo.
+        $validated = $request->validate(['data' => 'sometimes|array']);
+
+        DB::transaction(function () use ($user, $appointment, $validated) {
+            $record = CareRecord::where('appointment_id', $appointment->id)->lockForUpdate()->first();
+            abort_unless($record, 404, 'Esta cita todavía no tiene ficha.');
+            abort_unless($this->isOwn($record, $user), 403, 'Esta ficha es privada: solo la cambia quien la escribió.');
+
+            if ($record->status !== CareRecord::DRAFT) {
+                throw ValidationException::withMessages(['data' => 'Una ficha firmada conserva los campos con que se llenó. Puedes agregarle una nota.']);
+            }
+
+            $template = $this->templateFor($appointment);
+
+            if (!$template) {
+                throw ValidationException::withMessages(['data' => 'Este servicio ya no tiene una ficha asignada.']);
+            }
+
+            // Se conserva el valor de un campo si sigue existiendo con el mismo tipo.
+            $types = collect($record->template_snapshot ?? [])->pluck('type', 'key');
+            $kept = collect($template->fields ?? [])
+                ->filter(fn ($field) => $types->get($field['key'] ?? '') === ($field['type'] ?? null))
+                ->pluck('key')
+                ->all();
+            [$values] = RecordFields::values($template->fields ?? [], array_intersect_key($validated['data'] ?? $record->data ?? [], array_flip($kept)));
+
+            // Otro texto de consentimiento hay que volver a aceptarlo.
+            if ($record->consent_text !== $template->consent_text) {
+                $record->consent_accepted = false;
+                $record->consent_accepted_at = null;
+            }
+
+            $record->record_template_id = $template->id;
+            $record->template_snapshot = $template->fields ?? [];
+            $record->template_name = $template->name;
+            $record->consent_text = $template->consent_text;
+            $record->data = $values;
+
+            if ($this->storesRequireConsent($record)) {
+                $record->require_consent = (bool) $template->require_consent;
+            }
+
+            $record->save();
+        });
+
+        return response()->json($this->context($request, $appointment));
+    }
+
+    /**
+     * La plantilla actual del servicio, si ya no es la misma con que se empezó
+     * el borrador. Solo se ofrece a quien puede cambiar la ficha.
+     */
+    private function templateUpdate(CareRecord $record, Appointment $appointment, User $user): ?array
+    {
+        if ($record->status !== CareRecord::DRAFT || !$this->isOwn($record, $user)) {
+            return null;
+        }
+
+        $template = $this->templateFor($appointment);
+
+        if (!$template) {
+            return null;
+        }
+
+        $same = ($record->template_snapshot ?? []) == ($template->fields ?? [])
+            && $record->template_name === $template->name
+            && $record->consent_text === $template->consent_text
+            && (!$this->storesRequireConsent($record) || (bool) $record->require_consent === (bool) $template->require_consent);
+
+        return $same ? null : [
+            'name'            => $template->name,
+            'fields'          => $template->fields ?? [],
+            'consent_text'    => $template->consent_text,
+            'require_consent' => (bool) $template->require_consent,
+        ];
+    }
+
+    /**
+     * La ficha guarda si su plantilla exigía el consentimiento (columna reciente).
+     */
+    private function storesRequireConsent(CareRecord $record): bool
+    {
+        return array_key_exists('require_consent', $record->getAttributes());
+    }
+
+    private function context(Request $request, Appointment $appointment): array
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
         $record = CareRecord::where('appointment_id', $appointment->id)->with(self::RELATIONS)->first();
         $template = $record ? null : $this->templateFor($appointment);
 
@@ -211,7 +311,7 @@ class CareRecordController extends Controller
             ->limit(5)
             ->get();
 
-        return response()->json([
+        return [
             'appointment' => [
                 'id'           => $appointment->id,
                 'code'         => $appointment->code,
@@ -235,7 +335,9 @@ class CareRecordController extends Controller
             'required_to_complete' => (bool) AppointmentFlow::rule($tenant, 'records.require_on_complete'),
             'lock_hours'           => (int) AppointmentFlow::rule($tenant, 'records.lock_hours'),
             'previous'             => $previous->map(fn (CareRecord $r) => $this->present($r, $tenant, $user)),
-        ]);
+            // El servicio cambió de plantilla después de empezar este borrador.
+            'template_update'      => $record ? $this->templateUpdate($record, $appointment, $user) : null,
+        ];
     }
 
     /**
@@ -285,7 +387,11 @@ class CareRecordController extends Controller
                     'status'                => CareRecord::DRAFT,
                     'created_by'            => $user->id,
                 ]);
-                $requireConsent = $template->require_consent;
+                $requireConsent = (bool) $template->require_consent;
+
+                if (Schema::hasColumn('care_records', 'require_consent')) {
+                    $record->require_consent = $requireConsent;
+                }
             } else {
                 // Una ficha privada solo la cambia su autor; el acceso de emergencia es para leer.
                 abort_unless($this->isOwn($record, $user), 403, 'Esta ficha es privada: solo la cambia quien la escribió.');
@@ -294,7 +400,10 @@ class CareRecordController extends Controller
                     throw ValidationException::withMessages(['data' => 'La ficha ya está bloqueada. Puedes agregarle una nota.']);
                 }
 
-                $requireConsent = (bool) RecordTemplate::whereKey($record->record_template_id)->value('require_consent');
+                // Vale lo que exigía la plantilla al empezar la ficha, no lo que diga hoy.
+                $requireConsent = $this->storesRequireConsent($record)
+                    ? (bool) $record->require_consent
+                    : (bool) RecordTemplate::whereKey($record->record_template_id)->value('require_consent');
             }
 
             // Una ficha ya firmada se sigue validando completa al corregirla.
@@ -534,6 +643,7 @@ class CareRecordController extends Controller
             'professional'   => $record->professional?->display_name,
             'consent_accepted' => $record->consent_accepted,
             'consent_text'   => $readable ? $record->consent_text : null,
+            'require_consent' => (bool) $record->require_consent,
             'fields'         => $readable ? ($record->template_snapshot ?? []) : [],
             'data'           => $readable ? (object) ($record->data ?? []) : (object) [],
             'addenda'        => $readable ? $record->addenda->map(fn (CareRecordAddendum $note) => [

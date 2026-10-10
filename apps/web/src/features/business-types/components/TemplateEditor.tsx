@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Select from '@/app/components/common/Select';
 import {
   ArrowDown, ArrowUp, ChevronDown, ClipboardList, Clock, FolderOpen, Plus, Trash2,
   Globe, HandCoins, Video, FileText, Users, CalendarClock
@@ -423,12 +424,13 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                                   </div>
                                   <div className="col-span-2">
                                     <label className={labelClass}>Se agenda con</label>
-                                    <select value={service.recall.service_code ?? ''} onChange={(e) => updateService(categoryIndex, serviceIndex, { recall: { ...service.recall!, service_code: e.target.value || undefined } })} className={inputClass}>
-                                      <option value="">Este mismo</option>
-                                      {servicesWithCode.filter((other) => other.code !== service.code).map((other) => (
-                                        <option key={other.code!} value={other.code!}>{other.name}</option>
-                                      ))}
-                                    </select>
+                                    <Select
+                                      ariaLabel="Servicio del control"
+                                      placeholder="Este mismo"
+                                      value={service.recall.service_code ?? ''}
+                                      onChange={(e) => updateService(categoryIndex, serviceIndex, { recall: { ...service.recall!, service_code: String(e.target.value) || undefined } })}
+                                      options={servicesWithCode.filter((other) => other.code !== service.code).map((other) => ({ value: other.code!, label: other.name }))}
+                                    />
                                   </div>
                                 </div>
                               )}
@@ -561,11 +563,13 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                           </div>
                           <div>
                             <label className={labelClass}>Tipo</label>
-                            <select value={field.type} onChange={(e) => updateField(index, { type: e.target.value })} className={inputClass}>
-                              {FIELD_TYPES.map((type) => (
-                                <option key={type.value} value={type.value}>{type.label}</option>
-                              ))}
-                            </select>
+                            <Select
+                              ariaLabel="Tipo de campo"
+                              clearable={false}
+                              value={field.type}
+                              onChange={(e) => updateField(index, { type: String(e.target.value) })}
+                              options={FIELD_TYPES}
+                            />
                           </div>
                         </div>
 

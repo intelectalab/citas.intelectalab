@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Professional;
 use App\Models\ProfessionalSchedule;
+use App\Support\BranchHours;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,61 @@ class ProfessionalScheduleController extends Controller
         abort_unless($tenantId, 403);
 
         return Professional::where('tenant_id', $tenantId)->findOrFail($id);
+    }
+
+    /**
+     * Horarios de todo el equipo: cada sede activa con su horario de atención y
+     * quiénes atienden ahí cada día. Un profesional sin horario en ninguna sede
+     * sale aparte, para que no pase desapercibido.
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $tenantId = $user->tenant_id;
+        abort_unless($tenantId, 403);
+
+        $professionals = Professional::where('tenant_id', $tenantId)->orderBy('display_name')->get(['id', 'display_name']);
+        $schedules = ProfessionalSchedule::where('tenant_id', $tenantId)->orderBy('weekday')->orderBy('starts_local')->get();
+        $minutes = fn (ProfessionalSchedule $s) => (strtotime($s->ends_local) - strtotime($s->starts_local)) / 60;
+
+        $branches = Branch::where('tenant_id', $tenantId)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+            ->map(function (Branch $branch) use ($professionals, $schedules, $minutes) {
+                $here = $schedules->where('branch_id', $branch->id);
+
+                return [
+                    'id'    => $branch->id,
+                    'name'  => $branch->name,
+                    // Por día de la semana; vacío = la sede no limita el horario.
+                    'hours' => (object) BranchHours::of($branch->id),
+                    'professionals' => $professionals
+                        ->filter(fn (Professional $p) => $here->contains('professional_id', $p->id))
+                        ->map(function (Professional $p) use ($here, $minutes) {
+                            $own = $here->where('professional_id', $p->id);
+
+                            return [
+                                'id'           => $p->id,
+                                'display_name' => $p->display_name,
+                                'weekly_minutes' => (int) $own->sum($minutes),
+                                'ranges'       => $own->map(fn (ProfessionalSchedule $s) => [
+                                    'weekday' => $s->weekday,
+                                    'starts'  => substr($s->starts_local, 0, 5),
+                                    'ends'    => substr($s->ends_local, 0, 5),
+                                ])->values(),
+                            ];
+                        })->values(),
+                ];
+            });
+
+        $activeBranchIds = $branches->pluck('id');
+
+        return response()->json([
+            'can_edit' => $user->isTenantAdmin(),
+            'branches' => $branches,
+            'without_schedule' => $professionals
+                ->reject(fn (Professional $p) => $schedules->whereIn('branch_id', $activeBranchIds)->contains('professional_id', $p->id))
+                ->map(fn (Professional $p) => ['id' => $p->id, 'display_name' => $p->display_name])
+                ->values(),
+        ]);
     }
 
     public function show(Request $request, string $professional)

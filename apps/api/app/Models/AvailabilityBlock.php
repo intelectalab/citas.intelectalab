@@ -17,21 +17,19 @@ class AvailabilityBlock extends Model
 
     public const KIND_VACATION = 'vacation';
     public const KIND_LEAVE = 'leave';
-    public const KIND_HOLIDAY = 'holiday';
     public const KIND_CLOSURE = 'closure';
     public const KIND_OTHER = 'other';
 
     public const KINDS = [
         self::KIND_VACATION => 'Vacaciones',
         self::KIND_LEAVE    => 'Permiso o descanso médico',
-        self::KIND_HOLIDAY  => 'Feriado',
         self::KIND_CLOSURE  => 'Cierre de la sede',
         self::KIND_OTHER    => 'Bloqueo de horario',
     ];
 
-    // Tipos de una persona y tipos de una sede completa.
+    // Tipos de una persona y tipos de una sede completa. Los feriados van aparte (Holiday).
     public const PROFESSIONAL_KINDS = [self::KIND_VACATION, self::KIND_LEAVE, self::KIND_OTHER];
-    public const BRANCH_KINDS = [self::KIND_HOLIDAY, self::KIND_CLOSURE, self::KIND_OTHER];
+    public const BRANCH_KINDS = [self::KIND_CLOSURE, self::KIND_OTHER];
 
     protected $table = 'availability_blocks';
     public $timestamps = false;
@@ -65,7 +63,7 @@ class AvailabilityBlock extends Model
 
     /**
      * Solo un bloqueo de horario (reunión, capacitación) admite sobre-agenda.
-     * Vacaciones, permisos, feriados y cierres no: ahí no hay quien atienda.
+     * Vacaciones, permisos y cierres no: ahí no hay quien atienda.
      */
     public function isOverridable(): bool
     {

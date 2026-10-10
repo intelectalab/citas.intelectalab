@@ -126,12 +126,29 @@ CREATE TABLE branches (
     tenant_id uuid NOT NULL REFERENCES tenants(id),
     company_id uuid NOT NULL REFERENCES companies(id),
     name varchar(150) NOT NULL,
+    address varchar(255),
+    district varchar(100),
+    department varchar(100),
+    phone varchar(30),
     timezone varchar(64) NOT NULL DEFAULT 'America/Lima',
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, name)
 );
+
+-- Horario de atención de la sede: tramos por día de la semana (0 = domingo).
+-- Una sede sin ningún tramo no limita la agenda: vale el horario de cada profesional.
+CREATE TABLE branch_hours (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    weekday smallint NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    opens_local time NOT NULL,
+    closes_local time NOT NULL,
+    CHECK (closes_local > opens_local)
+);
+CREATE INDEX idx_branch_hours_branch ON branch_hours(branch_id, weekday);
 CREATE INDEX idx_branches_tenant ON branches(tenant_id);
 
 CREATE TABLE users (
@@ -331,6 +348,7 @@ CREATE TABLE rooms (
     branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     name varchar(100) NOT NULL, -- Ej: Consultorio 101, Tópico 2
     description varchar(255),
+    kind varchar(20) NOT NULL DEFAULT 'room' CHECK (kind IN ('room', 'equipment')), -- sala o equipo
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -346,13 +364,30 @@ CREATE TABLE availability_blocks (
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
     reason varchar(255),
-    -- vacation, leave, holiday y closure no se pueden forzar; other (reunión, capacitación) sí, con motivo
-    kind varchar(20) NOT NULL DEFAULT 'other' CHECK (kind IN ('vacation', 'leave', 'holiday', 'closure', 'other')),
+    -- vacation, leave y closure no se pueden forzar; other (reunión, capacitación) sí, con motivo.
+    -- Los feriados van aparte, en holidays.
+    kind varchar(20) NOT NULL DEFAULT 'other' CHECK (kind IN ('vacation', 'leave', 'closure', 'other')),
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     CHECK (ends_at > starts_at)
 );
 CREATE INDEX idx_blocks_tenant_time ON availability_blocks(tenant_id, starts_at, ends_at);
+
+-- Feriados de la empresa: un día del calendario para todas sus sedes (branch_id NULL)
+-- o para una sola. Al crear la empresa se le cargan los nacionales del año y del siguiente.
+CREATE TABLE holidays (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_id uuid NULL REFERENCES branches(id) ON DELETE CASCADE,
+    date date NOT NULL,
+    name varchar(150) NOT NULL,
+    closed boolean NOT NULL DEFAULT true, -- la sede cierra: ese día no se agenda
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_holidays_tenant_date ON holidays(tenant_id, date);
+CREATE UNIQUE INDEX idx_holidays_unique ON holidays(tenant_id, date, COALESCE(branch_id, '00000000-0000-0000-0000-000000000000'::uuid));
 
 CREATE TABLE appointments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1311,6 +1346,7 @@ CREATE TABLE care_records (
     status varchar(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'signed', 'locked')),
     template_name varchar(150) NULL, -- nombre de la plantilla al llenar la ficha
     consent_text text NULL, -- texto de consentimiento que se aceptó
+    require_consent boolean NOT NULL DEFAULT false, -- si la plantilla lo exigía al llenar la ficha
     signed_at timestamptz NULL,
     signed_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     locked_at timestamptz NULL, -- desde ese momento solo se admiten notas (adendas)

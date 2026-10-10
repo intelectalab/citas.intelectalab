@@ -5,6 +5,7 @@ import { PawPrint, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
+import Select from '@/app/components/common/Select';
 
 export interface CustomerDependent {
   id?: string;
@@ -221,15 +222,13 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
             </div>
             <div>
               <label className={labelClass}>Sexo</label>
-              <select
+              <Select
+                ariaLabel="Sexo"
+                placeholder="Sin indicar"
                 value={draft.biological_sex ?? ''}
-                onChange={(e) => setDraft({ ...draft, biological_sex: e.target.value })}
-                className={inputClass}
-              >
-                <option value="">Sin indicar</option>
-                <option value="M">{isPet ? 'Macho' : 'Masculino'}</option>
-                <option value="F">{isPet ? 'Hembra' : 'Femenino'}</option>
-              </select>
+                onChange={(e) => setDraft({ ...draft, biological_sex: String(e.target.value) })}
+                options={[{ value: 'M', label: isPet ? 'Macho' : 'Masculino' }, { value: 'F', label: isPet ? 'Hembra' : 'Femenino' }]}
+              />
             </div>
           </div>
 

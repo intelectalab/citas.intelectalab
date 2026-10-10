@@ -1,0 +1,239 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Appointment;
+use App\Models\Branch;
+use App\Models\Holiday;
+use App\Models\Tenant;
+use App\Support\AppointmentFlow;
+use App\Support\AppointmentScheduler;
+use App\Support\Holidays;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Feriados de la empresa: los nacionales que se le cargan y los propios. Todo
+ * el personal los ve; los cambia el administrador de la empresa.
+ */
+class HolidayController extends Controller
+{
+    private const AFFECTED_STATUSES = [
+        AppointmentFlow::PENDING,
+        AppointmentFlow::CONFIRMED,
+        AppointmentFlow::CHECKED_IN,
+        AppointmentFlow::IN_PROGRESS,
+    ];
+
+    private function tenant(Request $request): Tenant
+    {
+        $tenant = $request->user()->tenant;
+        abort_unless($tenant, 403);
+
+        return $tenant;
+    }
+
+    private function timezone(Tenant $tenant): string
+    {
+        return $tenant->timezone ?: 'America/Lima';
+    }
+
+    private function assertCanManage(Request $request): void
+    {
+        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa cambia los feriados.');
+    }
+
+    public function index(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        $validated = $request->validate([
+            'year'      => 'nullable|integer|min:2000|max:2100',
+            'branch_id' => 'nullable|uuid',
+        ]);
+
+        $today = now($this->timezone($tenant))->startOfDay();
+
+        // Sin año, los que vienen; con año, todos los de ese año.
+        $holidays = Holiday::where('tenant_id', $tenant->id)
+            ->with('branch:id,name')
+            ->when($validated['year'] ?? null, fn ($q, $year) => $q->whereYear('date', $year), fn ($q) => $q->where('date', '>=', $today->format('Y-m-d')))
+            ->when($validated['branch_id'] ?? null, fn ($q, $id) => $q->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $id)))
+            ->orderBy('date')
+            ->orderBy('name')
+            ->get();
+
+        $canManage = $request->user()->isTenantAdmin();
+
+        return response()->json([
+            'holidays'   => $holidays->map(fn (Holiday $holiday) => $this->present($holiday, $tenant, $today, $canManage)),
+            // Años con feriados cargados, y si falta cargar los nacionales de este año o del siguiente.
+            'years'      => Holiday::where('tenant_id', $tenant->id)->selectRaw('distinct extract(year from date)::int as year')->orderBy('year')->pluck('year'),
+            'missing'    => collect([$today->year, $today->year + 1])
+                ->filter(fn (int $year) => !Holiday::where('tenant_id', $tenant->id)->whereNull('branch_id')->whereYear('date', $year)->exists())
+                ->values(),
+            'can_manage' => $canManage,
+        ]);
+    }
+
+    /**
+     * Un feriado con las citas agendadas ese día.
+     */
+    public function show(Request $request, string $holiday)
+    {
+        $tenant = $this->tenant($request);
+        $holiday = Holiday::where('tenant_id', $tenant->id)->with('branch:id,name')->findOrFail($holiday);
+        $today = now($this->timezone($tenant))->startOfDay();
+
+        $affected = $this->affectedQuery($tenant, $holiday)
+            ->with(['customer:id,first_name,last_name', 'service:id,name', 'professional:id,display_name', 'branch:id,timezone'])
+            ->orderBy('starts_at')
+            ->limit(100)
+            ->get()
+            ->map(function (Appointment $a) use ($tenant) {
+                $timezone = AppointmentScheduler::timezone($a->branch ?? new Branch(), $tenant);
+
+                return [
+                    'id'           => $a->id,
+                    'code'         => $a->code,
+                    'status'       => $a->status,
+                    'status_name'  => AppointmentFlow::name($tenant, $a->status),
+                    'starts_at'    => $a->starts_at->copy()->setTimezone($timezone)->format('Y-m-d\TH:i'),
+                    'ends_at'      => $a->ends_at->copy()->setTimezone($timezone)->format('Y-m-d\TH:i'),
+                    'customer'     => $a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : null,
+                    'service'      => $a->service?->name,
+                    'professional' => $a->professional?->display_name,
+                ];
+            });
+
+        return response()->json($this->present($holiday, $tenant, $today, $request->user()->isTenantAdmin()) + ['affected' => $affected]);
+    }
+
+    public function store(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $this->assertCanManage($request);
+
+        $holiday = Holiday::create($this->validated($request, $tenant) + [
+            'tenant_id'  => $tenant->id,
+            'created_by' => $request->user()->id,
+        ]);
+
+        return response()->json($this->present($holiday->fresh('branch:id,name'), $tenant, now($this->timezone($tenant))->startOfDay(), true), 201);
+    }
+
+    public function update(Request $request, string $holiday)
+    {
+        $tenant = $this->tenant($request);
+        $this->assertCanManage($request);
+        $holiday = Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday);
+
+        $holiday->update($this->validated($request, $tenant, $holiday->id));
+
+        return response()->json($this->present($holiday->fresh('branch:id,name'), $tenant, now($this->timezone($tenant))->startOfDay(), true));
+    }
+
+    public function destroy(Request $request, string $holiday)
+    {
+        $tenant = $this->tenant($request);
+        $this->assertCanManage($request);
+        Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday)->delete();
+
+        return response()->json(['message' => 'Feriado eliminado correctamente']);
+    }
+
+    /**
+     * Carga los feriados nacionales de un año que aún no estén.
+     */
+    public function loadNational(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $this->assertCanManage($request);
+
+        $validated = $request->validate(['year' => 'required|integer|min:2000|max:2100']);
+        $added = Holidays::loadNational($tenant, (int) $validated['year'], $request->user()->id);
+
+        return response()->json([
+            'added'   => $added,
+            'message' => $added === 0
+                ? "Los feriados nacionales de {$validated['year']} ya estaban cargados."
+                : "Se agregaron {$added} feriados nacionales de {$validated['year']}.",
+        ]);
+    }
+
+    private function validated(Request $request, Tenant $tenant, ?string $ignoreId = null): array
+    {
+        $validated = $request->validate([
+            'name'      => 'required|string|max:150',
+            'date'      => 'required|date_format:Y-m-d',
+            'branch_id' => 'nullable|uuid',
+            'closed'    => 'nullable|boolean',
+        ], [
+            'name.required'    => 'Escribe el nombre del feriado.',
+            'date.required'    => 'Indica la fecha.',
+            'date.date_format' => 'La fecha no es válida.',
+        ]);
+
+        $branchId = $validated['branch_id'] ?? null;
+
+        if ($branchId) {
+            Branch::where('tenant_id', $tenant->id)->findOrFail($branchId);
+        }
+
+        // Dos feriados el mismo día para las mismas sedes solo confunden.
+        $duplicate = Holiday::where('tenant_id', $tenant->id)
+            ->where('date', $validated['date'])
+            ->where(fn ($q) => $branchId ? $q->where('branch_id', $branchId) : $q->whereNull('branch_id'))
+            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+            ->first();
+
+        if ($duplicate) {
+            throw ValidationException::withMessages(['date' => "Ese día ya tiene un feriado registrado: {$duplicate->name}."]);
+        }
+
+        return [
+            'name'      => trim($validated['name']),
+            'date'      => $validated['date'],
+            'branch_id' => $branchId,
+            'closed'    => array_key_exists('closed', $validated) && $validated['closed'] !== null ? (bool) $validated['closed'] : true,
+        ];
+    }
+
+    /**
+     * Citas que siguen en pie ese día en las sedes del feriado.
+     */
+    private function affectedQuery(Tenant $tenant, Holiday $holiday): Builder
+    {
+        $timezone = $this->timezone($tenant);
+        $start = Carbon::parse($holiday->date->format('Y-m-d'), $timezone)->startOfDay();
+
+        return Appointment::where('tenant_id', $tenant->id)
+            ->whereIn('status', self::AFFECTED_STATUSES)
+            ->when($holiday->branch_id, fn ($q, $id) => $q->where('branch_id', $id))
+            ->where('starts_at', '>=', $start->toIso8601String())
+            ->where('starts_at', '<', $start->copy()->addDay()->toIso8601String())
+            ->where('ends_at', '>', now()->toIso8601String());
+    }
+
+    private function present(Holiday $holiday, Tenant $tenant, Carbon $today, bool $canManage): array
+    {
+        $date = Carbon::parse($holiday->date->format('Y-m-d'), $today->getTimezone());
+
+        return [
+            'id'             => $holiday->id,
+            'name'           => $holiday->name,
+            'date'           => $holiday->date->format('Y-m-d'),
+            // Días que faltan; negativo si ya pasó.
+            'days_left'      => (int) round($today->diffInDays($date, false)),
+            'branch_id'      => $holiday->branch_id,
+            'branch'         => $holiday->branch ? ['id' => $holiday->branch->id, 'name' => $holiday->branch->name] : null,
+            // Si la sede cierra, ese día no se agenda. Si no, solo se recuerda.
+            'closed'         => (bool) $holiday->closed,
+            'affected_count' => $holiday->closed ? $this->affectedQuery($tenant, $holiday)->count() : 0,
+            'can_manage'     => $canManage,
+        ];
+    }
+}

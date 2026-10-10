@@ -11,12 +11,16 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
 import { apiError, formatDateTime, statusStyle } from '@/features/appointments/appointments';
 import FormBlock from './FormBlock';
+import HolidaysTable from './HolidaysTable';
 import { KIND_STYLES, STATE_LABELS, durationLabel, rangeLabel, type Block, type BlockOptions } from '../blocks';
 
 const PERIODS = [
   { id: 'current', label: 'Vigentes y próximos' },
   { id: 'past', label: 'Anteriores' },
 ];
+
+// Los feriados son una pestaña más, con su propia tabla.
+const HOLIDAYS_TAB = 'holidays';
 
 // Tarjetas que filtran la tabla.
 const CARDS: { id: string; title: string; match: (b: Block) => boolean; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
@@ -48,8 +52,12 @@ export default function BlocksTable() {
   // Bloqueo cuyas citas afectadas se están viendo.
   const [reviewing, setReviewing] = useState<Block | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
+  // Cuántos feriados vienen, para la pestaña.
+  const [holidayCount, setHolidayCount] = useState<number | undefined>(undefined);
 
   const load = useCallback(() => {
+    if (period === HOLIDAYS_TAB) return;
+
     api.get('/availability-blocks', { params: { period } })
       .then((res) => setBlocks(Array.isArray(res.data) ? res.data : []))
       .catch((error) => { console.error('Error al cargar bloqueos:', error); setBlocks([]); });
@@ -78,7 +86,17 @@ export default function BlocksTable() {
     api.get('/availability-blocks/options')
       .then((res) => setOptions(res.data))
       .catch(() => setOptions(null));
+
+    api.get('/holidays')
+      .then((res) => setHolidayCount((res.data.holidays ?? []).length))
+      .catch(() => setHolidayCount(undefined));
   }, []);
+
+  const tabs = [
+    ...PERIODS.map((p) => ({ id: p.id, label: p.label, count: p.id === period ? blocks.length : undefined })),
+    { id: HOLIDAYS_TAB, label: 'Feriados', count: holidayCount },
+  ];
+  const changeTab = (id: string) => { setPeriod(id); setActiveCard(''); };
 
   const handleFilterChange = (filterId: string, value: any) => setFilters((current) => ({ ...current, [filterId]: value }));
 
@@ -236,6 +254,12 @@ export default function BlocksTable() {
 
   const deletingWho = deleting?.professional?.display_name ?? deleting?.branch?.name ?? '';
 
+  if (period === HOLIDAYS_TAB) {
+    return (
+      <HolidaysTable tabs={tabs} activeTab={period} onTabChange={changeTab} branches={options?.branches ?? []} onCount={setHolidayCount} />
+    );
+  }
+
   return (
     <div className="space-y-6 mb-8">
       <div className="mb-6">
@@ -243,9 +267,9 @@ export default function BlocksTable() {
           title="Bloqueos y ausencias"
           primaryActionLabel="Nuevo bloqueo"
           onPrimaryAction={() => { setEditing(null); setFormOpen(true); }}
-          tabs={PERIODS.map((p) => ({ id: p.id, label: p.label, count: p.id === period ? blocks.length : undefined }))}
+          tabs={tabs}
           activeTab={period}
-          onTabChange={(id) => { setPeriod(id); setActiveCard(''); }}
+          onTabChange={changeTab}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           filterConfigs={filterConfigs}

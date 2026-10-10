@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ClipboardList, Download, EyeOff, Lock, PenLine, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ClipboardList, Download, EyeOff, Lock, PenLine, RefreshCw, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -57,6 +57,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   const [note, setNote] = useState('');
   const [openPrevious, setOpenPrevious] = useState<string | null>(null);
   const [accessReason, setAccessReason] = useState('');
+  const [confirmUpdate, setConfirmUpdate] = useState(false);
 
   const applyRecord = (record: CareRecord | null) => {
     setData({ ...(record?.data ?? {}) });
@@ -72,6 +73,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
     setNote('');
     setAccessReason('');
     setOpenPrevious(null);
+    setConfirmUpdate(false);
     setLoading(true);
 
     api.get(`/appointments/${appointmentId}/record`)
@@ -83,7 +85,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   const record = context?.record ?? null;
   const fields: RecordField[] = record?.fields ?? context?.template?.fields ?? [];
   const consentText = record ? record.consent_text : context?.template?.consent_text;
-  const requireConsent = Boolean(context?.template?.require_consent);
+  const requireConsent = Boolean(record ? record.require_consent : context?.template?.require_consent);
   const editable = Boolean(context?.uses_record) && (record ? record.can_edit : true) && !record?.hidden;
   const isSigned = record?.status === 'signed';
 
@@ -101,8 +103,10 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
       setErrors({});
       setMessage(null);
       const res = await api.put(`/appointments/${context.appointment.id}/record`, { data, consent_accepted: consent, sign });
-      setContext({ ...context, record: res.data, uses_record: true });
+      // Firmada ya no se ofrece pasarla a la plantilla actual.
+      setContext({ ...context, record: res.data, uses_record: true, template_update: sign ? null : context.template_update });
       applyRecord(res.data);
+      setConfirmUpdate(false);
       setMessage({ type: 'ok', text: sign ? 'Ficha firmada.' : isSigned ? 'Cambios guardados.' : 'Borrador guardado.' });
       onChanged?.();
     } catch (err: any) {
@@ -114,6 +118,36 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
         type: 'error',
         text: count > 1 ? `Faltan ${count} datos para firmar. Están marcados abajo.` : Object.values(found)[0] || err?.response?.data?.message || 'No se pudo guardar la ficha.',
       });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // Qué cambia si el borrador pasa a la plantilla actual del servicio: los campos
+  // nuevos y los que se quitan (o cambian de tipo) y ya tienen algo escrito.
+  const update = context?.template_update ?? null;
+  const updateAdds = update ? update.fields.filter((field) => !fields.some((old) => old.key === field.key)) : [];
+  const updateLoses = update
+    ? fields.filter((old) => !isEmptyValue(data[old.key]) && !update.fields.some((field) => field.key === old.key && field.type === old.type))
+    : [];
+
+  // Pasa el borrador a la plantilla actual. Lo escrito en pantalla viaja con el pedido.
+  const updateTemplate = async () => {
+    if (!context) return;
+
+    try {
+      setBusy('update');
+      setErrors({});
+      setMessage(null);
+      const res = await api.post(`/appointments/${context.appointment.id}/record/refresh-template`, { data });
+      setContext(res.data);
+      applyRecord(res.data.record);
+      setConfirmUpdate(false);
+      setMessage({ type: 'ok', text: 'Ficha actualizada a la plantilla actual.' });
+      onChanged?.();
+    } catch (err: any) {
+      const first = Object.values(err?.response?.data?.errors ?? {})[0] as string[] | undefined;
+      setMessage({ type: 'error', text: first?.[0] || err?.response?.data?.message || 'No se pudo actualizar la ficha.' });
     } finally {
       setBusy('');
     }
@@ -241,6 +275,70 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                 ))}
                 {readingByEmergency && (
                   <p className="text-xs text-amber-700">La estás leyendo con acceso de emergencia: dura 30 minutos y no permite cambiarla.</p>
+                )}
+              </section>
+            )}
+
+            {update && editable && (
+              <section className="p-3 bg-sky-50 border border-sky-200 rounded-xl space-y-2" data-template-update>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs text-sky-800">
+                    <span className="block font-bold uppercase tracking-wider text-sky-700">La plantilla de este servicio cambió</span>
+                    Este borrador conserva los campos con que se empezó. Puedes pasarlo a la plantilla actual
+                    {update.name !== record?.template_name ? ` («${update.name}»)` : ''}.
+                  </p>
+                  {!confirmUpdate && (
+                    <button
+                      type="button"
+                      data-action="update-template"
+                      disabled={busy !== ''}
+                      onClick={() => setConfirmUpdate(true)}
+                      className="flex items-center gap-1.5 shrink-0 px-3 py-2 text-xs font-semibold bg-white border border-sky-200 rounded-lg text-sky-800 hover:bg-sky-100 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw size={13} /> Actualizar ficha
+                    </button>
+                  )}
+                </div>
+
+                {confirmUpdate && (
+                  <div className="p-3 bg-white border border-sky-200 rounded-lg space-y-2" data-update-confirm>
+                    <p className="text-xs text-slate-600">Lo escrito en los campos que siguen existiendo se conserva.</p>
+                    {updateAdds.length > 0 && (
+                      <p className="text-xs text-slate-700" data-update-adds>
+                        <span className="font-semibold">Campos nuevos:</span> {updateAdds.map((field) => field.label).join(', ')}.
+                      </p>
+                    )}
+                    {updateLoses.length > 0 ? (
+                      <p className="text-xs text-red-700" data-update-loses>
+                        <span className="font-semibold">Se pierde lo escrito en:</span> {updateLoses.map((field) => field.label).join(', ')}.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-emerald-700" data-update-loses="none">No se pierde nada de lo escrito.</p>
+                    )}
+                    {update.consent_text !== (record?.consent_text ?? null) && consent && (
+                      <p className="text-xs text-slate-700">El consentimiento cambió: hay que volver a aceptarlo.</p>
+                    )}
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        data-action="update-cancel"
+                        disabled={busy !== ''}
+                        onClick={() => setConfirmUpdate(false)}
+                        className="px-3 py-2 text-xs font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                      >
+                        No, mantenerla
+                      </button>
+                      <button
+                        type="button"
+                        data-action="update-confirm"
+                        disabled={busy !== ''}
+                        onClick={updateTemplate}
+                        className="px-3 py-2 text-xs font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                      >
+                        {busy === 'update' ? 'Actualizando...' : 'Sí, actualizar'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </section>
             )}

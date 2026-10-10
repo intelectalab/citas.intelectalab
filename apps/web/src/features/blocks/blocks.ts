@@ -2,7 +2,7 @@
 // cierres de una sede.
 import { addDays, dateOf, formatDate, timeOf } from '@/features/appointments/appointments';
 
-export type BlockKind = 'vacation' | 'leave' | 'holiday' | 'closure' | 'other';
+export type BlockKind = 'vacation' | 'leave' | 'closure' | 'other';
 
 export interface Block {
   id: string;
@@ -37,6 +37,32 @@ export interface AffectedAppointment {
   professional: string | null;
 }
 
+// Feriado de la empresa: para todas sus sedes (sin sede) o para una sola.
+export interface Holiday {
+  id: string;
+  name: string;
+  // AAAA-MM-DD
+  date: string;
+  // Días que faltan; negativo si ya pasó.
+  days_left: number;
+  branch_id: string | null;
+  branch: { id: string; name: string } | null;
+  // Si la sede cierra, ese día no se agenda. Si no, solo se recuerda.
+  closed: boolean;
+  affected_count: number;
+  can_manage: boolean;
+  affected?: AffectedAppointment[];
+}
+
+// "Hoy" · "Mañana" · "En 12 días" · "En 2 meses" · "Ya pasó"
+export const holidayDueLabel = (days: number): string => {
+  if (days < 0) return 'Ya pasó';
+  if (days === 0) return 'Hoy';
+  if (days === 1) return 'Mañana';
+  if (days < 60) return `En ${days} días`;
+  return `En ${Math.round(days / 30)} meses`;
+};
+
 export interface BlockOptions {
   branches: { id: string; name: string }[];
   professionals: { id: string; display_name: string }[];
@@ -49,7 +75,6 @@ export interface BlockOptions {
 export const KIND_STYLES: Record<BlockKind, string> = {
   vacation: 'bg-sky-50 text-sky-700',
   leave: 'bg-violet-50 text-violet-600',
-  holiday: 'bg-rose-50 text-rose-700',
   closure: 'bg-slate-100 text-slate-500',
   other: 'bg-amber-50 text-amber-700',
 };

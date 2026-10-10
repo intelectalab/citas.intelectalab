@@ -7,6 +7,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
 import CustomerDependents, { type CustomerDependent } from './CustomerDependents';
 import { User, ChevronDown } from 'lucide-react';
+import Select from '@/app/components/common/Select';
 
 interface FormCustomerProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
   const { user } = useAuth();
   // Mascotas u otros dependientes: solo en los rubros que los usan.
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
+  // Datos clínicos (tipo de sangre, antecedentes): solo en los rubros de salud.
+  const clinical = Boolean(user?.tenant?.rules?.['customers.clinical_fields']);
   const [pendingDependents, setPendingDependents] = useState<CustomerDependent[]>([]);
   const [loading, setLoading] = useState(false);
   const [stages, setStages] = useState<any[]>([]);
@@ -231,29 +234,27 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Sexo Biológico</label>
-                          <select
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{clinical ? 'Sexo Biológico' : 'Sexo'}</label>
+                          <Select
+                            ariaLabel="Sexo"
+                            clearable={false}
                             value={form.biological_sex}
-                            onChange={(e) => setForm({ ...form, biological_sex: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                          >
-                            <option value="M">Masculino</option>
-                            <option value="F">Femenino</option>
-                          </select>
+                            onChange={(e) => setForm({ ...form, biological_sex: String(e.target.value) })}
+                            options={[{ value: 'M', label: 'Masculino' }, { value: 'F', label: 'Femenino' }]}
+                          />
                         </div>
-                        <div>
+                        {clinical && (
+                        <div data-field="blood-type">
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Sangre</label>
-                          <select
+                          <Select
+                            ariaLabel="Tipo de sangre"
+                            placeholder="Seleccione tipo..."
                             value={form.blood_type}
-                            onChange={(e) => setForm({ ...form, blood_type: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                          >
-                            <option value="">Seleccione tipo...</option>
-                            {bloodTypes.map((bt) => (
-                              <option key={bt} value={bt}>{bt}</option>
-                            ))}
-                          </select>
+                            onChange={(e) => setForm({ ...form, blood_type: String(e.target.value) })}
+                            options={bloodTypes.map((bt) => ({ value: bt, label: bt }))}
+                          />
                         </div>
+                        )}
                       </div>
                     )}
 
@@ -261,16 +262,13 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                       <div className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Documento</label>
-                          <select
+                          <Select
+                            ariaLabel="Tipo de documento"
+                            placeholder="Seleccione documento..."
                             value={form.type_document_id}
-                            onChange={(e) => setForm({ ...form, type_document_id: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                          >
-                            <option value="">Seleccione documento...</option>
-                            {documentTypes.map((dt) => (
-                              <option key={dt.id} value={dt.id}>{dt.name || dt.display_name}</option>
-                            ))}
-                          </select>
+                            onChange={(e) => setForm({ ...form, type_document_id: String(e.target.value) })}
+                            options={documentTypes.map((dt) => ({ value: dt.id, label: dt.name || dt.display_name }))}
+                          />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">N° de Documento</label>
@@ -366,27 +364,24 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                     {sec.id === 4 && (
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Observaciones</label>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{clinical ? 'Antecedentes y observaciones' : 'Observaciones'}</label>
                           <textarea
                             rows={3}
                             value={form.medical_notes}
                             onChange={(e) => setForm({ ...form, medical_notes: e.target.value })}
                             className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            placeholder="Observaciones o antecedentes relevantes..."
+                            placeholder={clinical ? 'Alergias, antecedentes y otros datos relevantes...' : 'Preferencias o datos a tener en cuenta...'}
                           />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Etapa del Pipeline</label>
-                          <select
+                          <Select
+                            ariaLabel="Etapa del pipeline"
+                            placeholder="Seleccione una etapa..."
                             value={form.pipeline_stage_id}
-                            onChange={(e) => setForm({ ...form, pipeline_stage_id: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                          >
-                            <option value="">Seleccione una etapa...</option>
-                            {stages.map((stage) => (
-                              <option key={stage.id} value={stage.id}>{stage.name}</option>
-                            ))}
-                          </select>
+                            onChange={(e) => setForm({ ...form, pipeline_stage_id: String(e.target.value) })}
+                            options={stages.map((stage) => ({ value: stage.id, label: stage.name }))}
+                          />
                         </div>
                       </div>
                     )}

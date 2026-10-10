@@ -1,9 +1,5 @@
-import CompaniesTable from '@/features/companies/components/CompaniesTable';
+import CompanyProfile from '@/features/companies/components/CompanyProfile';
 
 export default function CompaniesPage() {
-  return (
-    <div className="h-[calc(100vh-7rem)]">
-      <CompaniesTable/>
-    </div>
-  );
+  return <CompanyProfile />;
 }

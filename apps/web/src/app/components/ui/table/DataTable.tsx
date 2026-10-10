@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import styles from './DataTable.module.css';
+import Select from '@/app/components/common/Select';
 
 export type FilterType = 'select' | 'date' | 'daterange' | 'text';
 
@@ -287,22 +288,14 @@ export function DataTable<T extends Record<string, any>>({
                       <div key={config.id} className="relative inline-flex items-center">
                         <div className={styles.filterChip}>
                           <span className="text-xs text-slate-500 mr-1">{config.label}:</span>
-                          <select
+                          <Select
+                            variant="chip"
+                            ariaLabel={config.label}
+                            placeholder="Todos"
                             value={currentValue || ''}
-                            onChange={(e) => {
-                              if (onFilterChange) {
-                                onFilterChange(config.id, e.target.value);
-                              }
-                            }}
-                            className="bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer pr-4"
-                          >
-                            <option value="">Todos</option>
-                            {config.options?.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(e) => { if (onFilterChange) onFilterChange(config.id, String(e.target.value)); }}
+                            options={config.options ?? []}
+                          />
                         </div>
                       </div>
                     );

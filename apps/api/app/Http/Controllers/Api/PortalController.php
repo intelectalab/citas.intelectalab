@@ -324,6 +324,7 @@ class PortalController extends AppointmentController
         $this->log($appointment, $from, AppointmentFlow::CANCELLED, $request->user(), $reason);
         // Si la cita venía de un control, vuelve a quedar pendiente de agendar.
         \App\Support\Recalls::appointmentChanged($tenant, $appointment);
+        \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
 
         return response()->json($this->presentForCustomer($appointment, $tenant));
     }

@@ -39,6 +39,7 @@ import {
   Hourglass,
   Repeat,
   Timer,
+  Clock,
   LucideIcon
 } from 'lucide-react';
 
@@ -75,7 +76,7 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   },
   {
     id: 'saas-admin',
-    groupName: 'ADMINISTRACIÓN SAAS',
+    groupName: 'Plataforma',
     groupIcon: ShieldCheck,
     requireAdmin: true,
     items: [
@@ -87,14 +88,14 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   },
   {
     id: 'agenda',
-    groupName: 'AGENDA',
+    groupName: 'Agenda',
     groupIcon: CalendarDays,
     items: [
       { name: 'Agenda', href: '/agenda', icon: CalendarDays, module: 'agenda' },
       { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda' },
       { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
-      { name: 'Lista de espera', href: '/modules/waitlist', icon: Hourglass, module: 'agenda' },
-      { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'records' },
+      { name: 'Lista de espera', href: '/waitlist', icon: Hourglass, module: 'agenda' },
+      { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'agenda' },
       { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes' },
       { name: 'Bloqueos y ausencias', href: '/blocks', icon: CalendarOff, module: 'agenda' },
       { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda' },
@@ -102,7 +103,7 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   },
   {
     id: 'clinical',
-    groupName: 'ATENCIÓN',
+    groupName: 'Atención',
     groupIcon: Layers,
     items: [
       { name: vocab.clients, href: '/customers', icon: Users, module: 'crm' },
@@ -112,7 +113,7 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   },
   {
     id: 'crm',
-    groupName: 'VENTAS',
+    groupName: 'Ventas',
     groupIcon: Briefcase,
     items: [
       { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm' },
@@ -123,7 +124,7 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   },
   {
     id: 'loyalty',
-    groupName: 'FIDELIZACIÓN',
+    groupName: 'Fidelización',
     groupIcon: Gift,
     items: [
       { name: 'Paquetes', href: '/modules/packages', icon: Boxes, module: 'packages' },
@@ -134,11 +135,12 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   },
   {
     id: 'clinic-admin',
-    groupName: 'ADMINISTRACIÓN DE SEDE',
+    groupName: 'Tu empresa',
     groupIcon: Building2,
     requireAdmin: true,
     items: [
       { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda' },
+      { name: 'Horarios del equipo', href: '/schedules', icon: Clock, module: 'agenda' },
       { name: 'Sucursales', href: '/branches', icon: Store },
       { name: 'Empresa', href: '/companies', icon: Building2 },
     ]
@@ -170,7 +172,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  if (loading) return <div className="w-60 bg-[#031B33] h-screen" />;
+  if (loading) return <div className="w-60 bg-[#0B192C] h-screen" />;
 
   // Equipo de la plataforma: administrador SaaS o soporte SaaS.
   const isSaasAdmin = Boolean(user?.is_saas_admin);
@@ -183,14 +185,14 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const hasNoPlan = !isSuperAdmin && !user?.plan_slug;
 
   return (
-    <aside className={`bg-[#031B33] text-slate-300 flex flex-col h-screen border-r border-slate-800/80 transition-all duration-300 relative select-none ${isCollapsed ? 'w-16' : 'w-60'}`}>
+    <aside className={`bg-[#0B192C] text-slate-300 flex flex-col h-screen transition-all duration-300 relative select-none ${isCollapsed ? 'w-16' : 'w-60'}`}>
       
       <div className={`p-4 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-        <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white font-black shadow-md shadow-sky-500/20 shrink-0">
+        <div className="w-8 h-8 bg-gradient-to-br from-[#84D0D9] to-[#3F768C] rounded-xl flex items-center justify-center text-[#022340] font-black shrink-0">
           {platform.product_name.charAt(0).toUpperCase() || 'C'}
         </div>
         {!isCollapsed && (
-          <span className="font-extrabold text-lg text-white tracking-wide truncate">
+          <span className="font-bold text-[17px] text-white tracking-tight truncate">
             {platform.product_name}
           </span>
         )}
@@ -200,24 +202,24 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       {hasNoPlan ? (
         <div className="flex-1 p-4 flex flex-col justify-center items-center text-center">
           {!isCollapsed ? (
-            <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl space-y-3">
-              <span className="text-xs font-bold text-sky-400 uppercase tracking-widest">Sin Plan Activo</span>
+            <div className="bg-white/5 border border-white/10 p-4 rounded-xl space-y-3">
+              <span className="text-xs font-semibold text-[#84D0D9]">Sin Plan Activo</span>
               <p className="text-xs text-slate-300">¡Selecciona un plan para activar tus módulos del sistema!</p>
               <Link 
                 href="/subscribe" 
-                className="block w-full py-2 px-3 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-lg transition-colors shadow-lg shadow-sky-500/20"
+                className="block w-full py-2 px-3 bg-[#84D0D9] hover:bg-[#9bdbe3] text-[#022340] font-bold text-xs rounded-lg transition-colors"
               >
                 Elegir Plan
               </Link>
             </div>
           ) : (
-            <Link href="/subscribe" title="Elige un plan" className="p-2 bg-sky-500 text-white rounded-lg">
+            <Link href="/subscribe" title="Elige un plan" className="p-2 bg-[#84D0D9] text-[#022340] rounded-lg">
               <Ticket className="w-5 h-5" />
             </Link>
           )}
         </div>
       ) : (
-        <nav className="flex-1 px-3 py-2 space-y-3 overflow-y-auto scrollbar-thin">
+        <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto sidebar-scroll">
           {menuGroups.map((group) => {
             if (isSuperAdmin) {
               if (group.id !== 'saas-admin' && group.id !== 'home') return null;
@@ -247,7 +249,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
             if (!group.groupName) {
               return (
-                <div key={group.id} className="space-y-1">
+                <div key={group.id} className="space-y-0.5">
                   {visibleItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -256,15 +258,15 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                         key={item.name}
                         href={item.href}
                         title={isCollapsed ? item.name : undefined}
-                        className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                        className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${
                           isCollapsed ? 'justify-center' : ''
                         } ${
                           isActive
-                            ? 'bg-sky-500/15 text-white border-l-4 border-sky-400 pl-2.5 shadow-sm'
-                            : 'text-slate-300 hover:bg-slate-800/40 hover:text-slate-100 border-l-4 border-transparent'
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                         }`}
                       >
-                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
                         {!isCollapsed && <span className="truncate">{item.name}</span>}
                       </Link>
                     );
@@ -274,31 +276,26 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             }
 
             const isGroupOpen = openGroups[group.id] ?? true;
-            const GroupIcon = group.groupIcon;
             const containsActiveChild = visibleItems.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
 
             return (
-              <div key={group.id} className="space-y-1">
+              <div key={group.id} className="space-y-0.5">
                 {!isCollapsed && (
                   <button
                     onClick={() => toggleGroup(group.id)}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-bold tracking-wider uppercase transition-all cursor-pointer group/title ${
-                      !isGroupOpen && containsActiveChild
-                        ? 'bg-sky-500/15 text-white border-l-4 border-sky-400 pl-2 shadow-sm'
-                        : 'text-slate-200 hover:bg-slate-800/50 hover:text-white border-l-4 border-transparent'
+                    data-group={group.id}
+                    className={`w-full flex items-center justify-between px-3 pt-4 pb-1.5 text-[12.5px] font-semibold transition-colors cursor-pointer group/title ${
+                      !isGroupOpen && containsActiveChild ? 'text-[#84D0D9]' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      {GroupIcon && <GroupIcon className="w-3.5 h-3.5 text-sky-400" />}
-                      <span className="text-[11px] tracking-widest">{group.groupName}</span>
-                    </div>
+                    <span>{group.groupName}</span>
                     <motion.div animate={{ rotate: isGroupOpen ? 0 : -90 }} transition={{ duration: 0.15 }}>
-                      <ChevronDown className="w-4 h-4 text-slate-400 group-hover/title:text-slate-200" />
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-600 group-hover/title:text-slate-400" />
                     </motion.div>
                   </button>
                 )}
 
-                {group.groupName && isCollapsed && <div className="my-2 border-t border-slate-800/60" />}
+                {group.groupName && isCollapsed && <div className="my-2 border-t border-white/5" />}
 
                 <AnimatePresence initial={false}>
                   {(isGroupOpen || isCollapsed) && (
@@ -308,7 +305,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={isCollapsed ? undefined : { height: 0, opacity: 0 }}
                       transition={{ duration: 0.2 }}
-                      className={`overflow-hidden space-y-1 ${!isCollapsed ? 'ml-3 pl-2 border-l border-slate-800/80' : ''}`}
+                      className="overflow-hidden space-y-0.5"
                     >
                       {visibleItems.map((item) => {
                         const Icon = item.icon;
@@ -319,16 +316,16 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                             key={item.name}
                             href={item.href}
                             title={isCollapsed ? item.name : undefined}
-                            className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                            className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${
                               isCollapsed ? 'justify-center py-2' : ''
                             } ${
                               isActive
-                                ? 'bg-sky-500/15 text-white border-l-4 border-sky-400 pl-2.5 shadow-sm'
-                                : 'text-slate-300 hover:bg-slate-800/40 hover:text-slate-100 border-l-4 border-transparent'
+                                ? 'bg-white/10 text-white'
+                                : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                             }`}
                           >
-                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-200'}`} />
-                            {!isCollapsed && <span className="truncate tracking-tight">{item.name}</span>}
+                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                            {!isCollapsed && <span className="truncate">{item.name}</span>}
                           </Link>
                         );
                       })}
@@ -342,20 +339,20 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       )}
 
       {/* Footer */}
-      <div className="p-3 border-t border-slate-800/80 space-y-1">
+      <div className="p-3 border-t border-white/5 space-y-0.5">
         {/* Abajo va la configuración que le toca a cada quien: la de la plataforma
             para el administrador SaaS y la de su empresa para su administrador. */}
         {isSaasAdmin && (
           <Link
             href="/admin/configuration"
             title={isCollapsed ? 'Configuración' : undefined}
-            className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${isCollapsed ? 'justify-center' : ''} ${
+            className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${isCollapsed ? 'justify-center' : ''} ${
               pathname.startsWith('/admin/configuration')
-                ? 'bg-sky-500/15 text-white border-l-4 border-sky-400 pl-2.5 shadow-sm'
-                : 'text-slate-300 hover:bg-slate-800/40 hover:text-slate-100 border-l-4 border-transparent'
+                ? 'bg-white/10 text-white'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
             }`}
           >
-            <Settings className={`w-4 h-4 shrink-0 ${pathname.startsWith('/admin/configuration') ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-200'}`} />
+            <Settings className={`w-4 h-4 shrink-0 ${pathname.startsWith('/admin/configuration') ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
             {!isCollapsed && <span className="truncate">Configuración</span>}
           </Link>
         )}
@@ -363,16 +360,18 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
           <Link
             href="/settings"
             title={isCollapsed ? 'Configuración' : undefined}
-            className="group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:bg-slate-800/40 hover:text-slate-100"
+            className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${isCollapsed ? 'justify-center' : ''} ${
+              pathname.startsWith('/settings') ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+            }`}
           >
-            <Settings className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-200" />
+            <Settings className={`w-4 h-4 shrink-0 ${pathname.startsWith('/settings') ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
             {!isCollapsed && <span className="truncate">Configuración</span>}
           </Link>
         )}
 
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800/40 hover:text-white ${
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-white/5 hover:text-white ${
             isCollapsed ? 'justify-center' : ''
           }`}
         >

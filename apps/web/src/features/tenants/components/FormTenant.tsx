@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Select from '@/app/components/common/Select';
 import { Building2 } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
@@ -170,17 +171,14 @@ export default function FormTenant({
           <>
             <div>
               <label className={labelClass}>Rubro *</label>
-              <select
-                required
+              <Select
+                ariaLabel="Rubro"
+                clearable={false}
+                placeholder="Selecciona el rubro"
                 value={formData.business_type_id}
-                onChange={(e) => set('business_type_id', e.target.value)}
-                className={`${inputClass} bg-white`}
-              >
-                <option value="" disabled>Selecciona el rubro</option>
-                {businessTypes.map((type) => (
-                  <option key={type.id} value={type.id}>{type.name}</option>
-                ))}
-              </select>
+                onChange={(e) => set('business_type_id', String(e.target.value))}
+                options={businessTypes.map((type) => ({ value: type.id, label: type.name }))}
+              />
               {selectedType && (
                 <p className="text-[11px] text-slate-400 mt-1.5">
                   Empieza con {(selectedType.template?.categories ?? []).reduce((total: number, category: any) => total + (category.services?.length ?? 0), 0)} servicios
@@ -192,19 +190,14 @@ export default function FormTenant({
 
             <div>
               <label className={labelClass}>Plan *</label>
-              <select
-                required
+              <Select
+                ariaLabel="Plan"
+                clearable={false}
+                placeholder="Selecciona el plan"
                 value={formData.plan_id}
-                onChange={(e) => set('plan_id', e.target.value)}
-                className={`${inputClass} bg-white`}
-              >
-                <option value="" disabled>Selecciona el plan</option>
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name} · {plan.currency || 'PEN'} {plan.price_monthly}/mes{plan.is_public_catalog ? '' : ' (a medida)'}
-                  </option>
-                ))}
-              </select>
+                onChange={(e) => set('plan_id', String(e.target.value))}
+                options={plans.map((plan) => ({ value: plan.id, label: `${plan.name} · ${plan.currency || 'PEN'} ${plan.price_monthly}/mes${plan.is_public_catalog ? '' : ' (a medida)'}` }))}
+              />
             </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer">
@@ -227,10 +220,13 @@ export default function FormTenant({
             {!formData.start_trial && (
               <div>
                 <label className={labelClass}>Ciclo de cobro</label>
-                <select value={formData.billing_cycle} onChange={(e) => set('billing_cycle', e.target.value)} className={`${inputClass} bg-white`}>
-                  <option value="monthly">Mensual</option>
-                  <option value="yearly">Anual</option>
-                </select>
+                <Select
+                  ariaLabel="Ciclo de pago"
+                  clearable={false}
+                  value={formData.billing_cycle}
+                  onChange={(e) => set('billing_cycle', String(e.target.value))}
+                  options={[{ value: 'monthly', label: 'Mensual' }, { value: 'yearly', label: 'Anual' }]}
+                />
               </div>
             )}
 
@@ -316,15 +312,13 @@ export default function FormTenant({
           <label className={labelClass}>
             Estado
           </label>
-          <select
+          <Select
+            ariaLabel="Estado"
+            clearable={false}
             value={formData.status}
-            onChange={(e) => set('status', e.target.value)}
-            className={`${inputClass} bg-white`}
-          >
-            <option value="active">Activo</option>
-            <option value="suspended">Suspendido</option>
-            <option value="inactive">Inactivo</option>
-          </select>
+            onChange={(e) => set('status', String(e.target.value))}
+            options={[{ value: 'active', label: 'Activo' }, { value: 'suspended', label: 'Suspendido' }, { value: 'inactive', label: 'Inactivo' }]}
+          />
         </div>
 
         {error && (

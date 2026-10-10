@@ -9,6 +9,7 @@ import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
 import Stopwatch from './Stopwatch';
+import Select from '@/app/components/common/Select';
 import {
   RELEASED, addDays, apiError, formatDate, fromMinutes, statusStyle, timeOf, toMinutes, todayISO,
   type Appointment,
@@ -32,6 +33,8 @@ interface PendingMove {
 interface DayPayload {
   date: string;
   now: string;
+  // Feriados de ese día en la sede; si cierra, nadie atiende.
+  holidays?: { name: string; closed: boolean }[];
   professionals: DayProfessional[];
   appointments: Appointment[];
 }
@@ -242,14 +245,15 @@ export default function AgendaDay() {
 
         <div className="flex flex-wrap items-center gap-2">
           {branches.length > 1 && (
-            <select
-              aria-label="Sede"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="text-sm border border-slate-200 bg-white rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#022340]/20"
-            >
-              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-            </select>
+            <div className="w-60" data-branch-select>
+              <Select
+                ariaLabel="Sede"
+                clearable={false}
+                value={branchId}
+                onChange={(e) => setBranchId(String(e.target.value))}
+                options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+              />
+            </div>
           )}
 
           <button type="button" title="Día anterior" onClick={() => setDate(addDays(date, -1))} className={navButton}>
@@ -314,6 +318,17 @@ export default function AgendaDay() {
       </div>
 
       {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+
+      {(day?.holidays ?? []).map((holiday) => (
+        <p
+          key={holiday.name}
+          data-holiday={holiday.closed ? 'closed' : 'open'}
+          className={`text-sm rounded-lg px-3 py-2 border ${holiday.closed ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-sky-700 bg-sky-50 border-sky-200'}`}
+        >
+          <span className="font-semibold">Feriado: {holiday.name}.</span>{' '}
+          {holiday.closed ? 'La sede cierra este día: no se ofrecen horarios ni se puede agendar.' : 'Se atiende con normalidad.'}
+        </p>
+      ))}
 
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {loading && !day ? (

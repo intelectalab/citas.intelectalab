@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { FIELD_TYPES, FIELD_TYPE_LABELS, NEW_FIELD, type RecordField } from '../records';
+import Select from '@/app/components/common/Select';
 
 interface RecordFieldsEditorProps {
   value: RecordField[];
@@ -85,14 +86,13 @@ export default function RecordFieldsEditor({ value, onChange }: RecordFieldsEdit
                   </div>
                   <div>
                     <label className={labelClass}>Tipo</label>
-                    <select
-                      aria-label={`Tipo del campo ${index + 1}`}
+                    <Select
+                      ariaLabel={`Tipo del campo ${index + 1}`}
+                      clearable={false}
                       value={field.type}
-                      onChange={(e) => update(index, { type: e.target.value })}
-                      className={inputClass}
-                    >
-                      {FIELD_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                    </select>
+                      onChange={(e) => update(index, { type: String(e.target.value) })}
+                      options={FIELD_TYPES}
+                    />
                   </div>
                 </div>
 

@@ -16,6 +16,7 @@ use App\Models\Service;
 use App\Models\Tenant;
 use App\Models\Recall;
 use App\Models\User;
+use App\Models\WaitlistEntry;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
 use App\Support\AppointmentTiming;
@@ -216,6 +217,10 @@ class AppointmentController extends Controller
             return $date->lte($dayStart) ? '00:00' : ($date->gte($dayEnd) ? '24:00' : $date->format('H:i'));
         };
 
+        // Feriados del día. Si la sede cierra, la columna de cada profesional sale bloqueada.
+        $holidays = \App\Support\Holidays::on($tenant, $branch->id, $validated['date']);
+        $closedBy = $holidays->firstWhere('closed', true);
+
         $professionals = Professional::where('tenant_id', $tenant->id)
             ->when($own, fn ($q) => $q->where('id', $own))
             ->whereIn('id', $schedules->keys()->merge($appointments->pluck('professional_id'))->unique())
@@ -232,12 +237,14 @@ class AppointmentController extends Controller
                 'blocks'       => $blocks
                     ->filter(fn (AvailabilityBlock $b) => $b->professional_id === $p->id || (!$b->professional_id && $b->branch_id === $branch->id))
                     ->map(fn (AvailabilityBlock $b) => ['starts' => $clip($b->starts_at), 'ends' => $clip($b->ends_at), 'reason' => $b->reason, 'kind' => $b->kindKey()])
-                    ->values(),
+                    ->values()
+                    ->when($closedBy, fn ($blocks) => $blocks->prepend(['starts' => '00:00', 'ends' => '24:00', 'reason' => $closedBy->name, 'kind' => 'holiday'])),
             ])->values();
 
         return response()->json([
             'date'          => $validated['date'],
             'now'           => now($timezone)->format(self::LOCAL_FORMAT),
+            'holidays'      => $holidays->map(fn ($h) => ['name' => $h->name, 'closed' => (bool) $h->closed])->values(),
             'professionals' => $professionals,
             'appointments'  => $appointments->map(fn (Appointment $a) => $this->present($a, $tenant)),
         ]);
@@ -350,10 +357,13 @@ class AppointmentController extends Controller
             'override_reason'       => 'nullable|string|max:255',
             // Control pendiente que esta cita viene a cumplir.
             'recall_id'             => 'nullable|uuid',
+            // Persona de la lista de espera a la que se le consiguió este horario.
+            'waitlist_id'           => 'nullable|uuid',
         ]);
 
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
         $recall = $this->recallToBook($tenant, $customer, $validated['recall_id'] ?? null);
+        $waiting = $this->waitlistToBook($tenant, $customer, $validated['waitlist_id'] ?? null);
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $professional = Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
@@ -371,7 +381,7 @@ class AppointmentController extends Controller
         $duration = (int) ($validated['duration_minutes'] ?? $service->duration_minutes);
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall) {
+        return DB::transaction(function () use ($tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall, $waiting) {
             // Una cita a la vez por empresa: evita dobles reservas y códigos repetidos.
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
@@ -413,6 +423,10 @@ class AppointmentController extends Controller
 
             if ($recall) {
                 \App\Support\Recalls::book($recall, $appointment);
+            }
+
+            if ($waiting) {
+                \App\Support\Waitlist::book($waiting, $appointment);
             }
 
             return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true), 201);
@@ -523,8 +537,15 @@ class AppointmentController extends Controller
             $this->log($appointment, $from, $to, $user, $reason);
             // Los controles ligados a la cita siguen su suerte, y un servicio puede dejar el suyo.
             \App\Support\Recalls::appointmentChanged($tenant, $appointment);
+            \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
 
-            return response()->json($this->present($appointment, $tenant, true) + ['late_cancel' => $lateCancel]);
+            return response()->json($this->present($appointment, $tenant, true) + [
+                'late_cancel' => $lateCancel,
+                // Al liberarse el horario: cuántas personas de la lista de espera podrían tomarlo.
+                'waitlist_matches' => $to === AppointmentFlow::CANCELLED && $appointment->starts_at->gt($now)
+                    ? \App\Support\Waitlist::matching($tenant, $appointment)->count()
+                    : 0,
+            ]);
         });
     }
 
@@ -661,6 +682,29 @@ class AppointmentController extends Controller
             'limit'   => (int) $limit,
             'used'    => $used,
         ], 422);
+    }
+
+    /**
+     * Registro de la lista de espera que la cita viene a resolver: de la
+     * empresa, del mismo cliente y todavía en espera.
+     */
+    protected function waitlistToBook(Tenant $tenant, Customer $customer, ?string $id): ?WaitlistEntry
+    {
+        if (!$id) {
+            return null;
+        }
+
+        $entry = WaitlistEntry::where('tenant_id', $tenant->id)->findOrFail($id);
+
+        if ($entry->customer_id !== $customer->id) {
+            throw ValidationException::withMessages(['waitlist_id' => 'Ese registro de la lista de espera es de otra persona.']);
+        }
+
+        if (!$entry->isOpen()) {
+            throw ValidationException::withMessages(['waitlist_id' => 'Esa persona ya no está en la lista de espera.']);
+        }
+
+        return $entry;
     }
 
     /**

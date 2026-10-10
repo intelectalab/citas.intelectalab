@@ -132,6 +132,11 @@ class TenantProvisioner
                 'starts_at'     => now(),
             ]);
 
+            // Feriados nacionales de este año y del siguiente, para todas sus sedes.
+            $year = (int) now($timezone)->format('Y');
+            Holidays::loadNational($tenant, $year);
+            Holidays::loadNational($tenant, $year + 1);
+
             return ['tenant' => $tenant, 'user' => $user, 'installed' => $installed];
         });
     }

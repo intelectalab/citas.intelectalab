@@ -8,6 +8,8 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
 import FormCustomer from '@/features/customers/components/FormCustomer';
+import QuickDependent from '@/features/customers/components/QuickDependent';
+import QuickService from '@/features/services/components/QuickService';
 import { apiError, dateOf, formatDateTime, timeOf, todayISO, type Appointment, type AppointmentContext } from '../appointments';
 
 export interface CustomerOption {
@@ -34,6 +36,10 @@ interface AppointmentFormProps {
     date?: string; time?: string; professional_id?: string; branch_id?: string;
     // Cita que nace de un control pendiente: llega con el cliente y el servicio ya elegidos.
     customer?: CustomerOption; customer_dependent_id?: string; service_id?: string; recall_id?: string; recall_label?: string;
+    // Cita para alguien de la lista de espera.
+    waitlist_id?: string;
+    // Texto corto que dice de dónde viene la cita.
+    origin_label?: string;
   };
   // Con una cita, el formulario la reprograma en lugar de crear otra.
   reschedule?: Appointment | null;
@@ -52,6 +58,9 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   const isReschedule = Boolean(reschedule);
 
   const [context, setContext] = useState<AppointmentContext | null>(null);
+  // Crear lo que falta sin salir de la cita: una mascota o un servicio.
+  const [addingDependent, setAddingDependent] = useState(false);
+  const [serviceFormOpen, setServiceFormOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerResults, setCustomerResults] = useState<CustomerOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -74,6 +83,9 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   const [canForce, setCanForce] = useState(false);
   // Formulario de cliente nuevo, abierto encima de este panel.
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  // Sin horarios ese día: la persona quedó anotada en la lista de espera.
+  const [waitlisted, setWaitlisted] = useState(false);
+  const [waitlisting, setWaitlisting] = useState(false);
 
   // Al abrir: carga sedes, profesionales y servicios, y deja el formulario en su punto de partida.
   useEffect(() => {
@@ -81,6 +93,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
 
     setError('');
     setCanForce(false);
+    setWaitlisted(false);
     setCustomerFormOpen(false);
     setOverrideReason('');
     setReason('');
@@ -209,6 +222,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             starts_at: startsAt,
             notes: notes.trim() || null,
             ...(initial?.recall_id ? { recall_id: initial.recall_id } : {}),
+            ...(initial?.waitlist_id ? { waitlist_id: initial.waitlist_id } : {}),
             ...force,
           });
 
@@ -220,6 +234,30 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       setCanForce(Boolean(data?.code === 'SLOT_UNAVAILABLE' && data?.overridable && context?.can_override));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // No hay horario ese día: se anota para avisarle cuando se libere uno, desde esa fecha.
+  const addToWaitlist = async () => {
+    if (!customer || !serviceId || !branchId) return;
+
+    try {
+      setWaitlisting(true);
+      setError('');
+      await api.post('/waitlist', {
+        customer_id: customer.id,
+        customer_dependent_id: dependentId || null,
+        service_id: serviceId,
+        branch_id: branchId,
+        professional_id: professionalId || null,
+        date_from: date,
+        notes: notes.trim() || null,
+      });
+      setWaitlisted(true);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo anotar en la lista de espera.'));
+    } finally {
+      setWaitlisting(false);
     }
   };
 
@@ -241,7 +279,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       title={reschedule ? `Reprogramar cita ${reschedule.code}` : 'Nueva cita'}
       subtitle={reschedule
         ? `${reschedule.customer?.name ?? ''} · ${reschedule.service?.name ?? ''} · ahora: ${formatDateTime(reschedule.starts_at)}`
-        : initial?.recall_label ? `Control: ${initial.recall_label}` : 'Elige a quién se atiende, el servicio y un horario libre'}
+        : initial?.recall_label ? `Control: ${initial.recall_label}` : initial?.origin_label ?? 'Elige a quién se atiende, el servicio y un horario libre'}
       icon={reschedule ? <CalendarClock size={20} /> : <CalendarPlus size={20} />}
     >
       <div className="flex flex-col h-full justify-between">
@@ -322,19 +360,25 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
 
           {!isReschedule && dependents?.enabled && customer && (
             <div>
-              {(customer.dependents?.length ?? 0) > 0 ? (
-                <Select
-                  label={`${vocab.dependent}${dependents.required ? ' *' : ''}`}
-                  placeholder={dependents.required ? 'Seleccione...' : 'Ninguno'}
-                  value={dependentId}
-                  onChange={(e) => setDependentId(String(e.target.value))}
-                  options={(customer.dependents ?? []).map((d) => ({ value: d.id, label: d.species ? `${d.name} (${d.species})` : d.name }))}
+              <Select
+                label={`${vocab.dependent}${dependents.required ? ' *' : ''}`}
+                placeholder={(customer.dependents?.length ?? 0) === 0 ? `Aún no tiene ${vocab.dependents.toLowerCase()}: agrégalo con +` : dependents.required ? 'Seleccione...' : 'Ninguno'}
+                value={dependentId}
+                onChange={(e) => setDependentId(String(e.target.value))}
+                options={(customer.dependents ?? []).map((d) => ({ value: d.id, label: d.species ? `${d.name} (${d.species})` : d.name }))}
+                onAdd={() => setAddingDependent(true)}
+                addLabel={`Agregar ${vocab.dependent.toLowerCase()}`}
+              />
+              {addingDependent && (
+                <QuickDependent
+                  customerId={customer.id}
+                  onCancel={() => setAddingDependent(false)}
+                  onCreated={(created) => {
+                    setCustomer({ ...customer, dependents: [...(customer.dependents ?? []), created] } as typeof customer);
+                    setDependentId(created.id);
+                    setAddingDependent(false);
+                  }}
                 />
-              ) : (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Este {vocab.client.toLowerCase()} no tiene {vocab.dependents.toLowerCase()} registrados.
-                  {dependents.required ? ` Agrégalo en ${vocab.clients} antes de agendar.` : ''}
-                </p>
               )}
             </div>
           )}
@@ -346,6 +390,8 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
               value={serviceId}
               onChange={(e) => { setServiceId(String(e.target.value)); setTime(initial?.time ?? ''); setCanForce(false); }}
               options={(context?.services ?? []).map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min` }))}
+              onAdd={user?.is_tenant_admin ? () => setServiceFormOpen(true) : undefined}
+              addLabel="Nuevo servicio"
             />
           )}
 
@@ -398,7 +444,26 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             ) : loadingSlots ? (
               <p className="text-sm text-slate-400">Buscando horarios...</p>
             ) : !hasSlots ? (
-              <p className="text-sm text-slate-400">No hay horarios libres ese día. Prueba con otra fecha.</p>
+              <div className="space-y-2" data-no-slots>
+                <p className="text-sm text-slate-400">No hay horarios libres ese día. Prueba con otra fecha.</p>
+                {!isReschedule && !initial?.waitlist_id && customer && (
+                  waitlisted ? (
+                    <p data-waitlisted className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                      {customer.first_name} quedó en la lista de espera desde esa fecha. Lo verás en Lista de espera.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      data-action="waitlist"
+                      disabled={waitlisting}
+                      onClick={addToWaitlist}
+                      className="px-3.5 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    >
+                      {waitlisting ? 'Anotando...' : 'Anotar en lista de espera'}
+                    </button>
+                  )
+                )}
+              </div>
             ) : (
               <div className="space-y-3">
                 {slotGroups.filter((group) => group.slots.length > 0).map((group) => (
@@ -494,6 +559,17 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
         </div>
       </div>
     </FormDrawer>
+
+    {/* Servicio nuevo sin salir de la cita: al guardarlo queda elegido. */}
+    <QuickService
+      isOpen={isOpen && serviceFormOpen}
+      onClose={() => setServiceFormOpen(false)}
+      onCreated={(service) => {
+        setContext((current) => (current ? { ...current, services: [...current.services, service] } : current));
+        setServiceId(service.id);
+        setTime('');
+      }}
+    />
 
     {/* Cliente nuevo sin salir de la cita: al guardarlo queda elegido. */}
     <FormCustomer

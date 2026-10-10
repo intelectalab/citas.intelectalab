@@ -46,7 +46,7 @@ class Recalls
     {
         $service = $appointment->service;
 
-        if (!$service?->recall_label || !$service->recall_days || !$tenant->hasModule('records')) {
+        if (!$service?->recall_label || !$service->recall_days) {
             return;
         }
 

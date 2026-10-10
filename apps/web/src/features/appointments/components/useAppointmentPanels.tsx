@@ -10,6 +10,8 @@ type FormInitial = {
   date?: string; time?: string; professional_id?: string; branch_id?: string;
   // Para agendar desde un control pendiente.
   customer?: CustomerOption; customer_dependent_id?: string; service_id?: string; recall_id?: string; recall_label?: string;
+  // Para agendar a alguien de la lista de espera.
+  waitlist_id?: string; origin_label?: string;
 };
 
 // Los paneles laterales de una cita (nueva, detalle y reprogramar) y cómo

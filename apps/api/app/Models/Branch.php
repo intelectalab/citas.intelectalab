@@ -18,6 +18,10 @@ class Branch extends Model
         'tenant_id',
         'company_id',
         'name',
+        'address',
+        'district',
+        'department',
+        'phone',
         'timezone',
         'status',
     ];

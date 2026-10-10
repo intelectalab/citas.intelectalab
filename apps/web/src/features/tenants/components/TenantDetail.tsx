@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Select from '@/app/components/common/Select';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -468,14 +469,14 @@ export default function TenantDetail() {
               <div className="space-y-2">
                 <span className={labelClass}>Cambiar plan</span>
                 <div className="flex items-center gap-2">
-                  <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={inputClass}>
-                    <option value="" disabled>Selecciona un plan</option>
-                    {plans.filter((plan) => plan.status === 'active' || plan.id === subscription?.plan?.id).map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name} · {plan.currency || 'PEN'} {plan.price_monthly}/mes{plan.is_public_catalog ? '' : ' (a medida)'}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    ariaLabel="Plan"
+                    clearable={false}
+                    placeholder="Selecciona un plan"
+                    value={planId}
+                    onChange={(e) => setPlanId(String(e.target.value))}
+                    options={plans.filter((plan) => plan.status === 'active' || plan.id === subscription?.plan?.id).map((plan) => ({ value: plan.id, label: `${plan.name} · ${plan.currency || 'PEN'} ${plan.price_monthly}/mes${plan.is_public_catalog ? '' : ' (a medida)'}` }))}
+                  />
                   <button
                     type="button"
                     disabled={busy || !planId || planId === subscription?.plan?.id}
@@ -493,10 +494,13 @@ export default function TenantDetail() {
                   <div className="space-y-2 pt-4 border-t border-slate-100">
                     <span className={labelClass}>Registrar pago</span>
                     <div className="grid grid-cols-3 gap-2">
-                      <select value={payment.billing_cycle} onChange={(e) => setPayment({ ...payment, billing_cycle: e.target.value })} className={inputClass}>
-                        <option value="monthly">Mensual</option>
-                        <option value="yearly">Anual</option>
-                      </select>
+                      <Select
+                        ariaLabel="Ciclo de pago"
+                        clearable={false}
+                        value={payment.billing_cycle}
+                        onChange={(e) => setPayment({ ...payment, billing_cycle: String(e.target.value) })}
+                        options={[{ value: 'monthly', label: 'Mensual' }, { value: 'yearly', label: 'Anual' }]}
+                      />
                       <input type="number" min="0" step="0.01" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} className={inputClass} placeholder={`Monto (${defaultAmount})`} />
                       <input type="text" maxLength={255} value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })} className={inputClass} placeholder="N.º operación" />
                     </div>
@@ -653,12 +657,14 @@ export default function TenantDetail() {
             <div className="space-y-2">
               <span className={labelClass}>Cambiar rubro</span>
               <div className="flex items-center gap-2">
-                <select value={businessTypeId} onChange={(e) => setBusinessTypeId(e.target.value)} className={inputClass}>
-                  <option value="" disabled>Selecciona un rubro</option>
-                  {businessTypes.map((type) => (
-                    <option key={type.id} value={type.id}>{type.name}{type.status !== 'active' ? ' (inactivo)' : ''}</option>
-                  ))}
-                </select>
+                <Select
+                  ariaLabel="Rubro"
+                  clearable={false}
+                  placeholder="Selecciona un rubro"
+                  value={businessTypeId}
+                  onChange={(e) => setBusinessTypeId(String(e.target.value))}
+                  options={businessTypes.map((type) => ({ value: type.id, label: `${type.name}${type.status !== 'active' ? ' (inactivo)' : ''}` }))}
+                />
                 <button
                   type="button"
                   disabled={busy || !businessTypeId || businessTypeId === detail.business_type?.id}

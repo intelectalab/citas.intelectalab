@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Select from '@/app/components/common/Select';
 import { Package, ChevronDown, Check } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
@@ -366,14 +367,13 @@ export default function FormSaaSPlan({
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Estado</label>
-                          <select
+                          <Select
+                            ariaLabel="Estado"
+                            clearable={false}
                             value={formData.status}
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                          >
-                            <option value="active">Activo</option>
-                            <option value="inactive">Inactivo</option>
-                          </select>
+                            onChange={(e) => setFormData({ ...formData, status: String(e.target.value) })}
+                            options={[{ value: 'active', label: 'Activo' }, { value: 'inactive', label: 'Inactivo' }]}
+                          />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Orden de presentación</label>
@@ -386,14 +386,13 @@ export default function FormSaaSPlan({
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Catálogo público (is_public_catalog)</label>
-                          <select
+                          <Select
+                            ariaLabel="Visible en el catálogo"
+                            clearable={false}
                             value={formData.is_public_catalog ? 'yes' : 'no'}
                             onChange={(e) => setFormData({ ...formData, is_public_catalog: e.target.value === 'yes' })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                          >
-                            <option value="yes">Sí</option>
-                            <option value="no">No</option>
-                          </select>
+                            options={[{ value: 'yes', label: 'Sí' }, { value: 'no', label: 'No' }]}
+                          />
                         </div>
                       </div>
                     )}
@@ -426,14 +425,13 @@ export default function FormSaaSPlan({
                           </div>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">Moneda</label>
-                            <select
+                            <Select
+                              ariaLabel="Moneda"
+                              clearable={false}
                               value={formData.currency}
-                              onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="PEN">PEN - Sol peruano</option>
-                              <option value="USD">USD - Dólar estadounidense</option>
-                            </select>
+                              onChange={(e) => setFormData({ ...formData, currency: String(e.target.value) })}
+                              options={[{ value: 'PEN', label: 'PEN - Sol peruano' }, { value: 'USD', label: 'USD - Dólar estadounidense' }]}
+                            />
                           </div>
                         </div>
 
@@ -441,14 +439,13 @@ export default function FormSaaSPlan({
                           <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Prueba gratuita (trial_config)</h5>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">¿Tiene prueba?</label>
-                            <select
+                            <Select
+                              ariaLabel="Tiene prueba"
+                              clearable={false}
                               value={formData.has_trial ? 'yes' : 'no'}
                               onChange={(e) => setFormData({ ...formData, has_trial: e.target.value === 'yes' })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="yes">Sí</option>
-                              <option value="no">No</option>
-                            </select>
+                              options={[{ value: 'yes', label: 'Sí' }, { value: 'no', label: 'No' }]}
+                            />
                           </div>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">Días de prueba</label>
@@ -462,14 +459,13 @@ export default function FormSaaSPlan({
                           </div>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">¿Solicitar pago al iniciar?</label>
-                            <select
+                            <Select
+                              ariaLabel="Pide pago al inicio"
+                              clearable={false}
                               value={formData.require_payment_at_start ? 'yes' : 'no'}
                               onChange={(e) => setFormData({ ...formData, require_payment_at_start: e.target.value === 'yes' })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="yes">Sí</option>
-                              <option value="no">No</option>
-                            </select>
+                              options={[{ value: 'yes', label: 'Sí' }, { value: 'no', label: 'No' }]}
+                            />
                           </div>
                         </div>
 
@@ -477,25 +473,23 @@ export default function FormSaaSPlan({
                           <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Suscripción (subscription_config)</h5>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">Renovación automática (auto_renew)</label>
-                            <select
+                            <Select
+                              ariaLabel="Renovación automática"
+                              clearable={false}
                               value={formData.auto_renew ? 'yes' : 'no'}
                               onChange={(e) => setFormData({ ...formData, auto_renew: e.target.value === 'yes' })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="yes">Sí</option>
-                              <option value="no">No</option>
-                            </select>
+                              options={[{ value: 'yes', label: 'Sí' }, { value: 'no', label: 'No' }]}
+                            />
                           </div>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">Periodo predeterminado</label>
-                            <select
+                            <Select
+                              ariaLabel="Periodo por defecto"
+                              clearable={false}
                               value={formData.default_period}
-                              onChange={(e) => setFormData({ ...formData, default_period: e.target.value })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="monthly">Mensual</option>
-                              <option value="yearly">Anual</option>
-                            </select>
+                              onChange={(e) => setFormData({ ...formData, default_period: String(e.target.value) })}
+                              options={[{ value: 'monthly', label: 'Mensual' }, { value: 'yearly', label: 'Anual' }]}
+                            />
                           </div>
                         </div>
                       </div>

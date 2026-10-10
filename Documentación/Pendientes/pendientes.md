@@ -5,7 +5,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 ## Detectados el 2026-10-05 (revisión inicial)
 
 - **Aislamiento por tenant en otros controladores.** `PipelineController`, `PipelineStageController`, `TenantController` y `TypeDocumentController` no filtran por `tenant_id`. Definir cuáles son catálogos globales y cuáles deben limitarse al tenant.
-- **Rutas del menú lateral sin página.** `/opportunities`, `/quotes`, `/branches`, `/subscribe`.
+- **Rutas del menú lateral sin página.** `/opportunities`, `/quotes`, `/subscribe`.
 - **Archivos duplicados en frontend.** `ContactsTable1.tsx` y `FormContact1.tsx`.
 - **Esquema en SQL crudo.** No hay migraciones Laravel que reconstruyan la base; el esquema vive en `apps/api/infrastructure/docker/postgres/init.sql`.
 - **ESLint y configuración de Next de plantilla.** Sin convenciones de equipo definidas.
@@ -16,10 +16,10 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 - **Tablas nuevas sin backend ni pantallas.** Las 45 tablas de inventario, fidelización, marketing, presupuestos, fichas, dependientes y lista de espera solo existen en el esquema. Faltan modelos, controladores, rutas y vistas.
 - **Ruta `/api/contacts` duplicada.** `ContactController` ahora opera sobre `customers` igual que `/api/customers`. Su único consumidor es `ContactsTable1.tsx`, que ninguna página usa. Decidir si se elimina.
-- **Columnas clínicas en `customers`.** `blood_type` y `medical_notes` se conservaron. Para rubros no clínicos conviene evaluar moverlas a las fichas configurables.
+- **Columnas clínicas en `customers`.** `blood_type` ya solo se muestra y se guarda en los rubros de salud (regla `customers.clinical_fields`). `medical_notes` se usa en todos como observaciones. Queda evaluar moverlas a las fichas configurables.
 - **Código de cliente sin restricción única.** `customers` no tiene `UNIQUE (tenant_id, code)`. Dos altas simultáneas podrían recibir el mismo código.
 - **Búsqueda en servicios y profesionales.** Siguen con `like`: distinguen mayúsculas y tildes. Clientes y citas ya usan `App\Support\Search`.
-- **`seed.sql` no se carga solo.** `docker-compose.yml` monta únicamente `init.sql`.
+- **Los seeds no se cargan solos.** `docker-compose.yml` monta únicamente `init.sql`; `seed.sql` y `seed_demo.sql` se cargan a mano, en ese orden.
 - **Páginas vacías.** `forgot-password`, `reset-password`, `users` y `subscription` tienen archivos de 0 bytes y rompen la verificación de tipos de Next.
 - **Permisos gruesos.** El seed tiene 19 permisos. El prototipo usa permisos `módulo.acción` sobre 22 módulos y siete roles con alcance.
 
@@ -33,7 +33,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 - **Módulos sin pantallas.** `walkin`, `classes`, `pos`, `inventory`, `packages`, `memberships`, `loyalty` y `marketing` tienen ítem de menú que lleva a la página provisional `/modules/<clave>`. `booking`, `invoicing`, `commissions`, `automations`, `resources`, `multi_branch`, `reports_adv` y `api` no tienen ítem ni pantalla.
 - **Rutas nuevas deben declarar su módulo.** Todo endpoint de un módulo por plan va con `->middleware('module:<clave>')`. Hoy solo están protegidas las rutas de `agenda` y `crm`.
-- **Límites del plan sin aplicar.** `users`, `branches`, `professionals` y `whatsapp_month` se guardan en el plan pero nada impide superarlos. El de citas del mes ya se aplica.
+- **Límites del plan sin aplicar.** Falta `whatsapp_month` (ese módulo aún no existe). Ya se aplican citas del mes, sucursales activas, profesionales y cuentas de usuario.
 - **Reglas del rubro sin pantalla.** La API de citas ya aplica las de agenda, cancelación e inasistencia, pero ninguna pantalla las muestra todavía.
 - **Catálogo de módulos duplicado.** Las etiquetas están en la tabla `saas_modules` y en `src/lib/modules.ts`. Existe `GET /api/modules` para unificarlo.
 - **Género del vocabulario.** Los textos asumen masculino ("Nuevo Paciente", "Todos los clientes"). Si una empresa define un término femenino, la frase no concuerda.
@@ -42,7 +42,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 ## Detectados el 2026-10-05 (rubro en el registro y catálogo inicial)
 
 - **Resto de la plantilla del rubro.** El prototipo también trae salas y equipos, profesionales de ejemplo, paquetes y membresías por rubro. Solo se copian categorías, servicios y la plantilla de ficha.
-- **Empresas del seed sin catálogo de su rubro.** La plantilla se aplica al registrarse. DentalPlus, Mente Sana y las demás del seed siguen sin servicios; solo Centro Médico tiene datos de ejemplo.
 - **Registro de empresa sin límite de intentos.** `/api/register-tenant` no tiene `throttle`, a diferencia del login y del registro de clientes.
 - **Departamentos del formulario de registro.** La lista solo tiene Lima, Arequipa y Trujillo.
 
@@ -90,7 +89,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Nombre del producto.** Solo cambia en el menú lateral; el login y el registro siguen con su texto fijo.
 - **Contraseña temporal del administrador.** Al crear un tenant desde la consola la contraseña se muestra una vez y no se obliga a cambiarla en el primer ingreso. Tampoco se envía por correo (no hay envío de correos).
 - **Datos de ejemplo al crear un tenant.** El prototipo ofrece cargar equipo, clientes y citas de muestra y el horario de la sede. No se incluyó: faltan las tablas de horario de sede y el backend de citas.
-- **Dirección de la sede.** `branches` no tiene dirección; la del alta se guarda en la razón social (`companies`).
 - **Configuración de plataforma por definir.** Moneda e impuestos, pasarela de pago, días de gracia tras el vencimiento, avisos de vencimiento, política de contraseñas y segundo factor, aviso global o modo mantenimiento, plantillas de correo, retención de la bitácora, rubro y plan por defecto.
 - **Cambiar de cuenta sin volver a ingresar.** Hoy cierra la sesión y pide la contraseña. Un cambio directo entre empresas exigiría una forma segura de probar que las cuentas son de la misma persona.
 - **Preferencia de tema por cuenta.** El tema se guarda en el navegador, no en la cuenta: no viaja entre dispositivos.
@@ -98,23 +96,19 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-06 (disponibilidad: horarios y ausencias)
 
-- **Horario de atención de la sede.** No existe tabla. Hoy el horario de un profesional no se limita al de su sede.
 - **El ojo de la tabla de profesionales no abre nada.** Guarda el profesional elegido, pero ninguna vista lo muestra. El prototipo tiene una página del profesional con horario, perfil, ausencias y rendimiento.
 - **Mensajes de validación en inglés.** Los que genera Laravel por defecto ("The reason field is required") no están traducidos; solo salen en español los escritos a mano.
 - **Panel de horario sin revisar en tema oscuro.**
 
 ## Detectados el 2026-10-06 (API de citas y menú Agenda)
 
-- **Pantallas del grupo Agenda.** Solo falta Lista de espera: está en el menú, lleva a la página provisional y no tiene API. Agenda, Citas, Bloqueos y ausencias y Controles y seguimiento ya tienen pantalla.
 - **Cargos por cancelar tarde y por no asistir.** La API avisa de la cancelación tardía, pero no cobra nada. Depende de la caja.
 - **Adelanto para reservar.** `requires_deposit` del servicio y las reglas de adelanto no se aplican. Depende de los pagos.
-- **Salas y equipos en la cita.** No se valida que haya una sala libre ni se asigna `room_id`.
+- **Salas y equipos en la cita.** Ya se registran por sucursal, pero la cita no valida que haya una sala libre ni asigna `room_id`.
 - **Permisos por acción.** El prototipo separa confirmar, registrar llegada, atender, cancelar, reprogramar y forzar. Hoy cualquier personal con el módulo puede hacerlo todo, salvo forzar (solo el administrador) y las citas ajenas de un profesional.
 - **Avisos al cliente.** Confirmación de reserva, recordatorio y aviso de reprogramación no se envían: no hay envío de mensajes.
 - **Citas recurrentes y clases grupales.** El prototipo las tiene; no se incluyeron.
-- **Aviso a la lista de espera al liberarse un horario** (`agenda.waitlist_auto`).
 - **Reglas de agenda sin editor.** `agenda.require_confirmation`, `agenda.client_overlap`, `agenda.allow_override`, `agenda.slot_interval`, `cancel.require_reason` y `noshow.grace_minutes` usan su valor por defecto; no están en el editor de reglas de la plataforma (`src/lib/rules.ts`) ni en `/settings`.
-- **Citas de ejemplo en el seed.** No hay; la agenda se verá vacía tras un reseteo hasta crear citas.
 - **Asignación de servicios a profesionales.** La tabla `service_professionals` existe y la API la respeta, pero no hay pantalla para llenarla.
 - **Bitácora de citas.** Los cambios quedan en el historial de la cita, no en `audit_events`.
 
@@ -154,7 +148,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Firma del cliente.** El consentimiento se acepta con una casilla; no hay firma dibujada. El PDF trae las líneas para firmar a mano.
 - **Fotos y archivos en la ficha.** No hay campo para adjuntar (el rubro de estética registra fotos de antes y después).
 - **Dos editores de campos.** El de la plataforma (`TemplateEditor`) y el de la empresa (`RecordFieldsEditor`) hacen lo mismo con código separado. Conviene unificarlos.
-- **Consentimiento obligatorio tras eliminar la plantilla.** Si se elimina una plantilla, sus borradores ya no exigen el consentimiento al firmar.
 - **Reglas de fichas sin pantalla para la empresa.** Ficha obligatoria, plazo de corrección y fichas privadas se definen en el rubro; la empresa no puede cambiarlas en `/settings`.
 - **Cambios en la ficha sin bitácora.** Una corrección dentro del plazo reemplaza los valores; no se guarda qué decía antes.
 - **Odontograma básico.** Marca un estado por pieza; no distingue caras del diente ni dentición temporal.
@@ -191,8 +184,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 - **Resolver varias citas a la vez.** Las citas dentro de un bloqueo se abren una por una. No hay "reprogramar todas" ni "cancelar todas con aviso".
 - **Aviso al cliente cuando su cita queda dentro de un bloqueo.** Depende del envío de mensajes.
-- **Bloqueos que se repiten.** Un feriado anual o una reunión semanal se registran cada vez.
-- **Feriados nacionales precargados.** No hay calendario de feriados; cada empresa los registra.
+- **Bloqueos que se repiten.** Una reunión semanal se registra cada vez. Los feriados nacionales sí se cargan por año con un clic.
 - **Bloqueos anteriores sin límite de fecha.** La pestaña trae los últimos 200.
 - **Tipo de bloqueo en la agenda.** La franja dice "No atiende" y el motivo; no distingue con color el bloqueo que se puede forzar.
 - **Bitácora de bloqueos.** Se guarda quién lo creó, pero editar o eliminar no queda en `audit_events`.
@@ -216,10 +208,127 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 - **Avisar al cliente de su control.** "Avisado" es una marca manual; no se envía nada. Depende del envío de mensajes.
 - **Controles en la página del cliente y en su portal.** Solo se ven en la pantalla de Controles (la API ya filtra por cliente).
-- **Empresas sin el módulo de fichas.** Controles depende de "Fichas de atención e historia". Una peluquería sin ese módulo no ve la pantalla ni recibe los controles que piden sus servicios (retoques). Evaluar pasarlo al módulo de agenda.
 - **Reprogramar una cita no mueve la fecha del control.** El control sigue enlazado a la cita, que es lo que cuenta.
 - **Controles repetidos.** Se puede registrar a mano el mismo control dos veces para un cliente.
 - **Lista sin paginar.** Trae hasta 500 controles por pestaña. Los cerrados no tienen filtro de fechas.
 - **Dar por realizado sin confirmar.** El check cierra el control de inmediato; se deshace desde "Cerrados".
 - **Controles de un cliente eliminado.** Dejan de listarse, pero siguen en la base.
 - **Pruebas en pantalla que faltan.** Rubro con mascotas, vista de un profesional, un control nacido de una ficha o de un servicio, tema oscuro y el aspecto general de la pantalla.
+
+## Detectados el 2026-10-09 (lista de espera y datos clínicos por rubro)
+
+- **Avisar a la lista cuando se libera un horario.** Al cancelar se informa al personal cuántas personas podrían tomarlo, pero no se les envía nada ni se les ofrece el horario. Depende del envío de mensajes (regla `agenda.waitlist_auto`).
+- **Ir de ese aviso a las personas.** El aviso dice cuántas son; no las lista ni abre la lista de espera ya filtrada.
+- **Lista de espera desde el portal.** El cliente no puede anotarse solo cuando no encuentra horario.
+- **Lista de espera en la página del cliente.** No se ve si la persona está esperando algo (la API ya filtra por cliente).
+- **Buscar horario revisa tres semanas.** Para quien no puso última fecha no hay "seguir buscando más adelante".
+- **Franja que cruza varios días.** Solo se puede pedir una franja horaria, igual para todos los días; no "lunes por la mañana y jueves por la tarde".
+- **Reabrir un registro vencido.** Hay que anotarlo de nuevo; no se puede extender su fecha desde "Cerrados".
+- **Tres buscadores de cliente.** `CustomerPicker` es nuevo; "Nueva cita" y "Nuevo control" siguen con su copia. Conviene que usen el mismo.
+- **Sexo y contacto de emergencia en rubros no clínicos.** Se dejaron visibles. Las tarjetas de Clientes siguen filtrando por sexo en todos los rubros.
+- **Empresas ya creadas y la regla de datos clínicos.** Reciben la regla al recargar el seed o cuando la plataforma aplique el rubro; una empresa creada antes y no actualizada deja de ver el tipo de sangre.
+- **Pruebas en pantalla que faltan.** Rubro con mascotas, varias sedes, vista de un profesional, panel de horarios vacío, la regla nueva en el editor de rubros, tema oscuro y el aspecto general de la pantalla.
+
+## Detectados el 2026-10-09 (feriados y citas de demostración)
+
+- **Feriados que cambian de fecha.** Semana Santa y los feriados que el gobierno declara cada año no están en la lista nacional; cada empresa los agrega a mano.
+- **Feriados de otros países.** La lista nacional es la del Perú, para todas las empresas.
+- **Feriado en que se atiende medio día.** Solo hay dos casos: la sede cierra todo el día o se atiende normal. Para medio día hay que usar un cierre de sede por horas.
+- **Aviso al crear un feriado con citas.** El panel no avisa antes de guardar; las citas se ven después, en la columna "Citas ese día".
+- **Feriados y clientes.** El portal no dice que un día es feriado; solo no ofrece horarios.
+- **Feriados anteriores.** No se pueden eliminar varios a la vez ni limpiar años pasados.
+- **Citas de demostración sin ficha.** En los rubros que exigen ficha para atender, las citas atendidas del seed no la tienen (la regla solo se aplica al cambiar de fase).
+- **Pruebas en pantalla que faltan.** Las otras cinco empresas del seed, varias sedes, el filtro "Año completo", la vista de un profesional, tema oscuro y el aspecto de la pestaña.
+
+## Detectados el 2026-10-09 (sucursales)
+
+- **Horario del profesional frente al de la sede.** Al definir el horario de una persona no se avisa si queda fuera del horario de su sede; se ve después, en la página de la sucursal.
+- **Agenda: sede inicial.** Con varias sedes la agenda abre en la primera por orden alfabético, no en la principal ni en la última usada.
+- **Agenda de todas las sedes a la vez.** Solo se ve una sede por vez.
+- **Sede principal.** No hay forma de marcar cuál es la principal.
+- **Servicios por sede.** Todos los servicios se ofrecen en todas las sedes; el prototipo permite limitarlos.
+- **Personal por sede.** La recepción ve y agenda en todas las sedes; no hay usuarios limitados a una.
+- **Zona horaria.** La lista ofrece siete zonas; las ausencias y los feriados usan la zona de la empresa, no la de cada sede.
+- **Reportes por sede.** Tiempos de atención y la lista de citas no filtran por sede.
+- **Eliminar una sucursal.** Solo se desactiva. Una creada por error queda en "Inactivas".
+- **Sucursal en el portal.** El cliente ve el nombre de la sede al reservar, pero no su dirección ni su horario.
+- **Menú "Administración de sede".** El grupo se muestra al dueño o al rol `admin`; el resto del personal no llega a Sucursales por el menú, aunque la API le deja verlas.
+- **Pruebas en pantalla que faltan.** Cambiar de sede en la agenda, horario de un profesional con varias sedes, volver a activar una sede, vista de un profesional, empresa sin el módulo de salas, tema oscuro y el aspecto de la página de la sucursal.
+
+## Detectados el 2026-10-09 (una empresa por rubro)
+
+- **Clases grupales sin datos.** El Estudio Prana tiene tres clases grupales en su catálogo, pero ninguna sesión ni inscrito: esperan al módulo de Clases. Sus citas de demostración son solo clases privadas y evaluaciones.
+- **Cola sin cita sin datos.** La Barbería Don Filo tiene el módulo, pero nadie en cola: espera a ese módulo.
+- **Empresas nuevas sin controles ni lista de espera de ejemplo.** Solo Centro Médico los trae en el seed.
+- **Especialidades: solo se crean.** Se agregan desde el formulario del profesional; no hay dónde renombrarlas ni eliminarlas.
+- **Clientes de demostración sin sexo ni distrito.** Los cuatro primeros de cada empresa (los escritos a mano) no los tienen; los catorce agregados después sí.
+
+## Detectados el 2026-10-09 (más servicios y equipo; actualizar ficha)
+
+- **Ya no hay nadie en dos sedes en el seed.** La API y las pantallas lo siguen permitiendo, pero para probarlo hay que darle a alguien horario en otra sede desde Profesionales.
+- **Servicios propios sin ficha ni control.** Los servicios agregados a cada empresa (los que no vienen del rubro) no están asignados a una plantilla de ficha ni piden control de seguimiento.
+- **Laboratorio sin plantilla de ficha.** BioAnálisis está en el rubro genérico y su catálogo se escribe en el seed; no tiene ficha.
+- **Actualizar una ficha firmada.** No se permite, por decisión: solo los borradores pasan a la plantilla actual. Dentro del plazo de corrección una ficha firmada se corrige con sus campos originales.
+- **Aviso al editar una plantilla con borradores abiertos.** Quien edita la plantilla no ve cuántos borradores quedan con la versión anterior; cada autor lo ve al abrir el suyo.
+- **Borradores cuyo servicio se quedó sin plantilla.** Siguen con sus campos y se pueden firmar; no hay aviso.
+- **Versión de la plantilla en la ficha.** La ficha guarda los campos, no el número de versión con que se llenó.
+- **Pruebas en pantalla que faltan.** Actualizar una ficha desde la agenda (se probó desde Fichas de atención), la vista de un profesional, una ficha privada y tema oscuro.
+
+## Detectados el 2026-10-09 (inicio de la empresa y página Empresa)
+
+- **Ingresos en el inicio.** "Valor de lo atendido" suma el precio de las citas atendidas; no es lo cobrado. Cuando exista la caja debe mostrar lo cobrado, el ticket promedio y los ingresos por día.
+- **Abrir "Nueva cita" desde el inicio.** El botón lleva a la agenda; no abre el panel de la cita directamente. Las próximas citas también llevan a la agenda, no a su detalle.
+- **Ocupación por profesional.** El inicio da la ocupación total de hoy; el prototipo la muestra además por persona.
+- **Periodo del resumen.** Los números son de los últimos 30 días, sin poder cambiar el periodo ni filtrar por sede.
+- **Inicio de la plataforma.** El administrador SaaS ve solo el saludo y sus accesos; no hay números de la plataforma (empresas activas, pruebas por vencer, ingresos).
+- **Empresa en el menú.** "Empresa" está en el grupo que solo ve el administrador; el resto del personal no llega a la página, aunque la API le deja verla.
+- **Zona horaria de la empresa.** Se muestra, pero no se puede cambiar desde la página.
+- **Logo, color y redes de la empresa.** La página Empresa no los tiene; `tenant_settings` ya guarda color y logo.
+- **Componente anterior sin uso.** `features/companies/components/CompaniesTable.tsx` (la tabla de ejemplo) ya no se usa en ninguna página; se puede eliminar.
+- **Rutas del inicio anterior.** Los botones viejos apuntaban a `/orders`, `/products/new`, `/tickets/new` y `/activities`, que no existen; ya no se usan.
+- **Pruebas en pantalla que faltan.** El botón "Copiar" del código de empresa, el tema oscuro, la vista en celular y el inicio de una empresa sin citas.
+
+## Detectados el 2026-10-09 (seed separado)
+
+- **Contraseña de las cuentas de la plataforma.** `seed.sql` crea `admin@tusaas.com` y `soporte@tusaas.com` con la contraseña de prueba. Hay que cambiarla al desplegar; conviene que el despliegue la pida en vez de traerla escrita.
+- **Catálogo del rubro y feriados, escritos dos veces.** La copia del catálogo y la lista de feriados nacionales están en la API (para las empresas reales) y otra vez en `seed_demo.sql` (para las de ejemplo). Si cambia el formato de la plantilla de un rubro hay que tocar los dos. Se evitaría creando las empresas de ejemplo desde la API en lugar de SQL.
+- **Embudos en lo esencial.** Los tres embudos de `seed.sql` son de clínica y laboratorio; revisar si son los que debe traer el producto para todos los rubros.
+- **Guía de despliegue.** No hay un documento con los pasos para el servidor (qué archivos cargar, qué cambiar, qué variables definir).
+- **Prueba en pantalla con solo lo esencial.** Se probó por la API; falta recorrer el registro de una empresa y su primer día en el navegador.
+
+## Detectados el 2026-10-09 (cuentas de profesionales y topes del plan)
+
+- **Profesional sin cuenta (en consulta).** Hoy registrar a un profesional siempre le crea una cuenta, así que cada uno consume un usuario del plan. Falta decidir si puede existir alguien que atiende pero no entra al sistema (no gastaría usuario). Geraldine lo consulta con su jefe; respuesta prevista el 2026-10-10 por la tarde. No cambiar hasta entonces.
+- **Aviso del tope antes de abrir el formulario.** "Nuevo profesional" deja llenar el formulario y avisa al guardar. En Sucursales el botón lo explica antes; conviene igualarlo.
+- **Usuarios que no son profesionales.** No hay pantalla para crear recepción u otro administrador; cuando exista debe respetar el mismo tope de usuarios.
+- **Empresas que ya superan su plan.** Los topes impiden agregar, pero si a una empresa se le baja de plan no se le avisa ni se le pide reducir.
+- **Correo del profesional único en toda la plataforma.** Al registrar un profesional el correo no puede existir en ninguna otra empresa, a diferencia del resto de cuentas (único por empresa).
+- **Permisos del rol de profesional.** El rol que se crea solo para una empresa nueva nace sin permisos asignados; hoy los permisos no deciden nada (lo decide el rol), pero habrá que darlos cuando se apliquen.
+- **Pruebas en pantalla que faltan.** Entrar como un profesional de cada rubro de ejemplo y el aviso del tope de profesionales (se probó en pantalla el de usuarios).
+
+## Detectados el 2026-10-10 (menú, ficha editable y horarios del equipo)
+
+- **Menú claro como alternativa.** Se mantuvo el menú oscuro con otra presentación. Si aún desentona, la otra opción es un menú claro; exige revisar el marco del panel y el tema oscuro.
+- **Menú sin probar en todos sus estados.** Contraído (solo iconos), el de la plataforma y la animación de plegado.
+- **Dos formas de editar una ficha.** La hoja edita nombre, campos y consentimiento; el panel lateral sigue editando lo mismo además de servicios y descripción. Conviene dejar en el panel solo servicios y descripción.
+- **Texto de ejemplo y decimales en la hoja.** El texto de ejemplo de un campo y los decimales de un número solo se cambian desde el panel lateral.
+- **Arrastrar para ordenar.** En la hoja los campos se ordenan con flechas; no se arrastran.
+- **Crear una ficha desde la hoja.** "Nueva ficha" sigue abriendo el panel lateral.
+- **Editor de la plataforma.** La plantilla de ficha de cada rubro (consola de la plataforma) sigue con su editor anterior; podría usar la misma hoja editable.
+- **Horarios: semana tipo, no fechas.** La pantalla muestra el horario semanal; no marca las ausencias, vacaciones ni feriados de una semana concreta.
+- **Horarios: editar en la misma grilla.** Los tramos se cambian en el panel de la persona; no se pueden estirar ni mover sobre la línea de tiempo.
+- **Horarios para el personal.** El ítem está en "Tu empresa", que solo ve el administrador; un profesional no llega a ver el horario del equipo.
+- **Pruebas en pantalla que faltan.** Tema oscuro de las tres pantallas, Horarios con una sede sin horario definido y la hoja editable con odontograma.
+
+## Detectados el 2026-10-10 (Select propio y "+" en formularios)
+
+- **Listas de la plataforma sin probar en pantalla.** Planes, empresas y rubros ya usan el Select propio; falta abrir cada formulario, cambiar sus listas y guardar.
+- **Registro público de empresa con lista genérica.** `RegisterModal` conserva sus dos `<select>`: tiene otro estilo de campos. Para cambiarlo hace falta una variante del Select con ese estilo y validar a mano que se eligió un rubro.
+- **Listas obligatorias sin validación del navegador.** El Select propio no bloquea el envío si queda vacío; en el alta de empresa de la consola el rubro y el plan ya no los valida el navegador, los valida la API al guardar.
+- **Select sin teclado.** El componente se abre y se elige con el ratón; no responde a flechas, Enter ni Escape, y no se puede buscar dentro de una lista larga.
+- **Menú del Select dentro de zonas con desplazamiento.** El menú se abre hacia abajo dentro de su contenedor; al final de un panel largo puede quedar parcialmente fuera de la vista.
+- **"+" de profesional y de sede.** No se agregaron: crear un profesional consume plan y pide más datos, y una sede tiene su propio flujo.
+- **"+" de categoría.** El formulario de servicio conserva su enlace "Nueva categoría"; no usa el "+" junto a la lista como los demás.
+- **Mascota rápida con pocos datos.** El "+" pide nombre y especie; raza, fecha de nacimiento y sexo se completan en la ficha del cliente.
+- **Servicio creado desde lista de espera o controles.** Queda elegido en ese formulario, pero la lista de la pantalla de atrás no se entera hasta recargar.
+- **Pruebas en pantalla que faltan.** Guardar cliente y servicio tras cambiar sus listas, los "+" como profesional y el tema oscuro del Select en su versión pequeña.

@@ -61,6 +61,8 @@ export interface CareRecord {
   professional: string | null;
   consent_accepted: boolean;
   consent_text?: string | null;
+  // Lo que exigía la plantilla cuando se empezó la ficha.
+  require_consent?: boolean;
   fields?: RecordField[];
   data?: RecordData;
   addenda?: { note: string; by: string | null; at: string }[];
@@ -85,6 +87,8 @@ export interface AppointmentRecord {
   required_to_complete: boolean;
   lock_hours: number;
   previous: CareRecord[];
+  // El servicio cambió de plantilla después de empezar este borrador: la plantilla actual.
+  template_update?: { name: string; fields: RecordField[]; consent_text: string | null; require_consent: boolean } | null;
 }
 
 export const FIELD_TYPES: { value: string; label: string }[] = [

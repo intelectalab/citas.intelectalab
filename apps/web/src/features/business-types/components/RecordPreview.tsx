@@ -13,7 +13,7 @@ interface RecordPreviewProps {
 const blankLine = 'h-9 rounded-lg border border-slate-200 bg-slate-50/70';
 
 // Cómo se vería cada campo al llenarlo. Es una vista previa: nada es editable.
-function FieldPreview({ field }: { field: TemplateField }) {
+export function FieldPreview({ field }: { field: TemplateField }) {
   const options = (field.options ?? []).filter(Boolean);
 
   switch (field.type) {

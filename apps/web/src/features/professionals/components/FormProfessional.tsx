@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
-import { UserPlus } from 'lucide-react';
+import { Plus, UserPlus } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -64,6 +64,32 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
   const [statuses, setStatuses] = useState<any[]>([]);
   const [specialtiesList, setSpecialtiesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  // Especialidad nueva sin salir del formulario: se crea y queda marcada.
+  const [newSpecialty, setNewSpecialty] = useState('');
+  const [addingSpecialty, setAddingSpecialty] = useState(false);
+
+  const addSpecialty = async () => {
+    const name = newSpecialty.trim();
+    if (!name) return;
+
+    try {
+      setAddingSpecialty(true);
+      setError('');
+      const res = await api.post('/specialties', { name });
+      const created = res.data?.data ?? res.data?.specialty ?? res.data;
+      if (created?.id) {
+        setSpecialtiesList((current) => [...current, created]);
+        setForm((current) => ({ ...current, specialties: [...current.specialties, created.id] }));
+        setNewSpecialty('');
+      }
+    } catch (err: any) {
+      const first = Object.values(err?.response?.data?.errors ?? {})[0] as string[] | undefined;
+      setError(first?.[0] || err?.response?.data?.message || 'No se pudo agregar la especialidad.');
+    } finally {
+      setAddingSpecialty(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -80,6 +106,9 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         .catch(err => console.error('Error cargando catálogos', err));
     }
   }, [isOpen]);
+
+  // Al abrir el panel no debe quedar el aviso de un intento anterior.
+  useEffect(() => { if (isOpen) setError(''); }, [isOpen]);
 
   useEffect(() => {
     if (initialData) {
@@ -115,6 +144,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     e.preventDefault();
     try {
       setLoading(true);
+      setError('');
       
       const payload = {
         display_name: form.display_name,
@@ -144,8 +174,10 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         
         onSubmitSuccess({ email: userEmail, tempPassword });
       }
-    } catch (error) {
-      console.error('Error al guardar profesional:', error);
+    } catch (err: any) {
+      console.error('Error al guardar profesional:', err);
+      const first = Object.values(err?.response?.data?.errors ?? {})[0] as string[] | undefined;
+      setError(first?.[0] || err?.response?.data?.message || 'No se pudo guardar.');
     } finally {
       setLoading(false);
     }
@@ -264,7 +296,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             </label>
             <div className="border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-white">
               {specialtiesList.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">No hay especialidades registradas.</p>
+                <p className="text-xs text-slate-400 italic">Aún no hay especialidades. Agrega la primera abajo.</p>
               ) : (
                 specialtiesList.map(spec => {
                   const isSelected = form.specialties.includes(spec.id);
@@ -290,6 +322,29 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
                 })
               )}
             </div>
+            <div className="flex items-center gap-2 mt-2" data-new-specialty>
+              <input
+                type="text"
+                maxLength={150}
+                aria-label="Nueva especialidad"
+                placeholder="Nueva especialidad"
+                className="flex-1 text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                value={newSpecialty}
+                onChange={(e) => setNewSpecialty(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecialty(); } }}
+              />
+              <button
+                type="button"
+                data-action="add-specialty"
+                title="Agregar especialidad"
+                aria-label="Agregar especialidad"
+                disabled={addingSpecialty || !newSpecialty.trim()}
+                onClick={addSpecialty}
+                className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+              >
+                <Plus size={18} className="stroke-[2.5]" />
+              </button>
+            </div>
           </div>
 
           <Select
@@ -302,6 +357,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
               label: st.name,
             }))}
           />
+
+          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
         </form>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">

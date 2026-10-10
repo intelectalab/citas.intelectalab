@@ -6,6 +6,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { Briefcase, ChevronDown, Plus } from 'lucide-react';
 import FormServiceCategory from './FormServiceCategory';
+import Select from '@/app/components/common/Select';
 
 interface ServiceCategory {
   label: string;
@@ -56,7 +57,8 @@ interface FormServiceProps {
   onClose: () => void;
   initialData?: Service | null;
   categories: ServiceCategory[];
-  onSubmitSuccess?: () => void;
+  // Recibe el servicio guardado (útil cuando se crea desde otro formulario).
+  onSubmitSuccess?: (service?: any) => void;
 }
 
 export default function FormService({
@@ -176,12 +178,10 @@ export default function FormService({
         recall_service_id: hasRecall ? form.recall_service_id || null : null,
       };
 
-      if (initialData?.id) {
-        await api.put(`/services/${initialData.id}`, payload);
-      } else {
-        await api.post('/services', payload);
-      }
-      onSubmitSuccess?.();
+      const res = initialData?.id
+        ? await api.put(`/services/${initialData.id}`, payload)
+        : await api.post('/services', payload);
+      onSubmitSuccess?.(res?.data?.data ?? res?.data);
       onClose();
     } catch (error) {
       console.error('Error guardando servicio:', error);
@@ -262,21 +262,13 @@ export default function FormService({
                                 <Plus size={14} /> Nueva categoría
                               </button>
                             </div>
-                            <select
+                            <Select
+                              ariaLabel="Categoría"
+                              placeholder="Sin categoría"
                               value={form.category_id}
-                              onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="">Sin categoría</option>
-                              {categories.map((cat, index) => {
-                                const optionKey = cat.value ? `cat-${cat.value}` : `cat-index-${index}`;
-                                return (
-                                  <option key={optionKey} value={cat.value}>
-                                    {cat.label}
-                                  </option>
-                                );
-                              })}
-                            </select>
+                              onChange={(e) => setForm({ ...form, category_id: String(e.target.value) })}
+                              options={categories.filter((cat) => cat.value).map((cat) => ({ value: cat.value, label: cat.label }))}
+                            />
                           </div>
                         </div>
                       )}
@@ -336,18 +328,13 @@ export default function FormService({
 
                           <div>
                             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Estado</label>
-                            <select
+                            <Select
+                              ariaLabel="Estado"
+                              placeholder="Seleccione estado..."
                               value={form.status_id}
-                              onChange={(e) => setForm({ ...form, status_id: e.target.value })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                            >
-                              <option value="">Seleccione estado...</option>
-                              {statuses.map((st) => (
-                                <option key={st.id} value={st.id}>
-                                  {st.name}
-                                </option>
-                              ))}
-                            </select>
+                              onChange={(e) => setForm({ ...form, status_id: String(e.target.value) })}
+                              options={statuses.map((st) => ({ value: st.id, label: st.name }))}
+                            />
                           </div>
                         </div>
                       )}
@@ -379,14 +366,13 @@ export default function FormService({
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Modalidad</label>
-                                <select
+                                <Select
+                                  ariaLabel="Modalidad"
+                                  clearable={false}
                                   value={form.kind}
                                   onChange={(e) => setForm({ ...form, kind: e.target.value as 'individual' | 'group' })}
-                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                                >
-                                  <option value="individual">Individual</option>
-                                  <option value="group">Clase grupal</option>
-                                </select>
+                                  options={[{ value: 'individual', label: 'Individual' }, { value: 'group', label: 'Clase grupal' }]}
+                                />
                               </div>
                               {form.kind === 'group' && (
                                 <div>
@@ -436,16 +422,13 @@ export default function FormService({
                             </div>
                             <div>
                               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Servicio del control</label>
-                              <select
+                              <Select
+                                ariaLabel="Servicio del control"
+                                placeholder="Este mismo servicio"
                                 value={form.recall_service_id}
-                                onChange={(e) => setForm({ ...form, recall_service_id: e.target.value })}
-                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
-                              >
-                                <option value="">Este mismo servicio</option>
-                                {otherServices.map((item) => (
-                                  <option key={item.id} value={item.id}>{item.name}</option>
-                                ))}
-                              </select>
+                                onChange={(e) => setForm({ ...form, recall_service_id: String(e.target.value) })}
+                                options={otherServices.map((item) => ({ value: item.id, label: item.name }))}
+                              />
                             </div>
                           </div>
                         </div>

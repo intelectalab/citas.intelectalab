@@ -44,6 +44,19 @@ class CustomerController extends Controller
         return $relations;
     }
 
+    /**
+     * Solo los rubros de salud guardan datos clínicos del cliente (tipo de
+     * sangre). En los demás ni se muestran ni se aceptan.
+     */
+    private function withoutClinicalFields(Request $request, array $validated): array
+    {
+        if (empty($request->user()->tenant?->rules()['customers.clinical_fields'])) {
+            unset($validated['blood_type']);
+        }
+
+        return $validated;
+    }
+
     private function usesDependents(Request $request): bool
     {
         return (bool) $request->user()->tenant?->dependents()['enabled'];
@@ -105,6 +118,7 @@ class CustomerController extends Controller
 
         $dependents = $validated['dependents'] ?? [];
         unset($validated['dependents']);
+        $validated = $this->withoutClinicalFields($request, $validated);
 
         try {
             DB::beginTransaction();
@@ -180,7 +194,7 @@ class CustomerController extends Controller
             'medical_notes' => 'nullable|string',
         ]);
 
-        $customer->update($validated);
+        $customer->update($this->withoutClinicalFields($request, $validated));
 
         // Si recién ahora tiene correo y documento, recibe su acceso. Mientras no
         // haya creado su contraseña, esta sigue a su número de documento.

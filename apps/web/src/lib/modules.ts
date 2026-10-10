@@ -75,9 +75,8 @@ export const OPTIONAL_MODULE_KEYS: string[] = MODULE_GROUPS.flatMap((group) =>
 
 // Secciones del menú que aún no tienen pantalla: nombre y módulo del que dependen.
 // La página provisional /modules/<clave> las muestra igual que a un módulo.
-export const PENDING_SECTIONS: Record<string, { label: string; module: string }> = {
-  waitlist: { label: 'Lista de espera', module: 'agenda' },
-};
+// Hoy no queda ninguna: las del grupo Agenda ya tienen su pantalla.
+export const PENDING_SECTIONS: Record<string, { label: string; module: string }> = {};
 
 export const MODULE_LABELS: Record<string, string> = {
   ...CORE_MODULE_LABELS,

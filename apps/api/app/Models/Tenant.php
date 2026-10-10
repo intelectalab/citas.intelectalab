@@ -226,14 +226,15 @@ class Tenant extends Model
 
     /**
      * Uso actual frente a los límites del plan: usuarios, sedes, profesionales
-     * y citas y mensajes del mes.
+     * y citas y mensajes del mes. El dueño no cuenta como usuario del plan:
+     * el tope es de cuentas además de la suya.
      */
     public function usage(): array
     {
         $monthStart = now()->startOfMonth();
 
         return [
-            'users'              => DB::table('users')->where('tenant_id', $this->id)->count(),
+            'users'              => DB::table('users')->where('tenant_id', $this->id)->where('is_owner', false)->count(),
             'branches'           => DB::table('branches')->where('tenant_id', $this->id)->count(),
             'professionals'      => DB::table('professionals')->where('tenant_id', $this->id)->count(),
             // Las canceladas no cuentan contra el límite del plan.

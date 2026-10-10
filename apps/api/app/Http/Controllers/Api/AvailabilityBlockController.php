@@ -83,6 +83,8 @@ class AvailabilityBlockController extends Controller
             'branch_kinds'       => $kinds(AvailabilityBlock::BRANCH_KINDS),
             // Cerrar una sede completa no es decisión de un profesional.
             'can_block_branch'   => $own === null,
+            // Los feriados los cambia el administrador de la empresa.
+            'can_manage_holidays' => $request->user()->isTenantAdmin(),
         ]);
     }
 
