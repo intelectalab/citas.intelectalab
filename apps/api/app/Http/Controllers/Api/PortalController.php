@@ -10,6 +10,7 @@ use App\Models\Professional;
 use App\Models\ProfessionalSchedule;
 use App\Models\Service;
 use App\Models\Tenant;
+use App\Models\WaitlistEntry;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
 use Illuminate\Http\JsonResponse;
@@ -50,6 +51,10 @@ class PortalController extends AppointmentController
             'cancel_allowed'     => (bool) $rule('cancel.client_allowed'),
             'cancel_window_hours' => (int) $rule('cancel.window_hours'),
             'reschedule_max'     => (int) $rule('reschedule.max_times'),
+            // Plazo para confirmar y qué pasa si no se confirma.
+            'confirm_deadline_hours' => \App\Support\Confirmations::deadlineHours($tenant),
+            'confirm_on_miss'    => \App\Support\Confirmations::mode($tenant),
+            'confirm_release_hours' => \App\Support\Confirmations::releaseHours($tenant),
         ];
     }
 
@@ -85,6 +90,9 @@ class PortalController extends AppointmentController
         $tenant = $this->tenant($request);
         $customer = $this->customer($request);
         $dependents = $tenant->dependents();
+
+        // Si alguna cita suya ya venció sin confirmar, el cliente debe verla como quedó.
+        \App\Support\Confirmations::process($tenant);
 
         $appointments = Appointment::where('tenant_id', $tenant->id)
             ->where('customer_id', $customer->id)
@@ -216,6 +224,8 @@ class PortalController extends AppointmentController
             'customer_dependent_id' => 'nullable|uuid',
             'starts_at'             => 'required|date_format:' . self::LOCAL_FORMAT,
             'notes'                 => 'nullable|string|max:1000',
+            // Reserva hecha desde su lista de espera: al guardarse deja de esperar.
+            'waitlist_id'           => 'nullable|uuid',
         ]);
 
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
@@ -274,6 +284,17 @@ class PortalController extends AppointmentController
             ]);
 
             $this->log($appointment, null, $status, $user, 'Reserva en línea');
+
+            if (!empty($validated['waitlist_id'])) {
+                $waiting = WaitlistEntry::where('tenant_id', $tenant->id)
+                    ->where('customer_id', $customer->id)
+                    ->whereIn('status', WaitlistEntry::OPEN)
+                    ->find($validated['waitlist_id']);
+
+                if ($waiting) {
+                    \App\Support\Waitlist::book($waiting, $appointment);
+                }
+            }
 
             return response()->json($this->presentForCustomer($appointment->fresh(self::RELATIONS), $tenant), 201);
         });
@@ -406,6 +427,180 @@ class PortalController extends AppointmentController
      * El cliente crea o cambia su contraseña. Con la inicial (su documento) es
      * obligatorio antes de usar el portal.
      */
+    /**
+     * Lo que el cliente está esperando, con los horarios libres que hoy le sirven.
+     */
+    public function waitlist(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+
+        \App\Support\Waitlist::expire($tenant);
+
+        $entries = WaitlistEntry::where('tenant_id', $tenant->id)
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', WaitlistEntry::OPEN)
+            ->with(['service.status', 'professional.status', 'branch', 'dependent'])
+            ->orderBy('created_at')
+            ->get();
+
+        return response()->json($entries->map(fn (WaitlistEntry $entry) => $this->presentWaiting($tenant, $entry))->values());
+    }
+
+    /**
+     * El cliente se anota en la lista de espera de un servicio.
+     */
+    public function joinWaitlist(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $this->assertBookingEnabled($tenant);
+        $customer = $this->customer($request);
+
+        $validated = $request->validate([
+            'service_id'            => 'required|uuid',
+            'branch_id'             => 'required|uuid',
+            'professional_id'       => 'nullable|uuid',
+            'customer_dependent_id' => 'nullable|uuid',
+            // Cualquier hora, por la mañana o por la tarde.
+            'time_of_day'           => 'nullable|in:any,morning,afternoon',
+            // Hasta cuándo le sirve: días desde hoy; vacío = sin fecha límite.
+            'within_days'           => 'nullable|integer|min:1|max:120',
+            'notes'                 => 'nullable|string|max:500',
+        ]);
+
+        $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
+        $branch = Branch::where('tenant_id', $tenant->id)->where('status', 'active')->findOrFail($validated['branch_id']);
+
+        if ($service->kind === Service::KIND_GROUP || !$service->online_booking || $service->status?->slug === 'inactive') {
+            throw ValidationException::withMessages(['service_id' => 'Este servicio no se reserva en línea. Comunícate con la sede.']);
+        }
+
+        $professional = !empty($validated['professional_id'])
+            ? Professional::where('tenant_id', $tenant->id)->findOrFail($validated['professional_id'])
+            : null;
+
+        $dependentId = $this->resolveDependent($tenant, $customer, $validated['customer_dependent_id'] ?? null);
+
+        $duplicate = WaitlistEntry::where('tenant_id', $tenant->id)
+            ->whereIn('status', WaitlistEntry::OPEN)
+            ->where('customer_id', $customer->id)
+            ->where('service_id', $service->id)
+            ->where('branch_id', $branch->id)
+            ->where(fn ($q) => $dependentId ? $q->where('customer_dependent_id', $dependentId) : $q->whereNull('customer_dependent_id'))
+            ->exists();
+
+        if ($duplicate) {
+            return response()->json(['message' => 'Ya estás en la lista de espera para este servicio en esta sede.', 'code' => 'DUPLICATE'], 409);
+        }
+
+        $today = now(AppointmentScheduler::timezone($branch, $tenant))->startOfDay();
+        [$timeFrom, $timeTo] = match ($validated['time_of_day'] ?? 'any') {
+            'morning'   => [null, '13:00'],
+            'afternoon' => ['13:00', null],
+            default     => [null, null],
+        };
+
+        $entry = WaitlistEntry::create([
+            'tenant_id'             => $tenant->id,
+            'branch_id'             => $branch->id,
+            'customer_id'           => $customer->id,
+            'customer_dependent_id' => $dependentId,
+            'service_id'            => $service->id,
+            'professional_id'       => $professional?->id,
+            'date_from'             => $today->format('Y-m-d'),
+            'date_to'               => !empty($validated['within_days']) ? $today->copy()->addDays((int) $validated['within_days'])->format('Y-m-d') : null,
+            'time_from'             => $timeFrom,
+            'time_to'               => $timeTo,
+            'notes'                 => trim((string) ($validated['notes'] ?? '')) ?: 'Se anotó desde el portal.',
+            'status'                => WaitlistEntry::WAITING,
+            // created_by es del personal: aquí se anotó el propio cliente.
+            'created_by'            => null,
+        ]);
+
+        return response()->json($this->presentWaiting($tenant, $entry->fresh(['service.status', 'professional.status', 'branch', 'dependent'])), 201);
+    }
+
+    /**
+     * El cliente deja de esperar.
+     */
+    public function leaveWaitlist(Request $request, string $entry)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+
+        $entry = WaitlistEntry::where('tenant_id', $tenant->id)
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', WaitlistEntry::OPEN)
+            ->findOrFail($entry);
+
+        $entry->update(['status' => WaitlistEntry::CANCELLED]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    private function presentWaiting(Tenant $tenant, WaitlistEntry $entry): array
+    {
+        // Hasta tres días con horarios: lo que puede reservar ya mismo.
+        $found = $entry->service && $entry->branch
+            ? \App\Support\Waitlist::slots($tenant, $entry, 3)
+            : ['days' => []];
+
+        // No se le ofrecen horas en las que él mismo ya tiene otra cita.
+        $timezone = $entry->branch ? AppointmentScheduler::timezone($entry->branch, $tenant) : ($tenant->timezone ?: 'America/Lima');
+        $duration = (int) ($entry->service?->duration_minutes ?? 0);
+        $own = Appointment::where('tenant_id', $tenant->id)
+            ->where('customer_id', $entry->customer_id)
+            ->whereNotIn('status', AppointmentFlow::RELEASED)
+            ->where('ends_at', '>', now()->toIso8601String())
+            ->get(['starts_at', 'ends_at']);
+
+        $isFree = function (string $date, string $slot) use ($own, $timezone, $duration): bool {
+            $start = Carbon::createFromFormat('Y-m-d H:i', "{$date} {$slot}", $timezone);
+            $end = $start->copy()->addMinutes($duration);
+
+            return !$own->contains(fn (Appointment $a) => $a->starts_at->lt($end) && $a->ends_at->gt($start));
+        };
+
+        $found['days'] = collect($found['days'])
+            ->map(function (array $day) use ($isFree) {
+                $day['groups'] = collect($day['groups'])
+                    ->map(function (array $group) use ($day, $isFree) {
+                        $group['slots'] = array_values(array_filter($group['slots'], fn (string $slot) => $isFree($day['date'], $slot)));
+
+                        return $group;
+                    })
+                    ->filter(fn (array $group) => $group['slots'] !== [])
+                    ->values()
+                    ->all();
+
+                return $day;
+            })
+            ->filter(fn (array $day) => $day['groups'] !== [])
+            ->values()
+            ->all();
+
+        return [
+            'id'           => $entry->id,
+            'service'      => $entry->service ? ['id' => $entry->service->id, 'name' => $entry->service->name] : null,
+            'professional' => $entry->professional ? ['id' => $entry->professional->id, 'display_name' => $entry->professional->display_name] : null,
+            'branch'       => $entry->branch ? ['id' => $entry->branch->id, 'name' => $entry->branch->name] : null,
+            'dependent'    => $entry->dependent ? ['id' => $entry->dependent->id, 'name' => $entry->dependent->name] : null,
+            'date_from'    => $entry->date_from?->format('Y-m-d'),
+            'date_to'      => $entry->date_to?->format('Y-m-d'),
+            'time_from'    => $entry->time_from ? substr($entry->time_from, 0, 5) : null,
+            'time_to'      => $entry->time_to ? substr($entry->time_to, 0, 5) : null,
+            'created_at'   => $entry->created_at?->format('Y-m-d'),
+            // Días con horarios libres que le sirven, con quién atiende en cada uno.
+            'days'         => collect($found['days'])->map(fn (array $day) => [
+                'date'   => $day['date'],
+                'groups' => collect($day['groups'])->map(fn (array $group) => [
+                    'professional' => ['id' => $group['professional']['id'], 'display_name' => $group['professional']['display_name']],
+                    'slots'        => $group['slots'],
+                ])->values(),
+            ])->values(),
+        ];
+    }
+
     public function updatePassword(Request $request)
     {
         $customer = $this->customer($request);
@@ -568,6 +763,9 @@ class PortalController extends AppointmentController
             'branch'           => $full['branch'],
             'dependent'        => $full['dependent'],
             'cancel_reason'    => $full['cancel_reason'],
+            // Hasta cuándo puede confirmar sin quedar fuera de plazo, y si ya se le pasó.
+            'confirm_by'       => $appointment->status === AppointmentFlow::PENDING ? $full['confirm_by'] : null,
+            'confirmation_overdue' => $full['confirmation_overdue'],
             'is_upcoming'      => $appointment->starts_at->isFuture() && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true),
             'can_confirm'      => $policies['booking_enabled'] && $appointment->status === AppointmentFlow::PENDING && $appointment->starts_at->isFuture(),
             'can_cancel'       => $policies['booking_enabled'] && $open && $policies['cancel_allowed'],

@@ -141,6 +141,12 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     ['Fecha', formatDate(dateOf(appointment.starts_at))],
     ['Hora', `${timeOf(appointment.starts_at)} a ${timeOf(appointment.ends_at)} · ${appointment.duration_minutes} min`],
     ['Precio', `S/ ${appointment.price}`],
+    ['Confirmación', appointment.status === 'pending' && appointment.confirm_by
+      ? <span data-confirm-by className={appointment.confirmation_overdue ? 'text-rose-600' : undefined}>
+          {appointment.confirmation_overdue ? 'Venció el plazo: debía confirmarse antes del ' : 'Debe confirmarse antes del '}
+          {formatDateTime(appointment.confirm_by)}
+        </span>
+      : null],
     ['Agendada fuera de horario', appointment.override_reason],
     ['Motivo de cancelación', appointment.cancel_reason],
     ['Reprogramada', appointment.reschedule_count > 0 ? `${appointment.reschedule_count} ${appointment.reschedule_count === 1 ? 'vez' : 'veces'}` : null],

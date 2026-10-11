@@ -119,6 +119,11 @@ Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(functio
         Route::post('/appointments/{appointment}/confirm', [PortalController::class, 'confirm']);
         Route::post('/appointments/{appointment}/cancel', [PortalController::class, 'cancel']);
         Route::post('/appointments/{appointment}/reschedule', [PortalController::class, 'move']);
+
+        // Lista de espera: el cliente se anota cuando ningún horario le sirve.
+        Route::get('/waitlist', [PortalController::class, 'waitlist']);
+        Route::post('/waitlist', [PortalController::class, 'joinWaitlist']);
+        Route::delete('/waitlist/{entry}', [PortalController::class, 'leaveWaitlist']);
     });
 });
 

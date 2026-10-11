@@ -15,6 +15,9 @@ export interface PortalAppointment {
   branch: { id: string; name: string } | null;
   dependent: { id: string; name: string; species: string | null } | null;
   cancel_reason: string | null;
+  // Hasta cuándo conviene confirmarla (hora de la sede) y si ya se pasó ese plazo.
+  confirm_by?: string | null;
+  confirmation_overdue?: boolean;
   // Aún no ocurre y sigue en pie (pendiente o confirmada).
   is_upcoming: boolean;
   can_confirm: boolean;
@@ -32,6 +35,10 @@ export interface PortalPolicies {
   cancel_allowed: boolean;
   cancel_window_hours: number;
   reschedule_max: number;
+  // Plazo para confirmar: horas antes de la cita (0 = sin plazo) y qué pasa si no se confirma.
+  confirm_deadline_hours?: number;
+  confirm_on_miss?: 'notify' | 'notify_release' | 'release';
+  confirm_release_hours?: number;
 }
 
 export interface PortalDependent {
@@ -69,6 +76,23 @@ export interface PortalCatalog {
   branches: { id: string; name: string }[];
   services: PortalService[];
   professionals: { id: string; display_name: string; branch_ids: string[] }[];
+}
+
+// Algo que el cliente espera: un servicio para el que no encontró horario.
+export interface PortalWaitlistEntry {
+  id: string;
+  service: { id: string; name: string } | null;
+  // Sin profesional: lo atiende cualquiera.
+  professional: { id: string; display_name: string } | null;
+  branch: { id: string; name: string } | null;
+  dependent: { id: string; name: string } | null;
+  date_from: string | null;
+  date_to: string | null;
+  time_from: string | null;
+  time_to: string | null;
+  created_at: string | null;
+  // Días con horarios libres que hoy le sirven; vacío = aún no hay.
+  days: { date: string; groups: { professional: { id: string; display_name: string }; slots: string[] }[] }[];
 }
 
 export interface PortalAvailability {

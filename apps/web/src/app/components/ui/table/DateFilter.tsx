@@ -74,7 +74,7 @@ export default function DateFilter({ label, value, onChange, future = false }: D
         aria-expanded={open}
         aria-label={label}
         onClick={openPanel}
-        className={`inline-flex items-center gap-1 text-xs font-medium rounded-md pl-2 pr-1 py-0.5 select-none transition-colors cursor-pointer hover:bg-slate-100 ${open ? 'bg-slate-100' : ''} ${value ? 'text-slate-700' : 'text-slate-500'}`}
+        className={`flex items-center gap-1 text-xs leading-5 font-medium rounded-md pl-2 pr-1 select-none transition-colors cursor-pointer hover:bg-slate-100 ${open ? 'bg-slate-100' : ''} ${value ? 'text-slate-700' : 'text-slate-500'}`}
       >
         <span className="truncate max-w-56">{describeDateFilter(value)}</span>
         <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />

@@ -12,10 +12,12 @@ interface PortalAppointmentCardProps {
   onConfirm?: (appointment: PortalAppointment) => void;
   onReschedule?: (appointment: PortalAppointment) => void;
   onCancel?: (appointment: PortalAppointment) => void;
+  // Qué hace la empresa con una cita que no se confirma a tiempo.
+  onMiss?: 'notify' | 'notify_release' | 'release';
 }
 
 // Una cita del cliente, con lo que puede hacer con ella desde el portal.
-export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel }: PortalAppointmentCardProps) {
+export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel, onMiss = 'notify' }: PortalAppointmentCardProps) {
   const date = dateOf(appointment.starts_at);
   const hasActions = appointment.can_confirm || appointment.can_reschedule || appointment.can_cancel;
 
@@ -45,6 +47,14 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
             {appointment.dependent && <li className="flex items-center gap-2"><PawPrint size={14} className="text-slate-400 shrink-0" /> {appointment.dependent.name}</li>}
             {appointment.branch && <li className="flex items-center gap-2"><MapPin size={14} className="text-slate-400 shrink-0" /> {appointment.branch.name}</li>}
           </ul>
+
+          {appointment.can_confirm && appointment.confirm_by && (
+            <p data-confirm-by className={`text-xs font-medium ${appointment.confirmation_overdue ? 'text-rose-600' : 'text-amber-700'}`}>
+              {appointment.confirmation_overdue
+                ? `Aún no confirmas tu asistencia${onMiss === 'notify' ? '. Hazlo cuanto antes.' : ': tu cita puede cancelarse. Confírmala ahora.'}`
+                : `Confirma tu asistencia antes del ${formatDate(dateOf(appointment.confirm_by), { weekday: 'long', day: 'numeric', month: 'long' })}, ${timeOf(appointment.confirm_by)}${onMiss === 'notify' ? '.' : ', o tu cita se cancelará.'}`}
+            </p>
+          )}
 
           {appointment.status === 'cancelled' && appointment.cancel_reason && (
             <p className="text-xs text-slate-500">Motivo: {appointment.cancel_reason}</p>

@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Loader2, PawPrint, Plus, Search, UserRound, Video } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Hourglass, Loader2, PawPrint, Plus, Search, UserRound, Video } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
+import Select from '@/app/components/common/Select';
 import { addDays, dateOf, formatDate, timeOf, todayISO } from '@/features/appointments/appointments';
 import { portalError, type PortalAppointment, type PortalAvailability, type PortalCatalog, type PortalDependent, type PortalOverview } from '../portal';
 
@@ -15,6 +16,8 @@ interface BookingFlowProps {
   onDone: () => void;
   onExit: () => void;
   onDependentAdded: (dependent: PortalDependent) => void;
+  // Se anotó en la lista de espera en vez de reservar.
+  onWaitlisted: () => void;
 }
 
 type Step = 'who' | 'service' | 'branch' | 'professional' | 'when' | 'review';
@@ -42,7 +45,7 @@ const inputClass =
 
 // Reserva en línea, paso a paso: para quién, qué servicio, con quién y cuándo.
 // También sirve para cambiar la fecha de una cita que el cliente ya tiene.
-export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded }: BookingFlowProps) {
+export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded, onWaitlisted }: BookingFlowProps) {
   const vocab = useVocabulary();
   const policies = overview.policies;
   const isReschedule = Boolean(reschedule);
@@ -63,6 +66,32 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<PortalAppointment | null>(null);
+
+  // Lista de espera: cuando ningún horario le sirve.
+  const [waitOpen, setWaitOpen] = useState(false);
+  const [waitTime, setWaitTime] = useState('any');
+  const [waitDays, setWaitDays] = useState('');
+  const [savingWait, setSavingWait] = useState(false);
+
+  const joinWaitlist = async () => {
+    try {
+      setSavingWait(true);
+      setError('');
+      await api.post('/portal/waitlist', {
+        service_id: serviceId,
+        branch_id: branchId,
+        professional_id: professionalId || null,
+        customer_dependent_id: dependentId || null,
+        time_of_day: waitTime,
+        within_days: waitDays ? Number(waitDays) : null,
+      });
+      onWaitlisted();
+    } catch (err) {
+      setError(portalError(err, 'No se pudo anotar en la lista de espera.'));
+    } finally {
+      setSavingWait(false);
+    }
+  };
 
   const [addingPet, setAddingPet] = useState(overview.dependents.enabled && overview.dependents.items.length === 0);
   const [pet, setPet] = useState({ name: '', species: '' });
@@ -454,6 +483,72 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Si nada le acomoda, se anota y se le avisa cuando se libere un horario. */}
+            {!isReschedule && !loadingTimes && (
+              <div className="p-4 rounded-2xl border border-dashed border-slate-300 bg-white space-y-3" data-waitlist-box>
+                {!waitOpen ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-slate-600">
+                      <span className="font-bold text-[#022340]">¿Ningún horario te sirve?</span> Anótate en la lista de espera y te mostraremos los horarios que se liberen.
+                    </p>
+                    <button
+                      type="button"
+                      data-action="open-waitlist"
+                      onClick={() => setWaitOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#022340] bg-white border border-slate-300 rounded-xl hover:border-[#3F768C] transition-colors"
+                    >
+                      <Hourglass size={15} className="text-[#3F768C]" /> Anotarme en la lista de espera
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-[#022340]">Lista de espera para {service?.name}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        label="¿A qué hora te sirve?"
+                        clearable={false}
+                        value={waitTime}
+                        onChange={(e) => setWaitTime(String(e.target.value))}
+                        options={[
+                          { value: 'any', label: 'A cualquier hora' },
+                          { value: 'morning', label: 'Por la mañana (hasta la 1 p. m.)' },
+                          { value: 'afternoon', label: 'Por la tarde (desde la 1 p. m.)' },
+                        ]}
+                      />
+                      <Select
+                        label="¿Hasta cuándo te sirve?"
+                        placeholder="Sin fecha límite"
+                        value={waitDays}
+                        onChange={(e) => setWaitDays(String(e.target.value))}
+                        options={[
+                          { value: '7', label: 'Solo esta semana (7 días)' },
+                          { value: '14', label: 'Las próximas 2 semanas' },
+                          { value: '30', label: 'El próximo mes' },
+                        ]}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {professionalId ? 'Esperarás un horario con quien elegiste.' : `Te servirá un horario con cualquier ${vocab.pro.toLowerCase()}.`} Lo verás en "Mis citas" apenas haya uno libre.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        data-action="join-waitlist"
+                        disabled={savingWait}
+                        onClick={joinWaitlist}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                      >
+                        {savingWait ? <Loader2 size={15} className="animate-spin" /> : <Hourglass size={15} />} Anotarme
+                      </button>
+                      <button type="button" onClick={() => setWaitOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-[#022340] transition-colors">
+                        Mejor no
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

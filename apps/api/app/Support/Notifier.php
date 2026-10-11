@@ -149,6 +149,141 @@ class Notifier
     }
 
     /**
+     * Citas que siguen pendientes con el plazo para confirmar vencido. A quien
+     * atiende se le avisa de cada una; a la administración, una sola vez por día
+     * con cuántas son, para no llenarle la campana.
+     *
+     * @param \Illuminate\Support\Collection<int, Appointment> $appointments
+     * @param int|null $releaseHours Si la empresa libera después: a cuántas horas de la cita.
+     */
+    public static function unconfirmed(Tenant $tenant, $appointments, ?int $releaseHours = null): void
+    {
+        try {
+            if (!self::available()) {
+                return;
+            }
+
+            $timezone = $tenant->timezone ?: 'America/Lima';
+            $local = fn (Appointment $a) => Carbon::parse($a->starts_at)->setTimezone($a->branch?->timezone ?: $timezone)->locale('es');
+            $warning = $releaseHours !== null ? " · Se liberará {$releaseHours} h antes si sigue sin confirmar" : '';
+
+            foreach ($appointments as $appointment) {
+                $userId = $appointment->professional?->user_id;
+
+                if (!$userId) {
+                    continue;
+                }
+
+                $who = $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : null;
+
+                self::send(
+                    $tenant->id,
+                    $userId,
+                    'appointment.unconfirmed',
+                    'Cita sin confirmar',
+                    implode(' · ', array_filter([$who, $appointment->service?->name, $local($appointment)->isoFormat('ddd D [de] MMM, HH:mm')])) . $warning,
+                    '/agenda',
+                    'appointment',
+                    $appointment->id,
+                    "confirm-due:{$appointment->id}",
+                );
+            }
+
+            $admins = self::adminIds($tenant->id);
+
+            foreach ($appointments->groupBy(fn (Appointment $a) => $local($a)->format('Y-m-d')) as $date => $group) {
+                $count = $group->count();
+                $day = Carbon::parse($date)->locale('es')->isoFormat('dddd D [de] MMMM');
+
+                foreach ($admins as $userId) {
+                    self::send(
+                        $tenant->id,
+                        $userId,
+                        'appointment.unconfirmed',
+                        $count === 1 ? 'Una cita sigue sin confirmar' : "{$count} citas siguen sin confirmar",
+                        ($count === 1 ? 'Es del ' : 'Son del ') . $day . '. Conviene llamar para confirmar.' . $warning,
+                        '/appointments',
+                        null,
+                        null,
+                        "confirm-due-day:{$date}",
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
+     * Una cita que el sistema liberó porque nadie la confirmó a tiempo.
+     */
+    public static function released(Tenant $tenant, Appointment $appointment): void
+    {
+        try {
+            if (!self::available()) {
+                return;
+            }
+
+            $appointment->loadMissing(['customer', 'service', 'professional', 'branch']);
+            $professionalUser = $appointment->professional?->user_id;
+            $timezone = $appointment->branch?->timezone ?: ($tenant->timezone ?: 'America/Lima');
+            $when = Carbon::parse($appointment->starts_at)->setTimezone($timezone)->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
+            $who = $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : null;
+
+            foreach (array_unique(array_filter([$professionalUser, ...self::adminIds($tenant->id)])) as $userId) {
+                $parts = [$who, $appointment->service?->name, $when, $userId === $professionalUser ? null : $appointment->professional?->display_name];
+
+                self::send(
+                    $tenant->id,
+                    $userId,
+                    'appointment.released',
+                    'Cita liberada por falta de confirmación',
+                    implode(' · ', array_filter($parts)) . ' · El horario quedó libre',
+                    '/agenda',
+                    'appointment',
+                    $appointment->id,
+                    "confirm-released:{$appointment->id}",
+                );
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
+     * Se liberó un horario que le sirve a alguien de la lista de espera.
+     */
+    public static function waitlistSlotFreed(Tenant $tenant, Appointment $appointment, int $count): void
+    {
+        try {
+            if (!self::available()) {
+                return;
+            }
+
+            $appointment->loadMissing(['service', 'professional', 'branch']);
+            $timezone = $appointment->branch?->timezone ?: ($tenant->timezone ?: 'America/Lima');
+            $when = Carbon::parse($appointment->starts_at)->setTimezone($timezone)->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
+            $people = $count === 1 ? 'Una persona de la lista de espera puede tomarlo' : "{$count} personas de la lista de espera pueden tomarlo";
+
+            foreach (self::adminIds($tenant->id) as $userId) {
+                self::send(
+                    $tenant->id,
+                    $userId,
+                    'waitlist.slot_freed',
+                    'Se liberó un horario',
+                    implode(' · ', array_filter([$appointment->service?->name, $when, $appointment->professional?->display_name])) . '. ' . $people . '.',
+                    '/waitlist',
+                    null,
+                    null,
+                    "waitlist-freed:{$appointment->id}",
+                );
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
      * Cuentas que administran la empresa: el dueño y quien tenga rol de dueño o administrador.
      *
      * @return array<int, string>

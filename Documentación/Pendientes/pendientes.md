@@ -217,8 +217,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 ## Detectados el 2026-10-09 (lista de espera y datos clínicos por rubro)
 
 - **Avisar a la lista cuando se libera un horario.** Al cancelar se informa al personal cuántas personas podrían tomarlo, pero no se les envía nada ni se les ofrece el horario. Depende del envío de mensajes (regla `agenda.waitlist_auto`).
-- **Ir de ese aviso a las personas.** El aviso dice cuántas son; no las lista ni abre la lista de espera ya filtrada.
-- **Lista de espera desde el portal.** El cliente no puede anotarse solo cuando no encuentra horario.
 - **Lista de espera en la página del cliente.** No se ve si la persona está esperando algo (la API ya filtra por cliente).
 - **Buscar horario revisa tres semanas.** Para quien no puso última fecha no hay "seguir buscando más adelante".
 - **Franja que cruza varios días.** Solo se puede pedir una franja horaria, igual para todos los días; no "lunes por la mañana y jueves por la tarde".
@@ -380,3 +378,37 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Avisos del portal sin probar desde su pantalla.** La regla está probada; falta reservar, cambiar y cancelar desde el portal y ver llegar el aviso.
 - **La agenda no se entera de lo hecho desde la campana.** Si se cambia una cita abierta desde un aviso, la agenda de atrás se actualiza en su siguiente refresco (20 segundos).
 - **Pruebas en pantalla que faltan.** Actualización sola a los 30 segundos, administrador que no es dueño, tema oscuro y celular.
+
+## Detectados el 2026-10-10 (portal: filtros, Mis datos y encabezado)
+
+- **CRM opcional (en consulta).** Hoy `crm` es módulo base y protege también el registro de clientes, del que depende la agenda. Para que un plan pueda no incluir CRM hay que separar "Clientes" (básico) de "CRM" (embudos, oportunidades, contactos). Geraldine lo consultará con su jefe; no cambiar hasta entonces.
+- **Servicios por sede en el portal.** El portal pide el servicio antes que la sede porque todos los servicios se ofrecen en todas. Si se limitan por sede, el paso de sede debe ir antes o filtrar las sedes según el servicio.
+- **Sedes sin quien atienda un servicio.** El portal deja elegir una sede aunque ahí nadie atienda ese servicio; se nota recién al no encontrar horarios.
+- **Mis datos: solo se cambian celular y contraseña.** Nombre, correo, documento, dirección y mascotas ya registradas los cambia la empresa.
+- **El portal trae las últimas 100 citas.** Los filtros trabajan sobre esas.
+- **Pruebas en pantalla que faltan.** Portal en celular, rubro con mascotas, empresa de una sede, filtros por servicio y profesional.
+
+## Detectados el 2026-10-11 (portal: filtros desplegables; plazo para confirmar)
+
+- **Alineación de las fichas en el panel, sin medir.** El arreglo es compartido; falta mirarlo en las barras de filtros y de orden de las tablas.
+
+## Detectados el 2026-10-11 (plazo para confirmar y reglas de reserva)
+
+- **El cliente no recibe ningún mensaje.** Ni recordatorio para confirmar ni aviso de que su cita se liberó: lo ve solo si entra al portal. Depende del envío de mensajes; con "liberar" activo conviene tenerlo antes de usarlo con clientes reales.
+- **La revisión depende de que alguien tenga el sistema abierto.** Sin nadie con el panel o el portal abierto, una cita vencida se avisa o se libera recién cuando alguien entra. Con envío de mensajes haría falta una tarea programada.
+- **Marca en la agenda.** "Sin confirmar a tiempo" se ve en la tabla de Citas y en el panel de la cita; las tarjetas de la agenda no la muestran.
+- **Filtro de citas sin confirmar.** El aviso agrupado lleva a Citas, pero no hay un filtro o tarjeta que deje solo las vencidas.
+- **Resto de reglas en manos de la empresa.** "Reglas de reserva" cubre el plazo para confirmar y la ventana para cancelar. Siguen solo en el rubro: reserva en línea, anticipación mínima y máxima, elegir profesional, confirmación automática, veces que se puede reprogramar, tolerancia de inasistencia.
+- **Aviso al cambiar las reglas.** Si la empresa acorta el plazo o pasa a "liberar", las citas ya agendadas quedan sujetas a la regla nueva sin aviso previo.
+- **Opción "qué pasa si no se confirma" por rubro.** El editor de reglas del rubro solo fija las horas del plazo; la opción (avisar o liberar) la elige cada empresa.
+- **Pruebas en pantalla que faltan.** Ver liberarse una cita y su aviso, el editor de reglas del rubro, tema oscuro y celular.
+
+## Detectados el 2026-10-11 (lista de espera desde el portal)
+
+- **El aviso al cliente es solo dentro del portal.** Quien espera un horario se entera al entrar a su portal; no recibe correo ni WhatsApp. Es lo primero que conviene conectar cuando exista el envío de mensajes.
+- **Nadie tiene preferencia sobre el horario liberado.** Lo toma el primero que lo reserva, sea de la lista de espera o no. No se le reserva unos minutos a quien esperaba, ni se respeta el orden o la prioridad de la lista.
+- **Reprogramar no avisa.** Si una cita se mueve a otra hora, el horario que deja libre no genera el aviso "Se liberó un horario"; solo cancelar, no asistir o liberarse por falta de confirmación.
+- **Aviso también a quien cancela.** El administrador que cancela la cita recibe igual el aviso de la campana (además del mensaje que ya ve al cancelar).
+- **Franjas simples en el portal.** El cliente elige mañana, tarde o cualquier hora; no un rango de horas ni días concretos de la semana. El personal sí puede afinarlo desde su Lista de espera.
+- **Anotarse cuando sí hay horarios.** El recuadro aparece siempre en el paso de día y hora, también si hay horas libres; en ese caso el registro nace ya con horarios para reservar.
+- **Pruebas en pantalla que faltan.** "Salir de la lista" con su confirmación, el aviso en la campana del personal, rubro con mascotas y celular.

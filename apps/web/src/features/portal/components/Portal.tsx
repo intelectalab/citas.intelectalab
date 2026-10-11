@@ -1,17 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, CalendarDays, CalendarPlus, Home, KeyRound, Loader2, LogOut, PawPrint, Phone } from 'lucide-react';
+import { BellRing, Building2, CalendarDays, CalendarPlus, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import BookingFlow from './BookingFlow';
 import PortalAppointmentCard from './PortalAppointmentCard';
+import PortalAppointments from './PortalAppointments';
+import PortalWaitlist from './PortalWaitlist';
 import PortalPassword from './PortalPassword';
-import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview } from '../portal';
+import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview, type PortalWaitlistEntry } from '../portal';
 
-type Tab = 'home' | 'book' | 'appointments';
+type Tab = 'home' | 'book' | 'appointments' | 'profile';
 
 // Portal del cliente: su próxima cita, reservar en línea y sus citas.
 export default function Portal() {
@@ -21,6 +23,7 @@ export default function Portal() {
 
   const [overview, setOverview] = useState<PortalOverview | null>(null);
   const [catalog, setCatalog] = useState<PortalCatalog | null>(null);
+  const [waiting, setWaiting] = useState<PortalWaitlistEntry[]>([]);
   const [tab, setTab] = useState<Tab>('home');
   const [rescheduling, setRescheduling] = useState<PortalAppointment | null>(null);
   const [cancelling, setCancelling] = useState<PortalAppointment | null>(null);
@@ -47,6 +50,13 @@ export default function Portal() {
     load();
   }, [user, isStaff, load]);
 
+  // Lo que espera, con los horarios que ya le sirven.
+  const loadWaiting = useCallback(() => {
+    api.get('/portal/waitlist')
+      .then((res) => setWaiting(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setWaiting([]));
+  }, []);
+
   // Primer ingreso con su número de documento: antes de nada, crea su contraseña.
   const mustChangePassword = Boolean(overview?.customer.must_change_password);
 
@@ -57,7 +67,8 @@ export default function Portal() {
     api.get('/portal/catalog')
       .then((res) => setCatalog(res.data))
       .catch(() => setCatalog(null));
-  }, [overview?.policies.booking_enabled, catalog, mustChangePassword]);
+    loadWaiting();
+  }, [overview?.policies.booking_enabled, catalog, mustChangePassword, loadWaiting]);
 
   if (authLoading || !user || isStaff || (!overview && !error)) {
     return (
@@ -118,18 +129,20 @@ export default function Portal() {
 
   const savePhone = () => act(() => api.put('/portal/profile', { phone }), 'Actualizamos tu celular.').then(() => setEditingPhone(false));
 
-  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling };
+  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling, onMiss: policies?.confirm_on_miss };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
     ...(canBook ? [{ id: 'book' as Tab, label: 'Reservar', icon: <CalendarPlus size={16} /> }] : []),
     { id: 'appointments', label: 'Mis citas', icon: <CalendarDays size={16} /> },
+    { id: 'profile', label: 'Mis datos', icon: <UserRound size={16} /> },
   ];
 
   return (
     <div className="min-h-screen bg-slate-100/70 font-sans text-[#1F2937]">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        {/* La empresa en una esquina y cerrar sesión en la otra; el menú sigue alineado con el contenido. */}
+        <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4" data-portal-bar>
           <div className="flex items-center gap-3 min-w-0">
             <span className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0" style={{ backgroundColor: tenant?.color ?? '#022340' }}>
               <Building2 className="w-5 h-5" />
@@ -144,7 +157,7 @@ export default function Portal() {
           </button>
         </div>
 
-        <nav className="max-w-3xl mx-auto px-4 sm:px-6 flex gap-1" aria-label="Secciones del portal">
+        <nav className="max-w-3xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto" aria-label="Secciones del portal">
           {!mustChangePassword && tabs.map((item) => (
             <button
               key={item.id}
@@ -152,7 +165,7 @@ export default function Portal() {
               data-tab={item.id}
               aria-current={tab === item.id ? 'page' : undefined}
               onClick={() => openTab(item.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
                 tab === item.id ? 'border-[#022340] text-[#022340]' : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -195,6 +208,21 @@ export default function Portal() {
               </section>
             )}
 
+            {waiting.some((entry) => entry.days.length > 0) && (
+              <button
+                type="button"
+                data-action="see-waiting"
+                onClick={() => openTab('appointments')}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left bg-emerald-50 border border-emerald-200 rounded-2xl hover:border-emerald-400 transition-colors"
+              >
+                <span className="p-2 bg-white text-emerald-600 rounded-xl shrink-0"><BellRing size={18} /></span>
+                <span>
+                  <span className="block text-sm font-bold text-emerald-800">Se liberó un horario que estabas esperando</span>
+                  <span className="block text-xs text-emerald-700">Míralo en "Mis citas" y resérvalo antes de que lo tome otra persona.</span>
+                </span>
+              </button>
+            )}
+
             {canBook && (
               <button
                 type="button"
@@ -212,8 +240,42 @@ export default function Portal() {
               </button>
             )}
 
+          </>
+        )}
+
+        {overview && !mustChangePassword && tab === 'book' && (
+          !catalog ? (
+            <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 size={15} className="animate-spin" /> Cargando servicios...</p>
+          ) : (
+            <BookingFlow
+              key={rescheduling?.id ?? 'new'}
+              overview={overview}
+              catalog={catalog}
+              reschedule={rescheduling}
+              onDone={() => { load(); openTab('appointments'); }}
+              onExit={() => openTab(rescheduling ? 'appointments' : 'home')}
+              onWaitlisted={() => { loadWaiting(); openTab('appointments'); setNotice('Te anotamos en la lista de espera. Cuando se libere un horario que te sirva, lo verás aquí.'); }}
+              onDependentAdded={(dependent) => setOverview({ ...overview, dependents: { ...overview.dependents, items: [...overview.dependents.items, dependent] } })}
+            />
+          )
+        )}
+
+        {overview && !mustChangePassword && tab === 'appointments' && (
+          <>
+            <PortalWaitlist
+              entries={waiting}
+              proWord={vocab.pro}
+              onChanged={(text) => { loadWaiting(); load(); setError(''); setNotice(text); }}
+            />
+            <PortalAppointments upcoming={upcoming} past={past} policies={policies} proWord={vocab.pro} actions={cardActions} />
+          </>
+        )}
+
+        {overview && !mustChangePassword && tab === 'profile' && (
+          <>
             <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="profile">
               <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Tus datos</h2>
+              <p className="text-xs text-slate-500 -mt-1.5">Para corregir tu nombre, tu correo o tu documento, comunícate con {tenant?.name}.</p>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nombre</dt>
@@ -222,6 +284,10 @@ export default function Portal() {
                 <div>
                   <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Código</dt>
                   <dd className="font-semibold text-slate-800 font-mono">{overview.customer.code}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Correo con el que ingresas</dt>
+                  <dd className="flex items-center gap-1.5 font-semibold text-slate-800 break-all"><Mail size={14} className="text-slate-400 shrink-0" /> {overview.customer.email || 'Sin registrar'}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Celular</dt>
@@ -285,46 +351,6 @@ export default function Portal() {
                   )}
                 </div>
               )}
-            </section>
-          </>
-        )}
-
-        {overview && !mustChangePassword && tab === 'book' && (
-          !catalog ? (
-            <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 size={15} className="animate-spin" /> Cargando servicios...</p>
-          ) : (
-            <BookingFlow
-              key={rescheduling?.id ?? 'new'}
-              overview={overview}
-              catalog={catalog}
-              reschedule={rescheduling}
-              onDone={() => { load(); openTab('appointments'); }}
-              onExit={() => openTab(rescheduling ? 'appointments' : 'home')}
-              onDependentAdded={(dependent) => setOverview({ ...overview, dependents: { ...overview.dependents, items: [...overview.dependents.items, dependent] } })}
-            />
-          )
-        )}
-
-        {overview && !mustChangePassword && tab === 'appointments' && (
-          <>
-            <section className="space-y-3" data-list="upcoming">
-              <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Próximas ({upcoming.length})</h2>
-              {upcoming.length === 0
-                ? <p className="text-sm text-slate-500">No tienes citas próximas.</p>
-                : upcoming.map((appointment) => <PortalAppointmentCard key={appointment.id} appointment={appointment} {...cardActions} />)}
-            </section>
-
-            {policies?.booking_enabled && policies.cancel_allowed && upcoming.length > 0 && (
-              <p className="text-xs text-slate-500">
-                Puedes cambiar o cancelar una cita hasta {policies.cancel_window_hours} horas antes. Después, comunícate con la sede.
-              </p>
-            )}
-
-            <section className="space-y-3 pt-2" data-list="past">
-              <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Anteriores ({past.length})</h2>
-              {past.length === 0
-                ? <p className="text-sm text-slate-500">Aquí verás tus citas pasadas.</p>
-                : past.map((appointment) => <PortalAppointmentCard key={appointment.id} appointment={appointment} />)}
             </section>
           </>
         )}

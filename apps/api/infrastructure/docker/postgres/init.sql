@@ -412,7 +412,7 @@ CREATE TABLE appointments (
     reschedule_count integer NOT NULL DEFAULT 0,
     override_reason varchar(255) NULL, -- Motivo cuando se agendó fuera del horario (sobre-agenda)
     cancel_reason varchar(255) NULL,
-    cancelled_by varchar(20) NULL, -- staff, customer
+    cancelled_by varchar(20) NULL, -- staff, customer, system (liberada por no confirmarse a tiempo)
     confirmed_at timestamptz NULL,
     checked_in_at timestamptz NULL,
     started_at timestamptz NULL,

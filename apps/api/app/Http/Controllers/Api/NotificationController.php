@@ -28,6 +28,7 @@ class NotificationController extends Controller
         // Los avisos "por venir" no los dispara ninguna acción: se generan al consultar.
         if ($user->tenant) {
             Notifier::upcomingAbsences($user->tenant);
+            \App\Support\Confirmations::process($user->tenant);
         }
 
         $mine = fn () => UserNotification::where('tenant_id', $user->tenant_id)->where('user_id', $user->id);

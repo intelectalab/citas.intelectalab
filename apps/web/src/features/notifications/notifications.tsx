@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarCheck, CalendarClock, CalendarOff, CalendarPlus, CalendarX2, Globe, type LucideIcon } from 'lucide-react';
+import { BellRing, CalendarCheck, CalendarClock, CalendarOff, CalendarPlus, CalendarX2, Globe, Unlock, type LucideIcon } from 'lucide-react';
 import { api } from '@/lib/axios';
 
 export interface AppNotification {
@@ -35,6 +35,8 @@ const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   'appointment.portal_cancelled': { icon: CalendarX2, tone: 'bg-rose-50 text-rose-600' },
   'appointment.portal_confirmed': { icon: CalendarCheck, tone: 'bg-emerald-50 text-emerald-600' },
   'block.soon': { icon: CalendarOff, tone: 'bg-violet-50 text-violet-600' },
+  'appointment.unconfirmed': { icon: BellRing, tone: 'bg-amber-50 text-amber-600' },
+  'appointment.released': { icon: Unlock, tone: 'bg-rose-50 text-rose-600' },
 };
 
 export const notificationStyle = (type: string) => STYLES[type] ?? { icon: CalendarCheck, tone: 'bg-slate-100 text-slate-600' };

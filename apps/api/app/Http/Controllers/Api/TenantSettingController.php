@@ -7,9 +7,11 @@ use App\Models\SaasModule;
 use App\Models\Tenant;
 use App\Models\TenantSetting;
 use App\Support\AppointmentFlow;
+use App\Support\Confirmations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Configuración que la empresa maneja por su cuenta. Solo la ve y la cambia
@@ -43,6 +45,12 @@ class TenantSettingController extends Controller
             'modules_off.*' => ['string', 'distinct', Rule::in($toggleable)],
             'vocabulary'    => 'sometimes|array',
             'appointment_statuses' => 'sometimes|array',
+            // Reglas de reserva que la empresa decide por su cuenta.
+            'booking_rules' => 'sometimes|array',
+            'booking_rules.confirm_deadline_hours' => 'required_with:booking_rules|integer|min:0|max:168',
+            'booking_rules.confirm_on_miss'        => ['required_with:booking_rules', Rule::in(Confirmations::MODES)],
+            'booking_rules.confirm_release_hours'  => 'required_with:booking_rules|integer|min:0|max:168',
+            'booking_rules.cancel_window_hours'    => 'required_with:booking_rules|integer|min:0|max:168',
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
             ->all()
@@ -50,7 +58,20 @@ class TenantSettingController extends Controller
             ->mapWithKeys(fn ($key) => ["appointment_statuses.$key" => 'nullable|string|max:30'])
             ->all(), [
             'modules_off.*.in' => 'Ese módulo no está disponible para tu plan y rubro.',
+            'booking_rules.*.integer' => 'Escribe las horas como un número entero.',
+            'booking_rules.*.min'     => 'Las horas no pueden ser negativas.',
+            'booking_rules.*.max'     => 'El plazo máximo es de 168 horas (una semana).',
         ]);
+
+        if (isset($validated['booking_rules'])) {
+            $rules = $validated['booking_rules'];
+
+            if ($rules['confirm_on_miss'] === Confirmations::NOTIFY_RELEASE && $rules['confirm_release_hours'] >= $rules['confirm_deadline_hours']) {
+                throw ValidationException::withMessages([
+                    'booking_rules.confirm_release_hours' => 'La cita debe liberarse más cerca de su hora que el plazo para confirmar: usa un número de horas menor.',
+                ]);
+            }
+        }
 
         $settings = $tenant->settings ?? new TenantSetting(['tenant_id' => $tenant->id]);
 
@@ -78,6 +99,15 @@ class TenantSettingController extends Controller
                 ->map(fn ($value) => trim((string) $value))
                 ->filter()
                 ->all();
+        }
+
+        if (isset($validated['booking_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'confirm.deadline_hours' => (int) $validated['booking_rules']['confirm_deadline_hours'],
+                'confirm.on_miss'        => $validated['booking_rules']['confirm_on_miss'],
+                'confirm.release_hours'  => (int) $validated['booking_rules']['confirm_release_hours'],
+                'cancel.window_hours'    => (int) $validated['booking_rules']['cancel_window_hours'],
+            ]);
         }
 
         $settings->save();
@@ -132,6 +162,15 @@ class TenantSettingController extends Controller
             ],
             'dependents' => $tenant->dependents(),
             'appointment_statuses' => AppointmentFlow::forTenant($tenant),
+            // Lo que rige hoy: lo que la empresa eligió o, si no eligió, lo de su rubro.
+            'booking_rules' => [
+                'confirm_deadline_hours' => (int) AppointmentFlow::rule($tenant, 'confirm.deadline_hours'),
+                'confirm_on_miss'        => Confirmations::mode($tenant),
+                'confirm_release_hours'  => (int) AppointmentFlow::rule($tenant, 'confirm.release_hours'),
+                'cancel_window_hours'    => (int) AppointmentFlow::rule($tenant, 'cancel.window_hours'),
+                // Sin el paso de confirmación en su rubro, el plazo no aplica.
+                'uses_confirmation'      => (bool) AppointmentFlow::rule($tenant, 'agenda.require_confirmation'),
+            ],
         ];
     }
 }

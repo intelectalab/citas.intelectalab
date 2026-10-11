@@ -110,7 +110,7 @@ export default function Select({
 
   if (isChip) {
     return (
-      <div className="relative inline-block">
+      <div className="relative inline-flex items-center">
         <div
           ref={triggerRef}
           role="combobox"
@@ -118,7 +118,7 @@ export default function Select({
           aria-label={ariaLabel ?? label}
           aria-disabled={disabled}
           onClick={toggle}
-          className={`inline-flex items-center gap-1 text-xs font-medium rounded-md pl-2 pr-1 py-0.5 select-none transition-colors ${
+          className={`flex items-center gap-1 text-xs leading-5 font-medium rounded-md pl-2 pr-1 select-none transition-colors ${
             disabled ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 cursor-pointer hover:bg-slate-100'
           } ${isOpen ? 'bg-slate-100' : ''}`}
         >

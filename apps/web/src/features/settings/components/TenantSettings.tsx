@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, CalendarCheck, Check, Loader2, Lock, Puzzle, Type } from 'lucide-react';
+import { BellRing, Building2, CalendarCheck, Check, ClipboardCheck, Hourglass, Loader2, Lock, Puzzle, Type, Unlock } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
@@ -23,7 +23,28 @@ interface SettingsPayload {
   // Los términos de dependientes solo se editan si el rubro los usa.
   dependents?: { enabled: boolean };
   appointment_statuses?: AppointmentStatus[];
+  booking_rules?: BookingRules & { uses_confirmation: boolean };
 }
+
+type OnMiss = 'notify' | 'notify_release' | 'release';
+
+interface BookingRules {
+  // Horas antes de la cita en que debe estar confirmada; 0 = sin plazo.
+  confirm_deadline_hours: number;
+  confirm_on_miss: OnMiss;
+  // En "avisar y luego liberar": a cuántas horas de la cita se libera.
+  confirm_release_hours: number;
+  cancel_window_hours: number;
+}
+
+// Qué puede hacer la empresa con una cita que nadie confirmó a tiempo.
+const ON_MISS_OPTIONS: { id: OnMiss; title: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'notify', title: 'Solo avisar', hint: 'La cita se mantiene. Se avisa al equipo para que llame a confirmar.', icon: <BellRing size={18} /> },
+  { id: 'notify_release', title: 'Avisar y luego liberar', hint: 'Primero se avisa. Si más cerca de la hora sigue sin confirmar, la cita se cancela y el horario queda libre.', icon: <Hourglass size={18} /> },
+  { id: 'release', title: 'Liberar de inmediato', hint: 'Al vencer el plazo la cita se cancela y el horario queda libre.', icon: <Unlock size={18} /> },
+];
+
+const hoursInput = 'w-24 text-sm text-center border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] outline-none';
 
 const VOCABULARY_FIELDS: { key: string; label: string }[] = [
   { key: 'client', label: 'Cliente (singular)' },
@@ -51,6 +72,8 @@ export default function TenantSettings() {
   const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [vocabulary, setVocabulary] = useState<Record<string, string>>({});
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
+  // Las horas se editan como texto para poder dejar el campo vacío mientras se escribe.
+  const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -65,6 +88,12 @@ export default function TenantSettings() {
     setStatusNames(Object.fromEntries(
       (payload.appointment_statuses ?? []).filter((s) => s.name !== s.default_name).map((s) => [s.key, s.name]),
     ));
+    setBookingRules(payload.booking_rules ? {
+      deadline: String(payload.booking_rules.confirm_deadline_hours),
+      onMiss: payload.booking_rules.confirm_on_miss,
+      release: String(payload.booking_rules.confirm_release_hours),
+      cancel: String(payload.booking_rules.cancel_window_hours),
+    } : null);
   };
 
   useEffect(() => {
@@ -81,6 +110,12 @@ export default function TenantSettings() {
       .finally(() => setLoading(false));
   }, [authLoading, isAdmin]);
 
+  // Solo dígitos, hasta tres: las horas son números enteros.
+  const setHours = (field: 'deadline' | 'release' | 'cancel', value: string) => {
+    setMessage(null);
+    setBookingRules((current) => (current ? { ...current, [field]: value.replace(/\D/g, '').slice(0, 3) } : current));
+  };
+
   const toggleModule = (key: string) => {
     setMessage(null);
     setModulesOff((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
@@ -90,7 +125,19 @@ export default function TenantSettings() {
     try {
       setSaving(true);
       setMessage(null);
-      const res = await api.put('/tenant-settings', { modules_off: modulesOff, vocabulary, appointment_statuses: statusNames });
+      const res = await api.put('/tenant-settings', {
+        modules_off: modulesOff,
+        vocabulary,
+        appointment_statuses: statusNames,
+        ...(bookingRules ? {
+          booking_rules: {
+            confirm_deadline_hours: Number(bookingRules.deadline || 0),
+            confirm_on_miss: bookingRules.onMiss,
+            confirm_release_hours: Number(bookingRules.release || 0),
+            cancel_window_hours: Number(bookingRules.cancel || 0),
+          },
+        } : {}),
+      });
       apply(res.data);
       // El menú y los nombres dependen de estos datos.
       await refetchUser();
@@ -265,6 +312,103 @@ export default function TenantSettings() {
                 />
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {bookingRules && (
+        <section className={cardClass} data-card="booking-rules">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+              <ClipboardCheck className="w-4 h-4 text-[#3F768C]" /> Reglas de reserva
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cuánto tiempo tienen tus clientes para confirmar y para cancelar, y qué hace el sistema con una cita que nadie confirmó.
+            </p>
+          </div>
+
+          {!data.booking_rules?.uses_confirmation ? (
+            <p className="text-sm text-slate-500">Tu rubro no usa el paso de confirmación: las citas se agendan ya confirmadas.</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="confirm-deadline" className="text-sm font-semibold text-slate-800">La cita debe estar confirmada</label>
+                <input
+                  id="confirm-deadline"
+                  inputMode="numeric"
+                  data-rule="confirm_deadline_hours"
+                  value={bookingRules.deadline}
+                  onChange={(e) => setHours('deadline', e.target.value)}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">horas antes de su inicio.</span>
+                <span className="w-full text-xs text-slate-500">
+                  {Number(bookingRules.deadline || 0) === 0
+                    ? 'Con 0 no hay plazo: una cita puede quedar pendiente hasta su hora.'
+                    : 'Las citas agendadas con menos anticipación que este plazo no cuentan: nadie tuvo tiempo de confirmarlas.'}
+                </span>
+              </div>
+
+              {Number(bookingRules.deadline || 0) > 0 && (
+                <div className="space-y-2">
+                  <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Si llega el plazo y sigue sin confirmar</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Si la cita no se confirma a tiempo">
+                    {ON_MISS_OPTIONS.map((option) => {
+                      const chosen = bookingRules.onMiss === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={chosen}
+                          data-on-miss={option.id}
+                          onClick={() => { setMessage(null); setBookingRules({ ...bookingRules, onMiss: option.id }); }}
+                          className={`flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
+                            chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                          <span>
+                            <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                            <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {Number(bookingRules.deadline || 0) > 0 && bookingRules.onMiss === 'notify_release' && (
+                <div className="flex flex-wrap items-center gap-3" data-row="release-hours">
+                  <label htmlFor="confirm-release" className="text-sm font-semibold text-slate-800">Liberar la cita si sigue sin confirmar</label>
+                  <input
+                    id="confirm-release"
+                    inputMode="numeric"
+                    data-rule="confirm_release_hours"
+                    value={bookingRules.release}
+                    onChange={(e) => setHours('release', e.target.value)}
+                    className={hoursInput}
+                  />
+                  <span className="text-sm text-slate-600">horas antes de su inicio.</span>
+                  <span className="w-full text-xs text-slate-500">Debe ser un número menor que el plazo para confirmar.</span>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+            <label htmlFor="cancel-window" className="text-sm font-semibold text-slate-800">El cliente puede cancelar o cambiar su cita hasta</label>
+            <input
+              id="cancel-window"
+              inputMode="numeric"
+              data-rule="cancel_window_hours"
+              value={bookingRules.cancel}
+              onChange={(e) => setHours('cancel', e.target.value)}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">horas antes de su inicio.</span>
+            <span className="w-full text-xs text-slate-500">Pasado ese momento, en el portal ya no puede hacerlo y debe comunicarse con la sede.</span>
           </div>
         </section>
       )}

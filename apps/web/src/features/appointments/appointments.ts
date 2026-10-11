@@ -7,6 +7,9 @@ export interface Appointment {
   status_name: string;
   next_statuses: string[];
   can_reschedule: boolean;
+  // Plazo para confirmar (hora de la sede) y si ya venció con la cita aún pendiente.
+  confirm_by?: string | null;
+  confirmation_overdue?: boolean;
   // Hora de la sede, sin zona: 2026-10-19T09:00
   starts_at: string;
   ends_at: string;

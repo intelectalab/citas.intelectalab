@@ -25,6 +25,7 @@ export const RULE_GROUPS: RuleGroup[] = [
       { key: 'booking.deposit_percent', label: 'Adelanto', hint: 'Porcentaje del precio que se cobra al reservar.', type: 'number', unit: '%' },
       { key: 'booking.auto_confirm', label: 'Confirmar reservas automáticamente', hint: 'Si no, el personal confirma cada reserva en línea.', type: 'boolean' },
       { key: 'booking.max_days_ahead', label: 'Anticipación máxima', hint: 'Hasta cuántos días adelante se puede reservar.', type: 'number', unit: 'días' },
+      { key: 'confirm.deadline_hours', label: 'Plazo para confirmar la cita', hint: 'Horas antes de la cita. Cada empresa puede cambiarlo y elegir qué pasa si no se confirma. 0 = sin plazo.', type: 'number', unit: 'horas' },
       { key: 'reminders.hours_before', label: 'Recordatorio de cita', hint: 'Con cuánta anticipación se envía.', type: 'number', unit: 'horas' },
     ],
   },

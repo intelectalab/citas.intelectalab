@@ -428,7 +428,7 @@ export function DataTable<T extends Record<string, any>>({
                     return (
                       <div key={config.id} className="relative inline-flex items-center">
                         <div className={styles.filterChip}>
-                          <span className="text-xs text-slate-500 mr-1">{config.label}:</span>
+                          <span className="text-xs leading-5 text-slate-500 mr-1">{config.label}:</span>
                           <Select
                             variant="chip"
                             ariaLabel={config.label}
@@ -445,7 +445,7 @@ export function DataTable<T extends Record<string, any>>({
                   {dateFilters.map((config) => (
                     <div key={config.id} className="relative inline-flex items-center">
                       <div className={styles.filterChip}>
-                        <span className="text-xs text-slate-500 mr-1">{config.label}:</span>
+                        <span className="text-xs leading-5 text-slate-500 mr-1">{config.label}:</span>
                         <DateFilter
                           label={config.label}
                           value={dateValues[config.id] ?? null}
@@ -509,7 +509,7 @@ export function DataTable<T extends Record<string, any>>({
 
                   <div className="relative inline-flex items-center">
                     <div className={styles.filterChip}>
-                      <span className="text-xs text-slate-500 mr-1">Campo:</span>
+                      <span className="text-xs leading-5 text-slate-500 mr-1">Campo:</span>
                       <Select
                         variant="chip"
                         ariaLabel="Ordenar por"

@@ -867,6 +867,9 @@ class AppointmentController extends Controller
             'started_at'       => $local($appointment->started_at),
             'completed_at'     => $local($appointment->completed_at),
             'cancelled_at'     => $local($appointment->cancelled_at),
+            // Plazo para confirmar: hasta cuándo y si ya venció con la cita aún pendiente.
+            'confirm_by'       => $local(\App\Support\Confirmations::deadline($tenant, $appointment)),
+            'confirmation_overdue' => \App\Support\Confirmations::overdue($tenant, $appointment),
             'timing'           => AppointmentTiming::of($appointment),
             // Ficha de atención: si el servicio la usa y en qué estado está la de esta cita.
             'record'           => [

@@ -174,9 +174,16 @@ export default function AppointmentsTable() {
     {
       header: 'Fase',
       cell: (a) => (
-        <span key={`status-${a.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>
-          {a.status_name}
-        </span>
+        <div key={`status-${a.id}`}>
+          <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>
+            {a.status_name}
+          </span>
+          {a.confirmation_overdue && (
+            <span data-overdue className="block mt-1.5 text-[11px] font-semibold text-rose-600 whitespace-nowrap" title="Venció el plazo para confirmar y sigue pendiente">
+              Sin confirmar a tiempo
+            </span>
+          )}
+        </div>
       ),
     },
     {

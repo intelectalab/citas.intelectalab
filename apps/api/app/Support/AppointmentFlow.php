@@ -69,6 +69,11 @@ class AppointmentFlow
         'booking.require_deposit'     => true,
         'cancel.client_allowed'       => true,
         'reschedule.max_times'        => 2,
+        // Plazo para confirmar: horas antes de la cita (0 = sin plazo), qué pasa si no se
+        // confirma (notify, notify_release, release) y a cuántas horas se libera.
+        'confirm.deadline_hours'      => 24,
+        'confirm.on_miss'             => 'notify',
+        'confirm.release_hours'       => 6,
     ];
 
     public static function keys(): array

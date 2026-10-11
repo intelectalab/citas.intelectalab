@@ -37,6 +37,30 @@ class Waitlist
             ->where('appointment_id', $appointment->id)
             ->where('status', WaitlistEntry::BOOKED)
             ->update(['status' => WaitlistEntry::WAITING, 'appointment_id' => null, 'notified_at' => null, 'updated_at' => now()]);
+
+        self::slotFreed($tenant, $appointment);
+    }
+
+    /**
+     * Una cita futura se cayó y dejó libre su horario: si a alguien de la lista
+     * le sirve, se avisa a la administración. La persona lo ve en su portal, que
+     * le muestra en vivo los horarios libres que calzan con lo que pidió.
+     */
+    public static function slotFreed(Tenant $tenant, Appointment $appointment): void
+    {
+        try {
+            if (!$appointment->starts_at->isFuture()) {
+                return;
+            }
+
+            $count = self::matching($tenant, $appointment)->count();
+
+            if ($count > 0) {
+                Notifier::waitlistSlotFreed($tenant, $appointment, $count);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
