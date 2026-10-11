@@ -8,6 +8,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Stopwatch from './Stopwatch';
 import { actionLabel, apiError, dateOf, formatDate, formatDateTime, formatMinutes, statusStyle, timeOf, type Appointment } from '../appointments';
+import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 
 interface AppointmentDetailProps {
   appointmentId: string | null;
@@ -125,12 +126,17 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const showTiming = Boolean(timing && (timing.running || timing.wait_seconds != null || timing.service_seconds != null))
     || Boolean(customerTiming?.measured);
 
-  const rows: [string, string | null | undefined][] = appointment ? [
-    [vocab.client, appointment.customer ? `${appointment.customer.name} · ${appointment.customer.code}` : null],
+  // El nombre del cliente y el del profesional llevan a su página.
+  const rows: [string, React.ReactNode][] = appointment ? [
+    [vocab.client, appointment.customer
+      ? <><CustomerLink id={appointment.customer.id}>{appointment.customer.name}</CustomerLink> · {appointment.customer.code}</>
+      : null],
     ['Celular', appointment.customer?.phone],
     [vocab.dependent, appointment.dependent ? `${appointment.dependent.name}${appointment.dependent.species ? ` (${appointment.dependent.species})` : ''}` : null],
     ['Servicio', appointment.service?.name],
-    [vocab.pro, appointment.professional?.display_name],
+    [vocab.pro, appointment.professional
+      ? <ProfessionalLink id={appointment.professional.id}>{appointment.professional.display_name}</ProfessionalLink>
+      : null],
     ['Sede', appointment.branch?.name],
     ['Fecha', formatDate(dateOf(appointment.starts_at))],
     ['Hora', `${timeOf(appointment.starts_at)} a ${timeOf(appointment.ends_at)} · ${appointment.duration_minutes} min`],

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, ReactNode } from 'react';
+import { useEffect, useMemo, useState, ReactNode } from 'react';
 import {
   Search,
   Filter,
   ArrowUpDown,
   Plus,
+  Lock,
   ChevronDown,
   MoreHorizontal,
   Download,
@@ -23,6 +24,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import styles from './DataTable.module.css';
 import Select from '@/app/components/common/Select';
+import DateFilter from './DateFilter';
+import { PAGE_SIZE } from '@/app/components/common/Pager';
+import { dateRangeOf, inDateRange, type DateFilterValue, type DateRange } from './dateFilters';
 
 export type FilterType = 'select' | 'date' | 'daterange' | 'text';
 
@@ -54,6 +58,34 @@ export interface FilterConfig {
   options?: FilterOption[];
 }
 
+/** Filtro de fecha: la tabla lo aplica sola sobre las filas que recibe. */
+export interface DateFilterConfig<T> {
+  id: string;
+  label: string;
+  // Fecha de la fila; con `end`, la fila ocupa un tramo de días.
+  value: (item: T) => string | null | undefined;
+  end?: (item: T) => string | null | undefined;
+  // La fecha puede ser futura (citas, controles): ofrece mañana, próxima semana, etc.
+  future?: boolean;
+  // Para pantallas que piden sus filas por periodo: se les avisa del rango elegido.
+  onRange?: (range: DateRange | null) => void;
+}
+
+/** Un criterio de "Ordenar por". */
+export interface SortOption<T> {
+  id: string;
+  label: string;
+  type?: 'text' | 'number' | 'date';
+  value: (item: T) => string | number | null | undefined;
+}
+
+// Cómo se llama cada sentido según lo que se ordena.
+const SORT_DIRECTIONS: Record<'text' | 'number' | 'date', { first: 'asc' | 'desc'; asc: string; desc: string }> = {
+  text: { first: 'asc', asc: 'A → Z', desc: 'Z → A' },
+  number: { first: 'desc', asc: 'Menor primero', desc: 'Mayor primero' },
+  date: { first: 'desc', asc: 'Más antiguo', desc: 'Más reciente' },
+};
+
 export interface TabOption {
   id: string;
   label: string;
@@ -73,6 +105,8 @@ interface DataTableProps<T> {
   title: string;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
+  /** Si viene, el botón principal queda bloqueado y muestra este motivo. */
+  primaryActionBlocked?: string;
   tabs?: TabOption[];
   activeTab?: string;
   onTabChange?: (tabId: string) => void;
@@ -83,6 +117,8 @@ interface DataTableProps<T> {
   filterConfigs?: FilterConfig[];
   filterValues?: Record<string, any>;
   onFilterChange?: (filterId: string, value: any) => void;
+  dateFilters?: DateFilterConfig<T>[];
+  sortOptions?: SortOption<T>[];
 
   columns: Column<T>[];
   data: T[];
@@ -90,12 +126,15 @@ interface DataTableProps<T> {
   entityLabel?: string;
   
   metricCards?: MetricCardItem[];
+  // Filas por página.
+  pageSize?: number;
 }
 
 export function DataTable<T extends Record<string, any>>({
   title,
   primaryActionLabel = 'Nuevo',
   onPrimaryAction,
+  primaryActionBlocked,
   tabs = [],
   activeTab,
   onTabChange,
@@ -105,14 +144,89 @@ export function DataTable<T extends Record<string, any>>({
   filterConfigs = [],
   filterValues = {},
   onFilterChange,
+  dateFilters = [],
+  sortOptions = [],
   columns,
-  data,
+  data: allData,
   getItemKey,
   entityLabel = 'registros',
-  metricCards
+  metricCards,
+  pageSize = PAGE_SIZE,
 }: DataTableProps<T>) {
   const [viewMode, setViewMode] = useState<'table' | 'panel'>('table');
   const [showFilters, setShowFilters] = useState(false);
+  const [showSort, setShowSort] = useState(false);
+  const [dateValues, setDateValues] = useState<Record<string, DateFilterValue | null>>({});
+  const [sortId, setSortId] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const activeSort = sortOptions.find((option) => option.id === sortId);
+  const sortType = activeSort?.type ?? 'text';
+  const hasFilters = filterConfigs.length > 0 || dateFilters.length > 0 || filterChips.length > 0;
+  const activeFilterCount =
+    filterConfigs.filter((config) => filterValues[config.id] !== undefined && filterValues[config.id] !== null && filterValues[config.id] !== '').length +
+    dateFilters.filter((config) => dateValues[config.id]).length;
+
+  const changeDate = (config: DateFilterConfig<T>, value: DateFilterValue | null) => {
+    setDateValues((current) => ({ ...current, [config.id]: value }));
+    config.onRange?.(dateRangeOf(value));
+  };
+
+  const clearFilters = () => {
+    filterConfigs.forEach((config) => {
+      if (filterValues[config.id]) onFilterChange?.(config.id, '');
+    });
+    dateFilters.forEach((config) => {
+      if (dateValues[config.id]) changeDate(config, null);
+    });
+  };
+
+  const changeSort = (id: string) => {
+    setSortId(id);
+    const option = sortOptions.find((item) => item.id === id);
+    if (option) setSortDir(SORT_DIRECTIONS[option.type ?? 'text'].first);
+  };
+
+  // Las filas que se ven: lo que llega, menos lo que dejan fuera las fechas, en el orden elegido.
+  const data = useMemo(() => {
+    let rows = allData;
+
+    dateFilters.forEach((config) => {
+      const range = dateRangeOf(dateValues[config.id]);
+      if (range) rows = rows.filter((item) => inDateRange(range, config.value(item), config.end?.(item)));
+    });
+
+    if (!activeSort) return rows;
+
+    const type = activeSort.type ?? 'text';
+    const factor = sortDir === 'asc' ? 1 : -1;
+    const empty = (v: unknown) => v === null || v === undefined || v === '';
+
+    return [...rows].sort((a, b) => {
+      const va = activeSort.value(a);
+      const vb = activeSort.value(b);
+
+      // Lo que no tiene dato va siempre al final.
+      if (empty(va) || empty(vb)) return empty(va) === empty(vb) ? 0 : empty(va) ? 1 : -1;
+
+      if (type === 'number') return (Number(va) - Number(vb)) * factor;
+      if (type === 'date') return (new Date(String(va)).getTime() - new Date(String(vb)).getTime()) * factor;
+      return String(va).localeCompare(String(vb), 'es', { sensitivity: 'base', numeric: true }) * factor;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allData, dateValues, sortId, sortDir]);
+
+  // Paginación: la tabla muestra una página; el tablero, todo.
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(data.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const pageRows = data.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const filterKey = JSON.stringify(filterValues);
+
+  // Al buscar, filtrar, ordenar o cambiar de pestaña se vuelve a la primera página.
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, activeTab, filterKey, dateValues, sortId, sortDir]);
 
   return (
     <div className={styles.container}>
@@ -128,7 +242,18 @@ export function DataTable<T extends Record<string, any>>({
             <button className={styles.actionBtnSecondary}>
               <MoreHorizontal size={18} />
             </button>
-            {onPrimaryAction && (
+            {onPrimaryAction && primaryActionBlocked && (
+              <div className={styles.blockedAction} data-primary-blocked>
+                <button type="button" className={`${styles.btnPrimary} ${styles.btnPrimaryBlocked}`} disabled aria-describedby="primary-blocked-reason">
+                  <Lock size={16} className="text-[#84D0D9]" />
+                  {primaryActionLabel}
+                </button>
+                <div id="primary-blocked-reason" role="tooltip" className={styles.blockedReason}>
+                  {primaryActionBlocked}
+                </div>
+              </div>
+            )}
+            {onPrimaryAction && !primaryActionBlocked && (
               <button className={styles.btnPrimary} onClick={onPrimaryAction}>
                 <Plus size={18} className="text-[#84D0D9] stroke-[2.5]" />
                 {primaryActionLabel}
@@ -227,19 +352,35 @@ export function DataTable<T extends Record<string, any>>({
               </div>
             )}
 
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`${styles.filterActionBtn} ${showFilters ? styles.filterActionBtnActive : ''}`}
-            >
-              <SlidersHorizontal size={15} className={showFilters ? 'text-white' : 'text-[#3F768C]'} />
-              <span className={styles.btnText}>Filtro</span>
-              {showFilters && <span className={styles.activeDot} />}
-            </button>
+            {hasFilters && (
+              <button
+                data-toggle="filters"
+                aria-expanded={showFilters}
+                onClick={() => setShowFilters(!showFilters)}
+                className={`${styles.filterActionBtn} ${showFilters ? styles.filterActionBtnActive : ''}`}
+              >
+                <SlidersHorizontal size={15} className={showFilters ? 'text-white' : 'text-[#3F768C]'} />
+                <span className={styles.btnText}>Filtro</span>
+                {activeFilterCount > 0
+                  ? <span className={`${styles.countPill} ${showFilters ? styles.countPillOnDark : ''}`} data-filter-count>{activeFilterCount}</span>
+                  : showFilters && <span className={styles.activeDot} />}
+              </button>
+            )}
 
-            <button className={styles.filterActionBtn}>
-              <ArrowUpDown size={15} className="text-[#3F768C]" />
-              <span className={`${styles.btnText} ${styles.btnTextCollapse}`}>Ordenar por</span>
-            </button>
+            {sortOptions.length > 0 && (
+              <button
+                data-toggle="sort"
+                aria-expanded={showSort}
+                onClick={() => setShowSort(!showSort)}
+                className={`${styles.filterActionBtn} ${showSort ? styles.filterActionBtnActive : ''}`}
+              >
+                <ArrowUpDown size={15} className={showSort ? 'text-white' : 'text-[#3F768C]'} />
+                <span className={`${styles.btnText} ${styles.btnTextCollapse}`}>
+                  {activeSort ? `Orden: ${activeSort.label}` : 'Ordenar por'}
+                </span>
+                {showSort && !activeSort && <span className={styles.activeDot} />}
+              </button>
+            )}
           </div>
 
           <div className={styles.filterRightGroup}>
@@ -301,6 +442,20 @@ export function DataTable<T extends Record<string, any>>({
                     );
                   })}
 
+                  {dateFilters.map((config) => (
+                    <div key={config.id} className="relative inline-flex items-center">
+                      <div className={styles.filterChip}>
+                        <span className="text-xs text-slate-500 mr-1">{config.label}:</span>
+                        <DateFilter
+                          label={config.label}
+                          value={dateValues[config.id] ?? null}
+                          onChange={(value) => changeDate(config, value)}
+                          future={config.future}
+                        />
+                      </div>
+                    </div>
+                  ))}
+
                   {filterChips.map((chip, idx) => (
                     <button key={`chip-${idx}`} className={styles.filterChip}>
                       <span>{chip}</span>
@@ -315,6 +470,12 @@ export function DataTable<T extends Record<string, any>>({
                 </div>
 
                 <div className={styles.drawerActions}>
+                  {activeFilterCount > 0 && (
+                    <button type="button" data-clear-filters onClick={clearFilters} className={styles.advancedFiltersBtn}>
+                      <X size={13} />
+                      Limpiar filtros
+                    </button>
+                  )}
                   <button className={styles.advancedFiltersBtn}>
                     <Filter size={13} />
                     Filtros avanzados
@@ -324,6 +485,68 @@ export function DataTable<T extends Record<string, any>>({
                     className={styles.closeDrawerBtn}
                     title="Cerrar barra de filtros"
                   >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Barra de orden: mismo diseño que la de filtros; con ambas abiertas queda debajo. */}
+        <AnimatePresence>
+          {showSort && sortOptions.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className={styles.filterDrawer} data-sort-drawer>
+                <div className={styles.pillsList}>
+                  <span className={styles.drawerLabel}>Ordenar por:</span>
+
+                  <div className="relative inline-flex items-center">
+                    <div className={styles.filterChip}>
+                      <span className="text-xs text-slate-500 mr-1">Campo:</span>
+                      <Select
+                        variant="chip"
+                        ariaLabel="Ordenar por"
+                        placeholder="Sin ordenar"
+                        value={sortId}
+                        onChange={(e) => changeSort(String(e.target.value))}
+                        options={sortOptions.map((option) => ({ value: option.id, label: option.label }))}
+                      />
+                    </div>
+                  </div>
+
+                  {activeSort && (
+                    <div className={styles.segmented} role="group" aria-label="Sentido del orden">
+                      {([SORT_DIRECTIONS[sortType].first, SORT_DIRECTIONS[sortType].first === 'asc' ? 'desc' : 'asc'] as const).map((dir) => (
+                        <button
+                          key={dir}
+                          type="button"
+                          data-sort-dir={dir}
+                          aria-pressed={sortDir === dir}
+                          onClick={() => setSortDir(dir)}
+                          className={`${styles.segmentedBtn} ${sortDir === dir ? styles.segmentedBtnActive : ''}`}
+                        >
+                          {SORT_DIRECTIONS[sortType][dir]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.drawerActions}>
+                  {activeSort && (
+                    <button type="button" data-clear-sort onClick={() => setSortId('')} className={styles.advancedFiltersBtn}>
+                      <X size={13} />
+                      Quitar orden
+                    </button>
+                  )}
+                  <button onClick={() => setShowSort(false)} className={styles.closeDrawerBtn} title="Cerrar barra de orden">
                     <X size={14} />
                   </button>
                 </div>
@@ -349,7 +572,7 @@ export function DataTable<T extends Record<string, any>>({
               </tr>
             </thead>
             <tbody>
-              {data.map((item) => (
+              {pageRows.map((item) => (
                 <tr key={getItemKey(item)} className={styles.tr}>
                   <td className={styles.thCheckbox} onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
@@ -428,12 +651,16 @@ export function DataTable<T extends Record<string, any>>({
         </span>
 
         <div className={styles.paginationGroup}>
-          <span className={styles.pageInfo}>Página 1 de 1</span>
+          <span className={styles.pageInfo} data-page-info>
+            {viewMode === 'table' && data.length > 0
+              ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, data.length)} · Página ${currentPage} de ${pages}`
+              : `Página ${currentPage} de ${pages}`}
+          </span>
           <div className={styles.paginationBtns}>
-            <button className={styles.pageBtn} disabled>
+            <button type="button" data-page="prev" aria-label="Página anterior" className={styles.pageBtn} disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
               <ChevronLeft size={16} />
             </button>
-            <button className={styles.pageBtn} disabled>
+            <button type="button" data-page="next" aria-label="Página siguiente" className={styles.pageBtn} disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>
               <ChevronRight size={16} />
             </button>
           </div>

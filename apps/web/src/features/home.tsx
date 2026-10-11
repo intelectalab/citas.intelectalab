@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import PlanSelection from '@/features/subscriptions/PlanSelection';
 import { formatDateTime, statusStyle, timeOf } from '@/features/appointments/appointments';
+import { CustomerLink } from '@/app/components/common/PersonLink';
 import {
   Plus,
   Users,
@@ -66,7 +67,7 @@ interface DashboardData {
     top_services: { name: string; count: number }[];
   };
   pending: { key: string; count: number; href: string }[];
-  activity: { at: string; from: string | null; to: string; to_name: string; by: string | null; by_customer: boolean; code: string | null; who: string | null; service: string | null }[];
+  activity: { at: string; from: string | null; to: string; to_name: string; by: string | null; by_customer: boolean; code: string | null; who: string | null; customer_id?: string | null; service: string | null }[];
 }
 
 const money = (value: number) => `S/ ${value.toLocaleString('es-PE', { maximumFractionDigits: 0 })}`;
@@ -550,7 +551,7 @@ export default function HomePage() {
                     <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${statusStyle(event.to).dot}`} />
                     <div className="text-xs min-w-0">
                       <p className="text-slate-800">
-                        <span className="font-bold">{event.who ?? `Un ${client}`}</span> {activityText(event)}
+                        <CustomerLink id={event.customer_id} className="font-bold">{event.who ?? `Un ${client}`}</CustomerLink> {activityText(event)}
                         {event.code && <> · <span className="font-mono text-[#022340]">{event.code}</span></>}
                       </p>
                       <span className="text-[10px] text-slate-400">

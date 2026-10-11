@@ -11,6 +11,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import { addDays, dateOf, formatDate, timeOf, todayISO } from '@/features/appointments/appointments';
 import RecordPanel from './RecordPanel';
 import { RECORD_STATUS, type CareRecord } from '../records';
+import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const PERIODS: { id: string; label: string; days: number | null }[] = [
   { id: '30', label: 'Últimos 30 días', days: 30 },
@@ -32,6 +33,8 @@ export default function RecordsTable() {
   const vocab = useVocabulary();
   const [records, setRecords] = useState<CareRecord[]>([]);
   const [period, setPeriod] = useState('30');
+  // Rango del filtro de fecha: mientras exista, manda sobre el periodo de la pestaña.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
@@ -45,13 +48,13 @@ export default function RecordsTable() {
 
     api.get('/care-records', {
       params: {
-        ...(days ? { from: addDays(todayISO(), -(days - 1)) } : {}),
+        ...(dateRange ? dateRange : days ? { from: addDays(todayISO(), -(days - 1)) } : {}),
         ...(query ? { search: query } : {}),
       },
     })
       .then((res) => setRecords(Array.isArray(res.data) ? res.data : []))
       .catch((error) => { console.error('Error al cargar fichas:', error); setRecords([]); });
-  }, [period, query]);
+  }, [period, dateRange, query]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -104,12 +107,12 @@ export default function RecordsTable() {
     {
       header: vocab.client,
       cell: (r) => (
-        <button key={`customer-${r.id}`} type="button" data-open={r.id} onClick={() => setOpenAppointmentId(r.appointment_id)} className="text-left">
-          <span className={styles.customerName}>{r.customer?.name ?? '—'}</span>
-          <span className="block text-xs text-slate-400">
-            {usesDependents && r.dependent ? `${vocab.dependent}: ${r.dependent.name}` : r.customer?.code}
-          </span>
-        </button>
+        <div key={`customer-${r.id}`}>
+          <CustomerLink id={r.customer?.id} className={styles.customerName}>{r.customer?.name ?? '—'}</CustomerLink>
+          <button type="button" data-open={r.id} onClick={() => setOpenAppointmentId(r.appointment_id)} className="block text-left text-xs text-slate-400 hover:text-[#3F768C] transition-colors">
+            {usesDependents && r.dependent ? `${vocab.dependent}: ${r.dependent.name}` : r.customer?.code} · ver ficha
+          </button>
+        </div>
       ),
     },
     {
@@ -126,7 +129,7 @@ export default function RecordsTable() {
     },
     {
       header: vocab.pro,
-      cell: (r) => <span key={`pro-${r.id}`} className="text-sm text-slate-700">{r.professional ?? r.author ?? '—'}</span>,
+      cell: (r) => <ProfessionalLink key={`pro-${r.id}`} id={r.professional ? r.professional_id : null} className="text-sm text-slate-700">{r.professional ?? r.author ?? '—'}</ProfessionalLink>,
     },
     {
       header: 'Estado',
@@ -168,6 +171,16 @@ export default function RecordsTable() {
           filterValues={{ status }}
           onFilterChange={(_, value) => setStatus(value)}
           columns={columns}
+          dateFilters={[
+            { id: 'created_at', label: 'Fecha de la ficha', value: (r) => r.created_at, onRange: setDateRange },
+          ]}
+          sortOptions={[
+            { id: 'created_at', label: 'Fecha', type: 'date', value: (r) => r.created_at },
+            { id: 'customer', label: vocab.client, value: (r) => r.customer?.name },
+            { id: 'template', label: 'Ficha', value: (r) => r.template_name },
+            { id: 'professional', label: vocab.pro, value: (r) => r.professional },
+            { id: 'status', label: 'Estado', value: (r) => r.status },
+          ]}
           data={rows}
           getItemKey={(r) => r.id}
           entityLabel="fichas"

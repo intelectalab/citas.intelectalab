@@ -170,6 +170,11 @@ export default function ContactsTable() {
                 searchTerm={searchTerm}
                 onSearchChange={handleSearchChange}
                 columns={columns}
+                sortOptions={[
+                  { id: 'name', label: 'Nombre', value: (c) => `${c.first_name} ${c.last_name}` },
+                  { id: 'last_name', label: 'Apellido', value: (c) => c.last_name },
+                  { id: 'email', label: 'Correo', value: (c) => c.email },
+                ]}
                 data={contacts}
                 getItemKey={(contact) => contact.id}
                 entityLabel="contactos registrados"

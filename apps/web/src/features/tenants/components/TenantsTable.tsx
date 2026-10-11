@@ -350,6 +350,16 @@ export default function TenantsTable() {
         filterValues={filters}
         onFilterChange={handleFilterChange}
         columns={columns}
+        dateFilters={[
+          { id: 'created_at', label: 'Fecha de alta', value: (t) => t.created_at },
+        ]}
+        sortOptions={[
+          { id: 'created_at', label: 'Fecha de alta', type: 'date', value: (t) => t.created_at },
+          { id: 'name', label: 'Nombre', value: (t) => t.name },
+          { id: 'business_type', label: 'Rubro', value: (t) => t.business_type?.name },
+          { id: 'plan', label: 'Plan', value: (t) => t.subscription?.plan?.name },
+          { id: 'status', label: 'Estado', value: (t) => t.status },
+        ]}
         data={safeTenants}
         getItemKey={(tenant) => tenant.id}
         entityLabel="tenants registrados"

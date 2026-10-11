@@ -13,6 +13,7 @@ import { apiError, formatDateTime, statusStyle } from '@/features/appointments/a
 import FormBlock from './FormBlock';
 import HolidaysTable from './HolidaysTable';
 import { KIND_STYLES, STATE_LABELS, durationLabel, rangeLabel, type Block, type BlockOptions } from '../blocks';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const PERIODS = [
   { id: 'current', label: 'Vigentes y próximos' },
@@ -178,7 +179,11 @@ export default function BlocksTable() {
             ) : (
               <span className={styles.customerName}>{b.professional?.display_name ?? b.branch?.name ?? '—'}</span>
             )}
-            <span className="block text-xs text-slate-400">{b.scope === 'branch' ? 'Toda la sede' : vocab.pro}</span>
+            <span className="block text-xs text-slate-400">
+              {b.scope === 'branch' || !b.professional
+                ? 'Toda la sede'
+                : <ProfessionalLink id={b.professional.id}>Ver la página de {b.professional.display_name}</ProfessionalLink>}
+            </span>
           </div>
         </div>
       ),
@@ -276,6 +281,16 @@ export default function BlocksTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          dateFilters={[
+            { id: 'when', label: 'Cuándo', future: true, value: (b) => b.starts_at, end: (b) => b.ends_at },
+          ]}
+          sortOptions={[
+            { id: 'starts_at', label: 'Inicio', type: 'date', value: (b) => b.starts_at },
+            { id: 'ends_at', label: 'Fin', type: 'date', value: (b) => b.ends_at },
+            { id: 'target', label: 'A quién aplica', value: (b) => b.professional?.display_name ?? b.branch?.name },
+            { id: 'kind', label: 'Motivo', value: (b) => b.kind_label },
+            { id: 'affected', label: 'Citas dentro', type: 'number', value: (b) => b.affected_count },
+          ]}
           data={rows}
           getItemKey={(b) => b.id}
           entityLabel="bloqueos"

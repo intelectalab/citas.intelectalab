@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
+import Floating from './Floating';
 
 export interface Option {
   label: string;
@@ -47,21 +48,10 @@ export default function Select({
   align = 'left',
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
 
   // Encontrar la opción seleccionada actualmente para mostrar su etiqueta
   const selectedOption = options.find((opt) => opt.value === value);
-
-  // Cerrar el menú si se hace clic fuera del componente
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSelect = (optionValue: string | number) => {
     onChange({ target: { value: optionValue } });
@@ -71,13 +61,20 @@ export default function Select({
   const toggle = () => { if (!disabled) setIsOpen(!isOpen); };
   const isChip = variant === 'chip';
 
-  const menu = isOpen && (
-    <div
+  // El menú flota sobre la página: no lo recorta el panel o la barra donde está la lista.
+  const menu = (
+    <Floating
+      anchorRef={triggerRef}
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      align={align}
+      matchWidth={!isChip}
       role="listbox"
-      className={`absolute z-50 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto select-scroll py-1 animate-in fade-in zoom-in-95 duration-150 ${
-        isChip ? `min-w-44 w-max max-w-72 ${align === 'right' ? 'right-0' : 'left-0'}` : 'w-full'
+      className={`bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-150 ${
+        isChip ? 'min-w-44 w-max max-w-72' : ''
       }`}
     >
+      <div className="max-h-60 min-h-0 overflow-y-auto select-scroll py-1">
       {clearable && (
         <div
           role="option"
@@ -107,13 +104,15 @@ export default function Select({
           </div>
         );
       })}
-    </div>
+      </div>
+    </Floating>
   );
 
   if (isChip) {
     return (
-      <div className="relative inline-block" ref={containerRef}>
+      <div className="relative inline-block">
         <div
+          ref={triggerRef}
           role="combobox"
           aria-expanded={isOpen}
           aria-label={ariaLabel ?? label}
@@ -132,7 +131,7 @@ export default function Select({
   }
 
   return (
-    <div className="w-full relative" ref={containerRef}>
+    <div className="w-full relative">
       {label && (
         <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
           {label}
@@ -142,6 +141,7 @@ export default function Select({
       <div className={onAdd ? 'flex items-center gap-2' : undefined}>
         {/* Botón principal que simula el input */}
         <div
+          ref={triggerRef}
           role="combobox"
           aria-expanded={isOpen}
           aria-label={ariaLabel ?? label}

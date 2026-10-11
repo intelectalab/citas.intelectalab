@@ -10,6 +10,7 @@ import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
 import Stopwatch from './Stopwatch';
 import Select from '@/app/components/common/Select';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import {
   RELEASED, addDays, apiError, formatDate, fromMinutes, statusStyle, timeOf, toMinutes, todayISO,
   type Appointment,
@@ -351,7 +352,7 @@ export default function AgendaDay() {
                 <div className="w-16 shrink-0" />
                 {day.professionals.map((professional) => (
                   <div key={professional.id} className="flex-1 min-w-[200px] px-3 py-3 border-l border-slate-200">
-                    <span className="block text-sm font-bold text-slate-800 truncate">{professional.display_name}</span>
+                    <ProfessionalLink id={professional.id} className="block text-sm font-bold text-slate-800 truncate">{professional.display_name}</ProfessionalLink>
                     <span className="block text-xs text-slate-500">
                       {professional.schedules.length
                         ? professional.schedules.map((s) => `${s.starts}–${s.ends}`).join(' · ')

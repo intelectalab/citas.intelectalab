@@ -10,6 +10,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
 import { RELEASED, addDays, dateOf, formatDate, statusStyle, timeOf, todayISO, type Appointment } from '../appointments';
+import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 
 // Periodos de la lista. Cada pestaña pide a la API su rango de fechas.
 const PERIODS: { id: string; label: string; range: () => { from: string; to: string } }[] = [
@@ -36,6 +37,8 @@ export default function AppointmentsTable() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<{ id: string; display_name: string }[]>([]);
   const [period, setPeriod] = useState('week');
+  // Rango del filtro de fecha: mientras exista, manda sobre el periodo de la pestaña.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({ status: '', professional_id: '' });
   const [activeCard, setActiveCard] = useState('');
@@ -46,7 +49,7 @@ export default function AppointmentsTable() {
   const statusOptions = (user?.tenant?.appointment_statuses ?? []).map((s) => ({ label: s.name, value: s.key }));
 
   const load = useCallback(() => {
-    const range = PERIODS.find((p) => p.id === period)!.range();
+    const range = dateRange ?? PERIODS.find((p) => p.id === period)!.range();
 
     api.get('/appointments', {
       params: {
@@ -57,7 +60,7 @@ export default function AppointmentsTable() {
     })
       .then((res) => setAppointments(Array.isArray(res.data) ? res.data : []))
       .catch((error) => { console.error('Error al cargar citas:', error); setAppointments([]); });
-  }, [period, query, filters.professional_id]);
+  }, [period, dateRange, query, filters.professional_id]);
 
   const { openNew, openDetail, panels, isOpen } = useAppointmentPanels(load);
 
@@ -148,7 +151,7 @@ export default function AppointmentsTable() {
       header: vocab.client,
       cell: (a) => (
         <div key={`customer-${a.id}`}>
-          <span className={styles.customerName}>{a.customer?.name ?? '—'}</span>
+          <CustomerLink id={a.customer?.id} className={styles.customerName}>{a.customer?.name ?? '—'}</CustomerLink>
           <span className="block text-xs text-slate-400">
             {usesDependents && a.dependent ? `${vocab.dependent}: ${a.dependent.name}` : a.customer?.phone ?? a.customer?.code}
           </span>
@@ -166,7 +169,7 @@ export default function AppointmentsTable() {
     },
     {
       header: vocab.pro,
-      cell: (a) => <span key={`pro-${a.id}`} className="text-sm text-slate-700">{a.professional?.display_name ?? '—'}</span>,
+      cell: (a) => <ProfessionalLink key={`pro-${a.id}`} id={a.professional?.id} className="text-sm text-slate-700">{a.professional?.display_name ?? '—'}</ProfessionalLink>,
     },
     {
       header: 'Fase',
@@ -207,6 +210,19 @@ export default function AppointmentsTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          dateFilters={[
+            { id: 'starts_at', label: 'Fecha de la cita', future: true, value: (a) => a.starts_at, onRange: setDateRange },
+          ]}
+          sortOptions={[
+            { id: 'starts_at', label: 'Fecha y hora', type: 'date', value: (a) => a.starts_at },
+            { id: 'code', label: 'Código de cita', value: (a) => a.code },
+            { id: 'customer', label: vocab.client, value: (a) => a.customer?.name },
+            { id: 'service', label: 'Servicio', value: (a) => a.service?.name },
+            { id: 'professional', label: vocab.pro, value: (a) => a.professional?.display_name },
+            { id: 'status', label: 'Fase', value: (a) => a.status_name },
+            { id: 'price', label: 'Precio', type: 'number', value: (a) => Number(a.price) },
+            { id: 'duration', label: 'Duración', type: 'number', value: (a) => a.duration_minutes },
+          ]}
           data={rows}
           getItemKey={(a) => a.id}
           entityLabel="citas"

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Contact, Pencil, Trash2, CheckCircle, XCircle, Award, FileBadge, UserCheck, Eye, CalendarClock } from 'lucide-react';
+import Link from 'next/link';
+import { Contact, Pencil, Trash2, CheckCircle, XCircle, Award, FileBadge, UserCheck, Eye, CalendarClock, Users } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -10,10 +11,12 @@ import ProfessionalSchedule from './ProfessionalSchedule';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 interface Professional {
   id: string;
   display_name: string;
+  created_at?: string;
   license_number?: string;
   status?: {
     id: string;
@@ -33,6 +36,12 @@ interface Professional {
   }>;
 }
 
+interface PlanUsage {
+  key: string;
+  used: number;
+  limit: number | null;
+}
+
 export default function ProfessionalsTable() {
   const vocab = useVocabulary();
   const { user } = useAuth();
@@ -45,7 +54,6 @@ export default function ProfessionalsTable() {
 
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
-  const [viewingProfessional, setViewingProfessional] = useState<Professional | null>(null);
   const [scheduleProfessional, setScheduleProfessional] = useState<Professional | null>(null);
 
   const [modalConfig, setModalConfig] = useState<{
@@ -63,6 +71,18 @@ export default function ProfessionalsTable() {
     message: '',
   });
   const [isActionLoading, setIsActionLoading] = useState(false);
+  // Uso frente al plan: cada profesional ocupa un lugar de profesional y una cuenta de usuario.
+  const [planUsage, setPlanUsage] = useState<PlanUsage[]>([]);
+
+  const fetchPlanUsage = async () => {
+    try {
+      const res = await api.get('/company');
+      setPlanUsage(Array.isArray(res.data?.usage) ? res.data.usage : []);
+    } catch {
+      // Sin este dato el botón queda disponible; la API igual rechaza al guardar si no hay lugar.
+      setPlanUsage([]);
+    }
+  };
 
   const filterConfigs: FilterConfig[] = [
     {
@@ -100,6 +120,7 @@ export default function ProfessionalsTable() {
 
   useEffect(() => {
     fetchProfessionals();
+    fetchPlanUsage();
   }, []);
 
   const handleSearchChange = (val: string) => {
@@ -134,6 +155,7 @@ export default function ProfessionalsTable() {
           setIsActionLoading(true);
           await api.delete(`/professionals/${id}`);
           fetchProfessionals(searchTerm, filters);
+          fetchPlanUsage();
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         } catch (error: any) {
           console.error('Error al eliminar profesional:', error);
@@ -146,6 +168,7 @@ export default function ProfessionalsTable() {
 
   const handleCreationSuccess = (credentials?: { email: string; tempPassword?: string }) => {
     fetchProfessionals(searchTerm, filters);
+    fetchPlanUsage();
     if (credentials?.tempPassword) {
       setModalConfig({
         isOpen: true,
@@ -191,7 +214,27 @@ export default function ProfessionalsTable() {
   const totalActive = safeProfessionals.filter(p => p.status?.slug === 'active' || p.status?.name?.toLowerCase() === 'activo').length;
   const totalInactive = safeProfessionals.filter(p => p.status?.slug === 'inactive' || p.status?.name?.toLowerCase() === 'inactivo').length;
 
+  const proUsage = planUsage.find((u) => u.key === 'professionals');
+  const userUsage = planUsage.find((u) => u.key === 'users');
+  const reached = (u?: PlanUsage) => typeof u?.limit === 'number' && u.used >= u.limit;
+  const planBlocked = reached(proUsage)
+    ? `Tu plan permite hasta ${proUsage!.limit} ${vocab.pros.toLowerCase()} y ya tienes ${proUsage!.used}. Para agregar otro, cambia de plan.`
+    : reached(userUsage)
+      ? `Tu plan permite hasta ${userUsage!.limit} cuentas de usuario además de la del dueño y ya tienes ${userUsage!.used}. Para agregar otro, cambia de plan.`
+      : '';
+  // El tope que se alcanza primero es el que se muestra en la tarjeta.
+  const shownUsage = [proUsage, userUsage]
+    .filter((u): u is PlanUsage => typeof u?.limit === 'number')
+    .sort((a, b) => ((a.limit as number) - a.used) - ((b.limit as number) - b.used))[0];
+
   const metricCards: MetricCardItem[] = [
+    ...(shownUsage ? [{
+      title: `${shownUsage.key === 'users' ? 'Cuentas' : vocab.pros} de ${shownUsage.limit} del plan${planBlocked ? ': tope alcanzado' : ''}`,
+      value: shownUsage.used,
+      icon: <Users size={18} />,
+      iconColorClass: planBlocked ? 'text-amber-500' : 'text-slate-500',
+      borderColorClass: planBlocked ? 'border-amber-300' : 'hover:border-slate-300',
+    }] : []),
     {
       title: `${vocab.pros}: activos`,
       value: totalActive,
@@ -222,7 +265,7 @@ export default function ProfessionalsTable() {
             <Contact size={16} />
           </div>
           <div>
-            <span className={styles.customerName}>{prof.display_name}</span>
+            <ProfessionalLink id={prof.id} className={styles.customerName}>{prof.display_name}</ProfessionalLink>
             <span className="block text-xs text-slate-400 font-mono">
               {prof.user?.email ? prof.user.email : 'Sin usuario vinculado'}
             </span>
@@ -275,13 +318,14 @@ export default function ProfessionalsTable() {
       header: 'Acciones',
       cell: (prof) => (
         <div key={`actions-${prof.id}`} className="flex items-center gap-1">
-          <button 
-            onClick={() => setViewingProfessional(prof)}
-            title="Ver detalles"
+          <Link
+            href={`/professionals/${prof.id}`}
+            data-open={prof.id}
+            title={`Ver la página de ${prof.display_name}`}
             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           >
             <Eye size={16} />
-          </button>
+          </Link>
           <button
             onClick={() => setScheduleProfessional(prof)}
             title="Horario y ausencias"
@@ -316,7 +360,8 @@ export default function ProfessionalsTable() {
         <DataTable<Professional>
           title={`Gestión de ${vocab.pros}`}
           primaryActionLabel={`Nuevo ${vocab.pro}`}
-          onPrimaryAction={() => { setEditingProfessional(null); setShowFormModal(true); }}
+          onPrimaryAction={() => { if (planBlocked) return; setEditingProfessional(null); setShowFormModal(true); }}
+          primaryActionBlocked={planBlocked || undefined}
           tabs={[{ id: 'all', label: 'Todos', count: safeProfessionals.length }]}
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -326,6 +371,17 @@ export default function ProfessionalsTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          dateFilters={[
+            { id: 'created_at', label: 'Fecha de registro', value: (p) => p.created_at },
+          ]}
+          sortOptions={[
+            { id: 'name', label: 'Nombre', value: (p) => p.display_name },
+            { id: 'email', label: 'Correo', value: (p) => p.user?.email },
+            ...(usesLicense ? [{ id: 'license', label: 'Colegiatura', value: (p: Professional) => p.license_number }] : []),
+            { id: 'specialties', label: 'Especialidades', type: 'number' as const, value: (p: Professional) => p.specialties?.length ?? 0 },
+            { id: 'status', label: 'Estado', value: (p) => p.status?.name },
+            { id: 'created_at', label: 'Fecha de registro', type: 'date' as const, value: (p: Professional) => p.created_at },
+          ]}
           data={safeProfessionals}
           getItemKey={(p) => p.id}
           entityLabel="registros"

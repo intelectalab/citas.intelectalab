@@ -34,6 +34,7 @@ interface Service {
   buffer_before_minutes: number;
   buffer_after_minutes: number;
   price: number;
+  created_at?: string;
 }
 
 export default function ServicesTable() {
@@ -70,8 +71,8 @@ export default function ServicesTable() {
   });
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchCategories = async () => {
+  // Se vuelve a pedir al cerrar el formulario: desde ahí se pueden crear categorías.
+  const fetchCategories = async () => {
       try {
         console.log('SERVICES_TABLE: Fetching categories...');
         const res = await api.get('/service-categories'); 
@@ -85,8 +86,9 @@ export default function ServicesTable() {
         console.warn('SERVICES_TABLE: Error fetching categories:', error);
         setCategoryOptions([]);
       }
-    };
+  };
 
+  useEffect(() => {
     const fetchStatuses = async () => {
       try {
         console.log('SERVICES_TABLE: Fetching statuses...');
@@ -324,6 +326,17 @@ export default function ServicesTable() {
         filterValues={filters}
         onFilterChange={handleFilterChange}
         columns={columns}
+        dateFilters={[
+          { id: 'created_at', label: 'Fecha de creación', value: (s) => s.created_at },
+        ]}
+        sortOptions={[
+          { id: 'name', label: 'Nombre', value: (s) => s.name },
+          { id: 'category', label: 'Categoría', value: (s) => s.category?.name },
+          { id: 'price', label: 'Precio', type: 'number', value: (s) => Number(s.price) },
+          { id: 'duration', label: 'Duración', type: 'number', value: (s) => s.duration_minutes },
+          { id: 'status', label: 'Estado', value: (s) => s.status?.name },
+          { id: 'created_at', label: 'Fecha de creación', type: 'date', value: (s) => s.created_at },
+        ]}
         data={services}
         getItemKey={(service) => service.id}
         entityLabel="servicios registrados"
@@ -331,7 +344,7 @@ export default function ServicesTable() {
 
       <FormService
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => { setShowModal(false); fetchCategories(); }}
         initialData={editingService}
         categories={categoryOptions}
         onSubmitSuccess={() => {

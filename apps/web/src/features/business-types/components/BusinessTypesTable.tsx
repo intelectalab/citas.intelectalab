@@ -293,6 +293,12 @@ export default function BusinessTypesTable() {
         filterValues={filters}
         onFilterChange={handleFilterChange}
         columns={columns}
+        sortOptions={[
+          { id: 'name', label: 'Nombre', value: (t) => t.name },
+          { id: 'tenants', label: 'Empresas', type: 'number', value: (t) => t.tenants_count ?? 0 },
+          { id: 'modules_off', label: 'Módulos que no usa', type: 'number', value: (t) => t.modules_off?.length ?? 0 },
+          { id: 'status', label: 'Estado', value: (t) => t.status },
+        ]}
         data={visibleTypes}
         getItemKey={(type) => type.id}
         entityLabel="plantillas de rubro"

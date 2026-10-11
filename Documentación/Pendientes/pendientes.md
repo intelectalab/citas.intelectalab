@@ -92,11 +92,10 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Configuración de plataforma por definir.** Moneda e impuestos, pasarela de pago, días de gracia tras el vencimiento, avisos de vencimiento, política de contraseñas y segundo factor, aviso global o modo mantenimiento, plantillas de correo, retención de la bitácora, rubro y plan por defecto.
 - **Cambiar de cuenta sin volver a ingresar.** Hoy cierra la sesión y pide la contraseña. Un cambio directo entre empresas exigiría una forma segura de probar que las cuentas son de la misma persona.
 - **Preferencia de tema por cuenta.** El tema se guarda en el navegador, no en la cuenta: no viaja entre dispositivos.
-- **Notificaciones y buscador de la barra superior.** Son solo visuales.
+- **Buscador de la barra superior.** Es solo visual.
 
 ## Detectados el 2026-10-06 (disponibilidad: horarios y ausencias)
 
-- **El ojo de la tabla de profesionales no abre nada.** Guarda el profesional elegido, pero ninguna vista lo muestra. El prototipo tiene una página del profesional con horario, perfil, ausencias y rendimiento.
 - **Mensajes de validación en inglés.** Los que genera Laravel por defecto ("The reason field is required") no están traducidos; solo salen en español los escritos a mano.
 - **Panel de horario sin revisar en tema oscuro.**
 
@@ -298,8 +297,9 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-09 (cuentas de profesionales y topes del plan)
 
-- **Profesional sin cuenta (en consulta).** Hoy registrar a un profesional siempre le crea una cuenta, así que cada uno consume un usuario del plan. Falta decidir si puede existir alguien que atiende pero no entra al sistema (no gastaría usuario). Geraldine lo consulta con su jefe; respuesta prevista el 2026-10-10 por la tarde. No cambiar hasta entonces.
-- **Aviso del tope antes de abrir el formulario.** "Nuevo profesional" deja llenar el formulario y avisa al guardar. En Sucursales el botón lo explica antes; conviene igualarlo.
+- **Igualar el botón de Sucursales.** "Nueva sucursal" con el tope alcanzado muestra un aviso al pulsarlo; "Nuevo profesional" ya sale bloqueado con su motivo. Conviene que Sucursales use el mismo botón bloqueado de la tabla.
+- **Botón bloqueado sin revisar a la vista.** Su aspecto y el del globo con el motivo se comprobaron por estilos, no en una captura. Falta también el tema oscuro y verlo habilitarse tras eliminar un profesional.
+- **Motivo del bloqueo en pantallas táctiles.** El globo aparece al pasar el cursor o con el teclado; en un celular no hay cursor. La tarjeta de arriba sí dice que se alcanzó el tope.
 - **Usuarios que no son profesionales.** No hay pantalla para crear recepción u otro administrador; cuando exista debe respetar el mismo tope de usuarios.
 - **Empresas que ya superan su plan.** Los topes impiden agregar, pero si a una empresa se le baja de plan no se le avisa ni se le pide reducir.
 - **Correo del profesional único en toda la plataforma.** Al registrar un profesional el correo no puede existir en ninguna otra empresa, a diferencia del resto de cuentas (único por empresa).
@@ -326,9 +326,57 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Registro público de empresa con lista genérica.** `RegisterModal` conserva sus dos `<select>`: tiene otro estilo de campos. Para cambiarlo hace falta una variante del Select con ese estilo y validar a mano que se eligió un rubro.
 - **Listas obligatorias sin validación del navegador.** El Select propio no bloquea el envío si queda vacío; en el alta de empresa de la consola el rubro y el plan ya no los valida el navegador, los valida la API al guardar.
 - **Select sin teclado.** El componente se abre y se elige con el ratón; no responde a flechas, Enter ni Escape, y no se puede buscar dentro de una lista larga.
-- **Menú del Select dentro de zonas con desplazamiento.** El menú se abre hacia abajo dentro de su contenedor; al final de un panel largo puede quedar parcialmente fuera de la vista.
 - **"+" de profesional y de sede.** No se agregaron: crear un profesional consume plan y pide más datos, y una sede tiene su propio flujo.
 - **"+" de categoría.** El formulario de servicio conserva su enlace "Nueva categoría"; no usa el "+" junto a la lista como los demás.
 - **Mascota rápida con pocos datos.** El "+" pide nombre y especie; raza, fecha de nacimiento y sexo se completan en la ficha del cliente.
 - **Servicio creado desde lista de espera o controles.** Queda elegido en ese formulario, pero la lista de la pantalla de atrás no se entera hasta recargar.
 - **Pruebas en pantalla que faltan.** Guardar cliente y servicio tras cambiar sus listas, los "+" como profesional y el tema oscuro del Select en su versión pequeña.
+
+## Detectados el 2026-10-10 (tablas que se actualizan al guardar)
+
+- **Categoría nueva en el filtro de Servicios, sin probar en pantalla.** La tabla vuelve a pedir las categorías al cerrar el formulario de servicio; falta comprobarlo en el navegador.
+- **Revisión de las demás pantallas hecha en el código.** Falta un recorrido en el navegador editando un registro en cada tabla.
+
+## Detectados el 2026-10-10 (filtro por fecha, ordenar por y listas flotantes)
+
+- **Pantallas sin probar en el navegador.** Feriados, Contactos y las tablas de la plataforma (empresas, planes, rubros) con sus filtros de fecha y su orden; el filtro de fecha de Fichas; y cada criterio de orden uno por uno (se probaron Clientes, Citas y Servicios).
+- **Menú flotante en el resto de formularios.** Se probó en los de cliente y servicio y en las barras de las tablas; falta recorrer los demás paneles y el tema oscuro.
+- **El filtro y el orden no se recuerdan.** Al salir de la pantalla o recargar, vuelven a quedar sin filtro y sin orden.
+- **Ordenar por un solo criterio.** No se puede ordenar por dos a la vez (por ejemplo, profesional y luego fecha).
+- **Ordenar desde el encabezado de la columna.** Solo se ordena desde la barra "Ordenar por".
+- **Botones de la barra de filtros que aún no hacen nada.** "+" (agregar filtro) y "Filtros avanzados"; también "Exportar", la vista de panel, la paginación y las casillas de selección de la tabla.
+- **Tabla sin mensaje cuando no hay filas.** Si los filtros no dejan nada, la tabla queda vacía sin decir por qué.
+- **Calendario propio solo en los filtros.** Los formularios siguen usando el campo de fecha del navegador (cita, bloqueo, feriado, control, lista de espera, cliente).
+- **Clientes: lista completa hasta 500.** La tabla ya no se queda en los 10 primeros, pero sigue sin paginación real; con más de 500 clientes haría falta.
+- **Fechas de registro en zona del navegador.** Los filtros de fecha de registro usan la zona horaria del navegador, no la de la empresa.
+
+## Detectados el 2026-10-10 (página del profesional y nombres con enlace)
+
+- **Página del profesional vista por otro profesional.** Cualquier persona del equipo puede abrirla; un profesional ve los datos de un colega pero no sus citas (la API solo le entrega las propias). Definir si debe poder abrirla.
+- **Periodo fijo en la página del profesional.** Números y citas son de 30 días hacia atrás y 30 hacia adelante; no se puede cambiar el periodo.
+- **Lo que la página del profesional aún no tiene.** Fichas que escribió, controles a su cargo, ingresos y comisiones (cuando exista la caja), color y foto.
+- **Asignar servicios desde la página.** Muestra los servicios asignados, pero sigue sin haber dónde asignarlos.
+- **Nombres sin enlace.** Las tarjetas de cita de la agenda y las próximas citas del inicio (toda la tarjeta ya es un botón o un enlace) y los textos de confirmación.
+- **Pruebas en pantalla que faltan.** Fichas de atención con enlaces (la base de ejemplo no trae fichas), página de la sucursal, vista de un profesional, profesional con dos sedes o con ausencias, tema oscuro y celular.
+
+## Detectados el 2026-10-10 (paginación de a seis y tarjetas que filtran)
+
+- **Elegir cuántas filas ver.** Todas las tablas y listas muestran 6; no hay selector de 6, 12 o 24.
+- **La página no se recuerda.** Al abrir un registro y volver, la tabla regresa a la página 1.
+- **Paginación hecha en el navegador.** La tabla recibe todas las filas y muestra 6. Con listas muy grandes (más de 500) haría falta paginar en la API.
+- **Refresco automático y página.** Citas se actualiza sola cada 30 segundos; la página se conserva, pero si llegan filas nuevas las de la página visible pueden desplazarse.
+- **Tarjeta "Tiempo promedio" sin filtro.** Podría dejar solo las atenciones medidas.
+- **Pruebas en pantalla que faltan.** La paginación en cada tabla (se probó Clientes), la tarjeta "Fichas" y la historia paginada con fichas reales, tema oscuro y celular.
+
+## Detectados el 2026-10-10 (notificaciones, primera entrega)
+
+- **Segunda entrega de avisos (acordada).** Citas dentro de un bloqueo o feriado recién creado; lista de espera que puede tomar un horario liberado; controles vencidos o por vencer; apertura de emergencia de una ficha privada; ficha en borrador de una cita ya atendida; tope del plan cerca; prueba o suscripción por vencer.
+- **Avisos que esperan a su módulo.** Cierre de caja con diferencia, stock mínimo, presupuesto aceptado, turno sin cita.
+- **Solo dentro del sistema.** No se envía correo, WhatsApp ni aviso del navegador; quien no tiene el panel abierto no se entera.
+- **Elegir qué avisos recibir.** Nadie puede apagar un tipo de aviso ni cambiar los 3 días de anticipación de las ausencias.
+- **Ausencias próximas dependen de que alguien abra el panel.** Se generan al consultar la campana. Con envío de mensajes haría falta una tarea diaria (y hoy nada ejecuta las tareas programadas).
+- **Avisos antiguos.** No se borran nunca; la página muestra los últimos 300.
+- **Recepción y otros roles.** Hoy solo existen dueño, administradores y profesionales; cuando haya recepción habrá que decidir qué recibe.
+- **Avisos del portal sin probar desde su pantalla.** La regla está probada; falta reservar, cambiar y cancelar desde el portal y ver llegar el aviso.
+- **La agenda no se entera de lo hecho desde la campana.** Si se cambia una cita abierta desde un aviso, la agenda de atrás se actualiza en su siguiente refresco (20 segundos).
+- **Pruebas en pantalla que faltan.** Actualización sola a los 30 segundos, administrador que no es dueño, tema oscuro y celular.

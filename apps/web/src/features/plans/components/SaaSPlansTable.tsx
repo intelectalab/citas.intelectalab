@@ -31,6 +31,7 @@ interface SaaSPlan {
   features: Record<string, any>;
   status: string;
   subscriptions_count?: number;
+  created_at?: string;
 }
 
 export default function SaaSPlansTable() {
@@ -373,6 +374,17 @@ export default function SaaSPlansTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          dateFilters={[
+            { id: 'created_at', label: 'Fecha de creación', value: (p) => p.created_at },
+          ]}
+          sortOptions={[
+            { id: 'name', label: 'Nombre', value: (p) => p.name },
+            { id: 'price_monthly', label: 'Precio mensual', type: 'number', value: (p) => Number(p.price_monthly) },
+            { id: 'price_yearly', label: 'Precio anual', type: 'number', value: (p) => Number(p.price_yearly) },
+            { id: 'subscriptions', label: 'Empresas suscritas', type: 'number', value: (p) => p.subscriptions_count ?? 0 },
+            { id: 'status', label: 'Estado', value: (p) => p.status },
+            { id: 'created_at', label: 'Fecha de creación', type: 'date', value: (p) => p.created_at },
+          ]}
           data={safePlans}
           getItemKey={(p) => p.id}
           entityLabel="planes registrados"

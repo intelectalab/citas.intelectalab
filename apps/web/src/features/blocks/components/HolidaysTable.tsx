@@ -258,6 +258,15 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
           filterValues={filters}
           onFilterChange={(id, value) => { setFilters((current) => ({ ...current, [id]: value })); setActiveCard(''); }}
           columns={columns}
+          dateFilters={[
+            { id: 'date', label: 'Fecha', future: true, value: (h) => h.date },
+          ]}
+          sortOptions={[
+            { id: 'date', label: 'Fecha', type: 'date', value: (h) => h.date },
+            { id: 'name', label: 'Feriado', value: (h) => h.name },
+            { id: 'branch', label: 'Sede', value: (h) => h.branch?.name },
+            { id: 'affected', label: 'Citas ese día', type: 'number', value: (h) => h.affected_count },
+          ]}
           data={rows}
           getItemKey={(h) => h.id}
           entityLabel="feriados"

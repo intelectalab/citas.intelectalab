@@ -8,6 +8,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import { apiError, toMinutes } from '@/features/appointments/appointments';
 import { WEEK } from '@/features/branches/branches';
 import ProfessionalSchedule from './ProfessionalSchedule';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 interface Range { weekday: number; starts: string; ends: string }
 interface Member { id: string; display_name: string; weekly_minutes: number; ranges: Range[] }
@@ -189,7 +190,7 @@ export default function TeamSchedules() {
                       <div className="px-5 py-3 flex items-center gap-3 min-w-0">
                         <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${tone.soft}`}>{initials(person.display_name)}</span>
                         <div className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-slate-800 truncate">{person.display_name}</span>
+                          <ProfessionalLink id={person.id} className="block text-sm font-bold text-slate-800 truncate">{person.display_name}</ProfessionalLink>
                           <span className="block text-[11px] text-slate-500">{hoursLabel(person.weekly_minutes)} a la semana</span>
                         </div>
                         {data.can_edit && (

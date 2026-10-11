@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Search, Bell, ChevronDown, LogOut, Moon, Sun, Users, LifeBuoy } from 'lucide-react';
+import { Search, ChevronDown, LogOut, Moon, Sun, Users, LifeBuoy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import NotificationsBell from '@/features/notifications/components/NotificationsBell';
 
 // Correo con el que la pantalla de ingreso abre tras "Cambiar de cuenta".
 export const SWITCH_ACCOUNT_EMAIL_KEY = 'switch_account_email';
@@ -72,10 +73,7 @@ export default function Navbar() {
       </div>
 
       <div className="flex items-center gap-4">
-        <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors relative">
-          <Bell size={20} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-[#FF7A00] rounded-full"></span>
-        </button>
+        <NotificationsBell />
 
         <div ref={menuRef} className="relative border-l border-gray-200 pl-4">
           <button

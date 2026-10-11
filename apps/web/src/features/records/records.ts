@@ -59,6 +59,7 @@ export interface CareRecord {
   customer: { id: string; code: string; name: string } | null;
   dependent: { id: string; name: string } | null;
   professional: string | null;
+  professional_id?: string | null;
   consent_accepted: boolean;
   consent_text?: string | null;
   // Lo que exigía la plantilla cuando se empezó la ficha.

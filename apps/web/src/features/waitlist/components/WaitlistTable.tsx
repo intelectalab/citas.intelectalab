@@ -14,6 +14,7 @@ import { useAppointmentPanels } from '@/features/appointments/components/useAppo
 import { apiError, formatDate, formatDateTime, type AppointmentContext } from '@/features/appointments/appointments';
 import FormWaitlist from './FormWaitlist';
 import { WAITLIST_STATUS_STYLES, dateRangeLabel, timeRangeLabel, waitingLabel, type WaitlistEntry, type WaitlistSlotDay, type WaitlistStatus } from '../waitlist';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const VIEWS = [
   { id: 'open', label: 'En espera' },
@@ -208,7 +209,9 @@ export default function WaitlistTable() {
         <div key={`what-${e.id}`} className="max-w-xs">
           <span className="block text-sm font-semibold text-slate-800">{e.service?.name ?? '—'}</span>
           <span className="block text-xs text-slate-500">
-            {e.professional ? `Con ${e.professional.display_name}` : `Con cualquier ${vocab.pro.toLowerCase()}`}
+            {e.professional
+              ? <>Con <ProfessionalLink id={e.professional.id}>{e.professional.display_name}</ProfessionalLink></>
+              : `Con cualquier ${vocab.pro.toLowerCase()}`}
             {(context?.branches.length ?? 0) > 1 && e.branch ? ` · ${e.branch.name}` : ''}
           </span>
           {e.notes && <span className="block text-xs text-slate-400 mt-0.5 truncate" title={e.notes}>{e.notes}</span>}
@@ -316,6 +319,18 @@ export default function WaitlistTable() {
           filterValues={filters}
           onFilterChange={(id, value) => setFilters((current) => ({ ...current, [id]: value }))}
           columns={columns}
+          dateFilters={[
+            { id: 'created_at', label: 'Anotado el', value: (e) => e.created_at },
+            { id: 'date_from', label: 'Le sirve desde', future: true, value: (e) => e.date_from, end: (e) => e.date_to ?? '9999-12-31' },
+          ]}
+          sortOptions={[
+            { id: 'days_waiting', label: 'Días en espera', type: 'number', value: (e) => e.days_waiting },
+            { id: 'created_at', label: 'Anotado el', type: 'date', value: (e) => e.created_at },
+            { id: 'date_from', label: 'Le sirve desde', type: 'date', value: (e) => e.date_from },
+            { id: 'customer', label: vocab.client, value: (e) => e.customer?.name },
+            { id: 'service', label: 'Servicio', value: (e) => e.service?.name },
+            { id: 'professional', label: vocab.pro, value: (e) => e.professional?.display_name },
+          ]}
           data={rows}
           getItemKey={(e) => e.id}
           entityLabel="personas"

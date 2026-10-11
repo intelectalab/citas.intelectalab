@@ -810,6 +810,7 @@ INSERT INTO demo_staff VALUES
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d71', 'Nicole Cabrera', 'day'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d81', 'Jhonatan Ríos', 'afternoon'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d81', 'Luis Ángel Soto', 'day'),
+  ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d81', 'Bryan Quispe', 'morning'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d91', 'Lic. Melissa Tovar', 'afternoon'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d91', 'Dra. Paola Guzmán', 'day'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380da1', 'Camila Echevarría', 'afternoon'),
@@ -1169,5 +1170,52 @@ BEGIN
   END LOOP;
 END
 $demo$;
+
+-- ============================================================================
+--  Avisos de la campana, de ejemplo
+--  · Cada profesional: sus tres próximas citas, como si se las hubiera agendado la recepción.
+--  · El dueño: dos reservas "desde el portal" y dos cancelaciones recientes.
+--  Los avisos de ausencias próximas no van aquí: el sistema los genera solo al consultar.
+-- ============================================================================
+INSERT INTO user_notifications (tenant_id, user_id, type, title, body, link, entity_type, entity_id, read_at, created_at)
+SELECT x.tenant_id, x.user_id, 'appointment.booked', 'Te agendaron una cita',
+       x.customer || ' · ' || x.service || ' · ' || to_char(x.starts_at AT TIME ZONE 'America/Lima', 'DD/MM, HH24:MI'),
+       '/agenda', 'appointment', x.id,
+       CASE WHEN x.n = 3 THEN now() - interval '1 hour' END,
+       now() - make_interval(hours => x.n::int * 5)
+FROM (
+  SELECT a.id, a.tenant_id, p.user_id, a.starts_at, s.name AS service,
+         c.first_name || ' ' || c.last_name AS customer,
+         row_number() OVER (PARTITION BY a.professional_id ORDER BY a.starts_at) AS n
+  FROM appointments a
+  JOIN professionals p ON p.id = a.professional_id AND p.user_id IS NOT NULL
+  JOIN customers c ON c.id = a.customer_id
+  JOIN services s ON s.id = a.service_id
+  WHERE a.starts_at > now() AND a.status IN ('pending', 'confirmed')
+) x
+WHERE x.n <= 3;
+
+INSERT INTO user_notifications (tenant_id, user_id, type, title, body, link, entity_type, entity_id, read_at, created_at)
+SELECT x.tenant_id, u.id,
+       CASE WHEN x.cancelled THEN 'appointment.cancelled' ELSE 'appointment.portal_booked' END,
+       CASE WHEN x.cancelled THEN 'Cancelaron una cita' ELSE 'Nueva reserva desde el portal' END,
+       x.customer || ' · ' || x.service || ' · ' || to_char(x.starts_at AT TIME ZONE 'America/Lima', 'DD/MM, HH24:MI') || ' · ' || x.professional,
+       '/agenda', 'appointment', x.id,
+       CASE WHEN x.n = 2 THEN now() - interval '2 hours' END,
+       now() - make_interval(hours => x.n::int * 7 + CASE WHEN x.cancelled THEN 3 ELSE 0 END)
+FROM (
+  SELECT a.id, a.tenant_id, a.starts_at, s.name AS service, p.display_name AS professional,
+         c.first_name || ' ' || c.last_name AS customer,
+         a.status = 'cancelled' AS cancelled,
+         row_number() OVER (PARTITION BY a.tenant_id, a.status = 'cancelled' ORDER BY CASE WHEN a.status = 'cancelled' THEN -extract(epoch FROM a.starts_at) ELSE extract(epoch FROM a.starts_at) END) AS n
+  FROM appointments a
+  JOIN professionals p ON p.id = a.professional_id
+  JOIN customers c ON c.id = a.customer_id
+  JOIN services s ON s.id = a.service_id
+  WHERE (a.status = 'cancelled' AND a.starts_at < now() + interval '7 days')
+     OR (a.status = 'pending' AND a.starts_at > now() + interval '1 day')
+) x
+JOIN users u ON u.tenant_id = x.tenant_id AND u.is_owner
+WHERE x.n <= 2;
 
 COMMIT;

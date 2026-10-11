@@ -632,6 +632,8 @@ class CareRecordController extends Controller
             'signed_at'      => $local($record->signed_at),
             'locked_at'      => $local($record->locked_at),
             'author'         => $record->author ? trim("{$record->author->first_name} {$record->author->last_name}") : null,
+            // Para enlazar el nombre del profesional con su página.
+            'professional_id' => $record->professional_id,
             'appointment_id' => $record->appointment_id,
             'appointment'    => $record->appointment ? [
                 'code'      => $record->appointment->code,

@@ -445,6 +445,28 @@ CREATE TABLE appointment_status_history (
 );
 CREATE INDEX idx_appt_history ON appointment_status_history(appointment_id, created_at);
 
+-- Avisos de la campana: uno por persona del equipo que debe enterarse de algo.
+CREATE TABLE user_notifications (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- appointment.booked, appointment.portal_booked, appointment.cancelled, block.soon, ...
+    type varchar(60) NOT NULL,
+    title varchar(190) NOT NULL,
+    body varchar(500) NULL,
+    link varchar(255) NULL,
+    -- A qué se refiere, para abrirlo desde el aviso: appointment, block.
+    entity_type varchar(50) NULL,
+    entity_id uuid NULL,
+    -- Para avisos que se generan al consultar: evita repetir el mismo a la misma persona.
+    dedupe_key varchar(190) NULL,
+    read_at timestamptz NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, dedupe_key)
+);
+CREATE INDEX idx_user_notifications_inbox ON user_notifications(user_id, created_at DESC);
+CREATE INDEX idx_user_notifications_unread ON user_notifications(user_id) WHERE read_at IS NULL;
+
 CREATE TABLE medical_records (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

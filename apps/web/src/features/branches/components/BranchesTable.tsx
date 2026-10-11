@@ -207,6 +207,13 @@ export default function BranchesTable() {
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           columns={columns}
+          sortOptions={[
+            { id: 'name', label: 'Nombre', value: (b) => b.name },
+            { id: 'district', label: 'Distrito', value: (b) => b.district },
+            { id: 'team', label: vocab.pros, type: 'number', value: (b) => b.professionals_count },
+            { id: 'today', label: 'Citas de hoy', type: 'number', value: (b) => b.appointments_today },
+            { id: 'upcoming', label: 'Citas próximas', type: 'number', value: (b) => b.upcoming },
+          ]}
           data={rows}
           getItemKey={(b) => b.id}
           entityLabel="sucursales"

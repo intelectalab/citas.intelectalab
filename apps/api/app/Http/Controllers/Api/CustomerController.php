@@ -85,7 +85,10 @@ class CustomerController extends Controller
             $query->where('status_id', $statusId);
         }
 
-        $customers = $query->orderBy('created_at', 'desc')->paginate(10);
+        // Los buscadores piden pocos; la tabla de clientes pide la lista completa para filtrar y ordenar.
+        $perPage = min(max((int) $request->input('per_page', 10), 1), 500);
+
+        $customers = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json($customers);
     }

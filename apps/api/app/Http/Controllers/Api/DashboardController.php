@@ -157,6 +157,7 @@ class DashboardController extends Controller
                 'by_customer' => (bool) $event->actor_customer_id,
                 'code'    => $event->appointment?->code,
                 'who'     => $who($event->appointment),
+                'customer_id' => $event->appointment?->customer_id,
                 'service' => $event->appointment?->service?->name,
             ]),
         ]);

@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 interface Customer {
   id: string;
   code: string;
+  created_at?: string;
   first_name: string;
   last_name: string;
   biological_sex?: string;
@@ -76,7 +77,7 @@ export default function CustomersTable() {
     try {
       setLoading(true);
       const res = await api.get('/customers', {
-        params: { search, ...currentFilters }
+        params: { search, ...currentFilters, per_page: 500 }
       });
       const responseData = res.data;
       if (Array.isArray(responseData)) {
@@ -294,6 +295,17 @@ export default function CustomersTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          dateFilters={[
+            { id: 'created_at', label: 'Fecha de registro', value: (c) => c.created_at },
+          ]}
+          sortOptions={[
+            { id: 'created_at', label: 'Fecha de registro', type: 'date', value: (c) => c.created_at },
+            { id: 'code', label: 'Código', value: (c) => c.code },
+            { id: 'first_name', label: 'Nombre', value: (c) => `${c.first_name} ${c.last_name}` },
+            { id: 'last_name', label: 'Apellido', value: (c) => `${c.last_name} ${c.first_name}` },
+            { id: 'document', label: 'Documento', value: (c) => c.document_number },
+            { id: 'district', label: 'Distrito', value: (c) => c.district },
+          ]}
           data={safeCustomers}
           getItemKey={(p) => p.id}
           entityLabel={`${vocab.clients.toLowerCase()} registrados`}

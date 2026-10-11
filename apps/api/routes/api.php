@@ -129,6 +129,11 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::get('/type-documents', [TypeDocumentController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
 
+    // La campana: avisos de quien tiene la sesión abierta.
+    Route::get('/notifications', [\App\Http\Controllers\Api\NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\Api\NotificationController::class, 'readAll']);
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Api\NotificationController::class, 'read']);
+
     Route::apiResource('statuses', StatusController::class);
 
     // Sucursales: las ve todo el personal; las cambia el administrador de la empresa.

@@ -13,6 +13,8 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import FormCustomer from './FormCustomer';
 import CustomerPortalAccess, { type PortalAccess } from './CustomerPortalAccess';
 import RecordPanel from '@/features/records/components/RecordPanel';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
+import { PagedList } from '@/app/components/common/Pager';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
 import { RELEASED, dateOf, formatDate, formatMinutes, statusStyle, timeOf, todayISO, type Appointment } from '@/features/appointments/appointments';
 import { RECORD_STATUS, type CareRecord } from '@/features/records/records';
@@ -45,6 +47,10 @@ const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
+// Tarjetas de números que funcionan como filtro, y cómo se titula la lista que dejan.
+const CLICKABLE = ['completed', 'upcoming', 'missed', 'records'];
+const FOCUS_TITLES: Record<string, string> = { completed: 'Atenciones', upcoming: 'Citas próximas', missed: 'Canceladas y ausencias' };
+
 const ageFrom = (birthDate?: string | null): string | null => {
   if (!birthDate) return null;
   const [y, m, d] = birthDate.slice(0, 10).split('-').map(Number);
@@ -67,6 +73,8 @@ export default function CustomerDetail() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [recordFor, setRecordFor] = useState<string | null>(null);
+  // Tarjeta de números elegida: filtra la lista de citas.
+  const [focus, setFocus] = useState('');
 
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const usesAgenda = hasModule('agenda');
@@ -114,6 +122,17 @@ export default function CustomerDetail() {
     ? measured.reduce((sum, a) => sum + (a.timing.service_seconds as number), 0) / measured.length / 60
     : null;
   const lastVisit = completed.length ? completed[completed.length - 1] : null;
+  const focused = focus === 'completed' ? [...completed].reverse()
+    : focus === 'upcoming' ? upcoming
+    : focus === 'missed' ? appointments.filter((a) => RELEASED.includes(a.status)).reverse()
+    : [];
+
+  // Las tarjetas de números filtran la lista de citas de esta misma página.
+  const pickStat = (id: string) => {
+    const target = id === 'records' ? 'records' : 'appointments';
+    if (id !== 'records') setFocus((current) => (current === id ? '' : id));
+    setTimeout(() => document.querySelector(`[data-card="${target}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
 
   if (loading) {
     return (
@@ -161,13 +180,9 @@ export default function CustomerDetail() {
   ];
 
   const appointmentRow = (a: Appointment) => (
-    <li key={a.id}>
-      <button
-        type="button"
-        data-appointment={a.id}
-        onClick={() => openDetail(a.id)}
-        className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-slate-50 transition-colors"
-      >
+    <li key={a.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+      {/* La fecha y la fase abren la cita; el nombre del profesional lleva a su página. */}
+      <button type="button" data-appointment={a.id} onClick={() => openDetail(a.id)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
         <div className="w-28 shrink-0">
           <span className="block text-sm font-semibold text-slate-800 first-letter:uppercase">{formatDate(dateOf(a.starts_at), { weekday: 'short', day: '2-digit', month: 'short' })}</span>
           <span className="block text-xs text-slate-500">{dateOf(a.starts_at).slice(0, 4)} · {timeOf(a.starts_at)}</span>
@@ -175,11 +190,12 @@ export default function CustomerDetail() {
         <div className="flex-1 min-w-0">
           <span className="block text-sm text-slate-800 truncate">{a.service?.name}</span>
           <span className="block text-xs text-slate-500 truncate">
-            {a.professional?.display_name}{a.dependent ? ` · ${a.dependent.name}` : ''} · {a.code}
+            {a.dependent ? `${a.dependent.name} · ` : ''}{a.code}
           </span>
         </div>
-        <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>{a.status_name}</span>
       </button>
+      <ProfessionalLink id={a.professional?.id} className="hidden sm:block max-w-40 text-xs font-semibold text-slate-600 truncate">{a.professional?.display_name}</ProfessionalLink>
+      <button type="button" onClick={() => openDetail(a.id)} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>{a.status_name}</button>
     </li>
   );
 
@@ -189,7 +205,7 @@ export default function CustomerDetail() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         {/* Datos del cliente */}
-        <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="customer">
+        <section className={`${card} p-6 space-y-5`} data-card="customer">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <span className="w-12 h-12 rounded-2xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><User size={22} /></span>
@@ -252,25 +268,37 @@ export default function CustomerDetail() {
           <CustomerPortalAccess customer={customer} clientWord={vocab.client} onChanged={loadCustomer} />
         </section>
 
-        {/* Números */}
-        <div className={`xl:col-span-2 grid grid-cols-2 gap-4 ${stats.length > 4 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+        {/* Números y, pegada debajo, la historia */}
+        <div className="xl:col-span-2 space-y-5">
+        <div className={`grid grid-cols-2 gap-4 ${stats.length > 4 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           {stats.map((stat) => (
-            <div key={stat.id} data-stat={stat.id} className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{stat.title}</span>
-                  <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{stat.value}</div>
+            <button
+              key={stat.id}
+              type="button"
+              data-stat={stat.id}
+              disabled={!CLICKABLE.includes(stat.id)}
+              aria-pressed={CLICKABLE.includes(stat.id) ? focus === stat.id : undefined}
+              title={CLICKABLE.includes(stat.id) ? 'Ver cuáles son' : undefined}
+              onClick={() => pickStat(stat.id)}
+              className={`bg-white px-4 py-3 rounded-2xl border text-left shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 enabled:cursor-pointer enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
+                focus === stat.id ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'border-slate-100 enabled:hover:border-slate-200'
+              }`}
+            >
+              <span className="flex items-start justify-between gap-2">
+                <span className="block min-w-0">
+                  <span className="block text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{stat.title}</span>
+                  <span className="block mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{stat.value}</span>
                   <span className="block text-xs text-slate-500 mt-0.5 first-letter:uppercase">{stat.note}</span>
-                </div>
-                <div className={`p-2 rounded-xl bg-slate-50 border border-slate-100 shrink-0 ${stat.color}`}>{stat.icon}</div>
-              </div>
-            </div>
+                </span>
+                <span className={`p-2 rounded-xl bg-slate-50 border border-slate-100 shrink-0 ${stat.color}`}>{stat.icon}</span>
+              </span>
+            </button>
           ))}
         </div>
 
         {/* Historia: fichas de atención */}
         {usesRecords && (
-          <section className={`${card} xl:col-span-2 overflow-hidden`} data-card="records">
+          <section className={`${card} overflow-hidden scroll-mt-4`} data-card="records">
             <div className="px-6 pt-5 pb-3">
               <h2 className={cardTitle}><ClipboardList className="w-4 h-4 text-[#3F768C]" /> Historia de atenciones</h2>
               <p className="text-xs text-slate-500 font-medium mt-1">Las fichas llenadas en cada atención, de la más reciente a la más antigua.</p>
@@ -278,8 +306,8 @@ export default function CustomerDetail() {
             {records.length === 0 ? (
               <p className="px-6 pb-6 text-sm text-slate-400">Aún no tiene fichas de atención.</p>
             ) : (
-              <ul className="divide-y divide-slate-100 border-t border-slate-100">
-                {records.map((record) => {
+              <div className="border-t border-slate-100 flex flex-col">
+                <PagedList items={records} empty="" renderRow={(record) => {
                   const date = record.appointment?.starts_at ?? record.created_at;
                   return (
                     <li key={record.id}>
@@ -309,34 +337,41 @@ export default function CustomerDetail() {
                       </button>
                     </li>
                   );
-                })}
-              </ul>
+                }} />
+              </div>
             )}
           </section>
         )}
+        </div>
 
         {/* Citas */}
         {usesAgenda && (
-          <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="appointments">
+          <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">
               <h2 className={cardTitle}><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</h2>
-              <p className="text-xs text-slate-500 font-medium mt-1">Haz clic en una cita para ver su detalle.</p>
+              <p className="text-xs text-slate-500 font-medium mt-1">Haz clic en una cita para ver su detalle. Las tarjetas de arriba filtran esta lista.</p>
             </div>
             {appointments.length === 0 ? (
               <p className="px-6 pb-6 text-sm text-slate-400">Aún no tiene citas.</p>
+            ) : focus && FOCUS_TITLES[focus] ? (
+              <div className="border-t border-slate-100 flex flex-col" data-list="focus">
+                <div className="flex items-center justify-between gap-3 px-5 pt-3">
+                  <span className={smallLabel}>{FOCUS_TITLES[focus]} ({focused.length})</span>
+                  <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                    Ver todas las citas
+                  </button>
+                </div>
+                <PagedList key={focus} items={focused} renderRow={appointmentRow} empty="Ninguna." />
+              </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 border-t border-slate-100 lg:divide-x divide-slate-100">
-                <div data-list="upcoming">
+                <div data-list="upcoming" className="flex flex-col">
                   <span className={`block px-5 pt-3 ${smallLabel}`}>Próximas ({upcoming.length})</span>
-                  {upcoming.length === 0
-                    ? <p className="px-5 py-3 text-sm text-slate-400">Sin citas agendadas.</p>
-                    : <ul className="divide-y divide-slate-100">{upcoming.map(appointmentRow)}</ul>}
+                  <PagedList items={upcoming} renderRow={appointmentRow} empty="Sin citas agendadas." />
                 </div>
-                <div data-list="past">
+                <div data-list="past" className="flex flex-col">
                   <span className={`block px-5 pt-3 ${smallLabel}`}>Anteriores ({past.length})</span>
-                  {past.length === 0
-                    ? <p className="px-5 py-3 text-sm text-slate-400">Sin citas anteriores.</p>
-                    : <ul className="divide-y divide-slate-100 max-h-[28rem] overflow-y-auto">{past.map(appointmentRow)}</ul>}
+                  <PagedList items={past} renderRow={appointmentRow} empty="Sin citas anteriores." />
                 </div>
               </div>
             )}

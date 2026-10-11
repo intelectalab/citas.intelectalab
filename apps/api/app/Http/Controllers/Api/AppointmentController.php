@@ -834,6 +834,9 @@ class AppointmentController extends Controller
             'actor_user_id'  => $actor instanceof User ? $actor->id : null,
             'actor_customer_id' => $actor instanceof Customer ? $actor->id : null,
         ]);
+
+        // Avisa en la campana a quien deba enterarse (el profesional, la administración).
+        \App\Support\Notifier::appointmentStep($appointment, $from, $to, $actor);
     }
 
     protected function present(Appointment $appointment, Tenant $tenant, bool $withHistory = false): array

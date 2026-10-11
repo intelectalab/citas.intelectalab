@@ -13,6 +13,7 @@ import { apiError } from '@/features/appointments/appointments';
 import FormBranch from './FormBranch';
 import BranchHoursPanel from './BranchHoursPanel';
 import { ROOM_KINDS, TIMEZONES, WEEK, addressLabel, rangesLabel, todayLabel, type BranchDetailData, type Room } from '../branches';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
@@ -237,7 +238,7 @@ export default function BranchDetail() {
             <ul className="space-y-3">
               {branch.professionals.map((p) => (
                 <li key={p.id} data-professional={p.id}>
-                  <span className={`block text-sm font-semibold ${p.inactive ? 'text-slate-400' : 'text-slate-800'}`}>{p.display_name}{p.inactive ? ' · inactivo' : ''}</span>
+                  <ProfessionalLink id={p.id} className={`block text-sm font-semibold ${p.inactive ? 'text-slate-400' : 'text-slate-800'}`}>{p.display_name}{p.inactive ? ' · inactivo' : ''}</ProfessionalLink>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {WEEK.filter((day) => p.ranges.some((r) => r.weekday === day.weekday)).map((day) => {
                       const ranges = p.ranges.filter((r) => r.weekday === day.weekday);

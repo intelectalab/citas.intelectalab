@@ -5,6 +5,7 @@ import { CalendarCheck, Clock, Hourglass, Scale, Timer } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { addDays, apiError, formatDate, formatMinutes, todayISO, type TimingSummary } from '../appointments';
+import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 
 interface TimingRow extends TimingSummary {
   id: string;
@@ -80,7 +81,11 @@ function TimingTable({ title, hint, firstColumn, rows, tableKey, showTotal = fal
               {rows.map((row) => (
                 <tr key={row.id} data-row={row.name}>
                   <td className="px-6 py-3 font-semibold text-slate-800">
-                    {row.name}
+                    {tableKey === 'professional'
+                      ? <ProfessionalLink id={row.id}>{row.name}</ProfessionalLink>
+                      : tableKey === 'customer'
+                        ? <CustomerLink id={row.id}>{row.name}</CustomerLink>
+                        : row.name}
                     {best?.id === row.id && tableKey === 'professional' && (
                       <span className="ml-2 px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 rounded-full">Más ágil</span>
                     )}

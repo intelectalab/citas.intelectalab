@@ -13,6 +13,7 @@ import { useAppointmentPanels } from '@/features/appointments/components/useAppo
 import { apiError, formatDate, formatDateTime, todayISO } from '@/features/appointments/appointments';
 import FormRecall from './FormRecall';
 import { ORIGIN_LABELS, RECALL_STATUS_STYLES, dueLabel, dueTone, type Recall, type RecallStatus } from '../recalls';
+import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const VIEWS = [
   { id: 'open', label: 'Por agendar' },
@@ -181,7 +182,8 @@ export default function RecallsTable() {
         <div key={`label-${r.id}`} className="max-w-xs">
           <span className="block text-sm font-semibold text-slate-800">{r.label}</span>
           <span className="block text-xs text-slate-500">
-            {r.service?.name ?? 'Sin servicio definido'}{r.professional ? ` · ${r.professional.display_name}` : ''}
+            {r.service?.name ?? 'Sin servicio definido'}
+            {r.professional && <> · <ProfessionalLink id={r.professional.id}>{r.professional.display_name}</ProfessionalLink></>}
           </span>
           {r.notes && <span className="block text-xs text-slate-400 mt-0.5 truncate" title={r.notes}>{r.notes}</span>}
         </div>
@@ -296,6 +298,17 @@ export default function RecallsTable() {
           filterValues={filters}
           onFilterChange={(id, value) => setFilters((current) => ({ ...current, [id]: value }))}
           columns={columns}
+          dateFilters={[
+            { id: 'due_date', label: 'Para cuándo', future: true, value: (r) => r.due_date },
+          ]}
+          sortOptions={[
+            { id: 'due_date', label: 'Para cuándo', type: 'date', value: (r) => r.due_date },
+            { id: 'customer', label: vocab.client, value: (r) => r.customer?.name },
+            { id: 'label', label: 'Control', value: (r) => r.label },
+            { id: 'service', label: 'Servicio', value: (r) => r.service?.name },
+            { id: 'professional', label: vocab.pro, value: (r) => r.professional?.display_name },
+            { id: 'status', label: 'Estado', value: (r) => r.status_name },
+          ]}
           data={rows}
           getItemKey={(r) => r.id}
           entityLabel="controles"

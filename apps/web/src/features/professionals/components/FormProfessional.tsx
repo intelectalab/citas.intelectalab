@@ -162,6 +162,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
       if (initialData) {
         await api.put(`/professionals/${initialData.id}`, payload);
         onClose();
+        // Sin credenciales: solo avisa a la tabla para que vuelva a cargar.
+        onSubmitSuccess();
       } else {
         const res = await api.post('/professionals', payload);
         
