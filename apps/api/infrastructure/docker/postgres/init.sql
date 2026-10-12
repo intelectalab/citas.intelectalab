@@ -349,6 +349,8 @@ CREATE TABLE rooms (
     name varchar(100) NOT NULL, -- Ej: Consultorio 101, Tópico 2
     description varchar(255),
     kind varchar(20) NOT NULL DEFAULT 'room' CHECK (kind IN ('room', 'equipment')), -- sala o equipo
+    -- Para un equipo: la sala donde está instalado (opcional).
+    parent_id uuid NULL REFERENCES rooms(id) ON DELETE SET NULL,
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),

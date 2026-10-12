@@ -6,23 +6,17 @@ import { useParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, CalendarDays, Clock, DoorOpen, Edit2, Globe2, Loader2, MapPin, Pencil, Phone, Plus, Store, Trash2, Users, Wrench } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
-import FormDrawer from '@/app/components/ui/forms/FormDrawer';
-import Switch from '@/app/components/common/Switch';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { apiError } from '@/features/appointments/appointments';
 import FormBranch from './FormBranch';
 import BranchHoursPanel from './BranchHoursPanel';
+import FormRoom from '@/features/rooms/components/FormRoom';
 import { ROOM_KINDS, TIMEZONES, WEEK, addressLabel, rangesLabel, todayLabel, type BranchDetailData, type Room } from '../branches';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
-
-const emptyRoom = { name: '', description: '', kind: 'room' as Room['kind'], active: true };
 
 // Página de una sucursal: sus datos, sus números, su horario de atención,
 // quiénes atienden ahí y sus salas y equipos.
@@ -37,8 +31,6 @@ export default function BranchDetail() {
 
   const [roomOpen, setRoomOpen] = useState(false);
   const [roomEditing, setRoomEditing] = useState<Room | null>(null);
-  const [roomForm, setRoomForm] = useState(emptyRoom);
-  const [roomError, setRoomError] = useState('');
   const [roomSaving, setRoomSaving] = useState(false);
   const [roomDeleting, setRoomDeleting] = useState<Room | null>(null);
 
@@ -83,36 +75,14 @@ export default function BranchDetail() {
     { id: 'today', title: 'Citas de hoy', value: String(branch.appointments_today), note: todayLabel(branch), icon: <CalendarDays size={18} />, color: 'text-sky-600' },
     { id: 'upcoming', title: 'Por atender', value: String(branch.upcoming), note: 'Pendientes y confirmadas', icon: <Clock size={18} />, color: 'text-amber-600' },
     { id: 'team', title: vocab.pros, value: String(branch.professionals.length), note: 'Con horario en esta sede', icon: <Users size={18} />, color: 'text-violet-600' },
-    ...(branch.uses_rooms ? [{ id: 'rooms', title: 'Salas y equipos', value: String(branch.rooms.filter((r) => r.status === 'active').length), note: 'Activos', icon: <DoorOpen size={18} />, color: 'text-emerald-600' }] : []),
+    ...(branch.uses_rooms ? [{ id: 'rooms', title: 'Salas y equipos', value: String(branch.rooms.filter((r) => (r.effective_status ?? r.status) === 'active').length), note: 'En uso', icon: <DoorOpen size={18} />, color: 'text-emerald-600' }] : []),
   ];
+
+  const statusOf = (room: Room) => room.effective_status ?? room.status;
 
   const openRoom = (room: Room | null) => {
     setRoomEditing(room);
-    setRoomForm(room ? { name: room.name, description: room.description ?? '', kind: room.kind, active: room.status === 'active' } : emptyRoom);
-    setRoomError('');
     setRoomOpen(true);
-  };
-
-  const saveRoom = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const payload = { name: roomForm.name.trim(), description: roomForm.description.trim() || null, kind: roomForm.kind, status: roomForm.active ? 'active' : 'inactive' };
-
-    try {
-      setRoomSaving(true);
-      setRoomError('');
-      if (roomEditing) {
-        await api.put(`/rooms/${roomEditing.id}`, payload);
-      } else {
-        await api.post(`/branches/${branch.id}/rooms`, payload);
-      }
-      setRoomOpen(false);
-      load();
-    } catch (err) {
-      setRoomError(apiError(err, 'No se pudo guardar.'));
-    } finally {
-      setRoomSaving(false);
-    }
   };
 
   const deleteRoom = async () => {
@@ -284,10 +254,15 @@ export default function BranchDetail() {
                         {room.kind === 'equipment' ? <Wrench size={15} /> : <DoorOpen size={15} />}
                       </span>
                       <div className="min-w-0">
-                        <span className={`block text-sm font-semibold truncate ${room.status === 'active' ? 'text-slate-800' : 'text-slate-400'}`}>{room.name}</span>
+                        <span className={`block text-sm font-semibold truncate ${statusOf(room) === 'active' ? 'text-slate-800' : 'text-slate-400'}`}>{room.name}</span>
                         <span className="block text-xs text-slate-500 truncate">
-                          {ROOM_KINDS[room.kind]}{room.description ? ` · ${room.description}` : ''}{room.status !== 'active' ? ' · inactivo' : ''}
+                          {ROOM_KINDS[room.kind]}{room.parent_name ? ` · en ${room.parent_name}` : ''}{room.description ? ` · ${room.description}` : ''}{statusOf(room) !== 'active' ? ' · fuera de uso' : ''}
                         </span>
+                        {(room.down_equipment?.length ?? 0) > 0 && (
+                          <span data-equipment-note className={`block text-[11px] font-semibold truncate ${room.auto_down ? 'text-rose-600' : 'text-amber-700'}`}>
+                            {room.auto_down ? 'Por' : 'Observación:'} {room.down_equipment!.join(', ')} fuera de uso
+                          </span>
+                        )}
                       </div>
                     </div>
                     {canManage && (
@@ -307,58 +282,15 @@ export default function BranchDetail() {
       <FormBranch isOpen={editing} onClose={() => setEditing(false)} initialData={branch} onSaved={load} />
       <BranchHoursPanel isOpen={hoursOpen} onClose={() => setHoursOpen(false)} branch={branch} onSaved={load} />
 
-      <FormDrawer
+      <FormRoom
         isOpen={roomOpen}
         onClose={() => setRoomOpen(false)}
-        title={roomEditing ? `Editar: ${roomEditing.name}` : 'Nueva sala o equipo'}
-        subtitle={branch.name}
-        icon={<DoorOpen size={20} />}
-      >
-        <form id="room-form" onSubmit={saveRoom} className="space-y-5">
-          <div>
-            <span className={labelClass}>Tipo</span>
-            <div className="flex gap-2">
-              {(Object.keys(ROOM_KINDS) as Room['kind'][]).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  data-room-kind={kind}
-                  aria-pressed={roomForm.kind === kind}
-                  onClick={() => setRoomForm({ ...roomForm, kind })}
-                  className={`px-3.5 py-2 text-sm font-medium border rounded-full transition-colors ${
-                    roomForm.kind === kind ? 'border-[#022340] bg-[#022340] text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  {ROOM_KINDS[kind]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="room-name">Nombre *</label>
-            <input id="room-name" type="text" required maxLength={100} placeholder={roomForm.kind === 'equipment' ? 'Ej. Ecógrafo' : 'Ej. Consultorio 101'} className={inputClass} value={roomForm.name} onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="room-description">Descripción</label>
-            <input id="room-description" type="text" maxLength={255} className={inputClass} value={roomForm.description} onChange={(e) => setRoomForm({ ...roomForm, description: e.target.value })} />
-          </div>
-          {roomEditing && (
-            <label className="flex items-center justify-between gap-3 px-4 py-3 border border-slate-200 rounded-xl cursor-pointer">
-              <span className="text-sm font-semibold text-slate-800">Disponible para usarse</span>
-              <Switch checked={roomForm.active} onChange={(active) => setRoomForm({ ...roomForm, active })} label="Disponible para usarse" />
-            </label>
-          )}
-
-          {roomError && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{roomError}</p>}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setRoomOpen(false)} className="px-4 py-2.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
-            <button type="submit" disabled={roomSaving} className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
-              {roomSaving ? 'Guardando...' : roomEditing ? 'Guardar cambios' : 'Agregar'}
-            </button>
-          </div>
-        </form>
-      </FormDrawer>
+        initialData={roomEditing}
+        branches={[{ id: branch.id, name: branch.name }]}
+        rooms={branch.links_equipment ? branch.rooms.filter((r) => r.kind === 'room') : []}
+        defaultBranchId={branch.id}
+        onSaved={load}
+      />
 
       <AppModal
         isOpen={Boolean(roomDeleting)}

@@ -51,6 +51,8 @@ class TenantSettingController extends Controller
             'booking_rules.confirm_on_miss'        => ['required_with:booking_rules', Rule::in(Confirmations::MODES)],
             'booking_rules.confirm_release_hours'  => 'required_with:booking_rules|integer|min:0|max:168',
             'booking_rules.cancel_window_hours'    => 'required_with:booking_rules|integer|min:0|max:168',
+            // Qué pasa con una sala cuando un equipo suyo queda fuera de uso.
+            'equipment_down' => ['sometimes', Rule::in(['none', 'observe', 'disable'])],
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
             ->all()
@@ -108,6 +110,10 @@ class TenantSettingController extends Controller
                 'confirm.release_hours'  => (int) $validated['booking_rules']['confirm_release_hours'],
                 'cancel.window_hours'    => (int) $validated['booking_rules']['cancel_window_hours'],
             ]);
+        }
+
+        if (isset($validated['equipment_down'])) {
+            $settings->rules = array_merge($settings->rules ?? [], ['resources.equipment_down' => $validated['equipment_down']]);
         }
 
         $settings->save();
@@ -171,6 +177,10 @@ class TenantSettingController extends Controller
                 // Sin el paso de confirmación en su rubro, el plazo no aplica.
                 'uses_confirmation'      => (bool) AppointmentFlow::rule($tenant, 'agenda.require_confirmation'),
             ],
+            // Solo para empresas con el módulo de salas y equipos.
+            'resources' => $tenant->hasModule('resources')
+                ? ['equipment_down' => in_array(AppointmentFlow::rule($tenant, 'resources.equipment_down'), ['observe', 'disable'], true) ? AppointmentFlow::rule($tenant, 'resources.equipment_down') : 'none']
+                : null,
         ];
     }
 }

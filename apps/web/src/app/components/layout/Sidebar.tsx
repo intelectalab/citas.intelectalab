@@ -40,6 +40,7 @@ import {
   Repeat,
   Timer,
   Clock,
+  DoorOpen,
   LucideIcon
 } from 'lucide-react';
 
@@ -107,8 +108,19 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupIcon: Layers,
     items: [
       { name: vocab.clients, href: '/customers', icon: Users, module: 'crm' },
-      { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda' },
       { name: 'Fichas de atención', href: '/records', icon: ClipboardList, module: 'records' },
+    ]
+  },
+  {
+    // Lo que la empresa ofrece y con qué lo atiende.
+    id: 'catalog',
+    groupName: 'Equipo y catálogo',
+    groupIcon: Layers,
+    items: [
+      { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda' },
+      { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda', requireAdmin: true },
+      { name: 'Horarios del equipo', href: '/schedules', icon: Clock, module: 'agenda', requireAdmin: true },
+      { name: 'Salas y equipos', href: '/rooms', icon: DoorOpen, module: 'resources' },
     ]
   },
   {
@@ -139,8 +151,6 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupIcon: Building2,
     requireAdmin: true,
     items: [
-      { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda' },
-      { name: 'Horarios del equipo', href: '/schedules', icon: Clock, module: 'agenda' },
       { name: 'Sucursales', href: '/branches', icon: Store },
       { name: 'Empresa', href: '/companies', icon: Building2 },
     ]
@@ -240,6 +250,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
             const visibleItems = group.items.filter((item) => {
               if (item.saasAdminOnly && !isSaasAdmin) return false;
+              // Ítems de administración dentro de un grupo que ve todo el equipo.
+              if (item.requireAdmin && !user?.is_tenant_admin) return false;
               if (item.feature && !hasFeature(item.feature)) return false;
               if (item.module && !hasModule(item.module)) return false;
               return true;

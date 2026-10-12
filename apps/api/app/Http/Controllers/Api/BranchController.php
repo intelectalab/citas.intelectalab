@@ -109,9 +109,9 @@ class BranchController extends Controller
         return response()->json($this->present($branch, $tenant) + [
             'hours'         => $hours,
             'professionals' => $professionals,
-            'rooms'         => $tenant->hasModule('resources')
-                ? DB::table('rooms')->where('branch_id', $branch->id)->orderBy('name')->get(['id', 'name', 'description', 'kind', 'status'])
-                : [],
+            // Con la regla de la empresa aplicada: una sala puede verse fuera de uso por su equipo.
+            'rooms'         => $tenant->hasModule('resources') ? \App\Support\Rooms::listing($tenant, $branch->id) : [],
+            'links_equipment' => \App\Support\Rooms::hasParent(),
             'uses_rooms'    => $tenant->hasModule('resources'),
             'can_manage'    => $request->user()->isTenantAdmin(),
         ]);

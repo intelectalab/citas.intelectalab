@@ -150,6 +150,7 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::put('/branches/{branch}/hours', [BranchController::class, 'updateHours']);
 
     Route::middleware('module:resources')->group(function () {
+        Route::get('/rooms', [RoomController::class, 'index']);
         Route::post('/branches/{branch}/rooms', [RoomController::class, 'store']);
         Route::put('/rooms/{room}', [RoomController::class, 'update']);
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);

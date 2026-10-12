@@ -412,3 +412,20 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Franjas simples en el portal.** El cliente elige mañana, tarde o cualquier hora; no un rango de horas ni días concretos de la semana. El personal sí puede afinarlo desde su Lista de espera.
 - **Anotarse cuando sí hay horarios.** El recuadro aparece siempre en el paso de día y hora, también si hay horas libres; en ese caso el registro nace ya con horarios para reservar.
 - **Pruebas en pantalla que faltan.** "Salir de la lista" con su confirmación, el aviso en la campana del personal, rubro con mascotas y celular.
+
+## Detectados el 2026-10-12 (Equipo y catálogo; Salas y equipos)
+
+- **Las salas y equipos aún no participan en las citas.** Se registran y se listan, pero una cita no reserva una sala ni un equipo, y un servicio no puede exigir uno. En el prototipo la cita solo se agenda si hay uno libre del tipo requerido. Es el siguiente paso natural de este módulo.
+- **Lo que el prototipo trae y aquí falta.** Capacidad simultánea (sala grupal), servicios que usan cada recurso, uso del día en minutos y poner un recurso "en mantenimiento" por un periodo (hoy solo se apaga a mano).
+- **Tipos de recurso.** Solo hay Sala y Equipo; el prototipo distingue más (cabina, sillón, consultorio…).
+- **"Profesionales y horarios" en una sola pantalla.** El prototipo los une; aquí siguen siendo dos ítems (Médicos y Horarios del equipo).
+- **Sede bloqueada al editar.** Una sala no se puede pasar a otra sede; hay que registrarla de nuevo.
+- **Pruebas en pantalla que faltan.** Menú como profesional, empresa sin el módulo de salas, eliminar algo con citas, filtro de sede, tema oscuro y celular.
+
+## Detectados el 2026-10-12 (equipos instalados en una sala)
+
+- **Un equipo, una sala.** Un equipo compartido entre varias salas se deja sin sala fija, y entonces no afecta a ninguna.
+- **Motivo y fecha de vuelta.** Al apagar un equipo no se anota por qué ni hasta cuándo (mantenimiento, avería).
+- **Salas y equipos sigue sin intervenir en las citas** (decisión del 2026-10-12: queda como inventario por ahora). La propuesta de que el servicio diga qué necesita quedó explicada y sin hacer.
+- **Aviso de salas solo al cambiar el equipo.** Si la empresa cambia la opción en Configuración con equipos ya fuera de uso, las salas cambian en pantalla pero no llega ningún aviso.
+- **Eliminar un equipo instalado en una sala.** Si se elimina (no solo se apaga), la sala vuelve a estar en uso sin aviso.

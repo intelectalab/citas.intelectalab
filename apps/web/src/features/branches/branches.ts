@@ -43,12 +43,23 @@ export interface Room {
   description: string | null;
   kind: 'room' | 'equipment';
   status: 'active' | 'inactive';
+  branch_id: string;
+  branch_name: string | null;
+  // Cómo queda según la regla de la empresa: una sala puede salir de uso por un equipo suyo.
+  effective_status?: 'active' | 'inactive';
+  auto_down?: boolean;
+  down_equipment?: string[];
+  // Para un equipo: la sala donde está instalado.
+  parent_id?: string | null;
+  parent_name?: string | null;
 }
 
 export interface BranchDetailData extends Branch {
   hours: BranchHoursMap;
   professionals: BranchProfessional[];
   rooms: Room[];
+  // La base ya permite decir en qué sala está un equipo.
+  links_equipment?: boolean;
   uses_rooms: boolean;
   can_manage: boolean;
 }

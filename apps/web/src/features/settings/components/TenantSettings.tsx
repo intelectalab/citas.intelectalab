@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarCheck, Check, ClipboardCheck, Hourglass, Loader2, Lock, Puzzle, Type, Unlock } from 'lucide-react';
+import { BellRing, Building2, CalendarCheck, Check, ClipboardCheck, DoorOpen, Eye, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
@@ -24,7 +24,18 @@ interface SettingsPayload {
   dependents?: { enabled: boolean };
   appointment_statuses?: AppointmentStatus[];
   booking_rules?: BookingRules & { uses_confirmation: boolean };
+  // Solo llega si la empresa tiene el módulo de salas y equipos.
+  resources?: { equipment_down: EquipmentDown } | null;
 }
+
+type EquipmentDown = 'none' | 'observe' | 'disable';
+
+// Qué pasa con una sala cuando un equipo instalado en ella queda fuera de uso.
+const EQUIPMENT_DOWN_OPTIONS: { id: EquipmentDown; title: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'none', title: 'No pasa nada', hint: 'La sala sigue en uso y no se muestra ningún aviso.', icon: <Minus size={18} /> },
+  { id: 'observe', title: 'Mostrarlo como observación', hint: 'La sala sigue en uso, con una nota que dice qué equipo suyo está fuera de uso.', icon: <Eye size={18} /> },
+  { id: 'disable', title: 'Dejar la sala fuera de uso', hint: 'La sala pasa sola a "Fuera de uso" mientras el equipo no vuelva, y regresa sola cuando vuelve.', icon: <PowerOff size={18} /> },
+];
 
 type OnMiss = 'notify' | 'notify_release' | 'release';
 
@@ -74,6 +85,7 @@ export default function TenantSettings() {
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
   // Las horas se editan como texto para poder dejar el campo vacío mientras se escribe.
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
+  const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -94,6 +106,7 @@ export default function TenantSettings() {
       release: String(payload.booking_rules.confirm_release_hours),
       cancel: String(payload.booking_rules.cancel_window_hours),
     } : null);
+    setEquipmentDown(payload.resources ? payload.resources.equipment_down : null);
   };
 
   useEffect(() => {
@@ -129,6 +142,7 @@ export default function TenantSettings() {
         modules_off: modulesOff,
         vocabulary,
         appointment_statuses: statusNames,
+        ...(equipmentDown ? { equipment_down: equipmentDown } : {}),
         ...(bookingRules ? {
           booking_rules: {
             confirm_deadline_hours: Number(bookingRules.deadline || 0),
@@ -409,6 +423,43 @@ export default function TenantSettings() {
             />
             <span className="text-sm text-slate-600">horas antes de su inicio.</span>
             <span className="w-full text-xs text-slate-500">Pasado ese momento, en el portal ya no puede hacerlo y debe comunicarse con la sede.</span>
+          </div>
+        </section>
+      )}
+
+      {equipmentDown && (
+        <section className={cardClass} data-card="resources-rules">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+              <DoorOpen className="w-4 h-4 text-[#3F768C]" /> Salas y equipos
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Qué pasa con una sala cuando un equipo instalado en ella queda fuera de uso. La sala de cada equipo se indica al registrarlo.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Si un equipo de una sala queda fuera de uso">
+            {EQUIPMENT_DOWN_OPTIONS.map((option) => {
+              const chosen = equipmentDown === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={chosen}
+                  data-equipment-down={option.id}
+                  onClick={() => { setMessage(null); setEquipmentDown(option.id); }}
+                  className={`flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
+                    chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                  <span>
+                    <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}

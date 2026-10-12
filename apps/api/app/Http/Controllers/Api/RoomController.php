@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use Illuminate\Http\Request;
+use App\Support\Rooms;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -35,12 +36,17 @@ class RoomController extends Controller
             'description' => 'nullable|string|max:255',
             'kind'        => ['nullable', Rule::in(['room', 'equipment'])],
             'status'      => ['nullable', Rule::in(['active', 'inactive'])],
+            // Solo para un equipo: la sala de la misma sede donde está instalado.
+            'parent_id'   => ['nullable', 'uuid', Rule::exists('rooms', 'id')->where('branch_id', $branchId)->where('kind', 'room')],
         ], [
             'name.required' => 'Escribe el nombre.',
             'name.unique'   => 'Esta sucursal ya tiene una sala o equipo con ese nombre.',
+            'parent_id.exists' => 'Elige una sala de la misma sede.',
         ]);
 
-        return [
+        $kind = $validated['kind'] ?? 'room';
+
+        return (Rooms::hasParent() ? ['parent_id' => $kind === 'equipment' ? ($validated['parent_id'] ?? null) : null] : []) + [
             'name'        => trim($validated['name']),
             'description' => $validated['description'] ?? null,
             'kind'        => $validated['kind'] ?? 'room',
@@ -52,6 +58,43 @@ class RoomController extends Controller
     private function present(string $id): object
     {
         return DB::table('rooms')->where('id', $id)->first(['id', 'branch_id', 'name', 'description', 'kind', 'status']);
+    }
+
+    /**
+     * Todas las salas y equipos de la empresa, con la sede de cada uno.
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user->tenant_id, 403);
+
+        $branches = Branch::where('tenant_id', $user->tenant_id)->orderBy('name')->get(['id', 'name', 'status']);
+        $names = $branches->pluck('name', 'id');
+
+        $rooms = $user->tenant ? Rooms::listing($user->tenant) : collect();
+        $mode = Rooms::mode($user->tenant);
+
+        return response()->json([
+            'can_manage' => $user->isTenantAdmin(),
+            'equipment_down' => $mode,
+            'links_equipment' => Rooms::hasParent(),
+            // Solo en sedes activas se registra algo nuevo.
+            'branches'   => $branches->where('status', 'active')->map(fn (Branch $b) => ['id' => $b->id, 'name' => $b->name])->values(),
+            'rooms'      => $rooms,
+        ]);
+    }
+
+    /**
+     * Si lo que cambió es un equipo instalado en una sala y pasó de estar en
+     * uso a fuera de uso (o al revés), la administración se entera.
+     */
+    private function notifyIfEquipmentChanged(Request $request, object $before): void
+    {
+        $after = DB::table('rooms')->where('id', $before->id)->first();
+
+        if ($after && $request->user()->tenant) {
+            Rooms::equipmentChanged($request->user()->tenant, $after, $before->status, $after->status);
+        }
     }
 
     public function store(Request $request, string $branch)
@@ -77,6 +120,8 @@ class RoomController extends Controller
 
         DB::table('rooms')->where('id', $room->id)->update($this->validated($request, $room->branch_id, $room->id));
 
+        $this->notifyIfEquipmentChanged($request, $room);
+
         return response()->json($this->present($room->id));
     }
 
@@ -90,6 +135,7 @@ class RoomController extends Controller
 
         if (DB::table('appointments')->where('room_id', $room->id)->exists()) {
             DB::table('rooms')->where('id', $room->id)->update(['status' => 'inactive', 'updated_at' => now()]);
+            $this->notifyIfEquipmentChanged($request, $room);
 
             return response()->json(['message' => 'Tiene citas registradas: se desactivó en lugar de eliminarse.', 'deactivated' => true]);
         }

@@ -74,6 +74,9 @@ class AppointmentFlow
         'confirm.deadline_hours'      => 24,
         'confirm.on_miss'             => 'notify',
         'confirm.release_hours'       => 6,
+        // Si un equipo instalado en una sala queda fuera de uso: none (no pasa nada),
+        // observe (la sala lo muestra como observación) o disable (la sala queda fuera de uso).
+        'resources.equipment_down'    => 'none',
     ];
 
     public static function keys(): array

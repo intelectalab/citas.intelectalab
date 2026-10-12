@@ -546,6 +546,12 @@ FROM (VALUES
 JOIN branches b ON b.id = v.branch_id::uuid
 ON CONFLICT DO NOTHING;
 
+-- Algunos equipos están instalados en una sala de su misma sede.
+UPDATE rooms e SET parent_id = r.id
+FROM rooms r
+WHERE e.kind = 'equipment' AND r.kind = 'room' AND r.branch_id = e.branch_id
+  AND (e.name, r.name) IN (('Ecógrafo', 'Consultorio 201'), ('Equipo de rayos X', 'Sillón 1'), ('Equipo láser', 'Cabina 1'));
+
 -- El laboratorio está en el rubro genérico, cuyo catálogo es neutro: sus servicios
 -- se escriben aquí. Las demás empresas reciben más abajo el catálogo de su rubro.
 INSERT INTO service_categories (id, tenant_id, name) VALUES
