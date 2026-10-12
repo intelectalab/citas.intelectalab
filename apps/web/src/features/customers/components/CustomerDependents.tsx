@@ -6,6 +6,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
 
 export interface CustomerDependent {
   id?: string;
@@ -213,11 +214,11 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>F. Nacimiento</label>
-              <input
-                type="date"
+              <DateField
+                ariaLabel="Fecha de nacimiento"
+                max={new Date().toLocaleDateString('en-CA')}
                 value={draft.birth_date ?? ''}
-                onChange={(e) => setDraft({ ...draft, birth_date: e.target.value })}
-                className={inputClass}
+                onChange={(value) => setDraft({ ...draft, birth_date: value })}
               />
             </div>
             <div>

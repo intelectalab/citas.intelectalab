@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import CustomerDependents, { type CustomerDependent } from './CustomerDependents';
 import { User, ChevronDown } from 'lucide-react';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
 
 interface FormCustomerProps {
   isOpen: boolean;
@@ -226,11 +227,11 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">F. Nacimiento</label>
-                          <input
-                            type="date"
-                            value={form.birth_date}
-                            onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white"
+                          <DateField
+                            ariaLabel="Fecha de nacimiento"
+                            max={new Date().toLocaleDateString('en-CA')}
+                            value={form.birth_date ?? ''}
+                            onChange={(value) => setForm({ ...form, birth_date: value })}
                           />
                         </div>
                         <div>

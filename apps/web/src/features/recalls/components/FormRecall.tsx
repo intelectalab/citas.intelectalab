@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
 import { addDays, apiError, todayISO } from '@/features/appointments/appointments';
 import type { Recall } from '../recalls';
 
@@ -262,7 +263,7 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
 
           <div>
             <label className={labelClass} htmlFor="recall-date">¿Para cuándo? *</label>
-            <input id="recall-date" type="date" required className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateField id="recall-date" required value={dueDate} onChange={setDueDate} />
             <div className="flex flex-wrap gap-1.5 mt-2">
               {SHORTCUTS.map((shortcut) => {
                 const value = addDays(todayISO(), shortcut.days);

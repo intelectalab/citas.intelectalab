@@ -5,6 +5,7 @@ import { Clock, Plus, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Switch from '@/app/components/common/Switch';
+import TimeField from '@/app/components/common/TimeField';
 import { apiError } from '@/features/appointments/appointments';
 import { WEEK, type BranchHoursMap, type HourRange } from '../branches';
 
@@ -23,9 +24,6 @@ interface Outside {
 }
 
 const DEFAULT_RANGE: HourRange = { opens: '08:00', closes: '20:00' };
-
-const inputClass =
-  'text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 
 const emptyWeek = (): Record<number, HourRange[]> => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
 
@@ -131,22 +129,20 @@ export default function BranchHoursPanel({ isOpen, onClose, branch, onSaved }: B
 
                     {ranges.map((range, index) => (
                       <div key={index} className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          step={300}
-                          aria-label={`${day.label}: abre`}
-                          className={inputClass}
+                        <TimeField
+                          size="compact"
+                          clearable={false}
+                          ariaLabel={`${day.label}: abre`}
                           value={range.opens}
-                          onChange={(e) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, opens: e.target.value } : r)))}
+                          onChange={(value) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, opens: value } : r)))}
                         />
                         <span className="text-sm text-slate-400">a</span>
-                        <input
-                          type="time"
-                          step={300}
-                          aria-label={`${day.label}: cierra`}
-                          className={inputClass}
+                        <TimeField
+                          size="compact"
+                          clearable={false}
+                          ariaLabel={`${day.label}: cierra`}
                           value={range.closes}
-                          onChange={(e) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, closes: e.target.value } : r)))}
+                          onChange={(value) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, closes: value } : r)))}
                         />
                         {ranges.length > 1 && (
                           <button

@@ -10,6 +10,7 @@ import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
 import Stopwatch from './Stopwatch';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import {
   RELEASED, addDays, apiError, formatDate, fromMinutes, statusStyle, timeOf, toMinutes, todayISO,
@@ -270,12 +271,13 @@ export default function AgendaDay() {
           <button type="button" title="Día siguiente" onClick={() => setDate(addDays(date, 1))} className={navButton}>
             <ChevronRight size={16} />
           </button>
-          <input
-            type="date"
-            aria-label="Ir a una fecha"
+          <DateField
+            ariaLabel="Ir a una fecha"
+            size="compact"
+            clearable={false}
+            className="w-40"
             value={date}
-            onChange={(e) => e.target.value && setDate(e.target.value)}
-            className="text-sm border border-slate-200 bg-white rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#022340]/20"
+            onChange={(value) => value && setDate(value)}
           />
 
           <button

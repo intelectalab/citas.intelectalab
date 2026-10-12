@@ -5,6 +5,8 @@ import { AlertTriangle, Building2, CalendarOff, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
+import TimeField from '@/app/components/common/TimeField';
 import Switch from '@/app/components/common/Switch';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { addDays, apiError, dateOf, formatDateTime, timeOf, todayISO } from '@/features/appointments/appointments';
@@ -273,25 +275,22 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass} htmlFor="block-start-date">Desde *</label>
-                <input
+                <DateField
                   id="block-start-date"
-                  type="date"
                   required
-                  className={inputClass}
                   value={form.startDate}
-                  onChange={(e) => set({ startDate: e.target.value, endDate: form.endDate < e.target.value ? e.target.value : form.endDate })}
+                  onChange={(value) => set({ startDate: value, endDate: form.endDate < value ? value : form.endDate })}
                 />
               </div>
               <div>
                 <label className={labelClass} htmlFor="block-end-date">Hasta *</label>
-                <input
+                <DateField
                   id="block-end-date"
-                  type="date"
                   required
                   min={form.startDate}
-                  className={inputClass}
+                  align="right"
                   value={form.endDate}
-                  onChange={(e) => set({ endDate: e.target.value })}
+                  onChange={(value) => set({ endDate: value })}
                 />
               </div>
 
@@ -299,11 +298,11 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
                 <>
                   <div>
                     <label className={labelClass} htmlFor="block-start-time">Hora de inicio *</label>
-                    <input id="block-start-time" type="time" step={300} required className={inputClass} value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} />
+                    <TimeField id="block-start-time" required value={form.startTime} onChange={(value) => set({ startTime: value })} />
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="block-end-time">Hora de fin *</label>
-                    <input id="block-end-time" type="time" step={300} required className={inputClass} value={form.endTime} onChange={(e) => set({ endTime: e.target.value })} />
+                    <TimeField id="block-end-time" required value={form.endTime} onChange={(value) => set({ endTime: value })} />
                   </div>
                 </>
               )}

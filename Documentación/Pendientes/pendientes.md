@@ -344,7 +344,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Ordenar desde el encabezado de la columna.** Solo se ordena desde la barra "Ordenar por".
 - **Botones de la barra de filtros que aún no hacen nada.** "+" (agregar filtro) y "Filtros avanzados"; también "Exportar", la vista de panel, la paginación y las casillas de selección de la tabla.
 - **Tabla sin mensaje cuando no hay filas.** Si los filtros no dejan nada, la tabla queda vacía sin decir por qué.
-- **Calendario propio solo en los filtros.** Los formularios siguen usando el campo de fecha del navegador (cita, bloqueo, feriado, control, lista de espera, cliente).
 - **Clientes: lista completa hasta 500.** La tabla ya no se queda en los 10 primeros, pero sigue sin paginación real; con más de 500 clientes haría falta.
 - **Fechas de registro en zona del navegador.** Los filtros de fecha de registro usan la zona horaria del navegador, no la de la empresa.
 
@@ -429,3 +428,11 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Salas y equipos sigue sin intervenir en las citas** (decisión del 2026-10-12: queda como inventario por ahora). La propuesta de que el servicio diga qué necesita quedó explicada y sin hacer.
 - **Aviso de salas solo al cambiar el equipo.** Si la empresa cambia la opción en Configuración con equipos ya fuera de uso, las salas cambian en pantalla pero no llega ningún aviso.
 - **Eliminar un equipo instalado en una sala.** Si se elimina (no solo se apaga), la sala vuelve a estar en uso sin aviso.
+
+## Detectados el 2026-10-12 (campos de fecha y hora propios)
+
+- **Sin teclado.** La fecha y la hora se eligen con el ratón; no se pueden escribir ni recorrer con flechas (igual que el Select propio).
+- **Minutos de 5 en 5.** El campo de hora no deja escribir un minuto intermedio (por ejemplo 10:12).
+- **Calendario escrito dos veces.** El filtro de fecha de las tablas (`DateFilter`) y el campo de los formularios (`DateField`) dibujan el mes con código separado; conviene que compartan la grilla.
+- **Registro público de empresa.** `RegisterModal` conserva sus dos listas genéricas del navegador (no tiene fechas).
+- **Pruebas en pantalla que faltan.** Lista de espera, nuevo control, fichas de atención, dependientes y mascotas, horario de la sede, vencimiento en la consola, días futuros bloqueados en la fecha de nacimiento, tema oscuro y celular.

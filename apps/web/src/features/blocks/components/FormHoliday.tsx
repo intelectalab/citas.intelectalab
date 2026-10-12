@@ -5,6 +5,7 @@ import { PartyPopper } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
 import Switch from '@/app/components/common/Switch';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import type { Holiday } from '../blocks';
@@ -93,7 +94,7 @@ export default function FormHoliday({ isOpen, onClose, initialData, branches, on
 
           <div>
             <label className={labelClass} htmlFor="holiday-date">Fecha *</label>
-            <input id="holiday-date" type="date" required className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateField id="holiday-date" required value={date} onChange={setDate} />
           </div>
 
           {branches.length > 1 && (

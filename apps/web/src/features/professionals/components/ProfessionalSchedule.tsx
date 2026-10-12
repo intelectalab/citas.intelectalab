@@ -5,6 +5,8 @@ import { CalendarClock, CalendarOff, Plus, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
+import TimeField from '@/app/components/common/TimeField';
 import Switch from '@/app/components/common/Switch';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 
@@ -65,6 +67,12 @@ const DEFAULT_RANGE: Range = { starts: '09:00', ends: '18:00' };
 const inputClass =
   'text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
+
+// Al elegir solo el día, la ausencia toma el día completo.
+const MOMENTS: { key: 'starts_at' | 'ends_at'; label: string; time: string }[] = [
+  { key: 'starts_at', label: 'Desde', time: '00:00' },
+  { key: 'ends_at', label: 'Hasta', time: '23:59' },
+];
 
 const emptyWeek = (): Record<number, Range[]> => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
 
@@ -198,6 +206,13 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
     }
   };
 
+  // La ausencia viaja como "AAAA-MM-DDTHH:MM"; en pantalla son una fecha y una hora.
+  const setMoment = (key: 'starts_at' | 'ends_at', part: { day?: string; hour?: string }, fallbackHour: string) => {
+    const [day = '', hour = ''] = blockForm[key].split('T');
+    const nextDay = part.day ?? (day || new Date().toLocaleDateString('en-CA'));
+    setBlockForm({ ...blockForm, [key]: nextDay ? `${nextDay}T${part.hour ?? (hour || fallbackHour)}` : '' });
+  };
+
   const removeBlock = async (id: string) => {
     try {
       setBlockError('');
@@ -258,22 +273,20 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
 
                       {ranges.map((range, index) => (
                         <div key={index} className="flex items-center gap-2">
-                          <input
-                            type="time"
-                            step={300}
-                            aria-label={`${day.label}: desde`}
-                            className={inputClass}
+                          <TimeField
+                            size="compact"
+                            clearable={false}
+                            ariaLabel={`${day.label}: desde`}
                             value={range.starts}
-                            onChange={(e) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, starts: e.target.value } : r)))}
+                            onChange={(value) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, starts: value } : r)))}
                           />
                           <span className="text-sm text-slate-400">a</span>
-                          <input
-                            type="time"
-                            step={300}
-                            aria-label={`${day.label}: hasta`}
-                            className={inputClass}
+                          <TimeField
+                            size="compact"
+                            clearable={false}
+                            ariaLabel={`${day.label}: hasta`}
                             value={range.ends}
-                            onChange={(e) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, ends: e.target.value } : r)))}
+                            onChange={(value) => updateDay(day.weekday, ranges.map((r, i) => (i === index ? { ...r, ends: value } : r)))}
                           />
                           {ranges.length > 1 && (
                             <button
@@ -359,28 +372,31 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
                 onChange={(e) => setBlockForm({ ...blockForm, kind: String(e.target.value) || 'vacation' })}
                 options={BLOCK_KINDS}
               />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>Desde *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    className={`${inputClass} w-full`}
-                    value={blockForm.starts_at}
-                    onChange={(e) => setBlockForm({ ...blockForm, starts_at: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Hasta *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    className={`${inputClass} w-full`}
-                    value={blockForm.ends_at}
-                    onChange={(e) => setBlockForm({ ...blockForm, ends_at: e.target.value })}
-                  />
-                </div>
-              </div>
+              {MOMENTS.map((moment) => {
+                const [day = '', hour = ''] = blockForm[moment.key].split('T');
+                return (
+                  <div key={moment.key} data-moment={moment.key}>
+                    <span className={labelClass}>{moment.label} *</span>
+                    <div className="flex items-center gap-2">
+                      <DateField
+                        required
+                        ariaLabel={`${moment.label}: fecha`}
+                        className="flex-1 min-w-0"
+                        min={moment.key === 'ends_at' ? blockForm.starts_at.slice(0, 10) || undefined : undefined}
+                        value={day}
+                        onChange={(value) => setMoment(moment.key, { day: value }, moment.time)}
+                      />
+                      <TimeField
+                        required
+                        ariaLabel={`${moment.label}: hora`}
+                        className="w-28 shrink-0"
+                        value={hour}
+                        onChange={(value) => setMoment(moment.key, { hour: value }, moment.time)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
               <div>
                 <label className={labelClass}>Motivo *</label>
                 <input

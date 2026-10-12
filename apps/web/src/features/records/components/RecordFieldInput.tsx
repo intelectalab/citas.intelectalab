@@ -1,5 +1,6 @@
 'use client';
 
+import DateField from '@/app/components/common/DateField';
 import { CalendarClock } from 'lucide-react';
 import { addDays, formatDate, todayISO } from '@/features/appointments/appointments';
 import { TEETH_ROWS, TOOTH_STATES, isEmptyValue, type RecordField, type RecordValue } from '../records';
@@ -135,13 +136,12 @@ export default function RecordFieldInput({ field, value, onChange, disabled = fa
 
     case 'date':
       return (
-        <input
-          type="date"
-          aria-label={label}
+        <DateField
+          ariaLabel={label}
           disabled={disabled}
-          className={`${inputClass} max-w-[14rem]`}
+          className="w-full max-w-[14rem]"
           value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value || null)}
+          onChange={(next) => onChange(next || null)}
         />
       );
 
@@ -150,13 +150,12 @@ export default function RecordFieldInput({ field, value, onChange, disabled = fa
       const suggested = field.days ? addDays(todayISO(), Number(field.days)) : null;
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            aria-label={label}
+          <DateField
+            ariaLabel={label}
             disabled={disabled}
-            className={`${inputClass} max-w-[14rem]`}
+            className="w-full max-w-[14rem]"
             value={date}
-            onChange={(e) => onChange(e.target.value ? { date: e.target.value } : null)}
+            onChange={(next) => onChange(next ? { date: next } : null)}
           />
           {!disabled && suggested && date !== suggested && (
             <button

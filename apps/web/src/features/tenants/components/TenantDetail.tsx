@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -527,7 +528,7 @@ export default function TenantDetail() {
                   <div className="space-y-2 pt-4 border-t border-slate-100">
                     <span className={labelClass}>Vencimiento</span>
                     <div className="flex flex-wrap items-center gap-2">
-                      <input type="date" value={extendDate} onChange={(e) => setExtendDate(e.target.value)} className={`${inputClass} flex-1 min-w-[9rem]`} />
+                      <DateField ariaLabel="Nueva fecha de vencimiento" size="compact" rounded="xl" className="flex-1 min-w-[9rem]" value={extendDate} onChange={setExtendDate} />
                       <button
                         type="button"
                         disabled={busy || !extendDate}

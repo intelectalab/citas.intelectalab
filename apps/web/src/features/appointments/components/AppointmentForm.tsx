@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
+import TimeField from '@/app/components/common/TimeField';
 import FormCustomer from '@/features/customers/components/FormCustomer';
 import QuickDependent from '@/features/customers/components/QuickDependent';
 import QuickService from '@/features/services/components/QuickService';
@@ -415,24 +417,19 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Fecha *</label>
-              <input
-                type="date"
+              <DateField
                 required
-                aria-label="Fecha de la cita"
-                className={inputClass}
+                ariaLabel="Fecha de la cita"
                 value={date}
-                onChange={(e) => { setDate(e.target.value); setTime(''); setCanForce(false); }}
+                onChange={(value) => { setDate(value); setTime(''); setCanForce(false); }}
               />
             </div>
             <div>
               <label className={labelClass}>Hora *</label>
-              <input
-                type="time"
-                step={300}
-                aria-label="Hora de la cita"
-                className={inputClass}
+              <TimeField
+                ariaLabel="Hora de la cita"
                 value={time}
-                onChange={(e) => { setTime(e.target.value); setCanForce(false); }}
+                onChange={(value) => { setTime(value); setCanForce(false); }}
               />
             </div>
           </div>

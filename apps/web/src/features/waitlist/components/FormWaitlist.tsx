@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import DateField from '@/app/components/common/DateField';
+import TimeField from '@/app/components/common/TimeField';
 import Switch from '@/app/components/common/Switch';
 import CustomerPicker, { type PickedCustomer } from '@/features/customers/components/CustomerPicker';
 import QuickDependent from '@/features/customers/components/QuickDependent';
@@ -203,18 +205,16 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1" htmlFor="waitlist-from">Desde *</label>
-                <input
+                <DateField
                   id="waitlist-from"
-                  type="date"
                   required
-                  className={inputClass}
                   value={dateFrom}
-                  onChange={(e) => { setDateFrom(e.target.value); if (dateTo && dateTo < e.target.value) setDateTo(e.target.value); }}
+                  onChange={(value) => { setDateFrom(value); if (dateTo && dateTo < value) setDateTo(value); }}
                 />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1" htmlFor="waitlist-to">Hasta</label>
-                <input id="waitlist-to" type="date" min={dateFrom} className={inputClass} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                <DateField id="waitlist-to" min={dateFrom} align="right" placeholder="Sin fecha final" value={dateTo} onChange={setDateTo} />
               </div>
             </div>
             <p className="text-xs text-slate-500 mt-1.5">Sin fecha final, espera hasta que haya un horario. Con ella, sale de la lista al pasar ese día.</p>
@@ -241,11 +241,11 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1" htmlFor="waitlist-time-from">Desde las</label>
-                <input id="waitlist-time-from" type="time" step={300} className={inputClass} value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} />
+                <TimeField id="waitlist-time-from" value={timeFrom} onChange={setTimeFrom} />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1" htmlFor="waitlist-time-to">Hasta las</label>
-                <input id="waitlist-time-to" type="time" step={300} className={inputClass} value={timeTo} onChange={(e) => setTimeTo(e.target.value)} />
+                <TimeField id="waitlist-time-to" value={timeTo} onChange={setTimeTo} />
               </div>
             </div>
           </div>
