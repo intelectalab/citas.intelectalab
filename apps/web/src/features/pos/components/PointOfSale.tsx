@@ -411,12 +411,13 @@ export default function PointOfSale() {
                     <article key={entry.sale.id} className={`${tileClass} border-amber-200 bg-amber-50/40`} data-pending-sale={entry.sale.code}>
                       <div className="flex items-start justify-between gap-2">
                         <span className="flex items-center gap-1.5 text-sm font-bold text-[#022340]"><Receipt size={15} /> Venta {entry.sale.code}</span>
-                        <span className="px-2 py-0.5 text-xs rounded-full font-semibold bg-amber-100 text-amber-800">{entry.sale.status === 'partial' ? 'Pago parcial' : 'Por cobrar'}</span>
+                        <span className="px-2 py-0.5 text-xs rounded-full font-semibold bg-amber-100 text-amber-800">{(entry.sale.deposit ?? 0) > 0 ? 'Adelanto pagado' : entry.sale.status === 'partial' ? 'Pago parcial' : 'Por cobrar'}</span>
                       </div>
                       <span className="text-sm font-semibold text-slate-800">
                         {entry.sale.customer ? <CustomerLink id={entry.sale.customer.id}>{entry.sale.customer.name}</CustomerLink> : 'Sin cliente'}
                       </span>
                       <span className="text-xs text-slate-500 line-clamp-2">{entry.sale.detail}</span>
+                      {(entry.sale.deposit ?? 0) > 0 && <span className="text-xs font-semibold text-[#3F768C]">Adelanto en línea {money(entry.sale.deposit, entry.sale.currency)} · falta {money(entry.sale.balance, entry.sale.currency)}</span>}
                       <span className="text-xs text-slate-400">{momentOf(entry.sale.created_at)}{entry.sale.by ? ` · ${entry.sale.by}` : ''}</span>
                       <div className="flex items-center justify-between gap-2 mt-auto">
                         <span className="text-sm font-black text-[#022340] tabular-nums">{money(entry.sale.balance, entry.sale.currency)}</span>

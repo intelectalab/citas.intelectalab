@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock, Wallet } from 'lucide-react';
+import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
 import CurrencySettings from './CurrencySettings';
+import IntegrationsSettings from './IntegrationsSettings';
 import { currencySymbol } from '@/lib/currency';
 
 interface SettingsModule {
@@ -27,6 +28,7 @@ interface SettingsPayload {
   resources?: { equipment_down: EquipmentDown } | null;
   sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
   booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
+  payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
@@ -89,6 +91,7 @@ export default function TenantSettings() {
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
   const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
   const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
+  const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -122,6 +125,12 @@ export default function TenantSettings() {
       arriveMinutes: String(payload.sales_rules.arrive_minutes ?? 15),
     } : null);
     setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days) } : null);
+    setPaymentRules(payload.payment_rules ? {
+      requireDeposit: payload.payment_rules.require_deposit,
+      depositMinutes: String(payload.payment_rules.deposit_minutes),
+      refundHours: String(payload.payment_rules.deposit_refund_hours),
+      linkHours: String(payload.payment_rules.link_hours),
+    } : null);
   };
 
   useEffect(() => {
@@ -171,6 +180,14 @@ export default function TenantSettings() {
           },
         } : {}),
         ...(misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : {}),
+        ...(paymentRules ? {
+          payment_rules: {
+            require_deposit: paymentRules.requireDeposit,
+            deposit_minutes: Number(paymentRules.depositMinutes || 0),
+            deposit_refund_hours: Number(paymentRules.refundHours || 0),
+            link_hours: Number(paymentRules.linkHours || 0),
+          },
+        } : {}),
         ...(bookingRules ? {
           booking_rules: {
             confirm_deadline_hours: Number(bookingRules.deadline || 0),
@@ -580,6 +597,62 @@ export default function TenantSettings() {
           </div>
         </section>
       )}
+
+      {paymentRules && (
+        <section className={cardClass} data-card="payment-rules">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+              <Link2 className="w-4 h-4 text-[#3F768C]" /> Adelantos y links de pago
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cuánto dura un link de pago y qué pasa con el adelanto de quien reserva en línea. Cuánto es el adelanto se elige en cada servicio.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="link-hours" className="text-sm font-semibold text-slate-800">Un link de pago vence</label>
+            <input id="link-hours" inputMode="numeric" data-rule="link_hours" value={paymentRules.linkHours} onChange={(e) => { setMessage(null); setPaymentRules({ ...paymentRules, linkHours: e.target.value.replace(/\D/g, '').slice(0, 3) }); }} className={hoursInput} />
+            <span className="text-sm text-slate-600">horas después de crearlo.</span>
+            <span className="w-full text-xs text-slate-500">Pasado ese tiempo el cliente ya no puede pagar con ese link y hay que crearle uno nuevo.</span>
+          </div>
+
+          {data.payment_rules?.booking && (
+            <>
+              <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+                <div>
+                  <span className="block text-sm font-semibold text-slate-800">Pedir el adelanto al reservar en línea</span>
+                  <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">Solo en los servicios marcados con &quot;Exige adelanto&quot;. Si lo apagas, esos servicios se reservan sin pagar nada.</span>
+                </div>
+                <Switch checked={paymentRules.requireDeposit} onChange={(on) => { setMessage(null); setPaymentRules({ ...paymentRules, requireDeposit: on }); }} label="Pedir el adelanto al reservar en línea" />
+              </div>
+
+              {paymentRules.requireDeposit && (
+                <>
+                  <div className="flex flex-wrap items-center gap-3" data-row="deposit-minutes">
+                    <label htmlFor="deposit-minutes" className="text-sm font-semibold text-slate-800">El cliente tiene</label>
+                    <input id="deposit-minutes" inputMode="numeric" data-rule="deposit_minutes" value={paymentRules.depositMinutes} onChange={(e) => { setMessage(null); setPaymentRules({ ...paymentRules, depositMinutes: e.target.value.replace(/\D/g, '').slice(0, 4) }); }} className={hoursInput} />
+                    <span className="text-sm text-slate-600">minutos para pagar el adelanto.</span>
+                    <span className="w-full text-xs text-slate-500">
+                      El horario no se aparta mientras tanto: la cita existe recién cuando paga. Si otra persona toma ese horario antes, su link se anula y no se le cobra nada.
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3" data-row="refund-hours">
+                    <label htmlFor="refund-hours" className="text-sm font-semibold text-slate-800">Se le devuelve el adelanto si cancela con al menos</label>
+                    <input id="refund-hours" inputMode="numeric" data-rule="deposit_refund_hours" value={paymentRules.refundHours} onChange={(e) => { setMessage(null); setPaymentRules({ ...paymentRules, refundHours: e.target.value.replace(/\D/g, '').slice(0, 3) }); }} className={hoursInput} />
+                    <span className="text-sm text-slate-600">horas de anticipación.</span>
+                    <span className="w-full text-xs text-slate-500">
+                      Ejemplo con 24 horas: si su cita es el sábado a las 10:00, se le devuelve si cancela hasta el viernes a las 10:00. Si cancela después o no asiste, el adelanto queda para la empresa. Con 0, siempre se devuelve si cancela antes de la cita.
+                    </span>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {paymentRules && <IntegrationsSettings canSave={canSave} />}
 
       {misses && (
         <section className={cardClass} data-card="booking-misses">

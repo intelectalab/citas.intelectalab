@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\SalesController;
 use App\Http\Controllers\Api\PosController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\RecordTemplateController;
@@ -56,6 +57,10 @@ Route::post('/register-customer', [RegisterCustomerController::class, 'register'
 Route::post('/register-tenant', [RegisterTenantController::class, 'register']);
 
 Route::get('/platform', [PlatformSettingController::class, 'publicValues']);
+
+Route::get('/pay/{token}', [PaymentController::class, 'show'])->middleware('throttle:60,1');
+Route::post('/pay/{token}/simulate', [PaymentController::class, 'simulate'])->middleware('throttle:20,1');
+Route::post('/webhooks/payments/{provider}', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
 
 Route::get('/modules', function () {
     return SaasModule::orderBy('sort_order')->get(['key', 'name', 'is_core']);
@@ -119,6 +124,9 @@ Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(functio
         Route::post('/appointments/{appointment}/confirm', [PortalController::class, 'confirm']);
         Route::post('/appointments/{appointment}/cancel', [PortalController::class, 'cancel']);
         Route::post('/appointments/{appointment}/reschedule', [PortalController::class, 'move']);
+
+        Route::get('/payment-links', [PortalController::class, 'paymentLinks']);
+        Route::post('/payment-links/{link}/cancel', [PortalController::class, 'cancelPaymentLink']);
 
         Route::get('/waitlist', [PortalController::class, 'waitlist']);
         Route::post('/waitlist', [PortalController::class, 'joinWaitlist']);
@@ -251,6 +259,15 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
 
         $guarded('products', ProductController::class, 'products', true, ['show']);
         Route::post('/product-categories', [ProductController::class, 'storeCategory'])->middleware('perm:products.create');
+
+        Route::post('/appointments/{appointment}/link', [SaleController::class, 'link'])->middleware('perm:sales.create');
+        Route::post('/sales/{sale}/links', [PaymentController::class, 'createForSale'])->middleware('perm:sales.create');
+        Route::post('/payment-links/{link}/cancel', [PaymentController::class, 'cancel'])->middleware('perm:sales.create');
+        Route::get('/integrations', [PaymentController::class, 'integrations']);
+        Route::put('/integrations/payments', [PaymentController::class, 'savePayments']);
+        Route::post('/integrations/payments/test', [PaymentController::class, 'test']);
+        Route::put('/payment-qr/{method}', [PaymentController::class, 'saveQr']);
+        Route::delete('/payment-qr/{method}', [PaymentController::class, 'deleteQr']);
     });
 
     Route::middleware('module:crm')->group(function () use ($guarded) {

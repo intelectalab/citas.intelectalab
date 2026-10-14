@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, Banknote, CreditCard, FileText, Landmark, Receipt, Smartphone, TicketPercent, Wallet, X } from 'lucide-react';
+import { BadgeCheck, Banknote, Copy, CreditCard, ExternalLink, FileText, Landmark, Link2, Receipt, RefreshCw, Smartphone, TicketPercent, Wallet, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -29,6 +29,9 @@ const METHOD_ICONS: Record<string, React.ReactNode> = {
   transfer: <Landmark size={16} />,
   yape: <Smartphone size={16} />,
   plin: <Smartphone size={16} />,
+  link: <Link2 size={16} />,
+  deposit: <Link2 size={16} />,
+  gateway: <Link2 size={16} />,
 };
 
 const STATUS_BADGES: Record<string, string> = {
@@ -68,6 +71,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
   const [couponError, setCouponError] = useState('');
   const [checkingCoupon, setCheckingCoupon] = useState(false);
   const attempt = useRef(newKey());
+  const [copied, setCopied] = useState(false);
 
   const balanceOf = (data: ChargeContext) => (data.sale ? data.sale.balance : data.preview.total);
 
@@ -117,6 +121,92 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
   const change = isCash && received ? Math.max(0, Number(received) - amountNumber) : 0;
   const completes = amountNumber >= balance - 0.001;
   const appliedCoupon = sale ? sale.coupon : context?.coupon ?? null;
+  const links = context?.links;
+  const currentLink = links?.current ?? null;
+  const pendingLink = currentLink?.status === 'pending' ? currentLink : null;
+  const isLink = method === 'link';
+  const qr = method === 'yape' || method === 'plin' ? context?.qr?.[method] ?? null : null;
+
+  useEffect(() => {
+    if (!base || !pendingLink) return;
+
+    const timer = setInterval(() => {
+      api.get(contextUrl).then((res) => {
+        const data: ChargeContext = res.data;
+        setContext(data);
+        if (data.sale?.status !== context?.sale?.status) onChanged?.(data);
+        if (data.sale?.status === 'paid') setNotice(`Pago recibido por link: la venta ${data.sale.code} quedó pagada.`);
+      }).catch(() => undefined);
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, [base, contextUrl, pendingLink, context?.sale?.status, onChanged]);
+
+  const createLink = async () => {
+    if (!base) return;
+
+    try {
+      setSaving(true);
+      setError('');
+      setNotice('');
+      if (appointmentId) {
+        await api.post(`/appointments/${appointmentId}/link`, { coupon_code: !sale && couponCode ? couponCode : null });
+      } else {
+        await api.post(`/sales/${saleId}/links`);
+      }
+      const res = await api.get(contextUrl);
+      apply(res.data);
+      setMethod('link');
+      onChanged?.(res.data);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo crear el link de pago.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelLink = async () => {
+    if (!pendingLink) return;
+
+    try {
+      setSaving(true);
+      setError('');
+      await api.post(`/payment-links/${pendingLink.id}/cancel`);
+      const res = await api.get(contextUrl);
+      apply(res.data);
+      setMethod('link');
+    } catch (err) {
+      setError(apiError(err, 'No se pudo anular el link.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const refreshLink = async () => {
+    try {
+      const res = await api.get(contextUrl);
+      setContext(res.data);
+      if (res.data.sale?.status === 'paid') {
+        setNotice(`Pago recibido por link: la venta ${res.data.sale.code} quedó pagada.`);
+        onChanged?.(res.data);
+      } else {
+        setNotice('Todavía no llega el pago.');
+      }
+    } catch (err) {
+      setError(apiError(err, 'No se pudo revisar el pago.'));
+    }
+  };
+
+  const copyLink = async () => {
+    if (!pendingLink) return;
+    try {
+      await navigator.clipboard.writeText(pendingLink.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('No se pudo copiar: selecciona el link y cópialo a mano.');
+    }
+  };
 
   const applyCoupon = async (code: string) => {
     if (!appointmentId) return;
@@ -303,8 +393,77 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                       {METHOD_ICONS[option.value]} {option.label}
                     </button>
                   ))}
+                  {links?.ready && (
+                    <button type="button" role="radio" aria-checked={isLink} data-method="link" onClick={() => { setMethod('link'); setError(''); }} className={chip(isLink)}>
+                      <Link2 size={16} /> Link de pago
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {pendingLink && !isLink && (
+                <p data-link-pending-note className="text-sm text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-lg px-3 py-2">
+                  Hay un link de pago esperando: si cobras aquí, ese link se anula para que no se pague dos veces.
+                </p>
+              )}
+
+              {isLink && (
+                <div className="space-y-3" data-link-box>
+                  {pendingLink ? (
+                    <div className="rounded-xl border border-[#84D0D9] bg-[#84D0D9]/10 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-[#022340]">{pendingLink.status_label} · {money(pendingLink.amount, pendingLink.currency)}</span>
+                        <span className="text-xs text-slate-500">Vence {momentOf(pendingLink.expires_at)}</span>
+                      </div>
+                      <input readOnly aria-label="Link de pago" data-link-url value={pendingLink.url} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" data-link-copy onClick={copyLink} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors">
+                          <Copy size={14} /> {copied ? '¡Copiado!' : 'Copiar'}
+                        </button>
+                        <Link href={new URL(pendingLink.url).pathname} target="_blank" rel="noreferrer" data-link-open className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                          <ExternalLink size={14} /> Abrir
+                        </Link>
+                        <button type="button" data-link-refresh onClick={refreshLink} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                          <RefreshCw size={14} /> ¿Ya pagó?
+                        </button>
+                        <button type="button" data-link-cancel disabled={saving} onClick={cancelLink} className="ml-auto px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 rounded-lg transition-colors">
+                          Anular link
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Cópialo y envíaselo al cliente por WhatsApp o correo. Cuando pague, la venta pasa a pagada sola y se emite el comprobante.
+                        {pendingLink.simulated ? ' Es un link de prueba: al abrirlo verás botones para simular el pago.' : ''}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+                      {currentLink && (
+                        <p className="text-xs text-slate-500" data-link-previous>
+                          El link anterior quedó {currentLink.status_label.toLowerCase()}{currentLink.cancel_reason ? `: ${currentLink.cancel_reason}` : '.'}
+                        </p>
+                      )}
+                      <p className="text-sm text-slate-600">
+                        Se crea un link para pagar {money(balance, context?.sale?.currency ?? context?.preview.currency)} con tarjeta, Yape o Plin. Vence en {links?.hours ?? 24} horas.
+                      </p>
+                      {links?.simulated && <p className="text-xs text-amber-700">Tu empresa usa la pasarela simulada: el link sirve para probar, no cobra dinero.</p>}
+                      <button type="button" data-link-create disabled={saving} onClick={createLink} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+                        <Link2 size={15} /> {saving ? 'Creando...' : 'Crear link de pago'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {qr && (
+                <div className="flex items-start gap-4 rounded-xl border border-slate-200 p-4" data-qr={method}>
+                  <img src={qr.image} alt={`QR de ${method === 'yape' ? 'Yape' : 'Plin'}`} className="w-32 h-32 object-contain rounded-lg border border-slate-100 bg-white" />
+                  <div className="text-sm text-slate-600 space-y-1">
+                    <span className="block font-bold text-[#022340]">Que el cliente escanee este QR</span>
+                    {qr.holder && <span className="block text-xs">A nombre de {qr.holder}</span>}
+                    <span className="block text-xs">Debe pagar {money(amountNumber, context?.sale?.currency ?? context?.preview.currency)}. Luego escribe el número de operación que le aparece.</span>
+                  </div>
+                </div>
+              )}
 
               {cashClosed && (
                 <p data-cash-closed className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -313,7 +472,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 </p>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              {!isLink && <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass} htmlFor="charge-amount">Monto a cobrar *</label>
                   <input
@@ -342,9 +501,9 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                     <input id="charge-reference" required maxLength={190} placeholder={method === 'card' ? 'Voucher del POS' : 'Código de la operación'} className={inputClass} value={reference} onChange={(e) => setReference(e.target.value)} />
                   </div>
                 )}
-              </div>
+              </div>}
 
-              {isCash && context.cash.sessions.length > 1 && (
+              {!isLink && isCash && context.cash.sessions.length > 1 && (
                 <Select
                   label="Caja"
                   placeholder="La caja que tienes abierta"
@@ -387,7 +546,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 </div>
               )}
 
-              {completes ? docFields : (
+              {isLink ? null : completes ? docFields : (
                 <p className="text-xs text-slate-500">El comprobante se emite con el pago que completa el total.</p>
               )}
 
@@ -395,9 +554,9 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
                   Cerrar
                 </button>
-                <button type="submit" data-pay disabled={saving || cashClosed || amountNumber <= 0} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+                {!isLink && <button type="submit" data-pay disabled={saving || cashClosed || amountNumber <= 0} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
                   {saving ? 'Registrando...' : `Cobrar ${money(amountNumber, context?.sale?.currency ?? context?.preview.currency)}`}
-                </button>
+                </button>}
               </div>
             </form>
           )}

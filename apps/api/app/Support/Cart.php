@@ -321,6 +321,7 @@ class Cart
             ] + Currency::column($resolved['currency']);
 
             if ($sale) {
+                PaymentLinks::cancelForSale($sale->id, 'La venta cambió: genera un link nuevo.');
                 self::releaseCoupon($sale->id);
                 DB::table('sale_items')->where('sale_id', $sale->id)->delete();
                 DB::table('sales')->where('id', $sale->id)->update($values);
@@ -411,6 +412,7 @@ class Cart
             ->where('s.tenant_id', $tenant->id)
             ->where('s.branch_id', $branchId)
             ->whereIn('s.status', ['pending', 'partial'])
+            ->when(Schema::hasColumn('sales', 'deposit_outcome'), fn ($q) => $q->whereNull('s.deposit_outcome'))
             ->orderByDesc('s.created_at')
             ->limit(200)
             ->get(['s.*', 'c.first_name', 'c.last_name', 'u.first_name as user_first', 'u.last_name as user_last']);
@@ -427,6 +429,8 @@ class Cart
             'detail'     => ($items[$s->id] ?? collect())->map(fn ($i) => ((float) $i->quantity > 1 ? (int) $i->quantity . ' × ' : '') . $i->description)->implode(', '),
             'total'      => round((float) $s->total, 2),
             'balance'    => round((float) $s->balance, 2),
+            'paid'       => round((float) $s->paid, 2),
+            'deposit'    => PaymentLinks::ready() ? PaymentLinks::depositPaid($s->id) : 0.0,
             'currency'   => $s->currency ?? Currency::DEFAULT,
         ])->values()->all();
     }

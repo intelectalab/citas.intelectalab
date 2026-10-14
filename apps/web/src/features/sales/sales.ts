@@ -55,6 +55,32 @@ export interface Sale {
   coupon: AppliedCoupon | null;
   invoice: SaleInvoice | null;
   refunded?: number;
+  deposit?: number;
+  deposit_outcome?: 'refund_due' | 'retained' | 'refunded' | null;
+}
+
+export interface PaymentLink {
+  id: string;
+  url: string;
+  purpose: 'sale' | 'deposit';
+  status: 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
+  status_label: string;
+  amount: number;
+  currency: string;
+  description: string;
+  expires_at: string;
+  paid_at: string | null;
+  cancel_reason: string | null;
+  provider: string;
+  simulated: boolean;
+  token?: string;
+  minutes?: number;
+}
+
+export interface PaymentQr {
+  image: string;
+  holder: string | null;
+  updated_at?: string;
 }
 
 export interface AppliedCoupon {
@@ -95,6 +121,8 @@ export interface ChargeContext {
   issuer: { name: string; tax_id: string | null; address: string | null };
   change?: number;
   duplicate?: boolean;
+  links?: { ready: boolean; hours: number; simulated: boolean; current: PaymentLink | null };
+  qr?: Partial<Record<'yape' | 'plin', PaymentQr>>;
 }
 
 export interface CashMovement {

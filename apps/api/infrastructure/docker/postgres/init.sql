@@ -256,6 +256,8 @@ CREATE TABLE services (
     price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
     code varchar(30) NULL,
     requires_deposit boolean NOT NULL DEFAULT false,
+    deposit_type varchar(10) NOT NULL DEFAULT 'percent' CHECK (deposit_type IN ('percent', 'amount')),
+    deposit_value numeric(14,2) NOT NULL DEFAULT 30 CHECK (deposit_value >= 0),
     online_booking boolean NOT NULL DEFAULT true,
     is_virtual boolean NOT NULL DEFAULT false,
     kind varchar(20) NOT NULL DEFAULT 'individual' CHECK (kind IN ('individual', 'group')),
@@ -524,6 +526,7 @@ CREATE TABLE sales (
     prices_include_tax boolean NOT NULL DEFAULT true,
     notes varchar(500) NULL,
     void_reason varchar(255) NULL,
+    deposit_outcome varchar(20) NULL CHECK (deposit_outcome IN ('refund_due', 'retained', 'refunded')),
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     paid_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -644,6 +647,66 @@ CREATE TABLE sale_refunds (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_sale_refunds_sale ON sale_refunds(tenant_id, sale_id);
+
+CREATE TABLE payment_links (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_id uuid NULL REFERENCES branches(id) ON DELETE SET NULL,
+    token varchar(64) NOT NULL UNIQUE,
+    purpose varchar(20) NOT NULL CHECK (purpose IN ('sale', 'deposit')),
+    status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'expired', 'cancelled', 'failed')),
+    amount numeric(14,2) NOT NULL CHECK (amount > 0),
+    currency varchar(3) NOT NULL DEFAULT 'PEN',
+    description varchar(255) NOT NULL,
+    sale_id uuid NULL REFERENCES sales(id) ON DELETE CASCADE,
+    customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
+    service_id uuid NULL REFERENCES services(id) ON DELETE SET NULL,
+    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
+    customer_dependent_id uuid NULL,
+    starts_at timestamptz NULL,
+    ends_at timestamptz NULL,
+    notes varchar(1000) NULL,
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
+    payment_id uuid NULL REFERENCES payments(id) ON DELETE SET NULL,
+    provider varchar(40) NOT NULL DEFAULT 'simulated',
+    external_id varchar(190) NULL,
+    cancel_reason varchar(255) NULL,
+    expires_at timestamptz NOT NULL,
+    paid_at timestamptz NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_payment_links_tenant ON payment_links(tenant_id, status, created_at);
+CREATE INDEX idx_payment_links_sale ON payment_links(sale_id);
+CREATE INDEX idx_payment_links_slot ON payment_links(professional_id, starts_at) WHERE purpose = 'deposit' AND status = 'pending';
+
+CREATE TABLE payment_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    payment_link_id uuid NULL REFERENCES payment_links(id) ON DELETE SET NULL,
+    provider varchar(40) NOT NULL,
+    event_id varchar(190) NOT NULL,
+    event varchar(60) NOT NULL,
+    status varchar(20) NOT NULL CHECK (status IN ('processed', 'duplicate', 'ignored', 'refunded', 'error')),
+    message varchar(255) NULL,
+    payload jsonb NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (provider, event_id)
+);
+CREATE INDEX idx_payment_events_tenant ON payment_events(tenant_id, created_at);
+
+CREATE TABLE payment_qr_codes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    method varchar(10) NOT NULL CHECK (method IN ('yape', 'plin')),
+    holder varchar(150) NULL,
+    image text NOT NULL,
+    updated_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, method)
+);
 
 CREATE TABLE audit_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -848,6 +911,10 @@ CREATE INDEX idx_customer_dependents_customer ON customer_dependents(tenant_id, 
 
 ALTER TABLE appointments
     ADD CONSTRAINT fk_appointments_customer_dependent
+    FOREIGN KEY (customer_dependent_id) REFERENCES customer_dependents(id) ON DELETE SET NULL;
+
+ALTER TABLE payment_links
+    ADD CONSTRAINT fk_payment_links_customer_dependent
     FOREIGN KEY (customer_dependent_id) REFERENCES customer_dependents(id) ON DELETE SET NULL;
 
 CREATE TABLE units (

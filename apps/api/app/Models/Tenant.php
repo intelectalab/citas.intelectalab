@@ -265,6 +265,7 @@ class Tenant extends Model
                     'buffer_after_minutes' => $service['buffer_after_minutes'] ?? 0,
                     'price'                => $service['price'] ?? 0,
                     'requires_deposit'     => $service['requires_deposit'] ?? false,
+                ] + (\Illuminate\Support\Facades\Schema::hasColumn('services', 'deposit_value') ? ['deposit_value' => (float) ($this->rules()['booking.deposit_percent'] ?? 30)] : []) + [
                     'online_booking'       => $service['online_booking'] ?? true,
                     'is_virtual'           => $service['is_virtual'] ?? false,
                     'kind'                 => $service['kind'] ?? Service::KIND_INDIVIDUAL,

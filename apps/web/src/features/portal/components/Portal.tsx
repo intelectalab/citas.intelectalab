@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarDays, CalendarPlus, CalendarX2, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
+import Link from 'next/link';
+import { BellRing, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -12,6 +13,7 @@ import PortalAppointments from './PortalAppointments';
 import PortalWaitlist from './PortalWaitlist';
 import PortalPassword from './PortalPassword';
 import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview, type PortalWaitlistEntry } from '../portal';
+import { money, momentOf, type PaymentLink } from '@/features/sales/sales';
 
 type Tab = 'home' | 'book' | 'appointments' | 'profile';
 
@@ -23,6 +25,7 @@ export default function Portal() {
   const [overview, setOverview] = useState<PortalOverview | null>(null);
   const [catalog, setCatalog] = useState<PortalCatalog | null>(null);
   const [waiting, setWaiting] = useState<PortalWaitlistEntry[]>([]);
+  const [payLinks, setPayLinks] = useState<PaymentLink[]>([]);
   const [tab, setTab] = useState<Tab>('home');
   const [rescheduling, setRescheduling] = useState<PortalAppointment | null>(null);
   const [cancelling, setCancelling] = useState<PortalAppointment | null>(null);
@@ -55,6 +58,36 @@ export default function Portal() {
   }, []);
 
   const mustChangePassword = Boolean(overview?.customer.must_change_password);
+
+  const loadPayLinks = useCallback(() => {
+    api.get('/portal/payment-links')
+      .then((res) => setPayLinks(res.data.links ?? []))
+      .catch(() => setPayLinks([]));
+  }, []);
+
+  useEffect(() => {
+    if (!overview?.policies.booking_enabled || mustChangePassword) return;
+    loadPayLinks();
+  }, [overview, mustChangePassword, loadPayLinks]);
+
+  const depositWarning = (appointment: PortalAppointment) => {
+    const deposit = appointment.deposit;
+    if (!deposit || deposit.outcome) return '';
+    const hoursLeft = (new Date(appointment.starts_at).getTime() - Date.now()) / 3600000;
+    return hoursLeft >= deposit.refund_hours
+      ? ` Se te devolverá el adelanto de ${money(deposit.amount, deposit.currency)}.`
+      : ` Faltan menos de ${deposit.refund_hours} horas para tu cita: el adelanto de ${money(deposit.amount, deposit.currency)} no se devuelve.`;
+  };
+
+  const dropPayLink = async (link: PaymentLink) => {
+    try {
+      const res = await api.post(`/portal/payment-links/${link.id}/cancel`);
+      setPayLinks(res.data.links ?? []);
+      setNotice('Listo: no se reservó esa cita y no se te cobró nada.');
+    } catch (err) {
+      setError(portalError(err, 'No se pudo cancelar.'));
+    }
+  };
 
   useEffect(() => {
     if (!overview?.policies.booking_enabled || catalog || mustChangePassword) return;
@@ -172,6 +205,23 @@ export default function Portal() {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
         {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">{notice}</p>}
+
+        {overview && !mustChangePassword && tab !== 'book' && payLinks.map((link) => (
+          <section key={link.id} data-portal-pay-link className="bg-white rounded-2xl border border-[#84D0D9] shadow-xs p-4 flex flex-wrap items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-[#84D0D9]/20 text-[#022340] shrink-0"><CreditCard size={18} /></span>
+            <span className="flex-1 min-w-[12rem]">
+              <span className="block text-sm font-bold text-[#022340]">{link.purpose === 'deposit' ? 'Tienes un adelanto por pagar' : 'Tienes un pago pendiente'} · {money(link.amount, link.currency)}</span>
+              <span className="block text-xs text-slate-500">{link.description} · vence {momentOf(link.expires_at)}</span>
+              {link.purpose === 'deposit' && <span className="block text-xs text-slate-500">Tu cita se reserva al pagar. Si otra persona toma el horario antes, este pago se anula.</span>}
+            </span>
+            <span className="flex gap-2">
+              <Link href={`/pay/${link.token}`} data-portal-pay className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors">Pagar</Link>
+              {link.purpose === 'deposit' && (
+                <button type="button" data-portal-pay-drop onClick={() => dropPayLink(link)} className="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-red-600 transition-colors">Ya no quiero</button>
+              )}
+            </span>
+          </section>
+        ))}
 
         {overview && mustChangePassword && (
           <PortalPassword forced onDone={() => { setNotice('Tu contraseña quedó guardada. Ya puedes usar tu portal.'); load(); }} />
@@ -371,7 +421,7 @@ export default function Portal() {
         type="confirm"
         variant="danger"
         title="¿Cancelar tu cita?"
-        message={cancelling ? `${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.` : ''}
+        message={cancelling ? `${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.${depositWarning(cancelling)}` : ''}
         confirmText="Sí, cancelar"
         cancelText="No, mantenerla"
         isLoading={busy}

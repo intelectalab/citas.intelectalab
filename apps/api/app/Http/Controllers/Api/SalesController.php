@@ -70,7 +70,7 @@ class SalesController extends Controller
                 'id'               => $s->id,
                 'code'             => $s->code,
                 'status'           => $s->status,
-                'status_label'     => Sales::STATUS_LABELS[$s->status] ?? $s->status,
+                'status_label'     => Sales::label($s),
                 'created_at'       => $iso($s->created_at),
                 'branch_id'        => $s->branch_id,
                 'branch_name'      => $s->branch_name,
@@ -156,7 +156,7 @@ class SalesController extends Controller
             'void_blocked'     => Refunds::voidBlocked($sale),
             'refund_available' => $refund['available'],
             'refund_blocked'   => $refund['blocked'],
-            'refund_methods'   => collect(Sales::METHODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values(),
+            'refund_methods'   => collect(Sales::METHODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values()->when(\App\Support\PaymentLinks::ready() && \App\Support\PaymentLinks::gatewayPaid($sale->id) > 0, fn ($list) => $list->prepend(['value' => 'gateway', 'label' => 'Por la pasarela'])),
             'cash_sessions'    => Cash::openSessions($tenant->id, $sale->branch_id)->map(fn ($s) => ['id' => $s->id, 'register_name' => $s->register_name])->values(),
         ];
     }
@@ -192,7 +192,7 @@ class SalesController extends Controller
 
         $validated = $request->validate([
             'amount'          => 'required|numeric|min:0.01|max:9999999',
-            'method'          => ['required', Rule::in(array_keys(Sales::METHODS))],
+            'method'          => ['required', Rule::in([...array_keys(Sales::METHODS), 'gateway'])],
             'reason'          => 'required|string|max:255',
             'cash_session_id' => 'nullable|uuid',
         ], [

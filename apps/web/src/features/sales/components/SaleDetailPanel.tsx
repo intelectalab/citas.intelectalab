@@ -71,7 +71,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
     setError('');
     setNotice('');
     setReason('');
-    setMethod('cash');
+    setMethod(sale?.refund_methods.some((m) => m.value === 'gateway') ? 'gateway' : 'cash');
     setSessionId('');
     setAmount(sale ? sale.refund_available.toFixed(2) : '');
     setAction(action === next ? '' : next);
@@ -99,7 +99,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
   };
 
   const refunded = sale?.refunded ?? 0;
-  const canCharge = can('sales.create') && Boolean(sale && (sale.status === 'pending' || sale.status === 'partial'));
+  const canCharge = can('sales.create') && Boolean(sale && !sale.deposit_outcome && (sale.status === 'pending' || sale.status === 'partial'));
   const canEdit = can('pos.view') && Boolean(sale?.can_edit);
   const codes = (sale?.appointments?.length ? sale.appointments : sale?.appointment ? [sale.appointment] : []).map((a) => a.code).filter(Boolean);
   const cashClosed = Boolean(sale && action === 'refund' && method === 'cash' && sale.cash_sessions.length === 0);
@@ -126,6 +126,22 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
             </div>
             <span data-sale-status={sale.status} className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${SALE_BADGES[sale.status]}`}>{sale.status_label}</span>
           </section>
+
+          {sale.deposit_outcome === 'refund_due' && sale.status !== 'void' && (
+            <p data-deposit-refund-due className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <span className="font-bold">Adelanto por devolver.</span> La cita se canceló a tiempo: devuélvele al cliente {money(sale.deposit ?? 0, sale?.currency)} con &quot;Devolver&quot;. Por la pasarela vuelve al mismo medio con que pagó.
+            </p>
+          )}
+          {sale.deposit_outcome === 'retained' && (
+            <p data-deposit-retained className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              El cliente canceló tarde o no asistió: el adelanto de {money(sale.deposit ?? 0, sale?.currency)} quedó para la empresa.
+            </p>
+          )}
+          {(sale.deposit ?? 0) > 0 && !sale.deposit_outcome && sale.status === 'partial' && (
+            <p data-deposit-paid className="text-sm text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-lg px-3 py-2">
+              Pagó {money(sale.deposit ?? 0, sale?.currency)} de adelanto al reservar en línea. Falta {money(sale.balance, sale?.currency)}, que se cobra en la sede.
+            </p>
+          )}
 
           {sale.status === 'void' && sale.void_reason && (
             <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Anulada: {sale.void_reason}</p>

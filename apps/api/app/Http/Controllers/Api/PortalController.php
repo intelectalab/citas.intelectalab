@@ -46,6 +46,8 @@ class PortalController extends AppointmentController
             'confirm_release_hours' => \App\Support\Confirmations::releaseHours($tenant),
             'pay_before_service' => \App\Support\Sales::mustPayFirst($tenant),
             'arrive_minutes'     => \App\Support\Sales::rules($tenant)['arrive_minutes'],
+            'deposit_minutes'    => max(5, (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes')),
+            'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
             'miss'               => \App\Support\OnlineBooking::policy($tenant),
         ];
     }
@@ -115,7 +117,7 @@ class PortalController extends AppointmentController
 
         $assigned = DB::table('service_professionals')->where('tenant_id', $tenant->id)->get()->groupBy('service_id');
         $worksAt = ProfessionalSchedule::where('tenant_id', $tenant->id)->get()->groupBy('professional_id');
-        $depositRule = (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit');
+        $depositRule = (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::ready();
 
         return response()->json([
             'branches' => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name']),
@@ -133,7 +135,9 @@ class PortalController extends AppointmentController
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
                     'is_virtual'       => $s->is_virtual,
-                    'needs_deposit'    => $depositRule && $s->requires_deposit,
+                    'needs_deposit'    => $depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0,
+                    'deposit_amount'   => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositAmount($s) : 0,
+                    'deposit_label'    => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositLabel($s) : null,
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
                 ])->values(),
             'professionals' => Professional::where('tenant_id', $tenant->id)
@@ -213,7 +217,9 @@ class PortalController extends AppointmentController
             throw ValidationException::withMessages(['service_id' => 'Este servicio no se reserva en línea. Comunícate con la sede.']);
         }
 
-        if ($service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit')) {
+        $needsDeposit = $service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service) > 0;
+
+        if ($needsDeposit && !\App\Support\PaymentLinks::ready()) {
             throw ValidationException::withMessages(['service_id' => 'Este servicio se reserva con un adelanto. Comunícate con la sede para agendarlo.']);
         }
 
@@ -223,7 +229,7 @@ class PortalController extends AppointmentController
         $duration = (int) $service->duration_minutes;
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration) {
+        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($response = $this->limitReached($tenant, $start)) {
@@ -238,6 +244,17 @@ class PortalController extends AppointmentController
             }
 
             $this->assertCustomerFree($tenant, $customer, $start, $end);
+
+            if ($needsDeposit) {
+                $link = \App\Support\PaymentLinks::forDeposit($tenant, $customer, $service, $branch, $professional, $start, $end, $dependentId, $validated['notes'] ?? null);
+
+                return response()->json([
+                    'deposit' => \App\Support\PaymentLinks::present($link) + [
+                        'token'   => $link->token,
+                        'minutes' => max(5, (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes')),
+                    ],
+                ], 202);
+            }
 
             $status = AppointmentFlow::rule($tenant, 'booking.auto_confirm') ? AppointmentFlow::CONFIRMED : AppointmentFlow::PENDING;
 
@@ -275,6 +292,48 @@ class PortalController extends AppointmentController
 
             return response()->json($this->presentForCustomer($appointment->fresh(self::RELATIONS), $tenant), 201);
         });
+    }
+
+    private function depositOf(Tenant $tenant, Appointment $appointment): ?array
+    {
+        if (!\App\Support\PaymentLinks::ready() || $appointment->source !== 'online') {
+            return null;
+        }
+
+        $sale = \App\Support\Sales::ofAppointment($tenant->id, $appointment->id);
+        $paid = $sale ? \App\Support\PaymentLinks::depositPaid($sale->id) : 0.0;
+
+        if ($paid <= 0) {
+            return null;
+        }
+
+        return [
+            'amount'      => $paid,
+            'currency'    => $sale->currency ?? Currency::of($tenant),
+            'balance'     => round((float) $sale->balance, 2),
+            'outcome'     => $sale->deposit_outcome,
+            'refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
+        ];
+    }
+
+    public function paymentLinks(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+
+        return response()->json(['links' => \App\Support\PaymentLinks::forCustomer($tenant->id, $customer->id)]);
+    }
+
+    public function cancelPaymentLink(Request $request, string $link)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        $row = DB::table('payment_links')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('purpose', 'deposit')->where('id', $link)->first();
+        abort_unless($row, 404);
+
+        \App\Support\PaymentLinks::cancel($row, 'El cliente decidió no reservar.');
+
+        return response()->json(['links' => \App\Support\PaymentLinks::forCustomer($tenant->id, $customer->id)]);
     }
 
     public function confirm(Request $request, string $appointment)
@@ -699,6 +758,7 @@ class PortalController extends AppointmentController
             'is_virtual'       => (bool) $appointment->service?->is_virtual,
             'pay_on_arrival'   => $upcoming && (float) $appointment->price > 0 && $policies['pay_before_service']
                 && !\App\Support\Sales::appointmentPaid($tenant->id, $appointment->id),
+            'deposit'          => $this->depositOf($tenant, $appointment),
             'can_confirm'      => $policies['booking_enabled'] && $appointment->status === AppointmentFlow::PENDING && $appointment->starts_at->isFuture(),
             'can_cancel'       => $policies['booking_enabled'] && $open && $policies['cancel_allowed'],
             'can_reschedule'   => $policies['booking_enabled'] && $open && $appointment->reschedule_count < $policies['reschedule_max'],

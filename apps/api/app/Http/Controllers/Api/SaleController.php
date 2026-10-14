@@ -80,7 +80,38 @@ class SaleController extends AppointmentController
                 'tax_id'  => $company->tax_id ?? null,
                 'address' => $company->address ?? null,
             ],
+            'links'            => [
+                'ready'      => \App\Support\PaymentLinks::ready(),
+                'hours'      => (int) AppointmentFlow::rule($tenant, 'payments.link_hours'),
+                'simulated'  => \App\Support\PaymentLinks::ready() && \App\Support\PaymentLinks::provider($tenant)->simulated(),
+                'current'    => $sale && \App\Support\PaymentLinks::ready() ? \App\Support\PaymentLinks::present(\App\Support\PaymentLinks::latestForSale($sale->id)) : null,
+            ],
+            'qr'               => PaymentController::qrCodes($tenant->id),
         ];
+    }
+
+    public function link(Request $request, string $appointment)
+    {
+        $this->assertReady();
+        abort_unless(\App\Support\PaymentLinks::ready(), 503, \App\Support\PaymentLinks::NOT_READY);
+        $appointment = $this->find($request, $appointment);
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $coupon = $request->validate(['coupon_code' => 'nullable|string|max:40'])['coupon_code'] ?? null;
+
+        DB::transaction(function () use ($tenant, $appointment, $user, $coupon) {
+            Appointment::where('id', $appointment->id)->lockForUpdate()->first();
+            $sale = Sales::ofAppointment($tenant->id, $appointment->id);
+
+            if (!$sale) {
+                abort_if($reason = $this->blocked($tenant, $appointment), 422, $reason ?? '');
+                $sale = Sales::createForAppointment($tenant, $appointment, $user, $coupon);
+            }
+
+            \App\Support\PaymentLinks::forSale($tenant, DB::table('sales')->where('id', $sale->id)->lockForUpdate()->first(), $user);
+        });
+
+        return response()->json($this->payload($tenant, $appointment), 201);
     }
 
     public function forAppointment(Request $request, string $appointment)

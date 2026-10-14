@@ -56,6 +56,11 @@ class TenantSettingController extends Controller
             'sales_rules.refund_days'        => 'sometimes|integer|min:0|max:365',
             'sales_rules.pay_before_service' => 'sometimes|boolean',
             'sales_rules.arrive_minutes'     => 'sometimes|integer|min:0|max:240',
+            'payment_rules' => 'sometimes|array',
+            'payment_rules.require_deposit'      => 'required_with:payment_rules|boolean',
+            'payment_rules.deposit_minutes'      => 'required_with:payment_rules|integer|min:5|max:1440',
+            'payment_rules.deposit_refund_hours' => 'required_with:payment_rules|integer|min:0|max:720',
+            'payment_rules.link_hours'           => 'required_with:payment_rules|integer|min:1|max:720',
             'booking_misses' => 'sometimes|array',
             'booking_misses.action'     => ['required_with:booking_misses', Rule::in(['none', 'note', 'block'])],
             'booking_misses.limit'      => 'required_with:booking_misses|integer|min:1|max:20',
@@ -72,6 +77,9 @@ class TenantSettingController extends Controller
             'booking_rules.*.max'     => 'El plazo máximo es de 168 horas (una semana).',
             'sales_rules.tax_rate.*'       => 'Escribe el impuesto como un porcentaje entre 0 y 100.',
             'sales_rules.cash_tolerance.*' => 'Escribe la tolerancia como un monto entre 0 y 9999.',
+            'payment_rules.deposit_minutes.*'      => 'El tiempo para pagar el adelanto va de 5 a 1440 minutos.',
+            'payment_rules.deposit_refund_hours.*' => 'Las horas para devolver el adelanto van de 0 a 720.',
+            'payment_rules.link_hours.*'           => 'Un link de pago vence entre 1 y 720 horas después.',
         ]);
 
         if (isset($validated['booking_rules'])) {
@@ -131,6 +139,15 @@ class TenantSettingController extends Controller
               + (array_key_exists('refund_days', $validated['sales_rules']) ? ['pos.refund_days' => (int) $validated['sales_rules']['refund_days']] : [])
               + (array_key_exists('pay_before_service', $validated['sales_rules']) ? ['pos.pay_before_service' => (bool) $validated['sales_rules']['pay_before_service']] : [])
               + (array_key_exists('arrive_minutes', $validated['sales_rules']) ? ['pos.arrive_minutes' => (int) $validated['sales_rules']['arrive_minutes']] : []));
+        }
+
+        if (isset($validated['payment_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'booking.require_deposit'      => (bool) $validated['payment_rules']['require_deposit'],
+                'booking.deposit_minutes'      => (int) $validated['payment_rules']['deposit_minutes'],
+                'booking.deposit_refund_hours' => (int) $validated['payment_rules']['deposit_refund_hours'],
+                'payments.link_hours'          => (int) $validated['payment_rules']['link_hours'],
+            ]);
         }
 
         if (isset($validated['booking_misses'])) {
@@ -201,6 +218,13 @@ class TenantSettingController extends Controller
                 : null,
             'sales_rules' => $tenant->hasModule('pos') ? Sales::rules($tenant) : null,
             'booking_misses' => $tenant->hasModule('booking') ? \App\Support\OnlineBooking::policy($tenant) : null,
+            'payment_rules' => $tenant->hasModule('pos') && \App\Support\PaymentLinks::ready() ? [
+                'require_deposit'      => (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit'),
+                'deposit_minutes'      => (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes'),
+                'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
+                'link_hours'           => (int) AppointmentFlow::rule($tenant, 'payments.link_hours'),
+                'booking'              => $tenant->hasModule('booking'),
+            ] : null,
         ];
     }
 }

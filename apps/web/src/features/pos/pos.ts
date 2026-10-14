@@ -45,6 +45,8 @@ export interface PendingSale {
   detail: string;
   total: number;
   balance: number;
+  paid?: number;
+  deposit?: number;
   currency?: string;
 }
 

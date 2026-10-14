@@ -783,6 +783,10 @@ class AppointmentController extends Controller
         ]);
 
         \App\Support\Notifier::appointmentStep($appointment, $from, $to, $actor);
+
+        if ($tenant = Tenant::find($appointment->tenant_id)) {
+            \App\Support\PaymentLinks::appointmentChanged($tenant->loadMissing('settings'), $appointment, $from, $to);
+        }
     }
 
     protected function present(Appointment $appointment, Tenant $tenant, bool $withHistory = false): array

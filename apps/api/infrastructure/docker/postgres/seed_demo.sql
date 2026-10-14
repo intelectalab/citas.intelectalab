@@ -497,12 +497,13 @@ WHERE b.slug <> 'generic'
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
 INSERT INTO services (
-    tenant_id, category_id, name, code, duration_minutes, buffer_after_minutes, price, requires_deposit,
+    tenant_id, category_id, name, code, duration_minutes, buffer_after_minutes, price, requires_deposit, deposit_value,
     online_booking, is_virtual, kind, capacity, recall_label, recall_days, status_id
 )
 SELECT t.id, sc.id, s.item->>'name', s.item->>'code', (s.item->>'duration_minutes')::int,
        coalesce((s.item->>'buffer_after_minutes')::int, 0), coalesce((s.item->>'price')::numeric, 0),
-       coalesce((s.item->>'requires_deposit')::boolean, false), coalesce((s.item->>'online_booking')::boolean, true),
+       coalesce((s.item->>'requires_deposit')::boolean, false), coalesce((b.default_rules->>'booking.deposit_percent')::numeric, 30),
+       coalesce((s.item->>'online_booking')::boolean, true),
        coalesce((s.item->>'is_virtual')::boolean, false), coalesce(s.item->>'kind', 'individual'),
        coalesce((s.item->>'capacity')::int, 1), s.item->'recall'->>'label', (s.item->'recall'->>'days')::int,
        'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a41'

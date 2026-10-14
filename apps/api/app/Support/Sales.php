@@ -21,7 +21,7 @@ class Sales
         'plin'     => 'Plin',
     ];
 
-    public const OTHER_METHODS = ['link' => 'Link de pago', 'deposit' => 'Adelanto'];
+    public const OTHER_METHODS = ['link' => 'Link de pago', 'deposit' => 'Adelanto en línea', 'gateway' => 'Devolución por la pasarela'];
 
     public const NEEDS_REFERENCE = ['card', 'transfer', 'yape', 'plin'];
 
@@ -108,7 +108,7 @@ class Sales
             ->first();
     }
 
-    public static function createForAppointment(Tenant $tenant, Appointment $appointment, User $user, ?string $couponCode = null): object
+    public static function createForAppointment(Tenant $tenant, Appointment $appointment, ?User $user, ?string $couponCode = null): object
     {
         $rules = self::rules($tenant);
         $applied = $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price, Currency::of($tenant)) : null;
@@ -131,7 +131,7 @@ class Sales
             'balance'            => $totals['total'],
             'tax_rate'           => $rules['tax_rate'],
             'prices_include_tax' => $rules['prices_include_tax'],
-            'created_by'         => $user->id,
+            'created_by'         => $user?->id,
             'created_at'         => now(),
             'updated_at'         => now(),
         ] + Currency::column($tenant));
@@ -259,12 +259,22 @@ class Sales
         ]);
 
         $sale = DB::table('sales')->where('id', $sale->id)->first();
+        PaymentLinks::cancelForSale($sale->id, 'Se cobró en la sede.');
 
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, $doc, $user);
         }
 
         return ['sale' => $sale, 'duplicate' => false, 'change' => $change];
+    }
+
+    public static function label(object $sale): string
+    {
+        if (($sale->deposit_outcome ?? null) === 'refund_due' && $sale->status !== 'void') {
+            return 'Adelanto por devolver';
+        }
+
+        return self::STATUS_LABELS[$sale->status] ?? $sale->status;
     }
 
     public static function present(object $sale): array
@@ -284,7 +294,7 @@ class Sales
             'id'                 => $sale->id,
             'code'               => $sale->code,
             'status'             => $sale->status,
-            'status_label'       => self::STATUS_LABELS[$sale->status] ?? $sale->status,
+            'status_label'       => self::label($sale),
             'subtotal'           => round((float) $sale->subtotal, 2),
             'discount'           => round((float) $sale->discount, 2),
             'tax'                => round((float) $sale->tax, 2),
@@ -314,6 +324,8 @@ class Sales
             'coupon'             => Coupons::ofSale($sale->id, $sale->currency ?? null),
             'invoice'            => Invoicing::present(Invoicing::ofSale($sale->id)),
             'refunded'           => Refunds::total($sale->id),
+            'deposit'            => PaymentLinks::ready() ? PaymentLinks::depositPaid($sale->id) : 0.0,
+            'deposit_outcome'    => $sale->deposit_outcome ?? null,
         ];
     }
 }

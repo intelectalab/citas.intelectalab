@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Hourglass, Loader2, PawPrint, Plus, Search, UserRound, Video } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -43,6 +44,7 @@ const inputClass =
 
 export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded, onWaitlisted }: BookingFlowProps) {
   const vocab = useVocabulary();
+  const router = useRouter();
   const policies = overview.policies;
   const isReschedule = Boolean(reschedule);
 
@@ -189,7 +191,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
   const canContinue = (() => {
     switch (step) {
       case 'who': return Boolean(dependentId) || !overview.dependents.required;
-      case 'service': return Boolean(service) && !service?.needs_deposit;
+      case 'service': return Boolean(service);
       case 'branch': return Boolean(branchId);
       case 'professional': return true;
       case 'when': return Boolean(time);
@@ -215,6 +217,10 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             starts_at: startsAt,
             notes: notes.trim() || null,
           });
+      if (res.status === 202 && res.data?.deposit?.token) {
+        router.push(`/pay/${res.data.deposit.token}`);
+        return;
+      }
       setDone(res.data);
     } catch (err: any) {
       setError(portalError(err, 'No se pudo completar la reserva.'));
@@ -346,9 +352,8 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                 type="button"
                 data-service={item.name}
                 aria-pressed={serviceId === item.id}
-                disabled={item.needs_deposit}
                 onClick={() => { setServiceId(item.id); setProfessionalId(''); setTime(''); }}
-                className={optionClass(serviceId === item.id, item.needs_deposit)}
+                className={optionClass(serviceId === item.id)}
               >
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-2 text-sm font-bold text-slate-800">
@@ -359,7 +364,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                     <Clock size={12} /> {item.duration_minutes} min{item.category ? ` · ${item.category}` : ''}
                   </span>
                   {item.needs_deposit && (
-                    <span className="block text-xs font-medium text-amber-700 mt-1">Se reserva con un adelanto. Comunícate con la sede para agendarlo.</span>
+                    <span className="block text-xs font-medium text-[#3F768C] mt-1">Se reserva pagando un adelanto de {money(item.deposit_amount ?? 0)}{item.deposit_label?.includes('%') ? ` (${item.deposit_label})` : ''}.</span>
                   )}
                 </span>
                 <span className="text-sm font-extrabold text-[#022340] shrink-0">{money(item.price)}</span>
@@ -578,7 +583,19 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
               />
             )}
 
-            {policies.pay_before_service && (
+            {!isReschedule && service?.needs_deposit && (
+              <div data-deposit-notice className="text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3 space-y-1.5">
+                <p>
+                  <span className="font-bold">Para reservar pagas {money(service.deposit_amount ?? 0)} de adelanto ahora</span>; el resto ({money(Math.max(0, Number(service.price) - (service.deposit_amount ?? 0)))}) lo pagas en la sede.
+                </p>
+                <p>
+                  Tu horario se reserva recién al pagar: tienes {policies.deposit_minutes ?? 30} minutos. Si otra persona toma ese horario antes, el link se anula y no se te cobra nada; si demoras, revisa que siga libre.
+                </p>
+                <p>Si cancelas con al menos {policies.deposit_refund_hours ?? 24} horas de anticipación, se te devuelve el adelanto.</p>
+              </div>
+            )}
+
+            {policies.pay_before_service && !service?.needs_deposit && (
               <p data-pay-notice className="text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3">
                 {service?.is_virtual ? (
                   <><span className="font-bold">Esta atención es por videollamada y se paga antes de empezar.</span> Comunícate con la sede para coordinar el pago.</>
@@ -624,7 +641,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             onClick={submit}
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
           >
-            <CalendarCheck size={16} /> {saving ? 'Guardando...' : isReschedule ? 'Cambiar mi cita' : 'Reservar cita'}
+            <CalendarCheck size={16} /> {saving ? 'Guardando...' : isReschedule ? 'Cambiar mi cita' : service?.needs_deposit ? `Pagar adelanto de ${money(service.deposit_amount ?? 0)}` : 'Reservar cita'}
           </button>
         ) : (
           <button

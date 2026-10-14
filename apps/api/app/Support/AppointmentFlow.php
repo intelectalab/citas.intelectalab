@@ -76,6 +76,9 @@ class AppointmentFlow
         'booking.miss_action'         => 'note',
         'booking.miss_limit'          => 2,
         'booking.block_days'          => 30,
+        'payments.link_hours'         => 24,
+        'booking.deposit_minutes'     => 30,
+        'booking.deposit_refund_hours' => 24,
     ];
 
     public static function keys(): array

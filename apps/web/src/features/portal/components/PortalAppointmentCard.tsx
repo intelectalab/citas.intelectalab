@@ -3,6 +3,7 @@
 import { CalendarClock, Check, Clock, MapPin, PawPrint, UserRound, Wallet, X } from 'lucide-react';
 import { dateOf, formatDate, statusStyle, timeOf } from '@/features/appointments/appointments';
 import type { PortalAppointment } from '../portal';
+import { money } from '@/features/sales/sales';
 
 interface PortalAppointmentCardProps {
   appointment: PortalAppointment;
@@ -62,6 +63,19 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
                 : arriveMinutes > 0
                   ? `Llega ${arriveMinutes} minutos antes de tu hora para pagar en recepción: la atención empieza con la cita pagada.`
                   : 'Esta cita se paga en recepción antes de la atención.'}
+            </p>
+          )}
+
+          {appointment.deposit && (
+            <p data-deposit className="flex items-start gap-1.5 text-xs font-medium text-[#022340]">
+              <Wallet size={14} className="shrink-0 mt-0.5" />
+              {appointment.deposit.outcome === 'refund_due'
+                ? `Cancelaste a tiempo: la sede te devolverá el adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)}.`
+                : appointment.deposit.outcome === 'refunded'
+                  ? `Se te devolvió el adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)}.`
+                  : appointment.deposit.outcome === 'retained'
+                    ? `El adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)} quedó para la sede porque la cita se canceló tarde o no asististe.`
+                    : `Pagaste ${money(appointment.deposit.amount, appointment.deposit.currency)} de adelanto. ${appointment.deposit.balance > 0 ? `Falta ${money(appointment.deposit.balance, appointment.deposit.currency)}, que pagas en la sede.` : ''} Si cancelas con al menos ${appointment.deposit.refund_hours} horas de anticipación, se te devuelve.`}
             </p>
           )}
 

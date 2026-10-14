@@ -7,6 +7,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Briefcase, ChevronDown, Plus } from 'lucide-react';
 import FormServiceCategory from './FormServiceCategory';
 import Select from '@/app/components/common/Select';
+import { cleanAmount, money } from '@/features/sales/sales';
+import { apiError } from '@/features/appointments/appointments';
+import { currencySymbol } from '@/lib/currency';
 
 interface ServiceCategory {
   label: string;
@@ -24,6 +27,8 @@ interface Service {
   status_id?: string | null;
   code?: string | null;
   requires_deposit?: boolean;
+  deposit_type?: 'percent' | 'amount';
+  deposit_value?: number | string;
   online_booking?: boolean;
   is_virtual?: boolean;
   kind?: 'individual' | 'group';
@@ -43,6 +48,8 @@ const EMPTY_FORM = {
   price: 0,
   status_id: '',
   requires_deposit: false,
+  deposit_type: 'percent' as 'percent' | 'amount',
+  deposit_value: '30',
   online_booking: true,
   is_virtual: false,
   kind: 'individual' as 'individual' | 'group',
@@ -68,6 +75,7 @@ export default function FormService({
   onSubmitSuccess = () => {},
 }: FormServiceProps) {
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [categories, setCategories] = useState<ServiceCategory[]>(initialCategories);
   const [statuses, setStatuses] = useState<any[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -102,6 +110,8 @@ export default function FormService({
         price: initialData.price || 0,
         status_id: initialData.status_id || '',
         requires_deposit: Boolean(initialData.requires_deposit),
+        deposit_type: initialData.deposit_type ?? 'percent',
+        deposit_value: initialData.deposit_value !== undefined && initialData.deposit_value !== null ? String(Number(initialData.deposit_value)) : '30',
         online_booking: initialData.online_booking ?? true,
         is_virtual: Boolean(initialData.is_virtual),
         kind: initialData.kind || 'individual',
@@ -113,6 +123,7 @@ export default function FormService({
     } else {
       setForm(EMPTY_FORM);
     }
+    setSaveError('');
   }, [initialData, isOpen]);
 
   useEffect(() => {
@@ -164,6 +175,7 @@ export default function FormService({
     e.preventDefault();
     try {
       setLoading(true);
+      setSaveError('');
       const hasRecall = form.recall_label.trim() !== '' && form.recall_days !== '';
       const payload = {
         ...form,
@@ -171,6 +183,7 @@ export default function FormService({
         recall_label: hasRecall ? form.recall_label.trim() : null,
         recall_days: hasRecall ? form.recall_days : null,
         recall_service_id: hasRecall ? form.recall_service_id || null : null,
+        deposit_value: Number(form.deposit_value || 0),
       };
 
       const res = initialData?.id
@@ -179,7 +192,7 @@ export default function FormService({
       onSubmitSuccess?.(res?.data?.data ?? res?.data);
       onClose();
     } catch (error) {
-      console.error('Error guardando servicio:', error);
+      setSaveError(apiError(error, 'No se pudo guardar el servicio.'));
     } finally {
       setLoading(false);
     }
@@ -357,6 +370,52 @@ export default function FormService({
                             ))}
                           </div>
 
+                          {form.requires_deposit && (() => {
+                            const value = Number(form.deposit_value || 0);
+                            const price = Number(form.price || 0);
+                            const deposit = form.deposit_type === 'percent' ? Math.round(price * Math.min(value, 100)) / 100 : Math.min(value, price);
+                            return (
+                              <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-deposit-amount>
+                                <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600">¿Cuánto es el adelanto?</span>
+                                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de adelanto">
+                                  {([
+                                    ['percent', 'Un porcentaje', 'Ej. 30 % del precio'],
+                                    ['amount', 'Un monto fijo', `Ej. ${money(50)}, cueste lo que cueste`],
+                                  ] as const).map(([key, title, hint]) => (
+                                    <button
+                                      key={key}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={form.deposit_type === key}
+                                      data-deposit-type={key}
+                                      onClick={() => setForm({ ...form, deposit_type: key, deposit_value: key === 'percent' ? '30' : String(Math.min(50, price) || '') })}
+                                      className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors ${form.deposit_type === key ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}
+                                    >
+                                      <span className="block text-sm font-bold text-[#022340]">{title}</span>
+                                      <span className="block text-xs text-slate-500">{hint}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    id="deposit-value"
+                                    inputMode="decimal"
+                                    aria-label="Valor del adelanto"
+                                    value={form.deposit_value}
+                                    onChange={(e) => setForm({ ...form, deposit_value: cleanAmount(e.target.value) })}
+                                    className="w-28 text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                  />
+                                  <span className="text-sm text-slate-600">{form.deposit_type === 'percent' ? '% del precio' : currencySymbol()}</span>
+                                </div>
+                                <p className="text-xs text-slate-500" data-deposit-example>
+                                  {price > 0 && value > 0
+                                    ? `Con el precio de ${money(price)}, el cliente paga ${money(deposit)} al reservar en línea y ${money(Math.max(0, price - deposit))} en la sede.`
+                                    : 'Escribe el precio y el adelanto para ver el ejemplo.'}
+                                </p>
+                              </div>
+                            );
+                          })()}
+
                           {(canUseClasses || form.kind === 'group') && (
                             <div className="grid grid-cols-2 gap-3">
                               <div>
@@ -436,6 +495,7 @@ export default function FormService({
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex items-center justify-end gap-3 z-10">
+            {saveError && <p role="alert" data-service-error className="mr-auto text-sm text-red-600">{saveError}</p>}
             <button
               type="button"
               onClick={onClose}

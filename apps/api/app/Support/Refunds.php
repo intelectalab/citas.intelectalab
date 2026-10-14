@@ -35,6 +35,7 @@ class Refunds
         DB::table('sales')->where('id', $sale->id)->update([
             'status' => 'void', 'void_reason' => mb_substr($reason, 0, 255), 'balance' => 0, 'updated_at' => now(),
         ]);
+        PaymentLinks::cancelForSale($sale->id, 'La venta se anuló.');
 
         foreach (DB::table('coupon_redemptions')->where('sale_id', $sale->id)->get() as $redemption) {
             DB::table('coupons')->where('id', $redemption->coupon_id)->where('used_count', '>', 0)->decrement('used_count');
@@ -78,6 +79,11 @@ class Refunds
         }
 
         $session = null;
+        $gateway = null;
+
+        if ($data['method'] === 'gateway') {
+            $gateway = PaymentLinks::refundThroughGateway($tenant, $sale, $amount);
+        }
 
         if ($data['method'] === 'cash') {
             $open = Cash::openSessions($tenant->id, $sale->branch_id);
@@ -103,7 +109,7 @@ class Refunds
             'id' => $paymentId, 'tenant_id' => $tenant->id, 'branch_id' => $sale->branch_id, 'sale_id' => $sale->id,
             'appointment_id' => $sale->appointment_id, 'customer_id' => $sale->customer_id,
             'method' => $data['method'], 'status' => 'refunded', 'amount' => -$amount,
-            'external_reference' => 'Devolución', 'confirmed_at' => now(), 'cash_session_id' => $session?->id,
+            'external_reference' => $gateway ? mb_substr((string) $gateway['external_id'], 0, 190) : 'Devolución', 'confirmed_at' => now(), 'cash_session_id' => $session?->id,
             'created_by' => $user->id, 'created_at' => now(),
         ] + Currency::column($sale->currency ?? Currency::of($tenant)));
 
@@ -135,6 +141,8 @@ class Refunds
             'reason' => mb_substr($data['reason'], 0, 255), 'payment_id' => $paymentId, 'invoice_id' => $note?->id,
             'created_by' => $user->id, 'created_at' => now(),
         ]);
+
+        PaymentLinks::afterRefund($sale);
 
         return DB::table('sales')->where('id', $sale->id)->first();
     }

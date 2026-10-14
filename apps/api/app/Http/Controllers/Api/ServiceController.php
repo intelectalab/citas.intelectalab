@@ -47,6 +47,8 @@ class ServiceController extends Controller
             'buffer_after_minutes' => 'nullable|integer|min:0',
             'price' => 'required|numeric|min:0',
             'requires_deposit' => 'sometimes|boolean',
+            'deposit_type' => ['sometimes', Rule::in(['percent', 'amount'])],
+            'deposit_value' => 'sometimes|numeric|min:0|max:99999',
             'online_booking' => 'sometimes|boolean',
             'is_virtual' => 'sometimes|boolean',
             'kind' => ['sometimes', Rule::in([Service::KIND_INDIVIDUAL, Service::KIND_GROUP])],
@@ -68,6 +70,26 @@ class ServiceController extends Controller
 
         if ($kind !== Service::KIND_GROUP) {
             $data['capacity'] = 1;
+        }
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('services', 'deposit_type')) {
+            unset($data['deposit_type'], $data['deposit_value']);
+        } elseif ($data['requires_deposit'] ?? $service?->requires_deposit) {
+            $type = $data['deposit_type'] ?? $service?->deposit_type ?? 'percent';
+            $value = (float) ($data['deposit_value'] ?? $service?->deposit_value ?? 30);
+            $price = (float) ($data['price'] ?? $service?->price ?? 0);
+
+            if ($value <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['deposit_value' => 'Escribe cuánto es el adelanto: debe ser mayor que cero.']);
+            }
+
+            if ($type === 'percent' && $value > 100) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['deposit_value' => 'El adelanto en porcentaje va de 1 a 100.']);
+            }
+
+            if ($type === 'amount' && $value > $price) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['deposit_value' => 'El adelanto no puede ser mayor que el precio del servicio.']);
+            }
         }
 
         if (array_key_exists('recall_label', $data) && empty($data['recall_label'])) {
