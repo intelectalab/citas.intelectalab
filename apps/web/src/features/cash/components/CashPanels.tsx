@@ -104,7 +104,7 @@ export function CashMovementPanel({ session, registerName, onClose, onSaved }: P
   };
 
   return (
-    <FormDrawer isOpen={session !== null} onClose={onClose} title="Movimiento de caja" subtitle={registerName ? `${registerName} · hay ${money(session?.expected_amount)} en efectivo` : undefined} icon={<Wallet size={20} />}>
+    <FormDrawer isOpen={session !== null} onClose={onClose} title="Movimiento de caja" subtitle={registerName ? `${registerName} · hay ${money(session?.expected_amount, session?.currency)} en efectivo` : undefined} icon={<Wallet size={20} />}>
       <div className="flex flex-col h-full justify-between">
         <form id="cash-movement-form" onSubmit={submit} className="space-y-5 flex-1 overflow-y-auto pr-1 pb-4">
           <div className="space-y-2" role="radiogroup" aria-label="Tipo de movimiento">
@@ -198,13 +198,13 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
               {rows.filter(([, value], index) => index === 0 || value > 0).map(([label, value, adds]) => (
                 <div key={label} className="flex justify-between text-slate-600">
                   <span>{label}</span>
-                  <span className="tabular-nums">{adds ? '' : '− '}{money(value)}</span>
+                  <span className="tabular-nums">{adds ? '' : '− '}{money(value, session?.currency)}</span>
                 </div>
               ))}
             </div>
             <div className="flex items-center justify-between px-5 py-3 bg-slate-50/80 border-t border-slate-100">
               <span className="text-sm font-bold text-[#022340]">Debe haber en efectivo</span>
-              <span className="text-xl font-black text-[#022340] tabular-nums" data-expected>{money(expected)}</span>
+              <span className="text-xl font-black text-[#022340] tabular-nums" data-expected>{money(expected, session?.currency)}</span>
             </div>
           </div>
 
@@ -214,7 +214,7 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
             {difference !== null && (
               <p data-difference className={`flex items-center gap-1.5 text-sm font-semibold mt-2 ${difference === 0 ? 'text-emerald-700' : needsNote ? 'text-rose-700' : 'text-amber-700'}`}>
                 <Calculator size={15} />
-                {difference === 0 ? 'La caja cuadra.' : `${difference < 0 ? 'Faltan' : 'Sobran'} ${money(Math.abs(difference))}${needsNote ? '' : ' (dentro de la tolerancia)'}.`}
+                {difference === 0 ? 'La caja cuadra.' : `${difference < 0 ? 'Faltan' : 'Sobran'} ${money(Math.abs(difference), session?.currency)}${needsNote ? '' : ' (dentro de la tolerancia)'}.`}
               </p>
             )}
           </div>
@@ -222,7 +222,7 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
           <div>
             <label className={labelClass} htmlFor="close-notes">Observaciones{needsNote ? ' *' : ''}</label>
             <textarea id="close-notes" rows={3} maxLength={500} required={needsNote} placeholder={needsNote ? 'Explica a qué se debe la diferencia' : 'Opcional'} className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
-            {needsNote && <p className="text-xs text-slate-500 mt-1.5">Con una diferencia mayor que {money(tolerance)} hay que explicarla, y la administración recibe un aviso.</p>}
+            {needsNote && <p className="text-xs text-slate-500 mt-1.5">Con una diferencia mayor que {money(tolerance, session?.currency)} hay que explicarla, y la administración recibe un aviso.</p>}
           </div>
 
           {error && <p role="alert" className={errorClass}>{error}</p>}
@@ -345,12 +345,12 @@ export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | n
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
             {stat('Abrió', `${session.opened_by ?? '—'} · ${momentOf(session.opened_at)}`)}
             {stat('Cerró', session.closed_at ? `${session.closed_by ?? '—'} · ${momentOf(session.closed_at)}` : 'Sigue abierto')}
-            {stat('Apertura', money(session.opening_amount))}
-            {stat(session.status === 'open' ? 'Debe haber ahora' : 'Debía haber', money(session.expected_amount))}
-            {session.status === 'closed' && stat('Contado', money(session.closing_amount))}
+            {stat('Apertura', money(session.opening_amount, session?.currency))}
+            {stat(session.status === 'open' ? 'Debe haber ahora' : 'Debía haber', money(session.expected_amount, session?.currency))}
+            {session.status === 'closed' && stat('Contado', money(session.closing_amount, session?.currency))}
             {session.status === 'closed' && stat(
               'Diferencia',
-              session.difference === 0 ? 'Cuadró' : `${(session.difference ?? 0) < 0 ? 'Faltaron' : 'Sobraron'} ${money(Math.abs(session.difference ?? 0))}`,
+              session.difference === 0 ? 'Cuadró' : `${(session.difference ?? 0) < 0 ? 'Faltaron' : 'Sobraron'} ${money(Math.abs(session.difference ?? 0), session?.currency)}`,
               session.difference === 0 ? 'text-emerald-700' : 'text-rose-700',
             )}
           </dl>
@@ -366,7 +366,7 @@ export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | n
                 {session.by_method.map((row) => (
                   <div key={row.method} className="rounded-xl border border-slate-200 px-4 py-3">
                     <span className="block text-xs text-slate-500">{row.label} · {row.count} {row.count === 1 ? 'pago' : 'pagos'}</span>
-                    <span className="block text-base font-black text-[#022340] tabular-nums">{money(row.total)}</span>
+                    <span className="block text-base font-black text-[#022340] tabular-nums">{money(row.total, session?.currency)}</span>
                   </div>
                 ))}
               </div>
@@ -390,7 +390,7 @@ export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | n
                     <span className="block text-xs text-slate-500">{momentOf(movement.at)}{movement.by ? ` · ${movement.by}` : ''}</span>
                   </span>
                   <span className={`text-sm font-bold tabular-nums ${movement.sign > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {movement.sign > 0 ? '+' : '−'} {money(movement.amount)}
+                    {movement.sign > 0 ? '+' : '−'} {money(movement.amount, session?.currency)}
                   </span>
                 </li>
               )}

@@ -8,6 +8,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import PlanSelection from '@/features/subscriptions/PlanSelection';
 import { formatDateTime, statusStyle, timeOf } from '@/features/appointments/appointments';
 import { CustomerLink } from '@/app/components/common/PersonLink';
+import { formatMoney } from '@/lib/currency';
 import {
   Plus,
   Users,
@@ -69,7 +70,7 @@ interface DashboardData {
   activity: { at: string; from: string | null; to: string; to_name: string; by: string | null; by_customer: boolean; code: string | null; who: string | null; customer_id?: string | null; service: string | null }[];
 }
 
-const money = (value: number) => `S/ ${value.toLocaleString('es-PE', { maximumFractionDigits: 0 })}`;
+const money = (value: number) => formatMoney(value, null, 0);
 
 const greeting = () => {
   const hour = new Date().getHours();

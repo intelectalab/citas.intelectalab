@@ -8,6 +8,7 @@ import { CustomerLink } from '@/app/components/common/PersonLink';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { dayOf, toISO } from '@/app/components/ui/table/dateFilters';
+import { currentCurrency } from '@/lib/currency';
 import { money, momentOf, type PaymentRow } from '../sales';
 import SaleDetailPanel from './SaleDetailPanel';
 
@@ -55,7 +56,8 @@ export default function PaymentsTable() {
   );
 
   const today = toISO(new Date());
-  const todays = all.filter((p) => dayOf(p.at) === today);
+  const current = currentCurrency();
+  const todays = all.filter((p) => dayOf(p.at) === today && (!p.currency || p.currency === current));
   const sum = (list: PaymentRow[]) => list.reduce((total, p) => total + p.amount, 0);
 
   const used = new Set(all.map((p) => p.method));
@@ -140,7 +142,7 @@ export default function PaymentsTable() {
       header: 'Monto',
       cell: (payment) => (
         <span key={`amount-${payment.id}`} data-kind={payment.kind} className={`text-sm font-bold tabular-nums ${payment.kind === 'refund' ? 'text-rose-700' : 'text-slate-800'}`}>
-          {payment.kind === 'refund' ? `− ${money(Math.abs(payment.amount))}` : money(payment.amount)}
+          {payment.kind === 'refund' ? `− ${money(Math.abs(payment.amount), payment.currency)}` : money(payment.amount, payment.currency)}
         </span>
       ),
     },

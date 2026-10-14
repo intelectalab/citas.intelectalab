@@ -1,4 +1,5 @@
 export interface Appointment {
+  currency?: string;
   id: string;
   code: string;
   status: string;

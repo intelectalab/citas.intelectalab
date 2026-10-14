@@ -34,6 +34,13 @@ class SaaSPlan extends Model
         'is_public_catalog',
     ];
 
+    protected $appends = ['currency_symbol'];
+
+    public function getCurrencySymbolAttribute(): string
+    {
+        return \App\Support\Currency::present($this->currency)['symbol'];
+    }
+
     protected $casts = [
         'price_monthly' => 'float',
         'price_yearly' => 'float',

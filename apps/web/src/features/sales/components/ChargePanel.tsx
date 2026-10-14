@@ -158,8 +158,8 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
       apply(data);
       setNotice(
         data.sale?.status === 'paid'
-          ? `Cobro registrado: la venta ${data.sale.code} quedó pagada.${data.change ? ` Vuelto: ${money(data.change)}.` : ''}`
-          : `Pago registrado. Saldo por cobrar: ${money(data.sale?.balance)}.${data.change ? ` Vuelto: ${money(data.change)}.` : ''}`,
+          ? `Cobro registrado: la venta ${data.sale.code} quedó pagada.${data.change ? ` Vuelto: ${money(data.change, context?.sale?.currency ?? context?.preview.currency)}.` : ''}`
+          : `Pago registrado. Saldo por cobrar: ${money(data.sale?.balance, context?.sale?.currency ?? context?.preview.currency)}.${data.change ? ` Vuelto: ${money(data.change, context?.sale?.currency ?? context?.preview.currency)}.` : ''}`,
       );
       onChanged?.(data);
     } catch (err) {
@@ -245,34 +245,34 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
               {(sale?.items ?? [{ id: 'preview', description: context.item ?? 'Servicio', quantity: 1, total: context.preview.subtotal }]).map((item) => (
                 <div key={item.id} className="flex items-start justify-between gap-3">
                   <span className="font-semibold text-slate-800">{item.quantity > 1 ? `${item.quantity} × ` : ''}{item.description}</span>
-                  <span className="font-semibold text-slate-800 tabular-nums">{money(item.total)}</span>
+                  <span className="font-semibold text-slate-800 tabular-nums">{money(item.total, context?.sale?.currency ?? context?.preview.currency)}</span>
                 </div>
               ))}
 
               {appliedCoupon && (
                 <div className="flex items-start justify-between gap-3 text-emerald-700" data-coupon-line={appliedCoupon.code}>
                   <span className="flex items-center gap-1.5 font-medium"><TicketPercent size={15} /> Cupón {appliedCoupon.code} ({appliedCoupon.benefit})</span>
-                  <span className="font-semibold tabular-nums">− {money(appliedCoupon.discount)}</span>
+                  <span className="font-semibold tabular-nums">− {money(appliedCoupon.discount, context?.sale?.currency ?? context?.preview.currency)}</span>
                 </div>
               )}
 
               <div className="pt-2 mt-2 border-t border-dashed border-slate-200 space-y-1 text-slate-500">
-                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(totals.total - totals.tax)}</span></div>
+                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(totals.total - totals.tax, context?.sale?.currency ?? context?.preview.currency)}</span></div>
                 <div className="flex justify-between">
                   <span>IGV {totals.tax_rate}%{totals.prices_include_tax ? ' (incluido en el precio)' : ''}</span>
-                  <span className="tabular-nums" data-tax>{money(totals.tax)}</span>
+                  <span className="tabular-nums" data-tax>{money(totals.tax, context?.sale?.currency ?? context?.preview.currency)}</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <span className="font-bold text-[#022340]">Total</span>
-                <span className="text-xl font-black text-[#022340] tabular-nums" data-total>{money(totals.total)}</span>
+                <span className="text-xl font-black text-[#022340] tabular-nums" data-total>{money(totals.total, context?.sale?.currency ?? context?.preview.currency)}</span>
               </div>
 
               {sale && sale.paid > 0 && !isPaid && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Pagado {money(sale.paid)}</span>
-                  <span className="font-bold text-amber-700" data-balance>Saldo {money(sale.balance)}</span>
+                  <span className="text-slate-500">Pagado {money(sale.paid, context?.sale?.currency ?? context?.preview.currency)}</span>
+                  <span className="font-bold text-amber-700" data-balance>Saldo {money(sale.balance, context?.sale?.currency ?? context?.preview.currency)}</span>
                 </div>
               )}
             </div>
@@ -283,7 +283,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
 
           {sale && !canPay && !isPaid && (
             <p data-closed className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              Esta venta está {sale.status_label.toLowerCase()}{(sale.refunded ?? 0) > 0 ? `: se devolvieron ${money(sale.refunded)}` : ''}. El detalle está en Ventas.
+              Esta venta está {sale.status_label.toLowerCase()}{(sale.refunded ?? 0) > 0 ? `: se devolvieron ${money(sale.refunded, context?.sale?.currency ?? context?.preview.currency)}` : ''}. El detalle está en Ventas.
             </p>
           )}
 
@@ -322,7 +322,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
                     onChange={(e) => setAmount(cleanAmount(e.target.value))}
                   />
                   <p className="text-xs text-slate-500 mt-1.5">
-                    {context.partial_payments ? `Saldo: ${money(balance)}. Puedes cobrar una parte.` : 'Tu empresa cobra el total de una vez.'}
+                    {context.partial_payments ? `Saldo: ${money(balance, context?.sale?.currency ?? context?.preview.currency)}. Puedes cobrar una parte.` : 'Tu empresa cobra el total de una vez.'}
                   </p>
                 </div>
 
@@ -330,7 +330,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
                   <div>
                     <label className={labelClass} htmlFor="charge-received">Recibido</label>
                     <input id="charge-received" inputMode="decimal" placeholder={amount || '0.00'} className={inputClass} value={received} onChange={(e) => setReceived(cleanAmount(e.target.value))} />
-                    <p className="text-xs mt-1.5 font-semibold text-[#3F768C]" data-change>Vuelto: {money(change)}</p>
+                    <p className="text-xs mt-1.5 font-semibold text-[#3F768C]" data-change>Vuelto: {money(change, context?.sale?.currency ?? context?.preview.currency)}</p>
                   </div>
                 ) : (
                   <div>
@@ -356,7 +356,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
                   {appliedCoupon ? (
                     <div className="flex items-center justify-between gap-3 border border-emerald-200 bg-emerald-50/60 rounded-lg px-3.5 py-2.5">
                       <span className="min-w-0">
-                        <span className="block text-sm font-bold text-emerald-800">{appliedCoupon.code} · descuenta {money(appliedCoupon.discount)}</span>
+                        <span className="block text-sm font-bold text-emerald-800">{appliedCoupon.code} · descuenta {money(appliedCoupon.discount, context?.sale?.currency ?? context?.preview.currency)}</span>
                         {appliedCoupon.description && <span className="block text-xs text-emerald-700 truncate">{appliedCoupon.description}</span>}
                       </span>
                       <button type="button" data-coupon-remove disabled={checkingCoupon} onClick={() => applyCoupon('')} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-red-600 transition-colors shrink-0">
@@ -392,7 +392,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
                   Cerrar
                 </button>
                 <button type="submit" data-pay disabled={saving || cashClosed || amountNumber <= 0} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
-                  {saving ? 'Registrando...' : `Cobrar ${money(amountNumber)}`}
+                  {saving ? 'Registrando...' : `Cobrar ${money(amountNumber, context?.sale?.currency ?? context?.preview.currency)}`}
                 </button>
               </div>
             </form>
@@ -412,10 +412,10 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-semibold text-slate-800">{payment.method_label}{payment.reference ? ` · ${payment.reference}` : ''}</span>
                       <span className="block text-xs text-slate-500 truncate">
-                        {momentOf(payment.at)}{payment.by ? ` · ${payment.by}` : ''}{payment.register ? ` · ${payment.register}` : ''}{payment.change > 0 ? ` · vuelto ${money(payment.change)}` : ''}
+                        {momentOf(payment.at)}{payment.by ? ` · ${payment.by}` : ''}{payment.register ? ` · ${payment.register}` : ''}{payment.change > 0 ? ` · vuelto ${money(payment.change, context?.sale?.currency ?? context?.preview.currency)}` : ''}
                       </span>
                     </span>
-                    <span className="text-sm font-bold text-slate-800 tabular-nums">{money(payment.amount)}</span>
+                    <span className="text-sm font-bold text-slate-800 tabular-nums">{money(payment.amount, context?.sale?.currency ?? context?.preview.currency)}</span>
                   </li>
                 )}
               />
@@ -452,7 +452,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
                   </div>
                   <div>
                     <dt className={sectionTitle}>Total</dt>
-                    <dd className="font-semibold text-slate-800">{money(invoice.total)} <span className="font-normal text-slate-500">(IGV {money(invoice.tax)})</span></dd>
+                    <dd className="font-semibold text-slate-800">{money(invoice.total, context?.sale?.currency ?? context?.preview.currency)} <span className="font-normal text-slate-500">(IGV {money(invoice.tax, context?.sale?.currency ?? context?.preview.currency)})</span></dd>
                   </div>
                 </dl>
 

@@ -7,6 +7,7 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import Select from '@/app/components/common/Select';
 import { addDays, dateOf, formatDate, timeOf, todayISO } from '@/features/appointments/appointments';
 import { portalError, type PortalAppointment, type PortalAvailability, type PortalCatalog, type PortalDependent, type PortalOverview } from '../portal';
+import { money } from '@/features/sales/sales';
 
 interface BookingFlowProps {
   overview: PortalOverview;
@@ -361,7 +362,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                     <span className="block text-xs font-medium text-amber-700 mt-1">Se reserva con un adelanto. Comunícate con la sede para agendarlo.</span>
                   )}
                 </span>
-                <span className="text-sm font-extrabold text-[#022340] shrink-0">S/ {Number(item.price).toFixed(2)}</span>
+                <span className="text-sm font-extrabold text-[#022340] shrink-0">{money(item.price)}</span>
               </button>
             ))
         )}
@@ -552,7 +553,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                 ['Hora', time],
                 [vocab.pro, chosenProfessional?.display_name ?? 'El primero disponible'],
                 ['Sede', catalog.branches.find((b) => b.id === branchId)?.name],
-                ['Precio', service ? `S/ ${Number(service.price).toFixed(2)}` : reschedule ? `S/ ${Number(reschedule.price).toFixed(2)}` : null],
+                ['Precio', service ? money(service.price) : reschedule ? money(reschedule.price) : null],
               ] as [string, string | null | undefined][]).filter(([, value]) => value).map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
                   <dt className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</dt>

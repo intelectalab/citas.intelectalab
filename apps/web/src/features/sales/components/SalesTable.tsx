@@ -8,6 +8,7 @@ import { CustomerLink } from '@/app/components/common/PersonLink';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { dayOf, toISO } from '@/app/components/ui/table/dateFilters';
+import { currentCurrency } from '@/lib/currency';
 import { money, momentOf, SALE_BADGES, type SaleRow, type UnbilledAppointment } from '../sales';
 import SaleDetailPanel from './SaleDetailPanel';
 import ChargePanel from './ChargePanel';
@@ -62,9 +63,11 @@ export default function SalesTable() {
   );
 
   const today = toISO(new Date());
-  const live = all.filter((s) => s.status !== 'void');
+  const ownCurrency = currentCurrency();
+  const others = all.filter((s) => s.currency && s.currency !== ownCurrency).length;
+  const live = all.filter((s) => s.status !== 'void' && (!s.currency || s.currency === ownCurrency));
   const todays = live.filter((s) => dayOf(s.created_at) === today);
-  const open = all.filter(VIEWS[1].test);
+  const open = all.filter(VIEWS[1].test).filter((s) => !s.currency || s.currency === ownCurrency);
 
   const branchOptions = [...new Map(all.map((s) => [s.branch_id, s.branch_name ?? 'Sede'])).entries()].map(([value, label]) => ({ value, label }));
 
@@ -99,7 +102,7 @@ export default function SalesTable() {
       onClick: () => setView(view === 'open' ? 'all' : 'open'),
     },
     {
-      title: 'Devuelto',
+      title: others ? `Devuelto · no suma ${others} en otra moneda` : 'Devuelto',
       value: money(live.reduce((sum, s) => sum + s.refunded, 0)),
       icon: <RotateCcw size={18} />,
       iconColorClass: 'text-rose-600',
@@ -144,9 +147,9 @@ export default function SalesTable() {
       header: 'Total',
       cell: (sale) => (
         <div key={`total-${sale.id}`}>
-          <span className={`block text-sm font-semibold tabular-nums ${sale.status === 'void' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{money(sale.total)}</span>
-          {sale.balance > 0 && sale.status !== 'void' && <span className="block text-xs font-semibold text-amber-700 tabular-nums">Falta {money(sale.balance)}</span>}
-          {sale.refunded > 0 && sale.status !== 'void' && <span className="block text-xs font-semibold text-rose-700 tabular-nums">Devuelto {money(sale.refunded)}</span>}
+          <span className={`block text-sm font-semibold tabular-nums ${sale.status === 'void' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{money(sale.total, sale.currency)}</span>
+          {sale.balance > 0 && sale.status !== 'void' && <span className="block text-xs font-semibold text-amber-700 tabular-nums">Falta {money(sale.balance, sale.currency)}</span>}
+          {sale.refunded > 0 && sale.status !== 'void' && <span className="block text-xs font-semibold text-rose-700 tabular-nums">Devuelto {money(sale.refunded, sale.currency)}</span>}
         </div>
       ),
     },

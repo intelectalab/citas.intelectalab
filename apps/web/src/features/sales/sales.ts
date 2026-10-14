@@ -1,4 +1,7 @@
+import { formatMoney } from '@/lib/currency';
+
 export interface SaleInvoice {
+  currency?: string;
   id: string;
   doc_type: 'ticket' | 'boleta' | 'factura' | 'nota_credito';
   doc_type_label: string;
@@ -32,6 +35,7 @@ export interface SalePayment {
 }
 
 export interface Sale {
+  currency?: string;
   id: string;
   code: string;
   status: 'pending' | 'partial' | 'paid' | 'void' | 'partially_refunded' | 'refunded';
@@ -78,7 +82,7 @@ export interface Coupon {
 
 export interface ChargeContext {
   sale: Sale | null;
-  preview: { subtotal: number; discount: number; tax: number; total: number; tax_rate: number; prices_include_tax: boolean };
+  preview: { subtotal: number; discount: number; tax: number; total: number; tax_rate: number; prices_include_tax: boolean; currency?: string };
   coupon?: AppliedCoupon | null;
   blocked: string | null;
   item: string | null;
@@ -105,6 +109,7 @@ export interface CashMovement {
 }
 
 export interface CashSession {
+  currency?: string;
   id: string;
   register_id: string;
   branch_id: string;
@@ -148,8 +153,7 @@ export interface CashBoardData {
   sessions: CashSession[];
 }
 
-export const money = (value: number | string | null | undefined): string =>
-  `S/ ${Number(value ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const money = (value: number | string | null | undefined, currency?: string | null): string => formatMoney(value, currency);
 
 export const momentOf = (iso: string | null | undefined): string =>
   iso
@@ -169,6 +173,7 @@ export const SUNAT_LABELS: Record<SaleInvoice['sunat_status'], string> = {
 };
 
 export interface SaleRow {
+  currency?: string;
   id: string;
   code: string;
   status: Sale['status'];
@@ -190,6 +195,7 @@ export interface SaleRow {
 }
 
 export interface UnbilledAppointment {
+  currency?: string;
   appointment_id: string;
   appointment_code: string;
   at: string;
@@ -226,6 +232,7 @@ export interface SaleDetail extends Sale {
 }
 
 export interface PaymentRow {
+  currency?: string;
   id: string;
   at: string;
   method: string;

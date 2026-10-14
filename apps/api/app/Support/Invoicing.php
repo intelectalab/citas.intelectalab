@@ -128,6 +128,7 @@ class Invoicing
             'tax'                 => $sale->tax,
             'total'               => $sale->total,
             'status'              => 'issued',
+        ] + Currency::column($sale->currency ?? Currency::of($tenant)) + [
             'issued_by'           => $user?->id,
             'issued_at'           => now(),
             'created_at'          => now(),
@@ -205,6 +206,7 @@ class Invoicing
             'tax'                  => $tax,
             'total'                => round($amount, 2),
             'status'               => 'issued',
+        ] + Currency::column($origin->currency ?? $sale->currency ?? Currency::of($tenant)) + [
             'reference_invoice_id' => $origin->id,
             'reason'               => mb_substr($reason, 0, 255),
             'issued_by'            => $user?->id,
@@ -256,6 +258,7 @@ class Invoicing
             'taxable'        => $invoice->taxable,
             'tax'            => $invoice->tax,
             'total'          => $invoice->total,
+            'currency'       => $invoice->currency ?? Currency::DEFAULT,
             'status'         => $invoice->status,
             'simulated'      => (bool) $invoice->simulated,
             'sunat_status'   => $invoice->sunat_status,

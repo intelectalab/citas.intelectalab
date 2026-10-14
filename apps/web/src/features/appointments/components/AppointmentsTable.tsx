@@ -11,6 +11,7 @@ import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
 import { RELEASED, addDays, dateOf, formatDate, statusStyle, timeOf, todayISO, type Appointment } from '../appointments';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
+import { formatMoney } from '@/lib/currency';
 
 const PERIODS: { id: string; label: string; range: () => { from: string; to: string } }[] = [
   { id: 'today', label: 'Hoy', range: () => ({ from: todayISO(), to: todayISO() }) },
@@ -156,7 +157,7 @@ export default function AppointmentsTable() {
       cell: (a) => (
         <div key={`service-${a.id}`}>
           <span className="block text-sm text-slate-700">{a.service?.name ?? '—'}</span>
-          <span className="block text-xs text-slate-400">{a.duration_minutes} min · S/ {a.price}</span>
+          <span className="block text-xs text-slate-400">{a.duration_minutes} min · {formatMoney(a.price, a.currency)}</span>
         </div>
       ),
     },

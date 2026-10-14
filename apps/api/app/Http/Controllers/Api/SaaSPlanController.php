@@ -57,7 +57,7 @@ class SaaSPlanController extends Controller
             'description' => 'nullable|string',
             'price_monthly' => 'required|numeric|min:0',
             'price_yearly' => 'required|numeric|min:0',
-            'currency' => 'required|string|max:10',
+            'currency' => ['required', 'string', 'max:10', \App\Support\Currency::ready() ? \Illuminate\Validation\Rule::in(\App\Support\Currency::all()->where('is_active', true)->pluck('code')->all()) : 'string'],
             'trial_config' => 'nullable|array',
             'subscription_config' => 'nullable|array',
             'modules' => 'nullable|array',
@@ -68,7 +68,7 @@ class SaaSPlanController extends Controller
             'status' => 'required|string|max:30',
             'presentation_order' => 'integer|min:0',
             'is_public_catalog' => 'boolean',
-        ]);
+        ], ['currency.in' => 'Esa moneda no está disponible.']);
 
         if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
@@ -100,7 +100,7 @@ class SaaSPlanController extends Controller
             'description' => 'nullable|string',
             'price_monthly' => 'sometimes|required|numeric|min:0',
             'price_yearly' => 'sometimes|required|numeric|min:0',
-            'currency' => 'sometimes|required|string|max:10',
+            'currency' => ['sometimes', 'required', 'string', 'max:10', \App\Support\Currency::ready() ? \Illuminate\Validation\Rule::in(\App\Support\Currency::all()->pluck('code')->all()) : 'string'],
             'trial_config' => 'nullable|array',
             'subscription_config' => 'nullable|array',
             'modules' => 'nullable|array',
@@ -111,7 +111,7 @@ class SaaSPlanController extends Controller
             'status' => 'sometimes|required|string|max:30',
             'presentation_order' => 'integer|min:0',
             'is_public_catalog' => 'boolean',
-        ]);
+        ], ['currency.in' => 'Esa moneda no está disponible.']);
 
         if (isset($validated['name']) && empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);

@@ -3,6 +3,17 @@ BEGIN;
 SET client_encoding = 'UTF8';
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE currencies (
+    code char(3) PRIMARY KEY,
+    name varchar(60) NOT NULL,
+    symbol varchar(8) NOT NULL,
+    decimals smallint NOT NULL DEFAULT 2 CHECK (decimals BETWEEN 0 AND 4),
+    is_active boolean NOT NULL DEFAULT true,
+    sort_order smallint NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE type_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name varchar(250) NOT NULL,
@@ -1488,5 +1499,31 @@ CREATE TABLE waitlist_entries (
 );
 CREATE INDEX idx_waitlist_tenant_status ON waitlist_entries(tenant_id, branch_id, status, date_from);
 CREATE INDEX idx_waitlist_customer ON waitlist_entries(tenant_id, customer_id);
+
+ALTER TABLE sales ADD COLUMN currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code),
+    ADD COLUMN converted_from char(3) NULL REFERENCES currencies(code),
+    ADD COLUMN exchange_rate numeric(18,8) NULL;
+ALTER TABLE payments ADD COLUMN currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code);
+ALTER TABLE cash_sessions ADD COLUMN currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code);
+ALTER TABLE invoices ADD COLUMN currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code);
+ALTER TABLE appointments ADD COLUMN currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code);
+CREATE INDEX idx_sales_currency ON sales(tenant_id, currency);
+CREATE INDEX idx_appointments_currency ON appointments(tenant_id, currency);
+
+CREATE TABLE currency_changes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    kind varchar(20) NOT NULL CHECK (kind IN ('setting', 'relabel', 'convert')),
+    from_currency char(3) NOT NULL REFERENCES currencies(code),
+    to_currency char(3) NOT NULL REFERENCES currencies(code),
+    exchange_rate numeric(18,8) NULL,
+    starts_on date NULL,
+    ends_on date NULL,
+    counts jsonb NOT NULL DEFAULT '{}'::jsonb,
+    excluded integer NOT NULL DEFAULT 0,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_currency_changes_tenant ON currency_changes(tenant_id, created_at DESC);
 
 COMMIT;

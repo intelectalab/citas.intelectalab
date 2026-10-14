@@ -39,6 +39,19 @@ INSERT INTO statuses (id, module_id, name, slug, color, is_default) VALUES
 
 ON CONFLICT DO NOTHING;
 
+INSERT INTO currencies (code, name, symbol, decimals, sort_order) VALUES
+  ('PEN', 'Sol peruano', 'S/', 2, 1),
+  ('USD', 'Dólar estadounidense', 'US$', 2, 2),
+  ('EUR', 'Euro', '€', 2, 3),
+  ('MXN', 'Peso mexicano', 'MX$', 2, 4),
+  ('COP', 'Peso colombiano', 'COL$', 2, 5),
+  ('CLP', 'Peso chileno', 'CLP$', 0, 6),
+  ('ARS', 'Peso argentino', 'AR$', 2, 7),
+  ('BOB', 'Boliviano', 'Bs', 2, 8),
+  ('BRL', 'Real brasileño', 'R$', 2, 9),
+  ('GBP', 'Libra esterlina', '£', 2, 10)
+ON CONFLICT (code) DO NOTHING;
+
 INSERT INTO saas_modules (key, name, is_core, sort_order) VALUES
   ('agenda', 'Agenda y citas', true, 1),
   ('crm', 'Clientes / CRM 360', true, 2),

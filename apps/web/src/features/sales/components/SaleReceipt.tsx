@@ -68,17 +68,17 @@ export default function SaleReceipt() {
               <tr key={item.id} className="align-top">
                 <td className="py-1 pr-2">{item.description}</td>
                 <td className="py-1 text-right tabular-nums">{item.quantity}</td>
-                <td className="py-1 text-right tabular-nums">{money(item.total)}</td>
+                <td className="py-1 text-right tabular-nums">{money(item.total, sale?.currency)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         <dl className="space-y-0.5">
-          {sale.coupon && <div className={row}><dt>Cupón {sale.coupon.code}</dt><dd className="tabular-nums">− {money(sale.coupon.discount)}</dd></div>}
-          <div className={row}><dt>Op. gravada</dt><dd className="tabular-nums">{money(sale.total - sale.tax)}</dd></div>
-          <div className={row}><dt>IGV {sale.tax_rate}%</dt><dd className="tabular-nums">{money(sale.tax)}</dd></div>
-          <div className={`${row} text-base font-extrabold pt-1`}><dt>Total</dt><dd className="tabular-nums">{money(sale.total)}</dd></div>
+          {sale.coupon && <div className={row}><dt>Cupón {sale.coupon.code}</dt><dd className="tabular-nums">− {money(sale.coupon.discount, sale?.currency)}</dd></div>}
+          <div className={row}><dt>Op. gravada</dt><dd className="tabular-nums">{money(sale.total - sale.tax, sale?.currency)}</dd></div>
+          <div className={row}><dt>IGV {sale.tax_rate}%</dt><dd className="tabular-nums">{money(sale.tax, sale?.currency)}</dd></div>
+          <div className={`${row} text-base font-extrabold pt-1`}><dt>Total</dt><dd className="tabular-nums">{money(sale.total, sale?.currency)}</dd></div>
         </dl>
 
         <div className="mt-4 pt-3 border-t border-dashed border-slate-400 space-y-0.5">
@@ -86,11 +86,11 @@ export default function SaleReceipt() {
           {sale.payments.filter((p) => p.amount > 0).map((payment) => (
             <div key={payment.id} className={row}>
               <span>{payment.method_label}{payment.reference ? ` · ${payment.reference}` : ''}</span>
-              <span className="tabular-nums">{money(payment.amount)}</span>
+              <span className="tabular-nums">{money(payment.amount, sale?.currency)}</span>
             </div>
           ))}
-          {sale.balance > 0 && <div className={`${row} font-bold`}><span>Saldo por cobrar</span><span className="tabular-nums">{money(sale.balance)}</span></div>}
-          {(sale.refunded ?? 0) > 0 && <div className={`${row} font-bold`}><span>Devuelto</span><span className="tabular-nums">− {money(sale.refunded)}</span></div>}
+          {sale.balance > 0 && <div className={`${row} font-bold`}><span>Saldo por cobrar</span><span className="tabular-nums">{money(sale.balance, sale?.currency)}</span></div>}
+          {(sale.refunded ?? 0) > 0 && <div className={`${row} font-bold`}><span>Devuelto</span><span className="tabular-nums">− {money(sale.refunded, sale?.currency)}</span></div>}
         </div>
 
         <footer className="mt-5 text-center text-[11px] text-slate-600 space-y-1">

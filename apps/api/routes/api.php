@@ -47,6 +47,7 @@ use App\Models\SaaSPlan;
 use App\Models\SaasModule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\CurrencyController;
 
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/register-customer', [RegisterCustomerController::class, 'register'])->middleware('throttle:10,1');
@@ -93,6 +94,8 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
 
         Route::apiResource('saas-plans', SaaSPlanController::class);
         Route::get('/admin/platform-settings', [PlatformSettingController::class, 'show']);
+        Route::get('/admin/currencies', [CurrencyController::class, 'platform']);
+        Route::put('/admin/currencies/{code}', [CurrencyController::class, 'toggle']);
         Route::put('/admin/platform-settings', [PlatformSettingController::class, 'update']);
         Route::apiResource('admin/business-types', BusinessTypeController::class);
         Route::get('/admin/business-types/{business_type}/tenants', [BusinessTypeController::class, 'tenants']);
@@ -257,6 +260,13 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::put('/company', [\App\Http\Controllers\Api\CompanyController::class, 'update'])->middleware('perm:company.edit');
 
     Route::get('/tenant-settings', [TenantSettingController::class, 'show'])->middleware('perm:settings.view');
+
+    Route::get('/currency', [CurrencyController::class, 'show'])->middleware('perm:settings.view');
+    Route::middleware('perm:settings.edit')->group(function () {
+        Route::put('/currency', [CurrencyController::class, 'update']);
+        Route::post('/currency/records/preview', [CurrencyController::class, 'preview']);
+        Route::post('/currency/records', [CurrencyController::class, 'apply']);
+    });
     Route::put('/tenant-settings', [TenantSettingController::class, 'update'])->middleware('perm:settings.edit');
 
     Route::prefix('access')->group(function () {

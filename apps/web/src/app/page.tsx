@@ -7,6 +7,7 @@ import { Building2, Check, ArrowRight, Sparkles } from 'lucide-react';
 import { RegisterModal } from '@/features/subscriptions/components/RegisterModal';
 
 interface Plan {
+  currency_symbol?: string;
   id: string | number;
   name: string;
   price_monthly: number;
@@ -156,7 +157,7 @@ export default function LandingPage() {
                   </div>
 
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-[#022340]">S/ {plan.price_monthly}</span>
+                    <span className="text-3xl font-black text-[#022340]">{plan.currency_symbol ?? 'S/'} {plan.price_monthly}</span>
                     <span className="text-xs text-slate-400 font-medium">/ mes</span>
                   </div>
 

@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
+use App\Support\Currency;
 
 class AppointmentController extends Controller
 {
@@ -388,6 +389,7 @@ class AppointmentController extends Controller
                 'status'                => $status,
                 'source'                => 'staff',
                 'price'                 => $service->price,
+            ] + Currency::column($tenant) + [
                 'notes'                 => $validated['notes'] ?? null,
                 'override_reason'       => $override,
                 'confirmed_at'          => $status === AppointmentFlow::CONFIRMED ? now() : null,
@@ -803,6 +805,7 @@ class AppointmentController extends Controller
             'ends_at'          => $local($appointment->ends_at),
             'duration_minutes' => (int) $appointment->starts_at->diffInMinutes($appointment->ends_at),
             'price'            => $appointment->price,
+            'currency'         => $appointment->currency ?? Currency::DEFAULT,
             'source'           => $appointment->source,
             'notes'            => $appointment->notes,
             'reschedule_count' => $appointment->reschedule_count,

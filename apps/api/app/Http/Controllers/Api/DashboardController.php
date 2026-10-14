@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Support\Access;
+use App\Support\Currency;
 
 class DashboardController extends Controller
 {
@@ -66,7 +67,9 @@ class DashboardController extends Controller
         $branches = $own ? collect() : $active->groupBy('branch_id')->map(fn ($group) => ['name' => $group->first()->branch?->name, 'count' => $group->count()])->sortByDesc('count')->values();
 
         $monthAgo = $dayStart->copy()->subDays(30);
-        $byStatus = $between($appointments(), $monthAgo, $now)->select('appointments.status', DB::raw('count(*) as total'), DB::raw('coalesce(sum(price), 0) as value'))->groupBy('status')->get()->keyBy('status');
+        $currency = Currency::of($tenant);
+        $value = Currency::ready() ? "coalesce(sum(price) filter (where appointments.currency = '{$currency}'), 0) as value" : 'coalesce(sum(price), 0) as value';
+        $byStatus = $between($appointments(), $monthAgo, $now)->select('appointments.status', DB::raw('count(*) as total'), DB::raw($value))->groupBy('status')->get()->keyBy('status');
         $attended = (int) ($byStatus[AppointmentFlow::COMPLETED]->total ?? 0);
         $noShow = (int) ($byStatus[AppointmentFlow::NO_SHOW]->total ?? 0);
         $cancelled = (int) ($byStatus[AppointmentFlow::CANCELLED]->total ?? 0);
@@ -112,7 +115,7 @@ class DashboardController extends Controller
                 'total'        => $active->count(),
                 'last_week'    => $lastWeek,
                 'completed'    => $completed->count(),
-                'value'        => round((float) $completed->sum('price'), 2),
+                'value'        => round((float) $completed->filter(fn ($a) => ($a->currency ?? $currency) === $currency)->sum('price'), 2),
                 'waiting'      => $today->where('status', AppointmentFlow::CHECKED_IN)->count(),
                 'in_progress'  => $today->where('status', AppointmentFlow::IN_PROGRESS)->count(),
                 'to_confirm'   => $today->where('status', AppointmentFlow::PENDING)->filter(fn (Appointment $a) => $a->starts_at->gte($now))->count(),

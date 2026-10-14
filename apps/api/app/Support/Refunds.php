@@ -92,7 +92,7 @@ class Refunds
                 $inCash = Cash::present(DB::table('cash_sessions')->where('id', $session->id)->first())['expected_amount'];
 
                 if ($amount > $inCash) {
-                    throw ValidationException::withMessages(['amount' => 'En la caja solo hay S/ ' . number_format($inCash, 2) . ' en efectivo.']);
+                    throw ValidationException::withMessages(['amount' => 'En la caja solo hay ' . Currency::format($inCash, $sale->currency ?? Currency::of($tenant)) . ' en efectivo.']);
                 }
             }
         }
@@ -105,7 +105,7 @@ class Refunds
             'method' => $data['method'], 'status' => 'refunded', 'amount' => -$amount,
             'external_reference' => 'Devolución', 'confirmed_at' => now(), 'cash_session_id' => $session?->id,
             'created_by' => $user->id, 'created_at' => now(),
-        ]);
+        ] + Currency::column($sale->currency ?? Currency::of($tenant)));
 
         if ($session) {
             DB::table('cash_movements')->insert([

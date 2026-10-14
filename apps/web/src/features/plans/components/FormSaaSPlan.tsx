@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Select from '@/app/components/common/Select';
 import { Package, ChevronDown, Check } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
+import { api } from '@/lib/axios';
 import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
 
 interface SaaSPlan {
@@ -130,6 +131,16 @@ export default function FormSaaSPlan({
   };
 
   const [formData, setFormData] = useState(defaultFormState);
+  const [currencies, setCurrencies] = useState<{ code: string; name: string; symbol: string; is_active: boolean }[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/admin/currencies').then((res) => setCurrencies(res.data.currencies ?? [])).catch(() => setCurrencies([]));
+  }, [isOpen]);
+
+  const currencyOptions = currencies
+    .filter((c) => c.is_active || c.code === formData.currency)
+    .map((c) => ({ value: c.code, label: `${c.symbol} · ${c.name} (${c.code})` }));
 
   useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
@@ -426,7 +437,7 @@ export default function FormSaaSPlan({
                               clearable={false}
                               value={formData.currency}
                               onChange={(e) => setFormData({ ...formData, currency: String(e.target.value) })}
-                              options={[{ value: 'PEN', label: 'PEN - Sol peruano' }, { value: 'USD', label: 'USD - Dólar estadounidense' }]}
+                              options={currencyOptions.length ? currencyOptions : [{ value: 'PEN', label: 'S/ · Sol peruano (PEN)' }]}
                             />
                           </div>
                         </div>

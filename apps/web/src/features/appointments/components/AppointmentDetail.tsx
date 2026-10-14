@@ -147,7 +147,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     ['Sede', appointment.branch?.name],
     ['Fecha', formatDate(dateOf(appointment.starts_at))],
     ['Hora', `${timeOf(appointment.starts_at)} a ${timeOf(appointment.ends_at)} · ${appointment.duration_minutes} min`],
-    ['Precio', `S/ ${appointment.price}`],
+    ['Precio', money(appointment.price, appointment.currency)],
     ['Confirmación', appointment.status === 'pending' && appointment.confirm_by
       ? <span data-confirm-by className={appointment.confirmation_overdue ? 'text-rose-600' : undefined}>
           {appointment.confirmation_overdue ? 'Venció el plazo: debía confirmarse antes del ' : 'Debe confirmarse antes del '}
@@ -316,12 +316,12 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     </span>
                     <span className="block text-xs text-slate-500">
                       {charge.sale?.status === 'paid'
-                        ? `${money(charge.sale.total)}${charge.sale.invoice ? ` · ${charge.sale.invoice.doc_type_label} ${charge.sale.invoice.number}` : ' · sin comprobante'}`
+                        ? `${money(charge.sale.total, charge.sale.currency)}${charge.sale.invoice ? ` · ${charge.sale.invoice.doc_type_label} ${charge.sale.invoice.number}` : ' · sin comprobante'}`
                         : charge.sale && (charge.sale.refunded ?? 0) > 0
-                          ? `${money(charge.sale.total)} · se devolvieron ${money(charge.sale.refunded)}.`
+                          ? `${money(charge.sale.total, charge.sale.currency)} · se devolvieron ${money(charge.sale.refunded, charge.sale.currency)}.`
                         : charge.sale
-                          ? `Pagado ${money(charge.sale.paid)} de ${money(charge.sale.total)}. Falta ${money(charge.sale.balance)}.`
-                          : charge.blocked ?? `${money(charge.preview.total)} por cobrar.`}
+                          ? `Pagado ${money(charge.sale.paid, charge.sale.currency)} de ${money(charge.sale.total, charge.sale.currency)}. Falta ${money(charge.sale.balance, charge.sale.currency)}.`
+                          : charge.blocked ?? `${money(charge.preview.total, charge.preview.currency)} por cobrar.`}
                     </span>
                   </span>
                   <span

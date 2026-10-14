@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
+use App\Support\Currency;
 
 class CashController extends Controller
 {
@@ -166,7 +167,7 @@ class CashController extends Controller
             DB::table('cash_sessions')->insert([
                 'id' => $id, 'tenant_id' => $tenant->id, 'branch_id' => $row->branch_id, 'cash_register_id' => $row->id,
                 'status' => 'open', 'opened_by' => $request->user()->id, 'opening_amount' => round((float) $validated['opening_amount'], 2), 'opened_at' => now(),
-            ]);
+            ] + Currency::column($tenant));
 
             return response()->json(Cash::present($this->session($tenant, $id)), 201);
         });

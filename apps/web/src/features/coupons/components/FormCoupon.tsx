@@ -8,6 +8,7 @@ import DateField from '@/app/components/common/DateField';
 import Switch from '@/app/components/common/Switch';
 import { apiError } from '@/features/appointments/appointments';
 import { cleanAmount, type Coupon } from '@/features/sales/sales';
+import { currencySymbol } from '@/lib/currency';
 
 interface FormCouponProps {
   isOpen: boolean;
@@ -24,7 +25,7 @@ const empty = { code: '', description: '', type: 'percent' as Coupon['discount_t
 
 const TYPES: { id: Coupon['discount_type']; title: string; hint: string }[] = [
   { id: 'percent', title: 'Un porcentaje', hint: 'Ej. 10 % de lo que se cobra' },
-  { id: 'amount', title: 'Un monto fijo', hint: 'Ej. S/ 20 menos' },
+  { id: 'amount', title: 'Un monto fijo', hint: 'Ej. 20 menos' },
 ];
 
 export default function FormCoupon({ isOpen, onClose, initialData, onSaved }: FormCouponProps) {
@@ -139,11 +140,11 @@ export default function FormCoupon({ isOpen, onClose, initialData, onSaved }: Fo
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass} htmlFor="coupon-value">{form.type === 'percent' ? 'Porcentaje (%) *' : 'Monto (S/) *'}</label>
+              <label className={labelClass} htmlFor="coupon-value">{form.type === 'percent' ? 'Porcentaje (%) *' : `Monto (${currencySymbol()}) *`}</label>
               <input id="coupon-value" inputMode="decimal" required placeholder={form.type === 'percent' ? '10' : '20.00'} className={inputClass} value={form.value} onChange={(e) => set({ value: cleanAmount(e.target.value) })} />
             </div>
             <div>
-              <label className={labelClass} htmlFor="coupon-min">Compra mínima (S/)</label>
+              <label className={labelClass} htmlFor="coupon-min">Compra mínima ({currencySymbol()})</label>
               <input id="coupon-min" inputMode="decimal" placeholder="Sin mínimo" className={inputClass} value={form.min} onChange={(e) => set({ min: cleanAmount(e.target.value) })} />
             </div>
           </div>

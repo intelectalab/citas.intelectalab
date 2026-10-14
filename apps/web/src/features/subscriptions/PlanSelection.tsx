@@ -7,6 +7,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 
 interface Plan {
+  currency_symbol?: string;
   id: string;
   name: string;
   slug: string;
@@ -191,7 +192,7 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
 
                   <div className="mb-6">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-[#022340]">S/ {Math.floor(Number(price))}</span>
+                      <span className="text-3xl font-black text-[#022340]">{plan.currency_symbol ?? 'S/'} {Math.floor(Number(price))}</span>
                       <span className="text-xs text-slate-400 font-medium">
                         /{billingCycle === 'monthly' ? 'mes' : 'año'}
                       </span>

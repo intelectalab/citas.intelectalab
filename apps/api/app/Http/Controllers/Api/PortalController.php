@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Support\Currency;
 
 class PortalController extends AppointmentController
 {
@@ -253,6 +254,7 @@ class PortalController extends AppointmentController
                 'status'                => $status,
                 'source'                => 'online',
                 'price'                 => $service->price,
+            ] + Currency::column($tenant) + [
                 'notes'                 => $validated['notes'] ?? null,
                 'confirmed_at'          => $status === AppointmentFlow::CONFIRMED ? now() : null,
                 'created_by'            => null,

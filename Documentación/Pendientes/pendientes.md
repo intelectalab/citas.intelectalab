@@ -448,7 +448,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Medios que no son efectivo.** Se muestran por turno para cuadrarlos, pero no se concilian contra el banco o el POS.
 - **Ventas, pagos y turnos de ejemplo.** `seed_demo.sql` no trae ninguno: Caja nace vacía en las empresas de ejemplo.
 - **Reglas de ventas en el editor de rubros.** Las nuevas (`pos.prices_include_tax`, `pos.tax_rate`, `pos.require_open_cash`, `pos.partial_payments`, `cash.tolerance`) las cambia cada empresa, pero no están en el editor de reglas del rubro de la plataforma.
-- **Moneda.** Todo está en soles, con "S/" fijo.
 - **Pruebas en pantalla que faltan.** Aviso de cierre con diferencia en la campana, editar o poner fuera de uso una caja, comprobante interno de una empresa sin facturación, "Emitir comprobante" de una venta pagada sin él, filtro de fecha y orden de los turnos, cobrar desde la agenda, vista de un profesional, tema oscuro y celular.
 
 ## Detectados el 2026-10-13 (cupones y caja por sucursal)
@@ -537,3 +536,15 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Desactivar una sede con turnos de caja abiertos.** Se impide si tiene personal o citas próximas, pero no si queda una caja abierta en ella.
 - **Quien ya estaba sin sede.** Se marca con "Falta su sede" en Usuarios y roles; nadie recibe un aviso en la campana.
 - **Mover a varias personas de sede a la vez.** Se hace una por una, desde el lápiz de cada una.
+
+## Detectados el 2026-10-14 (moneda)
+
+- **Cajas por moneda y por sede** (acordado para después). Hoy una empresa cobra en una sola moneda a la vez; cobrar en soles y en dólares según el cliente (por ejemplo, turistas) necesita una caja de efectivo por moneda y vuelto en otra moneda.
+- **Impuesto y comprobante de otros países.** El IGV de 18 % y el comprobante para SUNAT son del Perú. Una empresa de otro país necesita su impuesto y su sistema tributario: se definirá con los jefes. El comprobante sigue simulado; la API está lista para conectar un proveedor (`InvoiceProvider`, `tenant_integrations`) y ya le envía la moneda.
+- **Deshacer un cambio de registros anteriores.** Queda en el historial, pero no hay botón para revertirlo.
+- **Precios del catálogo al cambiar de moneda.** Servicios y cupones de monto fijo conservan sus números; no se ofrece convertirlos con el tipo de cambio.
+- **Plantillas de rubro en soles.** Los precios de ejemplo del catálogo de cada rubro (consola de la plataforma) siguen mostrándose con "S/".
+- **Reportes con varias monedas.** Ventas, Pagos e Inicio suman solo la moneda de la empresa; no hay un reporte que muestre lo de otras monedas ni equivalencias.
+- **Tipo de cambio del día.** Se escribe a mano; no se consulta a ninguna fuente.
+- **Página de inicio (landing).** El ejemplo "S/ 48,250" es un texto de muestra fijo.
+- **Pruebas en pantalla que faltan.** Elegir fechas en el calendario del panel, una venta convertida en su panel y en el comprobante, el aviso de caja abierta, guardar un plan en dólares, tema oscuro y celular.

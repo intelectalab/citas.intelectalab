@@ -8,6 +8,7 @@ import { RegisterModal } from '@/features/subscriptions/components/RegisterModal
 import { CORE_MODULE_LABELS, MODULE_LABELS } from '@/lib/modules';
 
 interface Plan {
+  currency_symbol?: string;
   id: string;
   name: string;
   description?: string | null;
@@ -125,7 +126,7 @@ export default function RegisterPage() {
                 )}
 
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-[#022340]">S/ {plan.price_monthly}</span>
+                  <span className="text-3xl font-black text-[#022340]">{plan.currency_symbol ?? 'S/'} {plan.price_monthly}</span>
                   <span className="text-xs text-slate-400 font-medium">/ mes</span>
                 </div>
 

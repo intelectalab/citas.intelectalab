@@ -5,6 +5,8 @@ import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, 
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
+import CurrencySettings from './CurrencySettings';
+import { currencySymbol } from '@/lib/currency';
 
 interface SettingsModule {
   key: string;
@@ -488,6 +490,8 @@ export default function TenantSettings() {
         </section>
       )}
 
+      <CurrencySettings />
+
       {salesRules && (
         <section className={cardClass} data-card="sales-rules">
           <div>
@@ -561,7 +565,7 @@ export default function TenantSettings() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <label htmlFor="cash-tolerance" className="text-sm font-semibold text-slate-800">Al cerrar caja se tolera una diferencia de hasta S/</label>
+            <label htmlFor="cash-tolerance" className="text-sm font-semibold text-slate-800">Al cerrar caja se tolera una diferencia de hasta {currencySymbol()}</label>
             <input
               id="cash-tolerance"
               inputMode="decimal"

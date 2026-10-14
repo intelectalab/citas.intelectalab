@@ -88,7 +88,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
         ? await api.post(`/sales/${sale.id}/void`, { reason: reason.trim() })
         : await api.post(`/sales/${sale.id}/refunds`, { amount: Number(amount || 0), method, reason: reason.trim(), cash_session_id: method === 'cash' && sessionId ? sessionId : null });
       setSale(res.data);
-      setNotice(action === 'void' ? 'La venta quedó anulada.' : `Devolución de ${money(Number(amount || 0))} registrada.`);
+      setNotice(action === 'void' ? 'La venta quedó anulada.' : `Devolución de ${money(Number(amount || 0), sale?.currency)} registrada.`);
       setAction('');
       onChanged?.();
     } catch (err) {
@@ -116,7 +116,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
         <div className="space-y-6 pb-4" data-sale={sale.status}>
           <section className="flex items-start justify-between gap-4">
             <div>
-              <span className="block text-3xl font-black text-[#022340] tabular-nums">{money(sale.total)}</span>
+              <span className="block text-3xl font-black text-[#022340] tabular-nums">{money(sale.total, sale?.currency)}</span>
               <span className="block text-sm text-slate-600 mt-1">
                 {sale.customer ? <CustomerLink id={sale.customer.id} className="font-semibold text-slate-800">{sale.customer.name}</CustomerLink> : 'Sin cliente'}
                 {sale.appointment?.code ? ` · cita ${sale.appointment.code}` : ''}
@@ -136,7 +136,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
             <section className="flex flex-wrap gap-2" data-actions>
               {canCharge && (
                 <button type="button" data-action="charge" onClick={() => setCharging(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors">
-                  <Wallet size={15} /> Cobrar {money(sale.balance)}
+                  <Wallet size={15} /> Cobrar {money(sale.balance, sale?.currency)}
                 </button>
               )}
               {sale.invoice && (
@@ -184,7 +184,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                 <div>
                   <label className={labelClass} htmlFor="refund-amount">Monto a devolver *</label>
                   <input id="refund-amount" inputMode="decimal" required className={inputClass} value={amount} onChange={(e) => setAmount(cleanAmount(e.target.value))} />
-                  <p className="text-xs text-slate-500 mt-1.5">Hasta {money(sale.refund_available)}. Puede ser una parte.</p>
+                  <p className="text-xs text-slate-500 mt-1.5">Hasta {money(sale.refund_available, sale?.currency)}. Puede ser una parte.</p>
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="refund-reason">Motivo *</label>
@@ -219,7 +219,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setAction('')} className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
                 <button type="submit" data-submit disabled={busy || Number(amount || 0) <= 0} className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50">
-                  {busy ? 'Registrando...' : `Devolver ${money(Number(amount || 0))}`}
+                  {busy ? 'Registrando...' : `Devolver ${money(Number(amount || 0), sale?.currency)}`}
                 </button>
               </div>
             </form>
@@ -235,28 +235,28 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
               {sale.items.map((item) => (
                 <div key={item.id} className="flex items-start justify-between gap-3">
                   <span className="font-semibold text-slate-800">{item.quantity > 1 ? `${item.quantity} × ` : ''}{item.description}</span>
-                  <span className="font-semibold text-slate-800 tabular-nums">{money(item.total)}</span>
+                  <span className="font-semibold text-slate-800 tabular-nums">{money(item.total, sale?.currency)}</span>
                 </div>
               ))}
               {sale.coupon && (
                 <div className="flex items-start justify-between gap-3 text-emerald-700">
                   <span className="flex items-center gap-1.5 font-medium"><TicketPercent size={15} /> Cupón {sale.coupon.code} ({sale.coupon.benefit})</span>
-                  <span className="font-semibold tabular-nums">− {money(sale.coupon.discount)}</span>
+                  <span className="font-semibold tabular-nums">− {money(sale.coupon.discount, sale?.currency)}</span>
                 </div>
               )}
               <div className="pt-2 mt-2 border-t border-dashed border-slate-200 space-y-1 text-slate-500">
-                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(sale.total - sale.tax)}</span></div>
-                <div className="flex justify-between"><span>IGV {sale.tax_rate}%{sale.prices_include_tax ? ' (incluido en el precio)' : ''}</span><span className="tabular-nums">{money(sale.tax)}</span></div>
+                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(sale.total - sale.tax, sale?.currency)}</span></div>
+                <div className="flex justify-between"><span>IGV {sale.tax_rate}%{sale.prices_include_tax ? ' (incluido en el precio)' : ''}</span><span className="tabular-nums">{money(sale.tax, sale?.currency)}</span></div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <span className="font-bold text-[#022340]">Total</span>
-                <span className="text-lg font-black text-[#022340] tabular-nums">{money(sale.total)}</span>
+                <span className="text-lg font-black text-[#022340] tabular-nums">{money(sale.total, sale?.currency)}</span>
               </div>
               {sale.balance > 0 && sale.status !== 'void' && (
-                <div className="flex justify-between text-amber-700 font-semibold" data-balance><span>Por cobrar</span><span className="tabular-nums">{money(sale.balance)}</span></div>
+                <div className="flex justify-between text-amber-700 font-semibold" data-balance><span>Por cobrar</span><span className="tabular-nums">{money(sale.balance, sale?.currency)}</span></div>
               )}
               {refunded > 0 && (
-                <div className="flex justify-between text-rose-700 font-semibold" data-refunded><span>Devuelto</span><span className="tabular-nums">− {money(refunded)}</span></div>
+                <div className="flex justify-between text-rose-700 font-semibold" data-refunded><span>Devuelto</span><span className="tabular-nums">− {money(refunded, sale?.currency)}</span></div>
               )}
             </div>
           </section>
@@ -273,7 +273,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                     <span className="block text-sm font-semibold text-slate-800">{payment.amount < 0 ? `Devolución · ${payment.method_label}` : `${payment.method_label}${payment.reference ? ` · ${payment.reference}` : ''}`}</span>
                     <span className="block text-xs text-slate-500 truncate">{momentOf(payment.at)}{payment.by ? ` · ${payment.by}` : ''}{payment.register ? ` · ${payment.register}` : ''}</span>
                   </span>
-                  <span className={`text-sm font-bold tabular-nums ${payment.amount < 0 ? 'text-rose-700' : 'text-slate-800'}`}>{payment.amount < 0 ? `− ${money(Math.abs(payment.amount))}` : money(payment.amount)}</span>
+                  <span className={`text-sm font-bold tabular-nums ${payment.amount < 0 ? 'text-rose-700' : 'text-slate-800'}`}>{payment.amount < 0 ? `− ${money(Math.abs(payment.amount), sale?.currency)}` : money(payment.amount, sale?.currency)}</span>
                 </li>
               )}
             />
@@ -304,7 +304,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                   <li key={refund.id} className="px-5 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-sm font-semibold text-slate-800">{refund.reason}</span>
-                      <span className="text-sm font-bold text-rose-700 tabular-nums shrink-0">− {money(refund.amount)}</span>
+                      <span className="text-sm font-bold text-rose-700 tabular-nums shrink-0">− {money(refund.amount, sale?.currency)}</span>
                     </div>
                     <span className="block text-xs text-slate-500">
                       {refund.method_label} · {momentOf(refund.at)}{refund.by ? ` · ${refund.by}` : ''}

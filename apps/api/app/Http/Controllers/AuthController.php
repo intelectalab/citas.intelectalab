@@ -76,7 +76,9 @@ class AuthController extends Controller
                 'rules' => (object) $tenant->rules(),
                 'dependents' => $tenant->dependents(),
                 'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
+                'currency' => \App\Support\Currency::present(\App\Support\Currency::of($tenant)),
             ] : null,
+            'currencies' => \App\Support\Currency::catalog(),
             'customer' => null,
         ]);
     }
@@ -114,7 +116,9 @@ class AuthController extends Controller
                 'rules' => (object) $tenant->rules(),
                 'dependents' => $tenant->dependents(),
                 'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
+                'currency' => \App\Support\Currency::present(\App\Support\Currency::of($tenant)),
             ] : null,
+            'currencies' => \App\Support\Currency::catalog(),
             'customer' => [
                 'id' => $customer->id,
                 'code' => $customer->code,

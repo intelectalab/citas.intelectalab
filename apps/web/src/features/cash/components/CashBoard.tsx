@@ -106,7 +106,7 @@ export default function CashBoard() {
       cell: (session) => (
         <div key={`opened-${session.id}`}>
           <span className="block text-sm text-slate-700">{momentOf(session.opened_at)}</span>
-          <span className="block text-xs text-slate-400">{session.opened_by ?? '—'} · {money(session.opening_amount)}</span>
+          <span className="block text-xs text-slate-400">{session.opened_by ?? '—'} · {money(session.opening_amount, session?.currency)}</span>
         </div>
       ),
     },
@@ -121,11 +121,11 @@ export default function CashBoard() {
     },
     {
       header: 'Debía haber',
-      cell: (session) => <span key={`expected-${session.id}`} className="text-sm text-slate-700 tabular-nums">{money(session.expected_amount)}</span>,
+      cell: (session) => <span key={`expected-${session.id}`} className="text-sm text-slate-700 tabular-nums">{money(session.expected_amount, session?.currency)}</span>,
     },
     {
       header: 'Contado',
-      cell: (session) => <span key={`counted-${session.id}`} className="text-sm font-semibold text-slate-800 tabular-nums">{money(session.closing_amount)}</span>,
+      cell: (session) => <span key={`counted-${session.id}`} className="text-sm font-semibold text-slate-800 tabular-nums">{money(session.closing_amount, session?.currency)}</span>,
     },
     {
       header: 'Resultado',
@@ -136,7 +136,7 @@ export default function CashBoard() {
           title={session.closing_notes ?? undefined}
           className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${squared(session) ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}
         >
-          {squared(session) ? 'Cuadró' : `${(session.difference ?? 0) < 0 ? 'Faltaron' : 'Sobraron'} ${money(Math.abs(session.difference ?? 0))}`}
+          {squared(session) ? 'Cuadró' : `${(session.difference ?? 0) < 0 ? 'Faltaron' : 'Sobraron'} ${money(Math.abs(session.difference ?? 0), session?.currency)}`}
         </span>
       ),
     },
@@ -210,7 +210,7 @@ export default function CashBoard() {
                 <>
                   <div>
                     <span className="block text-[11px] font-bold text-[#84D0D9] uppercase tracking-wider">Debe haber en efectivo</span>
-                    <span className="block text-3xl font-black tabular-nums" data-expected>{money(session.expected_amount)}</span>
+                    <span className="block text-3xl font-black tabular-nums" data-expected>{money(session.expected_amount, session?.currency)}</span>
                     <span className="block text-xs text-slate-300 mt-1">Abrió {session.opened_by ?? '—'} · {momentOf(session.opened_at)}</span>
                   </div>
 
@@ -218,7 +218,7 @@ export default function CashBoard() {
                     {([['Apertura', session.opening_amount], ['Cobros', session.sales + session.income], ['Salidas', session.expense + session.withdrawal + session.refund]] as [string, number][]).map(([label, value]) => (
                       <div key={label} className="rounded-lg bg-white/10 px-2.5 py-2">
                         <dt className="text-slate-300">{label}</dt>
-                        <dd className="font-bold tabular-nums">{money(value)}</dd>
+                        <dd className="font-bold tabular-nums">{money(value, session?.currency)}</dd>
                       </div>
                     ))}
                   </dl>

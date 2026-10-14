@@ -6,6 +6,7 @@ import { api } from '@/lib/axios';
 import { X, ArrowRight, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 interface Plan {
+  currency_symbol?: string;
   id: string;
   name: string;
   price_monthly: number;
@@ -126,7 +127,7 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
           </div>
           <div className="text-right">
             <span className="text-slate-400 font-medium block">Precio</span>
-            <span className="font-extrabold text-[#022340] text-sm">S/ {selectedPlan.price_monthly} / mes</span>
+            <span className="font-extrabold text-[#022340] text-sm">{selectedPlan.currency_symbol ?? 'S/'} {selectedPlan.price_monthly} / mes</span>
           </div>
         </div>
 

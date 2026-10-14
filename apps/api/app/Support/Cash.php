@@ -49,6 +49,7 @@ class Cash
 
     public static function present(object $session, bool $withMovements = false): array
     {
+        $currency = $session->currency ?? Currency::DEFAULT;
         $movements = DB::table('cash_movements')->where('cash_session_id', $session->id)->orderByDesc('created_at')->get();
         $sum = fn (string $type) => round((float) $movements->where('type', $type)->sum('amount'), 2);
 
@@ -78,6 +79,7 @@ class Cash
             'id'              => $session->id,
             'register_id'     => $session->cash_register_id,
             'branch_id'       => $session->branch_id,
+            'currency'        => $currency,
             'status'          => $session->status,
             'opened_at'       => $iso($session->opened_at),
             'closed_at'       => $iso($session->closed_at),

@@ -12,6 +12,7 @@ use App\Support\Sales;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Support\Currency;
 
 class SaleController extends AppointmentController
 {
@@ -30,6 +31,15 @@ class SaleController extends AppointmentController
             return 'Esta cita no tiene un monto por cobrar: su servicio se agendó con precio cero.';
         }
 
+        $currency = Currency::of($tenant);
+
+        if (Currency::ready() && ($appointment->currency ?? $currency) !== $currency) {
+            $from = Currency::present($appointment->currency);
+            $to = Currency::present($currency);
+
+            return "El precio de esta cita está en {$from['symbol']} y tu empresa ahora cobra en {$to['symbol']}. Pásala a {$to['symbol']} en Configuración → Moneda → \"Cambiar registros anteriores\" para poder cobrarla.";
+        }
+
         return null;
     }
 
@@ -43,7 +53,7 @@ class SaleController extends AppointmentController
 
         return [
             'sale'             => $sale ? Sales::present($sale) : null,
-            'preview'          => Sales::totals($rules, (float) $appointment->price, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax']],
+            'preview'          => Sales::totals($rules, (float) $appointment->price, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax'], 'currency' => $sale->currency ?? Currency::of($tenant)],
             'coupon'           => $applied ? Coupons::summary($applied['coupon'], $applied['discount']) : null,
             'blocked'          => $sale ? null : $this->blocked($tenant, $appointment),
             'item'             => $appointment->service?->name,

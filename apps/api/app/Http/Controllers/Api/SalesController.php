@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Support\Access;
+use App\Support\Currency;
 
 class SalesController extends Controller
 {
@@ -77,6 +78,7 @@ class SalesController extends Controller
                 'appointment_code' => $s->appointment_code,
                 'detail'           => ($items[$s->id] ?? collect())->pluck('description')->implode(', '),
                 'total'            => round((float) $s->total, 2),
+                'currency'         => $s->currency ?? Currency::DEFAULT,
                 'paid'             => round((float) $s->paid, 2),
                 'balance'          => round((float) $s->balance, 2),
                 'refunded'         => round((float) ($refunds[$s->id] ?? 0), 2),
@@ -99,7 +101,7 @@ class SalesController extends Controller
             ->whereNotExists(fn ($q) => $q->from('sales as s')->whereColumn('s.appointment_id', 'a.id')->where('s.status', '!=', 'void'))
             ->orderByDesc('a.starts_at')
             ->limit(self::MAX_ROWS)
-            ->get(['a.id', 'a.code', 'a.starts_at', 'a.price', 'a.branch_id', 'a.customer_id', 'c.first_name', 'c.last_name', 'sv.name as service_name', 'b.name as branch_name'])
+            ->get(['a.*', 'c.first_name', 'c.last_name', 'sv.name as service_name', 'b.name as branch_name'])
             ->map(fn ($a) => [
                 'appointment_id'   => $a->id,
                 'appointment_code' => $a->code,
@@ -109,6 +111,7 @@ class SalesController extends Controller
                 'customer'         => $a->customer_id ? ['id' => $a->customer_id, 'name' => trim("{$a->first_name} {$a->last_name}")] : null,
                 'detail'           => $a->service_name,
                 'total'            => round((float) $a->price, 2),
+                'currency'         => $a->currency ?? Currency::DEFAULT,
             ])
             ->values()
             ->all();
@@ -234,6 +237,7 @@ class SalesController extends Controller
                 'kind'         => (float) $p->amount < 0 ? 'refund' : 'payment',
                 'status'       => $p->status,
                 'amount'       => round((float) $p->amount, 2),
+                'currency'     => $p->currency ?? Currency::DEFAULT,
                 'reference'    => (float) $p->amount < 0 ? null : $p->external_reference,
                 'sale_id'      => $p->sale_id,
                 'sale_code'    => $p->sale_code,

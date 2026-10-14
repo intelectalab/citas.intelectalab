@@ -17,6 +17,7 @@ class Appointment extends Model
     protected $table = 'appointments';
 
     protected $fillable = [
+        'currency',
         'tenant_id',
         'code',
         'branch_id',

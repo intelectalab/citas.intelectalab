@@ -129,7 +129,7 @@ class Sales
             'created_by'         => $user->id,
             'created_at'         => now(),
             'updated_at'         => now(),
-        ]);
+        ] + Currency::column($tenant));
 
         DB::table('sale_items')->insert([
             'id'              => (string) Str::uuid(),
@@ -231,7 +231,7 @@ class Sales
             'idempotency_key'    => $key,
             'created_by'         => $user->id,
             'created_at'         => now(),
-        ]);
+        ] + Currency::column($sale->currency ?? Currency::of($tenant)));
 
         if ($session) {
             DB::table('cash_movements')->insert([
@@ -288,6 +288,7 @@ class Sales
             'balance'            => round((float) $sale->balance, 2),
             'tax_rate'           => (float) $sale->tax_rate,
             'prices_include_tax' => (bool) $sale->prices_include_tax,
+            'currency'           => $sale->currency ?? Currency::DEFAULT,
             'created_at'         => $iso($sale->created_at),
             'paid_at'            => $iso($sale->paid_at),
             'items'              => DB::table('sale_items')->where('sale_id', $sale->id)->get(['id', 'description', 'quantity', 'unit_price', 'discount', 'total'])

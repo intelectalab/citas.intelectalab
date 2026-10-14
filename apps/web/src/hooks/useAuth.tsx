@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from '@/lib/axios';
+import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
 
 export interface UserFeatures {
   crm?: boolean;
@@ -34,6 +35,7 @@ export interface UserTenant {
   rules?: Record<string, string | number | boolean>;
   dependents?: { enabled: boolean; kind: string | null; required: boolean };
   appointment_statuses?: AppointmentStatus[];
+  currency?: CurrencyInfo;
 }
 
 export interface AppointmentStatus {
@@ -62,6 +64,7 @@ export interface User {
   role_name?: string | null;
   plan_slug?: string | null;
   features?: UserFeatures;
+  currencies?: CurrencyInfo[];
 }
 
 interface AuthContextType {
@@ -106,7 +109,11 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setStoredUser] = useState<User | null>(null);
+  const setUser = (value: User | null) => {
+    if (value) setCurrencies(value.currencies, value.tenant?.currency?.code);
+    setStoredUser(value);
+  };
   const [loading, setLoading] = useState(true);
 
   const fetchUser = async () => {
