@@ -25,14 +25,12 @@ interface Tenant {
 
 export default function TenantsTable() {
   const { user, startImpersonation } = useAuth();
-  // El soporte SaaS solo consulta y entra al panel; crear, editar y eliminar es del administrador SaaS.
   const canManage = Boolean(user?.is_saas_admin);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Iniciamos los filtros limpios
   const [filters, setFilters] = useState<Record<string, any>>({ status: '' });
 
   const [showFormModal, setShowFormModal] = useState(false);
@@ -109,11 +107,9 @@ export default function TenantsTable() {
 
   const safeTenants = Array.isArray(tenants) ? tenants : [];
 
-  // Conteos calculados para las tarjetas
   const totalActiveTenants = safeTenants.filter(t => t.status === 'active').length;
   const totalInactiveTenants = safeTenants.filter(t => t.status !== 'active').length;
 
-  // Configuración de métricas con el diseño tenue y comportamiento de toggle exacto
   const metricCards: MetricCardItem[] = [
     {
       title: 'Tenants activos',
@@ -143,7 +139,6 @@ export default function TenantsTable() {
     setShowFormModal(true);
   };
 
-  // Si la API rechaza algo, el error sube al formulario, que lo muestra.
   const handleFormSubmit = async (formData: any) => {
     if (editingTenant) {
       const { name, slug, timezone, status } = formData;

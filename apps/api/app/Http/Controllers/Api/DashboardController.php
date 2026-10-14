@@ -21,10 +21,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Support\Access;
 
-/**
- * Inicio de la empresa: lo que pasa hoy en su agenda, lo que hay que resolver
- * y cómo le fue en los últimos 30 días. Un profesional ve solo lo suyo.
- */
 class DashboardController extends Controller
 {
     private const LOCAL_FORMAT = 'Y-m-d\TH:i';
@@ -51,13 +47,11 @@ class DashboardController extends Controller
         $between = fn (Builder $q, Carbon $from, Carbon $to): Builder => $q->where('appointments.starts_at', '>=', $from->toIso8601String())->where('appointments.starts_at', '<', $to->toIso8601String());
         $who = fn (?Appointment $a) => $a ? ($a->dependent?->name ?? ($a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : null)) : null;
 
-        // --- Hoy ---------------------------------------------------------------
         $today = $between($appointments(), $dayStart, $dayEnd)->with(['customer', 'dependent', 'service', 'professional', 'branch'])->orderBy('starts_at')->get();
         $active = $today->whereNotIn('status', AppointmentFlow::RELEASED);
         $completed = $today->where('status', AppointmentFlow::COMPLETED);
         $lastWeek = $between($appointments(), $dayStart->copy()->subWeek(), $dayEnd->copy()->subWeek())->whereNotIn('status', AppointmentFlow::RELEASED)->count();
 
-        // Ocupación: minutos agendados frente a los minutos de horario de hoy.
         $scheduled = ProfessionalSchedule::where('professional_schedules.tenant_id', $tenant->id)
             ->where('weekday', $dayStart->dayOfWeek)
             ->when($own, fn ($q) => $q->where('professional_id', $own))
@@ -71,7 +65,6 @@ class DashboardController extends Controller
         $upcoming = $today->filter(fn (Appointment $a) => in_array($a->status, self::OPEN, true) && $a->ends_at->gte($now))->take(6)->values();
         $branches = $own ? collect() : $active->groupBy('branch_id')->map(fn ($group) => ['name' => $group->first()->branch?->name, 'count' => $group->count()])->sortByDesc('count')->values();
 
-        // --- Últimos 30 días -----------------------------------------------------
         $monthAgo = $dayStart->copy()->subDays(30);
         $byStatus = $between($appointments(), $monthAgo, $now)->select('appointments.status', DB::raw('count(*) as total'), DB::raw('coalesce(sum(price), 0) as value'))->groupBy('status')->get()->keyBy('status');
         $attended = (int) ($byStatus[AppointmentFlow::COMPLETED]->total ?? 0);
@@ -89,7 +82,6 @@ class DashboardController extends Controller
             ->where('created_at', '>=', $monthStart->copy()->subMonthNoOverflow()->toIso8601String())
             ->where('created_at', '<', $monthStart->toIso8601String())->count();
 
-        // --- Por resolver ----------------------------------------------------------
         $toConfirm = $between($appointments(), $now, $dayEnd->copy()->addDay())->where('status', AppointmentFlow::PENDING)->count();
         $unclosed = $between($appointments(), $monthAgo, $now)->whereIn('status', self::OPEN)->where('ends_at', '<', $now->copy()->subHour()->toIso8601String())->count();
 
@@ -108,7 +100,6 @@ class DashboardController extends Controller
                 ->when($own, fn ($q) => $q->where('professional_id', $own))->count(), 'href' => '/records'];
         }
 
-        // --- Actividad reciente ------------------------------------------------------
         $activity = AppointmentStatusHistory::where('tenant_id', $tenant->id)
             ->where('created_at', '<=', $now->toIso8601String())
             ->when($own, fn ($q) => $q->whereHas('appointment', fn ($q) => $q->where('professional_id', $own)))
@@ -143,9 +134,7 @@ class DashboardController extends Controller
                 'attended'             => $attended,
                 'no_show'              => $noShow,
                 'cancelled'            => $cancelled,
-                // De quienes debían venir, cuántos vinieron.
                 'attendance'           => $attended + $noShow > 0 ? (int) round($attended * 100 / ($attended + $noShow)) : null,
-                // Suma del precio de las citas atendidas. No es lo cobrado: la caja aún no existe.
                 'value'                => round((float) ($byStatus[AppointmentFlow::COMPLETED]->value ?? 0), 2),
                 'new_customers'        => $newCustomers,
                 'new_customers_before' => $newCustomersBefore,
@@ -158,7 +147,6 @@ class DashboardController extends Controller
                 'to'      => $event->to_status,
                 'to_name' => AppointmentFlow::name($tenant, $event->to_status),
                 'by'      => $event->actor ? trim("{$event->actor->first_name} {$event->actor->last_name}") : null,
-                // Lo hizo el propio cliente desde su portal.
                 'by_customer' => (bool) $event->actor_customer_id,
                 'code'    => $event->appointment?->code,
                 'who'     => $who($event->appointment),
@@ -168,9 +156,6 @@ class DashboardController extends Controller
         ]);
     }
 
-    /**
-     * Citas próximas que quedaron dentro de un bloqueo o de un feriado en que la sede cierra.
-     */
     private function blockedAppointments(Builder $query, Carbon $now, string $timezone): int
     {
         return $query->where('appointments.starts_at', '>=', $now->toIso8601String())
@@ -194,9 +179,6 @@ class DashboardController extends Controller
             ->count();
     }
 
-    /**
-     * Un profesional que no administra la empresa ve solo lo suyo.
-     */
     private function ownProfessionalId(User $user): ?string
     {
         if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
@@ -204,7 +186,6 @@ class DashboardController extends Controller
         }
 
         return Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id')
-            // Con rol de profesional pero sin ficha de profesional: no ve citas de nadie.
             ?? '00000000-0000-0000-0000-000000000000';
     }
 }

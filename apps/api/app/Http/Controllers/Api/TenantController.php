@@ -14,11 +14,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/**
- * Empresas (tenants) vistas desde la plataforma. Ver el listado y la ficha lo
- * puede hacer el administrador SaaS y el soporte SaaS; todo lo que cambia a la
- * empresa (suspender, plan, rubro, módulos) es solo del administrador SaaS.
- */
 class TenantController extends Controller
 {
     public const STATUSES = ['active', 'suspended', 'inactive'];
@@ -27,7 +22,6 @@ class TenantController extends Controller
     {
         $query = Tenant::with(['subscription.plan', 'businessType', 'users']);
 
-        // Filtro por término de búsqueda (nombre o slug)
         if ($request->has('search') && !empty($request->input('search'))) {
             $search = $request->input('search');
             $query->where(function($q) use ($search) {
@@ -45,12 +39,6 @@ class TenantController extends Controller
         return response()->json($tenants);
     }
 
-    /**
-     * Alta de una empresa desde la consola: la deja lista para operar, igual
-     * que el registro público (rubro, catálogo inicial, razón social, sede,
-     * dueño y suscripción). Aquí sí se puede elegir un plan privado.
-     * La contraseña del dueño se genera y se devuelve una sola vez.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -107,15 +95,10 @@ class TenantController extends Controller
             'message' => 'Tenant creado correctamente',
             'data' => $result['tenant'],
             'installed' => $result['installed'],
-            // Solo se entrega aquí: el dueño debe cambiarla al entrar.
             'owner' => ['email' => $validated['admin_email'], 'temporary_password' => $password],
         ], 201);
     }
 
-    /**
-     * Ficha de la empresa: datos, suscripción, cobros, módulos efectivos con el
-     * motivo de cada uno y uso frente a los límites de su plan.
-     */
     public function show($id)
     {
         return response()->json($this->detail(Tenant::findOrFail($id)));
@@ -155,10 +138,6 @@ class TenantController extends Controller
         ]);
     }
 
-    /**
-     * Suspende la empresa: nadie de ella puede iniciar sesión y sus sesiones
-     * abiertas se cierran. Sus datos no se tocan.
-     */
     public function suspend(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
@@ -182,12 +161,6 @@ class TenantController extends Controller
         return response()->json($this->detail($tenant));
     }
 
-    /**
-     * Cambia el plan de la empresa. Acepta cualquier plan activo, también los
-     * privados (fuera del catálogo público), que son la forma de darle a una
-     * empresa una combinación a medida. Si la empresa tiene una suscripción
-     * vigente conserva su estado y sus fechas; si no, empieza una activa hoy.
-     */
     public function changePlan(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
@@ -231,12 +204,6 @@ class TenantController extends Controller
         return response()->json($this->detail($tenant));
     }
 
-    /**
-     * Cambia el rubro de la empresa: cambian su vocabulario, los módulos que el
-     * rubro apaga y sus reglas por defecto. Sus servicios y fichas no se tocan;
-     * el catálogo del rubro nuevo solo se copia si se pide y la empresa aún no
-     * tiene servicios.
-     */
     public function changeBusinessType(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
@@ -249,7 +216,6 @@ class TenantController extends Controller
         $before = ['business_type_id' => $tenant->business_type_id];
         $tenant->business_type_id = $validated['business_type_id'];
         $tenant->unsetRelation('businessType');
-        // Con el rubro nuevo la empresa recibe una copia nueva de su perfil.
         $tenant->fillBusinessProfile()->save();
 
         $installed = !empty($validated['install_template'])
@@ -261,10 +227,6 @@ class TenantController extends Controller
         return response()->json($this->detail($tenant) + ['installed' => $installed]);
     }
 
-    /**
-     * Módulos que la plataforma le apaga a la empresa. Solo quita: lo que el
-     * plan no incluye no se enciende desde aquí (para eso se cambia el plan).
-     */
     public function updateModules(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
@@ -288,7 +250,6 @@ class TenantController extends Controller
     private function afterStatusChange(Request $request, Tenant $tenant, string $previousStatus): void
     {
         if (!$tenant->isActive()) {
-            // Cierra las sesiones abiertas de todo su personal y sus clientes.
             DB::table('personal_access_tokens')
                 ->where(fn ($q) => $q
                     ->whereIn('tokenable_id', DB::table('users')->where('tenant_id', $tenant->id)->select(DB::raw('id::text')))
@@ -322,7 +283,6 @@ class TenantController extends Controller
         $modules = SaasModule::orderBy('sort_order')->get()->map(function (SaasModule $module) use ($isCurrent, $planKeys, $typeOff, $platformOff, $tenantOff, $active) {
             $inPlan = $module->is_core || in_array($module->key, $planKeys, true);
 
-            // Primer motivo por el que la empresa no lo tiene, de mayor a menor alcance.
             $reason = match (true) {
                 !$isCurrent                                  => 'no_subscription',
                 !$inPlan                                     => 'plan',
@@ -366,7 +326,6 @@ class TenantController extends Controller
             'suspension_reason' => $tenant->suspension_reason,
             'created_at'        => $tenant->created_at,
             'business_type'     => $tenant->businessType?->only(['id', 'slug', 'name', 'short_name', 'color']),
-            // Partes del rubro que cambiaron después de que la empresa recibió su copia.
             'business_profile_outdated' => $tenant->businessType ? $tenant->outdatedProfileParts() : [],
             'business_profile_synced_at' => $tenant->business_profile_synced_at,
             'company'           => $tenant->company?->only(['legal_name', 'trade_name', 'tax_id', 'phone', 'address', 'district', 'department']),
@@ -406,7 +365,6 @@ class TenantController extends Controller
                 'is_owner'   => $user->is_owner,
                 'role'       => $user->is_owner ? 'Dueño' : $user->roles->first()?->name,
             ]),
-            // Lo que la empresa ajustó por su cuenta en su configuración.
             'settings' => [
                 'vocabulary'            => $tenant->vocabulary(),
                 'vocabulary_overrides'  => (object) ($tenant->settings?->vocabulary ?? []),

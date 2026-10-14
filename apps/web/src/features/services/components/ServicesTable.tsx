@@ -73,7 +73,6 @@ export default function ServicesTable() {
   });
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  // Se vuelve a pedir al cerrar el formulario: desde ahí se pueden crear categorías.
   const fetchCategories = async () => {
       try {
         console.log('SERVICES_TABLE: Fetching categories...');
@@ -97,7 +96,6 @@ export default function ServicesTable() {
         const res = await api.get('/statuses');
         console.log('SERVICES_TABLE: All statuses received:', res.data);
         
-        // Filtramos estrictamente los estados cuyo módulo sea 'services'
         const serviceStatuses = res.data.filter((st: any) => st.module?.name === 'services');
         console.log('SERVICES_TABLE: Filtered statuses for module "services":', serviceStatuses);
 
@@ -141,7 +139,6 @@ export default function ServicesTable() {
         ...currentFilters,
       };
 
-      // Si la pestaña no es 'all', podemos mandar el filtro por slug o tab si el backend lo soporta
       if (tab !== 'all') {
         queryParams.tab_status = tab; 
       }

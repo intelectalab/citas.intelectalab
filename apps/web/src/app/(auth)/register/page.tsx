@@ -18,7 +18,6 @@ interface Plan {
   features?: Record<string, any>;
 }
 
-// Lo que incluye un plan: módulos base, sus límites y sus módulos propios.
 function planHighlights(plan: Plan): string[] {
   const limits = plan.limits ?? {};
   const items = [Object.values(CORE_MODULE_LABELS).join(' y ')];
@@ -35,7 +34,6 @@ export default function RegisterPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // null mientras se consulta; false cuando la plataforma cerró el registro de empresas.
   const [signupOpen, setSignupOpen] = useState<boolean | null>(null);
   const [supportEmail, setSupportEmail] = useState<string | null>(null);
 
@@ -55,7 +53,6 @@ export default function RegisterPage() {
         setSignupOpen(res.data.allow_tenant_signup !== false);
         setSupportEmail(res.data.support_email ?? null);
       })
-      // Si no se puede consultar, no se bloquea: la API decide al enviar.
       .catch(() => setSignupOpen(true));
   }, []);
 
@@ -96,7 +93,6 @@ export default function RegisterPage() {
           </div>
         ) : (
           <>
-        {/* Cabecera */}
         <div className="text-center space-y-3 max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#84D0D9]/15 border border-[#84D0D9]/30 text-[#022340] text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5 text-[#3F768C]" />
@@ -110,7 +106,6 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* Grid de Planes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
           {plans.map((plan) => (
             <div
@@ -170,7 +165,6 @@ export default function RegisterPage() {
           </>
         )}
 
-        {/* Enlace de regreso al Login */}
         <div className="text-center text-xs text-slate-500 font-medium pt-4 border-t border-slate-100">
           ¿Ya tienes una cuenta registrada?{' '}
           <Link href="/login" className="text-[#3F768C] font-bold hover:underline">
@@ -179,7 +173,6 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* Renderizamos el Modal Reutilizable */}
       <RegisterModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

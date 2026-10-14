@@ -7,10 +7,6 @@ use App\Models\AuditEvent;
 use App\Models\PlatformSetting;
 use Illuminate\Http\Request;
 
-/**
- * Configuración de la plataforma. La parte pública (marca y apariencia) la
- * lee cualquier pantalla; verla completa y cambiarla es del administrador SaaS.
- */
 class PlatformSettingController extends Controller
 {
     public function publicValues()

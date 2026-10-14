@@ -13,8 +13,6 @@ class SubscriptionController extends Controller
     {
         $user = $request->user();
 
-        // Solo el administrador de la empresa elige plan, y solo entre los del
-        // catálogo público. Los planes privados los asigna la plataforma.
         abort_unless($user->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede elegir el plan.');
 
         $request->validate([

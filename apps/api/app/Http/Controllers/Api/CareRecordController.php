@@ -23,19 +23,13 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Fichas de atención llenadas. Una por cita: se guarda como borrador, se
- * firma, y pasado el plazo de la empresa queda bloqueada y solo admite notas.
- */
 class CareRecordController extends Controller
 {
     private const LOCAL_FORMAT = 'Y-m-d\TH:i';
     private const RELATIONS = ['customer', 'dependent', 'professional', 'author', 'appointment.service', 'addenda.author'];
 
-    // Acción con que la bitácora registra la apertura de una ficha privada ajena.
     private const EMERGENCY_ACTION = 'care_record.emergency_access';
 
-    // Minutos que dura un acceso de emergencia; después hay que volver a justificarlo.
     private const EMERGENCY_MINUTES = 30;
 
     private function tenant(Request $request): Tenant
@@ -46,9 +40,6 @@ class CareRecordController extends Controller
         return $tenant->loadMissing('settings');
     }
 
-    /**
-     * Un profesional que no administra la empresa solo trabaja sus propias citas y fichas.
-     */
     private function ownProfessionalId(User $user): ?string
     {
         if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
@@ -71,9 +62,6 @@ class CareRecordController extends Controller
         return $appointment;
     }
 
-    /**
-     * La ficha con que se atiende un servicio, si la empresa le asignó una.
-     */
     private function templateFor(Appointment $appointment): ?RecordTemplate
     {
         return RecordTemplate::where('tenant_id', $appointment->tenant_id)
@@ -82,10 +70,6 @@ class CareRecordController extends Controller
             ->first();
     }
 
-    /**
-     * Una ficha privada solo la lee quien la escribió, o el administrador de
-     * la empresa mientras dure un acceso de emergencia que él mismo justificó.
-     */
     private function canRead(CareRecord $record, User $user): bool
     {
         if (!$record->is_private || $record->created_by === $user->id) {
@@ -99,19 +83,11 @@ class CareRecordController extends Controller
             ->exists();
     }
 
-    /**
-     * La ficha no es privada, o es de quien consulta: puede cambiarla.
-     */
     private function isOwn(CareRecord $record, User $user): bool
     {
         return !$record->is_private || $record->created_by === $user->id;
     }
 
-    /**
-     * Acceso de emergencia a una ficha privada ajena. Solo el administrador de
-     * la empresa, con un motivo, y queda en la bitácora: quien escribió la
-     * ficha ve después quién la abrió, cuándo y por qué. Solo permite leer.
-     */
     public function emergencyAccess(Request $request, string $careRecord)
     {
         $tenant = $this->tenant($request);
@@ -148,10 +124,6 @@ class CareRecordController extends Controller
         return response()->json($this->present($record, $tenant, $user));
     }
 
-    /**
-     * La ficha en PDF, para descargarla. Respeta la privacidad: quien no puede
-     * leerla tampoco puede descargarla.
-     */
     public function pdf(Request $request, string $careRecord)
     {
         $tenant = $this->tenant($request);
@@ -193,25 +165,16 @@ class CareRecordController extends Controller
         ]);
     }
 
-    /**
-     * La ficha de una cita: la ya llenada, o la plantilla en blanco para llenarla.
-     */
     public function forAppointment(Request $request, string $appointment)
     {
         return response()->json($this->context($request, $this->appointment($request, $appointment)));
     }
 
-    /**
-     * Pasa un borrador a la plantilla que hoy tiene su servicio. Conserva lo
-     * escrito en los campos que siguen existiendo. Una ficha firmada no se
-     * actualiza: es el registro de lo que se atendió.
-     */
     public function refreshTemplate(Request $request, string $appointment)
     {
         $user = $request->user();
         $appointment = $this->appointment($request, $appointment);
 
-        // Lo que hay en pantalla sin guardar viaja con el pedido, para no perderlo.
         $validated = $request->validate(['data' => 'sometimes|array']);
 
         DB::transaction(function () use ($user, $appointment, $validated) {
@@ -229,7 +192,6 @@ class CareRecordController extends Controller
                 throw ValidationException::withMessages(['data' => 'Este servicio ya no tiene una ficha asignada.']);
             }
 
-            // Se conserva el valor de un campo si sigue existiendo con el mismo tipo.
             $types = collect($record->template_snapshot ?? [])->pluck('type', 'key');
             $kept = collect($template->fields ?? [])
                 ->filter(fn ($field) => $types->get($field['key'] ?? '') === ($field['type'] ?? null))
@@ -237,7 +199,6 @@ class CareRecordController extends Controller
                 ->all();
             [$values] = RecordFields::values($template->fields ?? [], array_intersect_key($validated['data'] ?? $record->data ?? [], array_flip($kept)));
 
-            // Otro texto de consentimiento hay que volver a aceptarlo.
             if ($record->consent_text !== $template->consent_text) {
                 $record->consent_accepted = false;
                 $record->consent_accepted_at = null;
@@ -259,10 +220,6 @@ class CareRecordController extends Controller
         return response()->json($this->context($request, $appointment));
     }
 
-    /**
-     * La plantilla actual del servicio, si ya no es la misma con que se empezó
-     * el borrador. Solo se ofrece a quien puede cambiar la ficha.
-     */
     private function templateUpdate(CareRecord $record, Appointment $appointment, User $user): ?array
     {
         if ($record->status !== CareRecord::DRAFT || !$this->isOwn($record, $user)) {
@@ -288,9 +245,6 @@ class CareRecordController extends Controller
         ];
     }
 
-    /**
-     * La ficha guarda si su plantilla exigía el consentimiento (columna reciente).
-     */
     private function storesRequireConsent(CareRecord $record): bool
     {
         return array_key_exists('require_consent', $record->getAttributes());
@@ -324,7 +278,6 @@ class CareRecordController extends Controller
                 'service'      => $appointment->service?->name,
                 'professional' => $appointment->professional?->display_name,
             ],
-            // El servicio se atiende con ficha (o ya tiene una llenada).
             'uses_record' => (bool) ($record || $template),
             'record'      => $record ? $this->present($record, $tenant, $user) : null,
             'template'    => $template ? [
@@ -337,14 +290,10 @@ class CareRecordController extends Controller
             'required_to_complete' => (bool) AppointmentFlow::rule($tenant, 'records.require_on_complete'),
             'lock_hours'           => (int) AppointmentFlow::rule($tenant, 'records.lock_hours'),
             'previous'             => $previous->map(fn (CareRecord $r) => $this->present($r, $tenant, $user)),
-            // El servicio cambió de plantilla después de empezar este borrador.
             'template_update'      => $record ? $this->templateUpdate($record, $appointment, $user) : null,
         ];
     }
 
-    /**
-     * Guarda la ficha de la cita como borrador o la firma (sign = true).
-     */
     public function save(Request $request, string $appointment)
     {
         $tenant = $this->tenant($request);
@@ -373,7 +322,6 @@ class CareRecordController extends Controller
                     throw ValidationException::withMessages(['data' => 'Este servicio no tiene una ficha asignada.']);
                 }
 
-                // La ficha nace con su copia de los campos: editar la plantilla después no la cambia.
                 $record = new CareRecord([
                     'tenant_id'             => $tenant->id,
                     'branch_id'             => $appointment->branch_id,
@@ -395,20 +343,17 @@ class CareRecordController extends Controller
                     $record->require_consent = $requireConsent;
                 }
             } else {
-                // Una ficha privada solo la cambia su autor; el acceso de emergencia es para leer.
                 abort_unless($this->isOwn($record, $user), 403, 'Esta ficha es privada: solo la cambia quien la escribió.');
 
                 if ($record->currentStatus() === CareRecord::LOCKED) {
                     throw ValidationException::withMessages(['data' => 'La ficha ya está bloqueada. Puedes agregarle una nota.']);
                 }
 
-                // Vale lo que exigía la plantilla al empezar la ficha, no lo que diga hoy.
                 $requireConsent = $this->storesRequireConsent($record)
                     ? (bool) $record->require_consent
                     : (bool) RecordTemplate::whereKey($record->record_template_id)->value('require_consent');
             }
 
-            // Una ficha ya firmada se sigue validando completa al corregirla.
             $strict = $sign || $record->status === CareRecord::SIGNED;
             [$values, $errors] = RecordFields::values($record->template_snapshot ?? [], $validated['data'], $strict);
 
@@ -433,7 +378,6 @@ class CareRecordController extends Controller
                 $record->status = CareRecord::SIGNED;
                 $record->signed_at = now();
                 $record->signed_by = $user->id;
-                // Plazo para corregirla; después solo admite notas.
                 $record->locked_at = now()->addHours(max(0, (int) AppointmentFlow::rule($tenant, 'records.lock_hours')));
             }
 
@@ -449,9 +393,6 @@ class CareRecordController extends Controller
         return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
     }
 
-    /**
-     * Nota agregada a una ficha firmada. Es la única forma de añadirle algo una vez bloqueada.
-     */
     public function addAddendum(Request $request, string $careRecord)
     {
         $tenant = $this->tenant($request);
@@ -476,9 +417,6 @@ class CareRecordController extends Controller
         return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
     }
 
-    /**
-     * Fichas de la empresa, de la más reciente a la más antigua.
-     */
     public function index(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -519,7 +457,6 @@ class CareRecordController extends Controller
             ->limit(300)
             ->get();
 
-        // La lista no lleva el contenido: se pide al abrir cada ficha.
         return response()->json($records->map(fn (CareRecord $r) => array_diff_key($this->present($r, $tenant, $user), array_flip(['fields', 'data', 'addenda', 'consent_text']))));
     }
 
@@ -539,15 +476,9 @@ class CareRecordController extends Controller
         return $record;
     }
 
-    /**
-     * El próximo control que indica la ficha queda como pendiente de
-     * seguimiento. Si la ficha se corrige, el control se actualiza.
-     */
     private function syncRecall(CareRecord $record, Appointment $appointment): void
     {
         $control = RecordFields::nextControl($record->template_snapshot ?? [], $record->data ?? []);
-        // El de esta ficha o, si el servicio ya dejó uno al atender la cita, ese mismo:
-        // una atención deja un solo control.
         $existing = DB::table('recalls')
             ->where('tenant_id', $record->tenant_id)
             ->whereIn('status', ['pending', 'notified'])
@@ -556,7 +487,6 @@ class CareRecordController extends Controller
             ->first();
 
         if (!$control) {
-            // Solo se retira el que puso la ficha; el del servicio se queda.
             if ($existing && $existing->care_record_id) {
                 DB::table('recalls')->where('id', $existing->id)->delete();
             }
@@ -580,7 +510,6 @@ class CareRecordController extends Controller
             'customer_dependent_id' => $record->customer_dependent_id,
             'care_record_id'        => $record->id,
             'source_appointment_id' => $appointment->id,
-            // El control se agenda con el servicio que indique el servicio atendido, o con el mismo.
             'service_id'            => $appointment->service?->recall_service_id ?? $appointment->service_id,
             'professional_id'       => $record->professional_id,
             'status'                => 'pending',
@@ -621,22 +550,16 @@ class CareRecordController extends Controller
             'status'         => $status,
             'template_name'  => $record->template_name,
             'is_private'     => $record->is_private,
-            // Privada y de otra persona: se sabe que existe, no qué dice.
             'hidden'         => !$readable,
-            // Se está leyendo una ficha privada ajena gracias a un acceso de emergencia vigente.
             'reading_by_emergency' => $readable && !$this->isOwn($record, $user),
-            // El administrador puede abrirla con un motivo que queda registrado.
             'can_request_access' => !$readable && $user->allows('records.emergency'),
-            // Quién abrió esta ficha privada por emergencia. Lo ven su autor y quien la abrió.
             'emergency_accesses' => $record->is_private && $readable ? $this->emergencyAccesses($record, $local) : [],
-            // Con acceso de emergencia se lee, no se edita.
             'can_edit'       => $readable && $status !== CareRecord::LOCKED && $this->isOwn($record, $user),
             'can_add_note'   => $readable && $status !== CareRecord::DRAFT && $this->isOwn($record, $user),
             'created_at'     => $local($record->created_at),
             'signed_at'      => $local($record->signed_at),
             'locked_at'      => $local($record->locked_at),
             'author'         => $record->author ? trim("{$record->author->first_name} {$record->author->last_name}") : null,
-            // Para enlazar el nombre del profesional con su página.
             'professional_id' => $record->professional_id,
             'appointment_id' => $record->appointment_id,
             'appointment'    => $record->appointment ? [

@@ -5,9 +5,6 @@ import { usePathname } from 'next/navigation';
 import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-// Permiso que hace falta para abrir cada pantalla. Debe coincidir con el `perm`
-// de su ítem en el menú. `exact` protege solo esa dirección y no las que cuelgan
-// de ella (la página de un profesional se abre desde su nombre en cualquier pantalla).
 const SCREENS: { path: string; perm: string; exact?: boolean }[] = [
   { path: '/agenda', perm: 'agenda.view' },
   { path: '/appointments', perm: 'agenda.view' },
@@ -31,15 +28,11 @@ const SCREENS: { path: string; perm: string; exact?: boolean }[] = [
   { path: '/settings', perm: 'settings.view' },
 ];
 
-// Si alguien escribe la dirección de una pantalla que su rol no le permite ver,
-// en vez de la pantalla ve una explicación. La API rechaza lo mismo por su lado.
 export default function ScreenGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, loading, can } = useAuth();
 
   const screen = SCREENS.find((s) => pathname === s.path || (!s.exact && pathname.startsWith(`${s.path}/`)));
-  // El equipo de la plataforma no tiene rol en una empresa; y mientras la sesión no
-  // traiga los permisos no se bloquea nada.
   const isStaffOfTenant = Boolean(user?.tenant) && !user?.is_saas_admin && !user?.is_saas_support;
 
   if (!screen || loading || !isStaffOfTenant || !user?.permissions || can(screen.perm)) {

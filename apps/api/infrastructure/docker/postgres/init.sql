@@ -1,10 +1,8 @@
 BEGIN;
 
--- 1. Configuración inicial
 SET client_encoding = 'UTF8';
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- 2. Tablas base y auxiliares independientes
 CREATE TABLE type_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name varchar(250) NOT NULL,
@@ -16,24 +14,18 @@ CREATE TABLE type_documents (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Rubros de negocio (catálogo global del SaaS). Definen la presentación y el
--- vocabulario por defecto del tenant: cliente/paciente/alumno, profesional, etc.
 CREATE TABLE business_types (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    slug varchar(50) NOT NULL UNIQUE, -- salon, barber, dental, medical, vet, generic...
+    slug varchar(50) NOT NULL UNIQUE,
     name varchar(150) NOT NULL,
     short_name varchar(80) NOT NULL,
     description varchar(500),
     icon varchar(50),
     color varchar(7) DEFAULT '#3C7DC4',
-    vocabulary jsonb NOT NULL DEFAULT '{}'::jsonb, -- {client, clients, pro, pros, dependent, dependents}
-    modules_off jsonb NOT NULL DEFAULT '[]'::jsonb, -- Módulos que el rubro no usa aunque el plan los incluya
-    default_rules jsonb NOT NULL DEFAULT '{}'::jsonb, -- Reglas de operación por defecto ("cancel.window_hours": 24)
-    dependents jsonb NOT NULL DEFAULT '{}'::jsonb, -- {enabled, kind, required}: mascotas, hijos, etc.
-    -- Catálogo inicial que se copia al tenant al registrarse:
-    -- {categories: [{name, services: [{code, name, duration_minutes, price, buffer_after_minutes, uses_record,
-    --   requires_deposit, online_booking, is_virtual, kind, capacity, recall: {label, days, service_code}}]}],
-    --  record_template: {name, consent_text, require_consent, fields}}
+    vocabulary jsonb NOT NULL DEFAULT '{}'::jsonb,
+    modules_off jsonb NOT NULL DEFAULT '[]'::jsonb,
+    default_rules jsonb NOT NULL DEFAULT '{}'::jsonb,
+    dependents jsonb NOT NULL DEFAULT '{}'::jsonb,
     template jsonb NOT NULL DEFAULT '{}'::jsonb,
     sort_order int NOT NULL DEFAULT 0,
     status varchar(30) NOT NULL DEFAULT 'active',
@@ -45,19 +37,12 @@ CREATE TABLE tenants (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name varchar(150) NOT NULL,
     slug varchar(100) NOT NULL UNIQUE,
-    -- Código de empresa de 8 dígitos que el tenant entrega a sus clientes para que
-    -- se registren. Identifica al tenant sin exponer su id ni su slug.
     code char(8) NOT NULL UNIQUE CHECK (code ~ '^[0-9]{8}$'),
     business_type_id uuid NULL REFERENCES business_types(id) ON DELETE SET NULL,
     timezone varchar(64) NOT NULL DEFAULT 'America/Lima',
-    status varchar(30) NOT NULL DEFAULT 'active', -- active, suspended, inactive: solo 'active' puede iniciar sesión
-    suspension_reason varchar(255) NULL, -- Motivo que registra la plataforma al suspender
-    -- Módulos que la plataforma le apaga a esta empresa aunque su plan los incluya.
-    -- La empresa no puede volver a encenderlos (los suyos van en tenant_settings.modules_off).
+    status varchar(30) NOT NULL DEFAULT 'active',
+    suspension_reason varchar(255) NULL,
     modules_off jsonb NOT NULL DEFAULT '[]'::jsonb,
-    -- Copia de lo que el rubro le dio a la empresa: {vocabulary, modules_off, default_rules, dependents}.
-    -- Se toma al registrarse o al cambiar de rubro. Editar el rubro no la toca: los cambios
-    -- solo llegan cuando la plataforma los aplica a la empresa de forma explícita.
     business_profile jsonb NULL,
     business_profile_synced_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -67,32 +52,29 @@ CREATE TABLE tenants (
 
 CREATE INDEX idx_tenants_business_type ON tenants(business_type_id);
 
--- Configuración propia de cada tenant (una fila por tenant). La configuración
--- del SaaS vive en saas_plans y subscriptions.
 CREATE TABLE tenant_settings (
     tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
-    vocabulary jsonb NOT NULL DEFAULT '{}'::jsonb, -- Sobrescribe claves del vocabulario del rubro
-    modules_off jsonb NOT NULL DEFAULT '[]'::jsonb, -- Módulos que la empresa apaga además de los del rubro
-    rules jsonb NOT NULL DEFAULT '{}'::jsonb, -- Sobrescribe reglas por defecto del rubro
+    vocabulary jsonb NOT NULL DEFAULT '{}'::jsonb,
+    modules_off jsonb NOT NULL DEFAULT '[]'::jsonb,
+    rules jsonb NOT NULL DEFAULT '{}'::jsonb,
     brand_color varchar(7) NULL,
     logo_url varchar(255) NULL,
-    allow_customer_signup boolean NOT NULL DEFAULT true, -- Registro de clientes con el código de empresa
-    appointment_statuses jsonb NOT NULL DEFAULT '{}'::jsonb, -- Nombre propio de las fases de la cita: {"checked_in": "En sala"}
+    allow_customer_signup boolean NOT NULL DEFAULT true,
+    appointment_statuses jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE status_modules (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    name varchar(100) NOT NULL UNIQUE, -- ej: appointments, sales, customers, services, payments, cash_sessions
+    name varchar(100) NOT NULL UNIQUE,
     description varchar(255),
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Estados dinámicos
 CREATE TABLE statuses (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NULL REFERENCES tenants(id) ON DELETE CASCADE, -- NULL = Global del SaaS, con valor = Personalizado del Tenant
+    tenant_id uuid NULL REFERENCES tenants(id) ON DELETE CASCADE,
     module_id uuid NOT NULL REFERENCES status_modules(id) ON DELETE CASCADE,
     name varchar(100) NOT NULL,
     slug varchar(100) NOT NULL,
@@ -137,8 +119,6 @@ CREATE TABLE branches (
     UNIQUE (tenant_id, name)
 );
 
--- Horario de atención de la sede: tramos por día de la semana (0 = domingo).
--- Una sede sin ningún tramo no limita la agenda: vale el horario de cada profesional.
 CREATE TABLE branch_hours (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -171,7 +151,6 @@ CREATE INDEX idx_users_tenant ON users(tenant_id);
 CREATE UNIQUE INDEX idx_users_tenant_email ON users (tenant_id, email) WHERE tenant_id IS NOT NULL;
 CREATE UNIQUE INDEX idx_users_saas_email ON users (email) WHERE tenant_id IS NULL;
 
--- 3. Pipelines y Etapas (Se crean antes de customers para evitar errores de referencia)
 CREATE TABLE pipelines (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name varchar(150) NOT NULL,
@@ -191,31 +170,26 @@ CREATE TABLE pipeline_stages (
 );
 CREATE INDEX idx_pipeline_stages_pipeline ON pipeline_stages(pipeline_id);
 
--- 4. Tabla unificada de Customers (clientes; antes "patients")
 CREATE TABLE customers (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    code varchar(50) NOT NULL, -- Código correlativo por tenant (CLI-0001)
+    code varchar(50) NOT NULL,
     first_name varchar(150) NOT NULL,
     last_name varchar(150) NOT NULL,
     birth_date date NULL,
-    biological_sex varchar(20) NULL, -- M, F, Otro
-    blood_type varchar(10) NULL, -- O+, A-, etc.
+    biological_sex varchar(20) NULL,
+    blood_type varchar(10) NULL,
     type_document_id uuid NULL REFERENCES type_documents(id) ON DELETE SET NULL,
     document_number varchar(30) NULL,
     email varchar(250) NULL,
     phone varchar(50) NULL,
     emergency_contact_name varchar(200) NULL,
     emergency_contact_phone varchar(50) NULL,
-    status_id uuid NULL REFERENCES statuses(id), -- Vinculado a módulo 'customers'
+    status_id uuid NULL REFERENCES statuses(id),
     manager_user_id uuid NULL REFERENCES users(id) ON DELETE SET NULL,
-    -- Acceso al portal: el cliente ingresa con su correo. La contraseña inicial es su
-    -- número de documento y debe cambiarla en su primer ingreso. Sin correo o sin
-    -- contraseña no hay acceso. Los clientes no tienen fila en users.
     password_hash varchar(255) NULL,
     must_change_password boolean NOT NULL DEFAULT false,
     portal_enabled boolean NOT NULL DEFAULT true,
-    -- Inasistencias a citas reservadas en línea: las anteriores a esta fecha ya no cuentan (la empresa las perdonó).
     booking_strikes_reset_at timestamptz NULL,
     password_changed_at timestamptz NULL,
     last_login_at timestamptz NULL,
@@ -224,7 +198,7 @@ CREATE TABLE customers (
     district varchar(100) NULL,
     department varchar(100) NULL,
     postal_code varchar(20) NULL,
-    medical_notes text, -- Alergias o antecedentes médicos relevantes
+    medical_notes text,
     last_activity_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -237,7 +211,6 @@ CREATE INDEX idx_customers_tenant_document ON customers(tenant_id, document_numb
 CREATE INDEX idx_customers_status ON customers(status_id);
 CREATE INDEX idx_customers_login ON customers(lower(email)) WHERE password_hash IS NOT NULL;
 
--- 5. Resto de tablas operativas
 CREATE TABLE tenant_contacts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -270,16 +243,15 @@ CREATE TABLE services (
     buffer_before_minutes integer NOT NULL DEFAULT 0 CHECK (buffer_before_minutes >= 0),
     buffer_after_minutes integer NOT NULL DEFAULT 0 CHECK (buffer_after_minutes >= 0),
     price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
-    code varchar(30) NULL, -- Código interno del servicio (CAB-01)
-    requires_deposit boolean NOT NULL DEFAULT false, -- Exige adelanto para confirmar la reserva
-    online_booking boolean NOT NULL DEFAULT true, -- Se puede reservar desde el portal y la reserva pública
-    is_virtual boolean NOT NULL DEFAULT false, -- Se atiende por videollamada
-    kind varchar(20) NOT NULL DEFAULT 'individual' CHECK (kind IN ('individual', 'group')), -- group = clase con cupos
-    capacity integer NOT NULL DEFAULT 1 CHECK (capacity >= 1), -- Cupo por sesión; mayor a 1 solo en clases
-    -- Control de seguimiento que se sugiere al completar la atención
+    code varchar(30) NULL,
+    requires_deposit boolean NOT NULL DEFAULT false,
+    online_booking boolean NOT NULL DEFAULT true,
+    is_virtual boolean NOT NULL DEFAULT false,
+    kind varchar(20) NOT NULL DEFAULT 'individual' CHECK (kind IN ('individual', 'group')),
+    capacity integer NOT NULL DEFAULT 1 CHECK (capacity >= 1),
     recall_label varchar(150) NULL,
     recall_days integer NULL CHECK (recall_days > 0),
-    recall_service_id uuid NULL REFERENCES services(id) ON DELETE SET NULL, -- Servicio del control; NULL = el mismo
+    recall_service_id uuid NULL REFERENCES services(id) ON DELETE SET NULL,
     status_id uuid NULL REFERENCES statuses(id),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -306,12 +278,12 @@ CREATE TABLE professionals (
     type_document_id uuid NULL REFERENCES type_documents(id),
     document_number varchar(30) NULL,
     display_name varchar(150) NOT NULL,
-    license_number varchar(50) NULL, -- Número de colegiatura (CMP, COP, etc.)
+    license_number varchar(50) NULL,
     phone varchar(30) NULL,
     signature_url varchar(255) NULL,
     bio text NULL,
     color_code varchar(7) DEFAULT '#022340',
-    status_id uuid NULL REFERENCES statuses(id), -- Vinculado a módulo 'professionals'
+    status_id uuid NULL REFERENCES statuses(id),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -348,10 +320,9 @@ CREATE TABLE rooms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
-    name varchar(100) NOT NULL, -- Ej: Consultorio 101, Tópico 2
+    name varchar(100) NOT NULL,
     description varchar(255),
-    kind varchar(20) NOT NULL DEFAULT 'room' CHECK (kind IN ('room', 'equipment')), -- sala o equipo
-    -- Para un equipo: la sala donde está instalado (opcional).
+    kind varchar(20) NOT NULL DEFAULT 'room' CHECK (kind IN ('room', 'equipment')),
     parent_id uuid NULL REFERENCES rooms(id) ON DELETE SET NULL,
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -368,8 +339,6 @@ CREATE TABLE availability_blocks (
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
     reason varchar(255),
-    -- vacation, leave y closure no se pueden forzar; other (reunión, capacitación) sí, con motivo.
-    -- Los feriados van aparte, en holidays.
     kind varchar(20) NOT NULL DEFAULT 'other' CHECK (kind IN ('vacation', 'leave', 'closure', 'other')),
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -377,15 +346,13 @@ CREATE TABLE availability_blocks (
 );
 CREATE INDEX idx_blocks_tenant_time ON availability_blocks(tenant_id, starts_at, ends_at);
 
--- Feriados de la empresa: un día del calendario para todas sus sedes (branch_id NULL)
--- o para una sola. Al crear la empresa se le cargan los nacionales del año y del siguiente.
 CREATE TABLE holidays (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     branch_id uuid NULL REFERENCES branches(id) ON DELETE CASCADE,
     date date NOT NULL,
     name varchar(150) NOT NULL,
-    closed boolean NOT NULL DEFAULT true, -- la sede cierra: ese día no se agenda
+    closed boolean NOT NULL DEFAULT true,
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
@@ -396,27 +363,24 @@ CREATE UNIQUE INDEX idx_holidays_unique ON holidays(tenant_id, date, COALESCE(br
 CREATE TABLE appointments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    code varchar(20) NOT NULL, -- Correlativo por empresa (C-0001)
+    code varchar(20) NOT NULL,
     branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     room_id uuid NULL REFERENCES rooms(id) ON DELETE SET NULL,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    -- Mascota u otro dependiente atendido; obligatorio en los rubros que lo exigen (lo valida la API)
     customer_dependent_id uuid NULL,
     service_id uuid NOT NULL REFERENCES services(id) ON DELETE RESTRICT,
     professional_id uuid NOT NULL REFERENCES professionals(id) ON DELETE RESTRICT,
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
-    -- Fase de la cita. Son fijas: el flujo y los permisos dependen de ellas.
-    -- Cada empresa solo cambia el nombre con que las ve (tenant_settings.appointment_statuses).
     status varchar(20) NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show')),
     source varchar(30) NOT NULL DEFAULT 'staff',
-    price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0), -- Precio del servicio al reservar
+    price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
     notes text,
     reschedule_count integer NOT NULL DEFAULT 0,
-    override_reason varchar(255) NULL, -- Motivo cuando se agendó fuera del horario (sobre-agenda)
+    override_reason varchar(255) NULL,
     cancel_reason varchar(255) NULL,
-    cancelled_by varchar(20) NULL, -- staff, customer, system (liberada por no confirmarse a tiempo)
+    cancelled_by varchar(20) NULL,
     confirmed_at timestamptz NULL,
     checked_in_at timestamptz NULL,
     started_at timestamptz NULL,
@@ -428,13 +392,11 @@ CREATE TABLE appointments (
     CHECK (ends_at > starts_at),
     UNIQUE (tenant_id, code)
 );
---
 CREATE INDEX idx_appt_tenant_start ON appointments(tenant_id, starts_at);
 CREATE INDEX idx_appt_tenant_branch_date ON appointments(tenant_id, branch_id, starts_at);
 CREATE INDEX idx_appt_prof_time ON appointments(tenant_id, professional_id, starts_at, ends_at);
 CREATE INDEX idx_appt_customer ON appointments(tenant_id, customer_id, starts_at);
 
--- Cada cambio de fase y cada reprogramación (en ese caso la fase no cambia).
 CREATE TABLE appointment_status_history (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -443,26 +405,21 @@ CREATE TABLE appointment_status_history (
     to_status varchar(20) NOT NULL,
     reason varchar(255) NULL,
     actor_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
-    -- Cuando el paso lo dio el propio cliente desde el portal.
     actor_customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_appt_history ON appointment_status_history(appointment_id, created_at);
 
--- Avisos de la campana: uno por persona del equipo que debe enterarse de algo.
 CREATE TABLE user_notifications (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    -- appointment.booked, appointment.portal_booked, appointment.cancelled, block.soon, ...
     type varchar(60) NOT NULL,
     title varchar(190) NOT NULL,
     body varchar(500) NULL,
     link varchar(255) NULL,
-    -- A qué se refiere, para abrirlo desde el aviso: appointment, block.
     entity_type varchar(50) NULL,
     entity_id uuid NULL,
-    -- Para avisos que se generan al consultar: evita repetir el mismo a la misma persona.
     dedupe_key varchar(190) NULL,
     read_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -475,23 +432,17 @@ CREATE TABLE medical_records (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL, -- Vinculado a la cita que originó la atención
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
     professional_id uuid NOT NULL REFERENCES professionals(id) ON DELETE RESTRICT,
-    subjective text NULL, -- Síntomas / Motivo de consulta (Lo que dice el cliente)
-    objective text NULL, -- Examen físico / Signos vitales (Lo que observa el médico)
-    assessment text NULL, -- Diagnóstico / Impresión diagnóstica (Código CIE-10 opcional)
-    plan text NULL, -- Tratamiento, recetas, indicaciones y exámenes auxiliares
+    subjective text NULL,
+    objective text NULL,
+    assessment text NULL,
+    plan text NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_medical_records_customer ON medical_records(tenant_id, customer_id);
 
--- ---------------------------------------------------------------------
--- Ventas, pagos, caja y comprobantes
--- ---------------------------------------------------------------------
-
--- Correlativos por empresa (código de venta, etc.): se piden con una sola
--- sentencia, así dos cajas cobrando a la vez nunca reciben el mismo número.
 CREATE TABLE tenant_sequences (
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     key varchar(60) NOT NULL,
@@ -499,15 +450,13 @@ CREATE TABLE tenant_sequences (
     PRIMARY KEY (tenant_id, key)
 );
 
--- Proveedores externos de la empresa (pasarela de pago, facturación electrónica,
--- mensajería). Sin fila, o en modo 'simulated', el sistema simula la respuesta.
 CREATE TABLE tenant_integrations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     kind varchar(30) NOT NULL CHECK (kind IN ('payments', 'invoicing', 'messaging')),
-    provider varchar(40) NOT NULL DEFAULT 'simulated', -- ej: culqi, niubiz, izipay, mercadopago, nubefact
+    provider varchar(40) NOT NULL DEFAULT 'simulated',
     mode varchar(20) NOT NULL DEFAULT 'simulated' CHECK (mode IN ('simulated', 'sandbox', 'production')),
-    credentials text NULL, -- llaves del proveedor, cifradas por la aplicación
+    credentials text NULL,
     settings jsonb NOT NULL DEFAULT '{}'::jsonb,
     status varchar(20) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -515,7 +464,6 @@ CREATE TABLE tenant_integrations (
     UNIQUE (tenant_id, kind)
 );
 
--- Cajas de cada sede. Cada sede nace con una; la empresa puede agregar más.
 CREATE TABLE cash_registers (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -527,7 +475,6 @@ CREATE TABLE cash_registers (
     UNIQUE (branch_id, name)
 );
 
--- Un turno de caja: desde que se abre hasta que se cierra con su arqueo.
 CREATE TABLE cash_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -537,14 +484,13 @@ CREATE TABLE cash_sessions (
     opened_by uuid NOT NULL REFERENCES users(id),
     closed_by uuid REFERENCES users(id),
     opening_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (opening_amount >= 0),
-    expected_amount numeric(14,2) NULL, -- efectivo que debía haber al cerrar
-    closing_amount numeric(14,2) NULL CHECK (closing_amount >= 0), -- efectivo contado
-    difference numeric(14,2) NULL, -- contado menos esperado
+    expected_amount numeric(14,2) NULL,
+    closing_amount numeric(14,2) NULL CHECK (closing_amount >= 0),
+    difference numeric(14,2) NULL,
     closing_notes varchar(500) NULL,
     opened_at timestamptz NOT NULL DEFAULT now(),
     closed_at timestamptz
 );
--- Una caja no puede tener dos turnos abiertos a la vez.
 CREATE UNIQUE INDEX uq_cash_sessions_open ON cash_sessions(cash_register_id) WHERE status = 'open';
 CREATE INDEX idx_cash_sessions_tenant ON cash_sessions(tenant_id, opened_at);
 
@@ -554,16 +500,15 @@ CREATE TABLE sales (
     branch_id uuid NOT NULL REFERENCES branches(id),
     customer_id uuid REFERENCES customers(id),
     appointment_id uuid REFERENCES appointments(id),
-    code varchar(30) NOT NULL, -- V-000001, correlativo por empresa
+    code varchar(30) NOT NULL,
     status varchar(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'partial', 'paid', 'void', 'partially_refunded', 'refunded')),
-    subtotal numeric(14,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0), -- suma de los ítems antes de descuentos
+    subtotal numeric(14,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
     discount numeric(14,2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
     tax numeric(14,2) NOT NULL DEFAULT 0 CHECK (tax >= 0),
     tip numeric(14,2) NOT NULL DEFAULT 0 CHECK (tip >= 0),
     total numeric(14,2) NOT NULL DEFAULT 0 CHECK (total >= 0),
     paid numeric(14,2) NOT NULL DEFAULT 0,
     balance numeric(14,2) NOT NULL DEFAULT 0,
-    -- Cómo se calculó el impuesto al crear la venta: no cambia si la empresa cambia su regla después.
     tax_rate numeric(5,2) NOT NULL DEFAULT 18,
     prices_include_tax boolean NOT NULL DEFAULT true,
     notes varchar(500) NULL,
@@ -581,7 +526,7 @@ CREATE TABLE sale_items (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
     sale_id uuid NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
-    item_type varchar(30) NOT NULL, -- service, product, package...
+    item_type varchar(30) NOT NULL,
     reference_id uuid,
     description varchar(255) NOT NULL,
     quantity numeric(14,4) NOT NULL CHECK (quantity > 0),
@@ -593,8 +538,6 @@ CREATE TABLE sale_items (
 );
 CREATE INDEX idx_sale_items_sale ON sale_items(tenant_id, sale_id);
 
--- Un pago puede ser de una venta o, sin venta todavía, el adelanto de una cita.
--- Los pagos en línea nacen 'pending' y los confirma el aviso de la pasarela.
 CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
@@ -602,13 +545,13 @@ CREATE TABLE payments (
     sale_id uuid NULL REFERENCES sales(id),
     appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
     customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
-    method varchar(30) NOT NULL, -- cash, card, transfer, yape, plin, link, deposit
+    method varchar(30) NOT NULL,
     status varchar(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('pending', 'confirmed', 'failed', 'expired', 'refunded')),
-    amount numeric(14,2) NOT NULL CHECK (amount <> 0), -- negativo: devolución
-    change_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (change_amount >= 0), -- vuelto entregado (efectivo)
-    external_reference varchar(190), -- número de operación, voucher o referencia de la pasarela
-    provider varchar(40) NULL, -- pasarela que lo procesa, si es en línea
-    payment_url varchar(500) NULL, -- enlace de pago
+    amount numeric(14,2) NOT NULL CHECK (amount <> 0),
+    change_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (change_amount >= 0),
+    external_reference varchar(190),
+    provider varchar(40) NULL,
+    payment_url varchar(500) NULL,
     expires_at timestamptz NULL,
     confirmed_at timestamptz NULL,
     cash_session_id uuid NULL REFERENCES cash_sessions(id) ON DELETE SET NULL,
@@ -620,8 +563,6 @@ CREATE TABLE payments (
 CREATE INDEX idx_payments_sale ON payments(tenant_id, sale_id);
 CREATE INDEX idx_payments_tenant_created ON payments(tenant_id, created_at);
 
--- Lo que entra y sale del efectivo de un turno. El monto siempre es positivo:
--- el tipo dice si suma (sale, income) o resta (expense, withdrawal, refund).
 CREATE TABLE cash_movements (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
@@ -636,7 +577,6 @@ CREATE TABLE cash_movements (
 );
 CREATE INDEX idx_cash_movements_session ON cash_movements(tenant_id, cash_session_id);
 
--- Series de comprobantes de la empresa (B001, F001, T001) y su siguiente número.
 CREATE TABLE invoice_series (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -647,9 +587,6 @@ CREATE TABLE invoice_series (
     UNIQUE (tenant_id, doc_type, serie)
 );
 
--- Comprobantes emitidos. 'ticket' es el comprobante interno (no va a SUNAT);
--- boleta y factura pasan por el proveedor de facturación de la empresa, que
--- mientras no se configure uno real es una simulación.
 CREATE TABLE invoices (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -659,21 +596,19 @@ CREATE TABLE invoices (
     doc_type varchar(20) NOT NULL CHECK (doc_type IN ('ticket', 'boleta', 'factura', 'nota_credito')),
     serie varchar(4) NOT NULL,
     number integer NOT NULL,
-    -- Datos del cliente tal como salieron en el comprobante.
     customer_doc_type varchar(20) NULL,
     customer_doc_number varchar(30) NULL,
     customer_name varchar(255) NULL,
     customer_address varchar(255) NULL,
-    taxable numeric(14,2) NOT NULL DEFAULT 0, -- base imponible
+    taxable numeric(14,2) NOT NULL DEFAULT 0,
     tax numeric(14,2) NOT NULL DEFAULT 0,
     total numeric(14,2) NOT NULL DEFAULT 0,
     status varchar(20) NOT NULL DEFAULT 'issued' CHECK (status IN ('issued', 'voided')),
     provider varchar(40) NOT NULL DEFAULT 'simulated',
-    simulated boolean NOT NULL DEFAULT true, -- no se envió a SUNAT de verdad
+    simulated boolean NOT NULL DEFAULT true,
     sunat_status varchar(20) NOT NULL DEFAULT 'pending' CHECK (sunat_status IN ('pending', 'accepted', 'rejected', 'not_applicable')),
     sunat_message varchar(255) NULL,
-    external_id varchar(190) NULL, -- identificador que devuelve el proveedor
-    -- Solo en una nota de crédito: el comprobante que corrige y por qué.
+    external_id varchar(190) NULL,
     reference_invoice_id uuid NULL REFERENCES invoices(id) ON DELETE SET NULL,
     reason varchar(255) NULL,
     issued_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
@@ -683,8 +618,6 @@ CREATE TABLE invoices (
 );
 CREATE INDEX idx_invoices_sale ON invoices(tenant_id, sale_id);
 
--- Devoluciones de una venta: cuánto se devolvió, por qué medio y por qué. Cada
--- una tiene su pago en negativo y, si la venta tenía comprobante, su nota de crédito.
 CREATE TABLE sale_refunds (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -693,7 +626,7 @@ CREATE TABLE sale_refunds (
     method varchar(30) NOT NULL,
     reason varchar(255) NOT NULL,
     payment_id uuid NULL REFERENCES payments(id) ON DELETE SET NULL,
-    invoice_id uuid NULL REFERENCES invoices(id) ON DELETE SET NULL, -- nota de crédito
+    invoice_id uuid NULL REFERENCES invoices(id) ON DELETE SET NULL,
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -714,10 +647,8 @@ CREATE TABLE audit_events (
 );
 CREATE INDEX idx_audit_tenant_time ON audit_events(tenant_id, created_at);
 
--- Catálogo de módulos del producto. Los módulos base (is_core) están en todos
--- los planes; el resto se activa por plan y se puede apagar por rubro o empresa.
 CREATE TABLE saas_modules (
-    key varchar(50) PRIMARY KEY, -- agenda, crm, booking, pos, inventory...
+    key varchar(50) PRIMARY KEY,
     name varchar(150) NOT NULL,
     is_core boolean NOT NULL DEFAULT false,
     sort_order int NOT NULL DEFAULT 0,
@@ -725,11 +656,9 @@ CREATE TABLE saas_modules (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Configuración de la plataforma (del SaaS, no de una empresa): marca, apariencia,
--- registro de empresas y soporte. Una fila por clave; lo que falta usa su valor por defecto.
 CREATE TABLE platform_settings (
-    key varchar(60) PRIMARY KEY, -- product_name, accent_color, allow_tenant_signup...
-    value jsonb NULL, -- NULL = dato opcional vacío (p. ej. sin correo de soporte)
+    key varchar(60) PRIMARY KEY,
+    value jsonb NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -744,7 +673,6 @@ CREATE TABLE saas_plans (
     price_yearly numeric(14,2) NOT NULL DEFAULT 0 CHECK (price_yearly >= 0),
     currency varchar(10) NOT NULL DEFAULT 'PEN',
     
-    -- Bloques agrupados en JSONB
     trial_config jsonb NOT NULL DEFAULT '{}',
     subscription_config jsonb NOT NULL DEFAULT '{}',
     modules jsonb NOT NULL DEFAULT '{}',
@@ -783,15 +711,15 @@ CREATE TABLE IF NOT EXISTS subscription_invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    status_id UUID NOT NULL REFERENCES statuses(id), -- Vinculado al módulo de estados (ej. pagado, pendiente, anulado)
+    status_id UUID NOT NULL REFERENCES statuses(id),
     amount NUMERIC(12, 2) NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'PEN',
-    billing_reason VARCHAR(50), -- Ej: 'subscription_create', 'subscription_cycle', 'manual'
+    billing_reason VARCHAR(50),
     invoice_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     due_date TIMESTAMP WITH TIME ZONE,
     paid_at TIMESTAMP WITH TIME ZONE,
-    external_invoice_id VARCHAR(255), -- Referencia del pago: n.º de operación o id de la pasarela
-    period_start TIMESTAMP WITH TIME ZONE, -- Periodo de servicio que cubre el cobro
+    external_invoice_id VARCHAR(255),
+    period_start TIMESTAMP WITH TIME ZONE,
     period_end TIMESTAMP WITH TIME ZONE,
     notes VARCHAR(255),
     hosted_invoice_url TEXT,
@@ -818,9 +746,7 @@ CREATE TABLE roles (
     slug varchar(100) NOT NULL,
     description varchar(255),
     is_system boolean NOT NULL DEFAULT false,
-    -- Cuándo recibió sus permisos de fábrica. Vacío en un rol de fábrica: la API se los da la primera vez que hace falta.
     permissions_seeded_at timestamptz,
-    -- Qué tanto ve quien tiene el rol: toda la empresa (tenant), solo su sede (branch) o solo lo suyo (own).
     scope varchar(20) NOT NULL DEFAULT 'tenant' CHECK (scope IN ('tenant', 'branch', 'own')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -842,8 +768,6 @@ CREATE TABLE user_roles (
 );
 CREATE INDEX idx_user_roles_tenant ON user_roles(tenant_id, user_id);
 
--- Excepciones por persona: un permiso que su rol tiene y a ella se le quitó
--- (granted = false), o uno que su rol no tiene y a ella se le dio (granted = true).
 CREATE TABLE user_permissions (
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -855,7 +779,6 @@ CREATE TABLE user_permissions (
 );
 CREATE INDEX idx_user_permissions_tenant ON user_permissions(tenant_id, user_id);
 
--- Sede a la que pertenece una cuenta del personal (la del gerente de sede, por ejemplo).
 ALTER TABLE users ADD COLUMN branch_id uuid NULL REFERENCES branches(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS personal_access_tokens (
@@ -880,8 +803,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     last_activity INT NOT NULL
 );
 
--- Caché de Laravel (CACHE_STORE=database). La usa el límite de intentos
--- (throttle) del login y del registro de clientes.
 CREATE TABLE IF NOT EXISTS cache (
     key VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL,
@@ -894,26 +815,13 @@ CREATE TABLE IF NOT EXISTS cache_locks (
     expiration INT NOT NULL
 );
 
--- =====================================================================
--- 6. MÓDULOS AMPLIADOS (referencia: prototipo AGENDA360)
---    Dependientes · Inventario · Fidelización · Marketing · Presupuestos
---    · Fichas configurables y seguimiento · Lista de espera
---
---    Convención: los estados de flujo interno (borrador, enviado, etc.)
---    usan varchar + CHECK porque son máquinas de estado del sistema.
---    La tabla "statuses" queda para estados personalizables por tenant.
--- =====================================================================
-
--- ---------------------------------------------------------------------
--- 6.1 Dependientes del cliente (mascotas, hijos, familiares a cargo)
--- ---------------------------------------------------------------------
 CREATE TABLE customer_dependents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     name varchar(150) NOT NULL,
-    kind varchar(50) NULL, -- mascota, hijo, familiar
-    species varchar(80) NULL, -- Perro, Gato (rubro veterinario)
+    kind varchar(50) NULL,
+    species varchar(80) NULL,
     breed varchar(80) NULL,
     birth_date date NULL,
     biological_sex varchar(20) NULL,
@@ -929,12 +837,9 @@ ALTER TABLE appointments
     ADD CONSTRAINT fk_appointments_customer_dependent
     FOREIGN KEY (customer_dependent_id) REFERENCES customer_dependents(id) ON DELETE SET NULL;
 
--- ---------------------------------------------------------------------
--- 6.2 Inventario
--- ---------------------------------------------------------------------
 CREATE TABLE units (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NULL REFERENCES tenants(id) ON DELETE CASCADE, -- NULL = unidad global del SaaS
+    tenant_id uuid NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name varchar(80) NOT NULL,
     abbreviation varchar(15) NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -987,7 +892,7 @@ CREATE TABLE products (
     barcode varchar(60) NULL,
     name varchar(200) NOT NULL,
     description text,
-    kind varchar(20) NOT NULL DEFAULT 'retail' CHECK (kind IN ('retail', 'supply', 'both')), -- venta, insumo interno o ambos
+    kind varchar(20) NOT NULL DEFAULT 'retail' CHECK (kind IN ('retail', 'supply', 'both')),
     cost numeric(14,2) NOT NULL DEFAULT 0 CHECK (cost >= 0),
     price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
     min_stock numeric(14,4) NOT NULL DEFAULT 0 CHECK (min_stock >= 0),
@@ -1013,20 +918,18 @@ CREATE TABLE warehouses (
     UNIQUE (tenant_id, name)
 );
 
--- Saldo actual por almacén y producto
 CREATE TABLE stock_balances (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     warehouse_id uuid NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
     product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     quantity numeric(14,4) NOT NULL DEFAULT 0,
-    in_transit numeric(14,4) NOT NULL DEFAULT 0 CHECK (in_transit >= 0), -- enviado por transferencia y aún no recibido
+    in_transit numeric(14,4) NOT NULL DEFAULT 0 CHECK (in_transit >= 0),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (warehouse_id, product_id)
 );
 CREATE INDEX idx_stock_balances_tenant_product ON stock_balances(tenant_id, product_id);
 
--- Kardex: cada entrada o salida. quantity lleva signo (+ entrada, - salida)
 CREATE TABLE inventory_movements (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1036,7 +939,7 @@ CREATE TABLE inventory_movements (
     quantity numeric(14,4) NOT NULL CHECK (quantity <> 0),
     unit_cost numeric(14,2) NULL CHECK (unit_cost >= 0),
     balance_after numeric(14,4) NULL,
-    reference_type varchar(50) NULL, -- sale, appointment, purchase_order, stock_transfer
+    reference_type varchar(50) NULL,
     reference_id uuid NULL,
     reason varchar(255) NULL,
     actor_user_id uuid NULL REFERENCES users(id) ON DELETE SET NULL,
@@ -1045,7 +948,6 @@ CREATE TABLE inventory_movements (
 CREATE INDEX idx_inventory_movements_product ON inventory_movements(tenant_id, product_id, created_at);
 CREATE INDEX idx_inventory_movements_warehouse ON inventory_movements(tenant_id, warehouse_id, created_at);
 
--- Receta de insumos: qué productos consume un servicio al completarse
 CREATE TABLE service_supplies (
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     service_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
@@ -1113,9 +1015,6 @@ CREATE TABLE purchase_order_items (
 );
 CREATE INDEX idx_purchase_order_items_order ON purchase_order_items(tenant_id, purchase_order_id);
 
--- ---------------------------------------------------------------------
--- 6.3 Fidelización: membresías, paquetes, puntos y gift cards
--- ---------------------------------------------------------------------
 CREATE TABLE membership_plans (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1125,7 +1024,7 @@ CREATE TABLE membership_plans (
     billing_period varchar(20) NOT NULL DEFAULT 'monthly' CHECK (billing_period IN ('monthly', 'quarterly', 'semiannual', 'yearly')),
     discount_percent numeric(5,2) NOT NULL DEFAULT 0 CHECK (discount_percent BETWEEN 0 AND 100),
     sessions_included integer NOT NULL DEFAULT 0 CHECK (sessions_included >= 0),
-    benefits jsonb NOT NULL DEFAULT '{}', -- servicios incluidos, descuentos por categoría, etc.
+    benefits jsonb NOT NULL DEFAULT '{}',
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -1142,7 +1041,7 @@ CREATE TABLE memberships (
     starts_at date NOT NULL,
     ends_at date NOT NULL,
     paused_at timestamptz NULL,
-    paused_days integer NOT NULL DEFAULT 0 CHECK (paused_days >= 0), -- la pausa extiende la vigencia
+    paused_days integer NOT NULL DEFAULT 0 CHECK (paused_days >= 0),
     auto_renew boolean NOT NULL DEFAULT false,
     cancelled_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -1158,7 +1057,7 @@ CREATE TABLE package_plans (
     name varchar(150) NOT NULL,
     description text,
     price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
-    validity_days integer NULL CHECK (validity_days > 0), -- NULL = sin vencimiento
+    validity_days integer NULL CHECK (validity_days > 0),
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -1174,7 +1073,6 @@ CREATE TABLE package_plan_items (
     UNIQUE (package_plan_id, service_id)
 );
 
--- Paquete comprado por un cliente
 CREATE TABLE customer_packages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1189,7 +1087,6 @@ CREATE TABLE customer_packages (
 );
 CREATE INDEX idx_customer_packages_customer ON customer_packages(tenant_id, customer_id);
 
--- Saldo de sesiones por servicio dentro del paquete comprado
 CREATE TABLE customer_package_items (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1213,7 +1110,6 @@ CREATE TABLE package_usages (
 );
 CREATE INDEX idx_package_usages_package ON package_usages(tenant_id, customer_package_id);
 
--- Movimientos de puntos. points lleva signo (+ acumula, - canjea o vence)
 CREATE TABLE loyalty_transactions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1258,10 +1154,6 @@ CREATE TABLE gift_card_transactions (
 );
 CREATE INDEX idx_gift_card_transactions_card ON gift_card_transactions(tenant_id, gift_card_id);
 
--- ---------------------------------------------------------------------
--- 6.4 Marketing: etiquetas, consentimientos, plantillas, campañas,
---     cupones, automatizaciones y bitácora de mensajes
--- ---------------------------------------------------------------------
 CREATE TABLE customer_tags (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1279,14 +1171,13 @@ CREATE TABLE customer_tag_assignments (
     PRIMARY KEY (customer_id, customer_tag_id)
 );
 
--- Consentimiento por canal (Ley 29733 de protección de datos personales)
 CREATE TABLE customer_consents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     channel varchar(30) NOT NULL CHECK (channel IN ('whatsapp', 'email', 'sms', 'marketing', 'data_processing')),
     granted boolean NOT NULL DEFAULT false,
-    source varchar(50) NULL, -- staff, booking, portal
+    source varchar(50) NULL,
     granted_at timestamptz NULL,
     revoked_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -1301,7 +1192,7 @@ CREATE TABLE marketing_templates (
     channel varchar(30) NOT NULL CHECK (channel IN ('whatsapp', 'email', 'sms')),
     subject varchar(200) NULL,
     body text NOT NULL,
-    variables jsonb NOT NULL DEFAULT '[]', -- ej: ["first_name", "appointment_date"]
+    variables jsonb NOT NULL DEFAULT '[]',
     status varchar(30) NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -1316,7 +1207,7 @@ CREATE TABLE coupons (
     discount_type varchar(20) NOT NULL CHECK (discount_type IN ('percent', 'amount')),
     discount_value numeric(14,2) NOT NULL CHECK (discount_value > 0),
     min_purchase numeric(14,2) NOT NULL DEFAULT 0 CHECK (min_purchase >= 0),
-    max_uses integer NULL CHECK (max_uses > 0), -- NULL = ilimitado
+    max_uses integer NULL CHECK (max_uses > 0),
     used_count integer NOT NULL DEFAULT 0 CHECK (used_count >= 0),
     starts_at timestamptz NULL,
     ends_at timestamptz NULL,
@@ -1346,7 +1237,7 @@ CREATE TABLE marketing_campaigns (
     coupon_id uuid NULL REFERENCES coupons(id) ON DELETE SET NULL,
     subject varchar(200) NULL,
     body text NULL,
-    segment jsonb NOT NULL DEFAULT '{}', -- ej: {"type": "tag", "tag_id": "..."} o {"type": "inactive", "days": 90}
+    segment jsonb NOT NULL DEFAULT '{}',
     status varchar(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'sending', 'sent', 'cancelled')),
     scheduled_at timestamptz NULL,
     sent_at timestamptz NULL,
@@ -1363,7 +1254,7 @@ CREATE TABLE marketing_campaign_recipients (
     marketing_campaign_id uuid NOT NULL REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     status varchar(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'failed', 'skipped')),
-    skip_reason varchar(255) NULL, -- ej: sin consentimiento, sin teléfono
+    skip_reason varchar(255) NULL,
     sent_at timestamptz NULL,
     UNIQUE (marketing_campaign_id, customer_id)
 );
@@ -1372,7 +1263,7 @@ CREATE TABLE automation_rules (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name varchar(150) NOT NULL,
-    trigger_event varchar(60) NOT NULL, -- ej: appointment.completed, appointment.no_show, customer.inactive, customer.birthday
+    trigger_event varchar(60) NOT NULL,
     conditions jsonb NOT NULL DEFAULT '{}',
     channel varchar(30) NOT NULL CHECK (channel IN ('whatsapp', 'email', 'sms')),
     marketing_template_id uuid NULL REFERENCES marketing_templates(id) ON DELETE SET NULL,
@@ -1395,7 +1286,6 @@ CREATE TABLE automation_logs (
 );
 CREATE INDEX idx_automation_logs_rule ON automation_logs(tenant_id, automation_rule_id, created_at);
 
--- Bitácora de mensajes enviados o recibidos por cliente
 CREATE TABLE customer_messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1416,9 +1306,6 @@ CREATE TABLE customer_messages (
 );
 CREATE INDEX idx_customer_messages_customer ON customer_messages(tenant_id, customer_id, created_at);
 
--- ---------------------------------------------------------------------
--- 6.5 Presupuestos y planes de tratamiento
--- ---------------------------------------------------------------------
 CREATE TABLE quotes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1437,7 +1324,7 @@ CREATE TABLE quotes (
     notes text,
     accepted_at timestamptz NULL,
     accepted_via varchar(20) NULL CHECK (accepted_via IN ('staff', 'portal')),
-    sale_id uuid NULL REFERENCES sales(id) ON DELETE SET NULL, -- venta o cuenta por cobrar generada al aceptar
+    sale_id uuid NULL REFERENCES sales(id) ON DELETE SET NULL,
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -1451,20 +1338,19 @@ CREATE TABLE quote_items (
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     quote_id uuid NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
     item_type varchar(30) NOT NULL CHECK (item_type IN ('service', 'product', 'package', 'other')),
-    reference_id uuid NULL, -- id del servicio, producto o paquete según item_type
+    reference_id uuid NULL,
     description varchar(255) NOT NULL,
     quantity numeric(14,4) NOT NULL CHECK (quantity > 0),
     unit_price numeric(14,2) NOT NULL CHECK (unit_price >= 0),
     discount numeric(14,2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
     total numeric(14,2) NOT NULL CHECK (total >= 0),
-    sessions_total integer NOT NULL DEFAULT 0 CHECK (sessions_total >= 0), -- plan de sesiones al aceptar
+    sessions_total integer NOT NULL DEFAULT 0 CHECK (sessions_total >= 0),
     sessions_used integer NOT NULL DEFAULT 0 CHECK (sessions_used >= 0),
-    metadata jsonb NOT NULL DEFAULT '{}', -- ej: pieza dental en odontograma
+    metadata jsonb NOT NULL DEFAULT '{}',
     sort_order integer NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_quote_items_quote ON quote_items(tenant_id, quote_id);
 
--- Cuotas de pago del presupuesto aceptado
 CREATE TABLE quote_installments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1490,17 +1376,11 @@ CREATE TABLE quote_status_history (
 );
 CREATE INDEX idx_quote_status_history_quote ON quote_status_history(tenant_id, quote_id);
 
--- ---------------------------------------------------------------------
--- 6.6 Fichas de atención configurables y controles de seguimiento
---     (medical_records se mantiene como ficha clínica SOAP fija)
--- ---------------------------------------------------------------------
 CREATE TABLE record_templates (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name varchar(150) NOT NULL,
     description varchar(255) NULL,
-    -- Definición de campos: [{"key","label","type","required","options","placeholder","days","step"}]
-    -- type: text, textarea, number, select, multiselect, date, boolean, scale, odontogram, next_control
     fields jsonb NOT NULL DEFAULT '[]',
     consent_text text NULL,
     require_consent boolean NOT NULL DEFAULT false,
@@ -1513,7 +1393,6 @@ CREATE TABLE record_templates (
     UNIQUE (tenant_id, name)
 );
 
--- Servicios que usan cada plantilla de ficha
 CREATE TABLE record_template_services (
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     record_template_id uuid NOT NULL REFERENCES record_templates(id) ON DELETE CASCADE,
@@ -1526,29 +1405,28 @@ CREATE TABLE care_records (
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     branch_id uuid NULL REFERENCES branches(id) ON DELETE SET NULL,
     record_template_id uuid NULL REFERENCES record_templates(id) ON DELETE SET NULL,
-    template_snapshot jsonb NOT NULL DEFAULT '[]', -- copia de los campos al momento de llenar la ficha
+    template_snapshot jsonb NOT NULL DEFAULT '[]',
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     customer_dependent_id uuid NULL REFERENCES customer_dependents(id) ON DELETE SET NULL,
     appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
     professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
-    data jsonb NOT NULL DEFAULT '{}', -- valores capturados por clave de campo
+    data jsonb NOT NULL DEFAULT '{}',
     consent_accepted boolean NOT NULL DEFAULT false,
     consent_accepted_at timestamptz NULL,
     signature_url varchar(255) NULL,
-    is_private boolean NOT NULL DEFAULT false, -- visible solo para su autor
+    is_private boolean NOT NULL DEFAULT false,
     status varchar(30) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'signed', 'locked')),
-    template_name varchar(150) NULL, -- nombre de la plantilla al llenar la ficha
-    consent_text text NULL, -- texto de consentimiento que se aceptó
-    require_consent boolean NOT NULL DEFAULT false, -- si la plantilla lo exigía al llenar la ficha
+    template_name varchar(150) NULL,
+    consent_text text NULL,
+    require_consent boolean NOT NULL DEFAULT false,
     signed_at timestamptz NULL,
     signed_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
-    locked_at timestamptz NULL, -- desde ese momento solo se admiten notas (adendas)
+    locked_at timestamptz NULL,
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_care_records_customer ON care_records(tenant_id, customer_id, created_at);
--- Una sola ficha por cita.
 CREATE UNIQUE INDEX idx_care_records_appointment ON care_records(appointment_id) WHERE appointment_id IS NOT NULL;
 
 CREATE TABLE care_record_addenda (
@@ -1561,34 +1439,29 @@ CREATE TABLE care_record_addenda (
 );
 CREATE INDEX idx_care_record_addenda_record ON care_record_addenda(tenant_id, care_record_id);
 
--- Controles y seguimiento (vacuna, profilaxis, retoque, próxima sesión). Nacen de la
--- ficha de una atención, del servicio atendido (services.recall_*) o los registra el personal.
 CREATE TABLE recalls (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     customer_dependent_id uuid NULL REFERENCES customer_dependents(id) ON DELETE SET NULL,
     care_record_id uuid NULL REFERENCES care_records(id) ON DELETE SET NULL,
-    source_appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL, -- cita de la atención que lo originó
+    source_appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
     service_id uuid NULL REFERENCES services(id) ON DELETE SET NULL,
     professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
     label varchar(150) NOT NULL,
     due_date date NOT NULL,
     status varchar(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'notified', 'booked', 'done', 'cancelled')),
     notified_at timestamptz NULL,
-    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL, -- cita en la que se convirtió
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
     notes text NULL,
-    closed_reason varchar(255) NULL, -- por qué se descartó o se dio por realizado sin cita
-    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL, -- solo los registrados a mano
+    closed_reason varchar(255) NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_recalls_tenant_due ON recalls(tenant_id, status, due_date);
 CREATE INDEX idx_recalls_customer ON recalls(tenant_id, customer_id);
 
--- ---------------------------------------------------------------------
--- 6.7 Lista de espera
--- ---------------------------------------------------------------------
 CREATE TABLE waitlist_entries (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1596,17 +1469,17 @@ CREATE TABLE waitlist_entries (
     customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     customer_dependent_id uuid NULL REFERENCES customer_dependents(id) ON DELETE SET NULL,
     service_id uuid NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL, -- NULL = cualquier profesional
+    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
     date_from date NOT NULL,
     date_to date NULL,
-    time_from time NULL, -- franja horaria preferida
+    time_from time NULL,
     time_to time NULL,
     notes text,
     status varchar(30) NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'notified', 'booked', 'expired', 'cancelled')),
     priority integer NOT NULL DEFAULT 0,
     notified_at timestamptz NULL,
     expires_at timestamptz NULL,
-    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL, -- cita obtenida desde la lista
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
     created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),

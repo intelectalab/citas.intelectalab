@@ -15,11 +15,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Support\Access;
 
-/**
- * Ventas y pagos de la empresa: consultarlos, anular una venta sin dinero
- * cobrado y devolver una que ya lo tiene. Como Caja, lo ve quien no es solo
- * profesional; anular y devolver son del administrador.
- */
 class SalesController extends Controller
 {
     private const MAX_ROWS = 500;
@@ -29,7 +24,6 @@ class SalesController extends Controller
         $user = $request->user();
         abort_unless($user->tenant, 403);
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
-        // Quién ve las ventas lo decide el permiso sales.view de cada ruta.
 
         return $user->tenant->loadMissing(['settings', 'activeSubscription.plan']);
     }
@@ -43,7 +37,6 @@ class SalesController extends Controller
     {
         $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $id)->first();
         abort_unless($sale, 404);
-        // Quien trabaja solo con su sede no abre ventas de otra.
         Access::assertBranch(request()->user(), $sale->branch_id);
 
         return $sale;
@@ -71,7 +64,6 @@ class SalesController extends Controller
 
         return response()->json([
             'can_manage' => $request->user()->allows('sales.delete'),
-            // Si la empresa no cobra antes de atender, puede haber citas atendidas que nadie cobró.
             'unbilled'   => Sales::mustPayFirst($tenant) ? null : $this->unbilled($tenant),
             'sales'      => $sales->map(fn ($s) => [
                 'id'               => $s->id,
@@ -94,9 +86,6 @@ class SalesController extends Controller
         ]);
     }
 
-    /**
-     * Citas atendidas con precio y sin venta: se atendieron y nadie las cobró.
-     */
     private function unbilled(Tenant $tenant): array
     {
         return DB::table('appointments as a')
@@ -217,9 +206,6 @@ class SalesController extends Controller
         return response()->json($this->detail($tenant, $this->find($tenant, $sale), $request->user()));
     }
 
-    /**
-     * Todos los pagos y devoluciones, del más reciente al más antiguo.
-     */
     public function payments(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -245,7 +231,6 @@ class SalesController extends Controller
                 'at'           => Carbon::parse($p->created_at)->toIso8601String(),
                 'method'       => $p->method,
                 'method_label' => $labels[$p->method] ?? $p->method,
-                // Un monto negativo es una devolución.
                 'kind'         => (float) $p->amount < 0 ? 'refund' : 'payment',
                 'status'       => $p->status,
                 'amount'       => round((float) $p->amount, 2),

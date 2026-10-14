@@ -11,12 +11,10 @@ import { portalError, type PortalAppointment, type PortalAvailability, type Port
 interface BookingFlowProps {
   overview: PortalOverview;
   catalog: PortalCatalog;
-  // Con una cita, el flujo solo pide la nueva fecha y hora.
   reschedule?: PortalAppointment | null;
   onDone: () => void;
   onExit: () => void;
   onDependentAdded: (dependent: PortalDependent) => void;
-  // Se anotó en la lista de espera en vez de reservar.
   onWaitlisted: () => void;
 }
 
@@ -32,7 +30,6 @@ const STEP_TITLES: Record<Step, string> = {
 };
 
 const DAYS_PER_PAGE = 7;
-// Cuántos días hacia adelante se revisan al buscar el próximo con horarios.
 const SEARCH_DAYS = 21;
 
 const optionClass = (active: boolean, disabled = false) =>
@@ -43,8 +40,6 @@ const optionClass = (active: boolean, disabled = false) =>
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 
-// Reserva en línea, paso a paso: para quién, qué servicio, con quién y cuándo.
-// También sirve para cambiar la fecha de una cita que el cliente ya tiene.
 export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded, onWaitlisted }: BookingFlowProps) {
   const vocab = useVocabulary();
   const policies = overview.policies;
@@ -53,7 +48,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
   const [dependentId, setDependentId] = useState(overview.dependents.items.length === 1 ? overview.dependents.items[0].id : '');
   const [serviceId, setServiceId] = useState(reschedule?.service?.id ?? '');
   const [branchId, setBranchId] = useState(reschedule?.branch?.id ?? (catalog.branches.length === 1 ? catalog.branches[0].id : ''));
-  // '' = cualquiera disponible.
   const [professionalId, setProfessionalId] = useState(reschedule?.professional?.id ?? '');
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState('');
@@ -67,7 +61,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
   const [error, setError] = useState('');
   const [done, setDone] = useState<PortalAppointment | null>(null);
 
-  // Lista de espera: cuando ningún horario le sirve.
   const [waitOpen, setWaitOpen] = useState(false);
   const [waitTime, setWaitTime] = useState('any');
   const [waitDays, setWaitDays] = useState('');
@@ -99,7 +92,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
 
   const service = catalog.services.find((s) => s.id === serviceId) ?? null;
 
-  // Quién puede atender el servicio en la sede elegida.
   const professionals = useMemo(
     () => catalog.professionals.filter((p) =>
       (!branchId || p.branch_ids.includes(branchId)) &&
@@ -135,7 +127,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
       },
     }).then((res) => res.data as PortalAvailability);
 
-  // Horarios del día elegido.
   useEffect(() => {
     if (step !== 'when' || !serviceId || !branchId) return;
 
@@ -154,7 +145,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
     setError('');
   };
 
-  // Recorre los días siguientes hasta dar con uno que tenga horarios.
   const findNextDay = async () => {
     setSearching(true);
     setError('');
@@ -227,7 +217,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
       setDone(res.data);
     } catch (err: any) {
       setError(portalError(err, 'No se pudo completar la reserva.'));
-      // El horario se ocupó mientras tanto: se vuelve a elegir.
       if (err?.response?.data?.code === 'SLOT_UNAVAILABLE') {
         setTime('');
         setStepIndex(steps.indexOf('when'));
@@ -486,7 +475,6 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
               </div>
             )}
 
-            {/* Si nada le acomoda, se anota y se le avisa cuando se libere un horario. */}
             {!isReschedule && !loadingTimes && (
               <div className="p-4 rounded-2xl border border-dashed border-slate-300 bg-white space-y-3" data-waitlist-box>
                 {!waitOpen ? (

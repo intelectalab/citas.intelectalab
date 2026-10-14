@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * Aviso dentro del sistema para una persona del equipo: lo ve en la campana.
- */
 class UserNotification extends Model
 {
     use HasUuids;

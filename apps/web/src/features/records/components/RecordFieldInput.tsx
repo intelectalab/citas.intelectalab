@@ -9,7 +9,6 @@ interface RecordFieldInputProps {
   field: RecordField;
   value: RecordValue;
   onChange: (value: RecordValue) => void;
-  // Solo lectura: ficha bloqueada o que no se puede editar.
   disabled?: boolean;
 }
 
@@ -21,7 +20,6 @@ const chip = (active: boolean, disabled?: boolean) =>
     active ? 'bg-[#022340] border-[#022340] text-white font-semibold' : 'bg-white border-slate-200 text-slate-700'
   } ${disabled ? 'cursor-default' : active ? '' : 'hover:border-[#3F768C]'} ${disabled && !active ? 'opacity-50' : ''}`;
 
-// Control para llenar un campo de la ficha, según su tipo.
 export default function RecordFieldInput({ field, value, onChange, disabled = false }: RecordFieldInputProps) {
   const label = field.label;
 
@@ -174,7 +172,6 @@ export default function RecordFieldInput({ field, value, onChange, disabled = fa
     case 'odontogram': {
       const teeth = (value && typeof value === 'object' && !Array.isArray(value) ? value : {}) as Record<string, string>;
 
-      // Cada clic pasa la pieza al siguiente estado; tras el último vuelve a sana.
       const cycle = (tooth: string) => {
         const index = TOOTH_STATES.findIndex((state) => state.key === teeth[tooth]);
         const next = TOOTH_STATES[index + 1];

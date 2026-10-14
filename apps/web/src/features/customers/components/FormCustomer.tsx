@@ -21,9 +21,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
   const vocab = useVocabulary();
   const clientLower = vocab.client.toLowerCase();
   const { user } = useAuth();
-  // Mascotas u otros dependientes: solo en los rubros que los usan.
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
-  // Datos clínicos (tipo de sangre, antecedentes): solo en los rubros de salud.
   const clinical = Boolean(user?.tenant?.rules?.['customers.clinical_fields']);
   const [pendingDependents, setPendingDependents] = useState<CustomerDependent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -112,14 +110,12 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
 
   useEffect(() => {
     if (isOpen) {
-      // 1. Cargar etapas del pipeline
       api.get('/pipeline-stages', {
         params: { pipeline_id: 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01' }
       })
         .then(res => setStages(res.data))
         .catch(err => console.error('Error cargando etapas de clientes:', err));
 
-      // 2. Cargar tipos de documento usando la ruta correcta del backend
       api.get('/type-documents')
         .then(res => {
           setDocumentTypes(res.data);
@@ -140,7 +136,6 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
         onSubmitSuccess();
       } else {
         const res = await api.post('/customers', usesDependents ? { ...form, dependents: pendingDependents } : form);
-        // Quien abrió el formulario puede necesitar al cliente recién creado (p. ej. para agendarle una cita).
         onSubmitSuccess(res.data?.customer);
       }
       onClose();

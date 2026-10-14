@@ -1,5 +1,3 @@
-// Tipos y utilidades de las fichas de atención: plantillas de la empresa y fichas llenadas.
-
 export interface RecordField {
   key: string;
   label: string;
@@ -28,7 +26,6 @@ export interface TemplateService {
   id: string;
   name: string;
   category: string | null;
-  // Plantilla que usa hoy ese servicio, si tiene.
   template_id: string | null;
 }
 
@@ -40,15 +37,11 @@ export interface CareRecord {
   status: 'draft' | 'signed' | 'locked';
   template_name: string | null;
   is_private: boolean;
-  // Privada y escrita por otra persona: se sabe que existe, no qué dice.
   hidden: boolean;
   can_edit: boolean;
   can_add_note: boolean;
-  // El administrador puede abrirla con un motivo que queda registrado.
   can_request_access?: boolean;
-  // Se lee una ficha privada ajena por un acceso de emergencia vigente.
   reading_by_emergency?: boolean;
-  // Quién abrió esta ficha privada por emergencia, cuándo y por qué.
   emergency_accesses?: { by: string | null; at: string; reason: string | null }[];
   created_at: string;
   signed_at: string | null;
@@ -62,14 +55,12 @@ export interface CareRecord {
   professional_id?: string | null;
   consent_accepted: boolean;
   consent_text?: string | null;
-  // Lo que exigía la plantilla cuando se empezó la ficha.
   require_consent?: boolean;
   fields?: RecordField[];
   data?: RecordData;
   addenda?: { note: string; by: string | null; at: string }[];
 }
 
-// Lo que entrega la API para la ficha de una cita.
 export interface AppointmentRecord {
   appointment: {
     id: string;
@@ -88,7 +79,6 @@ export interface AppointmentRecord {
   required_to_complete: boolean;
   lock_hours: number;
   previous: CareRecord[];
-  // El servicio cambió de plantilla después de empezar este borrador: la plantilla actual.
   template_update?: { name: string; fields: RecordField[]; consent_text: string | null; require_consent: boolean } | null;
 }
 
@@ -107,7 +97,6 @@ export const FIELD_TYPES: { value: string; label: string }[] = [
 
 export const FIELD_TYPE_LABELS: Record<string, string> = Object.fromEntries(FIELD_TYPES.map((type) => [type.value, type.label]));
 
-// Estados de una pieza del odontograma, en el orden en que se recorren con cada clic.
 export const TOOTH_STATES: { key: string; label: string; className: string }[] = [
   { key: 'caries', label: 'Caries', className: 'bg-rose-200 border-rose-200 text-rose-700' },
   { key: 'restored', label: 'Restaurada', className: 'bg-sky-200 border-sky-200 text-sky-700' },
@@ -116,7 +105,6 @@ export const TOOTH_STATES: { key: string; label: string; className: string }[] =
   { key: 'missing', label: 'Ausente', className: 'bg-slate-200 border-slate-300 text-slate-500 line-through' },
 ];
 
-// Piezas permanentes (numeración FDI), como se ven de frente: arriba y abajo.
 export const TEETH_ROWS: string[][] = [
   ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'],
   ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'],
@@ -133,5 +121,4 @@ export const isEmptyValue = (value: RecordValue): boolean =>
   (Array.isArray(value) && value.length === 0) ||
   (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0);
 
-// Campo recién agregado en el editor de plantillas.
 export const NEW_FIELD: RecordField = { key: '', label: '', type: 'text', required: false };

@@ -10,7 +10,6 @@ export type PortalAccess = 'no_email' | 'no_document' | 'pending' | 'active' | '
 
 interface CustomerPortalAccessProps {
   customer: { id: string; first_name: string; email?: string | null; portal_access?: PortalAccess };
-  // Palabra del rubro para el cliente (paciente, alumno...).
   clientWord: string;
   onChanged: () => void;
 }
@@ -23,8 +22,6 @@ const STATES: Record<PortalAccess, { label: string; badge: string }> = {
   no_document: { label: 'Falta su documento', badge: 'bg-amber-50 text-amber-700' },
 };
 
-// Acceso del cliente a su portal, dentro de su página. No hay cuenta aparte:
-// entra con el correo de su ficha y, la primera vez, con su número de documento.
 export default function CustomerPortalAccess({ customer, clientWord, onChanged }: CustomerPortalAccessProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

@@ -9,8 +9,6 @@ import { money, momentOf, SUNAT_LABELS, type SaleDetail } from '../sales';
 
 const row = 'flex justify-between gap-4';
 
-// Comprobante de una venta en formato de impresión (tira de 80 mm). Se abre
-// en su propia pestaña, sin el menú, y se imprime con el botón o con Ctrl+P.
 export default function SaleReceipt() {
   const params = useParams<{ id: string }>();
   const [sale, setSale] = useState<SaleDetail | null>(null);

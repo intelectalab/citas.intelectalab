@@ -3,12 +3,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from '@/lib/axios';
 
-// Configuración pública de la plataforma: marca y apariencia. La define el
-// administrador SaaS en /admin/configuration.
 export interface PlatformConfig {
   product_name: string;
   support_email: string | null;
-  // Color de lo que está "encendido" o "bien": interruptores y anillos de uso.
   accent_color: string;
   usage_warning_percent: number;
   usage_danger_percent: number;
@@ -26,7 +23,6 @@ export const PLATFORM_DEFAULTS: PlatformConfig = {
 
 interface PlatformContextType {
   platform: PlatformConfig;
-  // Aplica valores recién guardados sin volver a pedirlos.
   applyPlatform: (values: Partial<PlatformConfig>) => void;
 }
 
@@ -44,7 +40,6 @@ export const PlatformProvider = ({ children }: { children: ReactNode }) => {
       .catch(() => setPlatform(PLATFORM_DEFAULTS));
   }, []);
 
-  // El acento vive en una variable CSS para que lo usen los componentes y los estilos.
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', platform.accent_color);
   }, [platform.accent_color]);

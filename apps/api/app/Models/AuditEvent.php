@@ -7,10 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\Request;
 
-/**
- * Bitácora de acciones sensibles: lo que la plataforma hace sobre una empresa
- * (suspender, cambiar plan o rubro, entrar a su panel, registrar pagos).
- */
 class AuditEvent extends Model
 {
     use HasUuids;

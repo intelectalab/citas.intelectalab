@@ -19,8 +19,6 @@ export interface CustomerDependent {
 }
 
 interface CustomerDependentsProps {
-  // Con cliente guardado cada cambio va directo a la API. Sin cliente (alta),
-  // la lista queda en memoria y se envía junto con el cliente.
   customerId: string | null;
   onPendingChange: (dependents: CustomerDependent[]) => void;
 }
@@ -31,8 +29,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white';
 const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1';
 
-// Dependientes del cliente (mascotas de un tutor, hijos de un titular). Solo se
-// muestra en los rubros que los usan.
 export default function CustomerDependents({ customerId, onPendingChange }: CustomerDependentsProps) {
   const { user } = useAuth();
   const vocab = useVocabulary();
@@ -41,7 +37,6 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
 
   const [items, setItems] = useState<CustomerDependent[]>([]);
   const [draft, setDraft] = useState<CustomerDependent>(EMPTY);
-  // Índice del registro en edición; null = se está agregando uno nuevo.
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);

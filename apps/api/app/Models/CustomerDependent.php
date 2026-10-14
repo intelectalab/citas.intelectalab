@@ -7,10 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * Dependiente de un cliente: la mascota de un tutor, el hijo de un titular.
- * Solo se usa en los rubros que lo activan (business_types.dependents).
- */
 class CustomerDependent extends Model
 {
     use HasUuids, SoftDeletes;
@@ -34,10 +30,6 @@ class CustomerDependent extends Model
         'birth_date' => 'date:Y-m-d',
     ];
 
-    /**
-     * Reglas de validación de los datos de un dependiente. El prefijo permite
-     * validarlos anidados (dependents.*.) al crear el cliente.
-     */
     public static function rules(string $prefix = ''): array
     {
         return [

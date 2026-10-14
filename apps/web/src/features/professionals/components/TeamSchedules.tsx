@@ -26,7 +26,6 @@ interface TeamData {
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 
-// Un tono por persona, de la paleta, para reconocerla en la semana.
 const TONES = [
   { bar: 'bg-sky-400', soft: 'bg-sky-50 text-sky-700' },
   { bar: 'bg-emerald-400', soft: 'bg-emerald-50 text-emerald-700' },
@@ -44,8 +43,6 @@ const hoursLabel = (minutes: number) => {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} h`;
 };
 
-// Horarios de todo el equipo en una semana, por sede: quién atiende cada día y
-// a qué hora, sobre una línea de tiempo. El lápiz abre el horario de la persona.
 export default function TeamSchedules() {
   const vocab = useVocabulary();
   const [data, setData] = useState<TeamData | null>(null);
@@ -67,7 +64,6 @@ export default function TeamSchedules() {
 
   const branch = data?.branches.find((b) => b.id === branchId) ?? null;
 
-  // La línea de tiempo va de la primera a la última hora que alguien usa en la sede.
   const [from, to] = useMemo(() => {
     if (!branch) return [8 * 60, 20 * 60];
     const points = [
@@ -156,7 +152,6 @@ export default function TeamSchedules() {
           <section className={`${card} overflow-hidden`} data-week>
             <div className="overflow-x-auto">
               <div className="min-w-[980px]">
-                {/* Días, con el horario de la sede */}
                 <div className="grid grid-cols-[220px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-slate-50/70">
                   <div className="px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-end">{vocab.pro}</div>
                   {WEEK.map((day) => {
@@ -210,7 +205,6 @@ export default function TeamSchedules() {
                               <span className="block text-center text-xs text-slate-300">—</span>
                             ) : (
                               <>
-                                {/* Línea de tiempo del día: en gris claro, cuándo abre la sede. */}
                                 <div className="relative h-2 rounded-full bg-slate-100 overflow-hidden">
                                   {sede.map((h, i) => <span key={i} className="absolute inset-y-0 bg-slate-200" style={{ left: left(h.opens), width: width(h.opens, h.closes) }} />)}
                                   {ranges.map((r, i) => <span key={i} className={`absolute inset-y-0 rounded-full ${tone.bar}`} style={{ left: left(r.starts), width: width(r.starts, r.ends) }} />)}

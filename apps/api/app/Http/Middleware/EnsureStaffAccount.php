@@ -7,10 +7,6 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * El panel de la empresa y la consola son solo para el personal (users). Un
- * cliente inicia sesión con su ficha (customers) y no pasa de aquí.
- */
 class EnsureStaffAccount
 {
     public function handle(Request $request, Closure $next): Response
@@ -21,7 +17,6 @@ class EnsureStaffAccount
             ], 403);
         }
 
-        // Una cuenta desactivada deja de entrar aunque tuviera la sesión abierta.
         if ($request->user()->tenant_id && $request->user()->status === 'inactive') {
             return response()->json(['message' => 'Tu cuenta está desactivada. Comunícate con quien administra tu empresa.'], 401);
         }

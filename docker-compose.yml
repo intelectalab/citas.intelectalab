@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Base de datos PostgreSQL 17
   postgres:
     image: postgres:17-alpine
     container_name: erp_postgres
@@ -18,7 +17,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./apps/api/infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  # Redis
   redis:
     image: redis:alpine
     container_name: erp_redis

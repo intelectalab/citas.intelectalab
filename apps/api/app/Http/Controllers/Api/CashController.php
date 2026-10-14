@@ -15,11 +15,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Caja: abrir un turno, registrar ingresos, gastos y retiros, y cerrarlo con
- * su arqueo. La opera el personal que no es solo profesional; crear o cambiar
- * cajas es del administrador de la empresa.
- */
 class CashController extends Controller
 {
     private function tenant(Request $request): Tenant
@@ -27,7 +22,6 @@ class CashController extends Controller
         $user = $request->user();
         abort_unless($user->tenant, 403);
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
-        // Quién ve y opera la caja lo deciden los permisos cash.* de cada ruta.
 
         return $user->tenant->loadMissing(['settings', 'activeSubscription.plan']);
     }
@@ -46,15 +40,11 @@ class CashController extends Controller
         return $session;
     }
 
-    /**
-     * Las cajas de la empresa con su turno abierto, y los turnos ya cerrados.
-     */
     public function index(Request $request)
     {
         $tenant = $this->tenant($request);
         Cash::ensureRegisters($tenant);
 
-        // Quien trabaja solo con su sede ve las cajas y los turnos de su sede.
         $limit = Access::branchLimit($request->user());
         $branches = DB::table('branches')->where('tenant_id', $tenant->id)->when($limit, fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name', 'status']);
         $branchNames = $branches->pluck('name', 'id');
@@ -119,7 +109,6 @@ class CashController extends Controller
             'name.required'      => 'Escribe el nombre de la caja.',
             'name.unique'        => 'Esa sede ya tiene una caja con ese nombre.',
         ]);
-        // Quien trabaja solo con su sede no agrega cajas en otra.
         Access::assertBranch($request->user(), $validated['branch_id'], true);
 
         $id = (string) Str::uuid();
@@ -206,7 +195,6 @@ class CashController extends Controller
 
             $amount = round((float) $validated['amount'], 2);
 
-            // No puede salir más efectivo del que hay.
             if (Cash::SIGNS[$validated['type']] < 0 && $amount > Cash::present($row)['expected_amount']) {
                 throw ValidationException::withMessages(['amount' => 'En la caja no hay tanto efectivo.']);
             }
@@ -221,11 +209,6 @@ class CashController extends Controller
         });
     }
 
-    /**
-     * Cierre con arqueo: se compara lo contado con lo que debía haber. Una
-     * diferencia mayor que la tolerancia de la empresa exige explicarla, y la
-     * administración se entera.
-     */
     public function close(Request $request, string $session)
     {
         $tenant = $this->tenant($request);
@@ -282,7 +265,6 @@ class CashController extends Controller
             $body = ($difference < 0 ? 'Faltan' : 'Sobran') . ' S/ ' . number_format(abs($difference), 2) . " en {$register}. La cerró {$who}.";
 
             foreach (Notifier::adminIds($tenant->id) as $userId) {
-                // Quien cerró ya lo sabe.
                 if ($userId !== $actor->id) {
                     Notifier::send($tenant->id, $userId, 'cash.difference', 'Cierre de caja con diferencia', implode(' · ', array_filter([$body, $branch])), '/cash');
                 }

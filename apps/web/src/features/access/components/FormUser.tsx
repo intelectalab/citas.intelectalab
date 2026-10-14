@@ -21,9 +21,7 @@ interface FormUserProps {
   initialData: StaffUser | null;
   roles: RoleOption[];
   branches: BranchOption[];
-  // Se creó o cambió alguien; con credenciales cuando la cuenta es nueva.
   onSaved: (credentials?: NewCredentials) => void;
-  // Se creó un rol desde el "+": la lista de roles debe volver a pedirse.
   onRolesChanged?: () => void;
 }
 
@@ -33,8 +31,6 @@ const labelClass = 'block text-xs font-semibold text-slate-600 mb-1.5';
 
 const empty = { firstName: '', lastName: '', email: '', phone: '', roleId: '', branchId: '', active: true };
 
-// Panel para crear la cuenta de alguien que no atiende citas (recepción, caja,
-// gerencia) o cambiar los datos, el rol y la sede de una cuenta que ya existe.
 export default function FormUser({ isOpen, onClose, initialData, roles, branches, onSaved, onRolesChanged }: FormUserProps) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -59,7 +55,6 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
   const set = (changes: Partial<typeof empty>) => setForm((current) => ({ ...current, ...changes }));
 
   const isProfessional = Boolean(initialData?.professional_id);
-  // Al dueño y a uno mismo no se les cambia el rol ni se les desactiva; quien atiende citas conserva su rol.
   const fixedReason = initialData?.is_owner
     ? 'Es la cuenta del dueño de la empresa: siempre es Administrador y no se desactiva.'
     : initialData?.is_self
@@ -68,10 +63,8 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
         ? 'Atiende citas, así que conserva el rol Profesional. Si necesita hacer algo más, enciéndele esos permisos en su página.'
         : '';
 
-  // El rol Profesional solo lo tiene quien está registrado como profesional.
   const roleOptions = roles.filter((role) => role.slug !== 'professional' || isProfessional);
   const chosenRole = roles.find((role) => role.id === form.roleId);
-  // Quien trabaja solo con su sede necesita una.
   const isManager = chosenRole?.scope === 'branch';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -222,7 +215,6 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
         </div>
       </FormDrawer>
 
-      {/* El "+" del rol: se crea ahí mismo y queda elegido. */}
       <FormRole
         isOpen={roleFormOpen}
         onClose={() => setRoleFormOpen(false)}

@@ -5,11 +5,9 @@ import { notificationStyle, timeAgo, type AppNotification } from '../notificatio
 interface NotificationItemProps {
   item: AppNotification;
   onOpen: (item: AppNotification) => void;
-  // En la página el texto no se recorta.
   roomy?: boolean;
 }
 
-/** Un aviso: icono según su tipo, título, detalle y hace cuánto. Las no leídas llevan un punto. */
 export default function NotificationItem({ item, onOpen, roomy = false }: NotificationItemProps) {
   const { icon: Icon, tone } = notificationStyle(item.type);
 

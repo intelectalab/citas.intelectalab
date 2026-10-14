@@ -1,4 +1,3 @@
-{{-- Ficha de atención para descargar. La dibuja dompdf: solo CSS simple y tablas. --}}
 @php
     $toothStates = ['caries' => 'Caries', 'restored' => 'Restaurada', 'crown' => 'Corona', 'treatment' => 'En tratamiento', 'missing' => 'Ausente'];
     $statusLabels = ['draft' => 'Borrador', 'signed' => 'Firmada', 'locked' => 'Firmada'];

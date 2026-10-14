@@ -13,7 +13,6 @@ interface FormRecordTemplateProps {
   onClose: () => void;
   initialData: RecordTemplate | null;
   services: TemplateService[];
-  // Nombre de las otras fichas, para avisar de dónde sale un servicio.
   templates: RecordTemplate[];
   onSaved: (template: RecordTemplate) => void;
 }
@@ -23,8 +22,6 @@ const inputClass =
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const blockTitle = 'text-xs font-bold uppercase tracking-wider text-slate-800';
 
-// Panel lateral para crear o editar una ficha de la empresa: sus campos, su
-// consentimiento y los servicios que se atienden con ella.
 export default function FormRecordTemplate({ isOpen, onClose, initialData, services, templates, onSaved }: FormRecordTemplateProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

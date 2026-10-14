@@ -16,7 +16,6 @@ import { useAuth } from '@/hooks/useAuth';
 interface SaleDetailPanelProps {
   saleId: string | null;
   onClose: () => void;
-  // La venta cambió (se cobró, se anuló o se devolvió): quien abre el panel refresca su lista.
   onChanged?: () => void;
 }
 
@@ -40,15 +39,12 @@ const chip = (active: boolean) =>
     active ? 'bg-[#022340] text-white border-[#022340]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
   }`;
 
-// Panel de una venta: qué se vendió, cómo se pagó, su comprobante y sus
-// devoluciones. Desde aquí se cobra el saldo, se anula o se devuelve.
 export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDetailPanelProps) {
   const { can } = useAuth();
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  // Qué formulario está abierto dentro del panel.
   const [action, setAction] = useState<'' | 'void' | 'refund'>('');
   const [reason, setReason] = useState('');
   const [amount, setAmount] = useState('');

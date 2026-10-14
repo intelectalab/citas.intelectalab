@@ -1,5 +1,3 @@
-// Tipos y utilidades que comparten la agenda, la lista de citas y sus paneles.
-
 export interface Appointment {
   id: string;
   code: string;
@@ -7,10 +5,8 @@ export interface Appointment {
   status_name: string;
   next_statuses: string[];
   can_reschedule: boolean;
-  // Plazo para confirmar (hora de la sede) y si ya venció con la cita aún pendiente.
   confirm_by?: string | null;
   confirmation_overdue?: boolean;
-  // Hora de la sede, sin zona: 2026-10-19T09:00
   starts_at: string;
   ends_at: string;
   duration_minutes: number;
@@ -26,26 +22,20 @@ export interface Appointment {
   professional: { id: string; display_name: string; color_code: string | null } | null;
   branch: { id: string; name: string } | null;
   timing: AppointmentTiming;
-  // Ficha de atención: si el servicio la usa y en qué estado está la de esta cita.
   record: { uses: boolean; status: 'draft' | 'signed' | 'locked' | null };
-  // Hasta qué hora ocupa al profesional: antes de lo asignado si la atención terminó antes.
   occupied_until: string;
   history?: AppointmentStep[];
-  // Solo al abrir una cita: cuánto suelen durar las atenciones de su cliente.
   customer_timing?: TimingSummary;
 }
 
-// Tiempos reales de la cita, en segundos. `running` dice cuál sigue corriendo.
 export interface AppointmentTiming {
   planned_seconds: number | null;
   wait_seconds: number | null;
   service_seconds: number | null;
   running: 'wait' | 'service' | null;
-  // La duración de la atención es fiable y entra en los promedios.
   measured: boolean;
 }
 
-// Promedios de un grupo de citas atendidas, en minutos.
 export interface TimingSummary {
   completed: number;
   measured: number;
@@ -73,7 +63,6 @@ export interface AppointmentContext {
   slot_interval: number;
 }
 
-// Color de cada fase. Salen de la paleta para que el tema oscuro los alcance.
 export const STATUS_STYLES: Record<string, { badge: string; block: string; dot: string }> = {
   pending:     { badge: 'bg-amber-50 text-amber-700',     block: 'bg-amber-50 border-amber-200 text-amber-800',       dot: 'bg-amber-500' },
   confirmed:   { badge: 'bg-sky-50 text-sky-700',         block: 'bg-sky-50 border-sky-200 text-sky-700',             dot: 'bg-sky-500' },
@@ -86,10 +75,8 @@ export const STATUS_STYLES: Record<string, { badge: string; block: string; dot: 
 
 export const statusStyle = (status: string) => STATUS_STYLES[status] ?? STATUS_STYLES.cancelled;
 
-// Fases que ya no ocupan el horario.
 export const RELEASED = ['cancelled', 'no_show'];
 
-// Cómo se llama la acción que lleva a cada fase, según de dónde viene la cita.
 export const actionLabel = (to: string, from: string): string => {
   switch (to) {
     case 'pending': return 'Volver a pendiente';
@@ -111,7 +98,6 @@ export const toMinutes = (time: string): number => {
 export const fromMinutes = (minutes: number): string =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
-// 754 -> "12:34"; desde una hora, "1:02:34".
 export const formatClock = (seconds: number): string => {
   const total = Math.max(0, Math.floor(seconds));
   const h = Math.floor(total / 3600);
@@ -122,7 +108,6 @@ export const formatClock = (seconds: number): string => {
     : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
-// 24.5 -> "25 min"; 95 -> "1 h 35 min".
 export const formatMinutes = (minutes: number | null | undefined): string => {
   if (minutes === null || minutes === undefined) return '—';
   const total = Math.round(Math.abs(minutes));
@@ -133,7 +118,6 @@ export const formatMinutes = (minutes: number | null | undefined): string => {
 export const timeOf = (local: string): string => local.slice(11, 16);
 export const dateOf = (local: string): string => local.slice(0, 10);
 
-// Fecha de hoy en el navegador, como AAAA-MM-DD.
 export const todayISO = (): string => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -145,7 +129,6 @@ export const addDays = (date: string, days: number): string => {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
 };
 
-// "lunes, 19 de octubre de 2026"
 export const formatDate = (date: string, options?: Intl.DateTimeFormatOptions): string => {
   const [y, m, d] = date.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('es-PE', options ?? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -154,7 +137,6 @@ export const formatDate = (date: string, options?: Intl.DateTimeFormatOptions): 
 export const formatDateTime = (local: string): string =>
   `${formatDate(dateOf(local), { day: '2-digit', month: 'short', year: 'numeric' })}, ${timeOf(local)}`;
 
-// Primer mensaje útil de un error de la API.
 export const apiError = (error: any, fallback: string): string => {
   const errors = error?.response?.data?.errors;
   if (errors) {

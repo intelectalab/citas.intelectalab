@@ -76,10 +76,8 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-      {/* Contenedor con tamaño fijo para evitar saltos de diseño */}
       <div className="bg-white rounded-2xl shadow-2xl w-[680px] h-[620px] overflow-hidden border border-slate-100 flex flex-col">
         
-        {/* Cabecera */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/75 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-[#022340]/10 text-[#022340] rounded-xl border border-[#022340]/20">
@@ -105,7 +103,6 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
           </button>
         </div>
 
-        {/* Pestañas de navegación con color #022340 */}
         <div className="flex border-b border-slate-100 bg-slate-50/40 px-6 gap-6 text-sm font-medium shrink-0">
           <button
             onClick={() => setActiveTab('general')}
@@ -149,10 +146,8 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
           </button>
         </div>
 
-        {/* Contenido con Scroll interno fijo */}
         <div className="p-6 space-y-5 text-sm text-slate-700 overflow-y-auto flex-1">
           
-          {/* TAB 1: GENERAL */}
           {activeTab === 'general' && (
             <div className="space-y-4 animate-fadeIn">
               {plan.description && (
@@ -206,7 +201,6 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
             </div>
           )}
 
-          {/* TAB 2: LÍMITES Y CONSUMO */}
           {activeTab === 'limits' && (
             <div className="space-y-4 animate-fadeIn">
               <div className="space-y-2">
@@ -263,7 +257,6 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
             </div>
           )}
 
-          {/* TAB 3: MÓDULOS Y SOPORTE */}
           {activeTab === 'modules' && (
             <div className="space-y-4 animate-fadeIn">
               <div className="space-y-2">
@@ -311,7 +304,6 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
             </div>
           )}
 
-          {/* TAB 4: CARACTERÍSTICAS (FEATURES) */}
           {activeTab === 'advanced' && (
             <div className="space-y-2 animate-fadeIn">
               <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Parámetros y Permisos (Features)</span>
@@ -342,7 +334,6 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
 
         </div>
 
-        {/* Pie */}
         <div className="flex justify-end px-6 py-3.5 border-t border-slate-100 bg-slate-50/75 shrink-0">
           <button
             onClick={onClose}

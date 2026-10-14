@@ -5,14 +5,12 @@ import type { TemplateField, TemplateRecord } from './TemplateEditor';
 
 interface RecordPreviewProps {
   record: TemplateRecord;
-  // Color del rubro: tiñe la cabecera de la ficha.
   color: string;
   businessTypeName: string;
 }
 
 const blankLine = 'h-9 rounded-lg border border-slate-200 bg-slate-50/70';
 
-// Cómo se vería cada campo al llenarlo. Es una vista previa: nada es editable.
 export function FieldPreview({ field }: { field: TemplateField }) {
   const options = (field.options ?? []).filter(Boolean);
 
@@ -98,8 +96,6 @@ export function FieldPreview({ field }: { field: TemplateField }) {
   }
 }
 
-// Vista previa de la ficha de atención con forma de hoja: cabecera, campos y
-// consentimiento con línea de firma.
 export default function RecordPreview({ record, color, businessTypeName }: RecordPreviewProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
@@ -111,7 +107,6 @@ export default function RecordPreview({ record, color, businessTypeName }: Recor
         <p className="text-xs opacity-80 mt-0.5">{businessTypeName}</p>
       </div>
 
-      {/* Datos que la ficha toma de la cita */}
       <div className="grid grid-cols-3 gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
         {['Cliente', 'Servicio', 'Fecha'].map((label) => (
           <div key={label}>

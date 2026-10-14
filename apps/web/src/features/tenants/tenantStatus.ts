@@ -1,4 +1,3 @@
-// Estados de una empresa y de su suscripción, con su etiqueta y color.
 export const TENANT_STATUS: Record<string, { label: string; className: string }> = {
   active: { label: 'Activo', className: 'bg-emerald-50 text-emerald-600' },
   suspended: { label: 'Suspendido', className: 'bg-rose-50 text-rose-600' },

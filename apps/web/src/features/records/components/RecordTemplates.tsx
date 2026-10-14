@@ -11,9 +11,6 @@ import FormRecordTemplate from './FormRecordTemplate';
 import RecordSheetEditor from './RecordSheetEditor';
 import type { RecordTemplate, TemplateService } from '../records';
 
-// Las fichas de la empresa: cada una con sus campos y los servicios que la
-// usan. A la derecha, cómo se ve la ficha elegida. Solo el administrador de la
-// empresa las cambia; el resto del personal las consulta.
 export default function RecordTemplates() {
   const { user } = useAuth();
   const [templates, setTemplates] = useState<RecordTemplate[]>([]);
@@ -26,10 +23,8 @@ export default function RecordTemplates() {
   const [editing, setEditing] = useState<RecordTemplate | null>(null);
   const [deleting, setDeleting] = useState<RecordTemplate | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  // La hoja de la derecha tiene cambios sin guardar.
   const [sheetDirty, setSheetDirty] = useState(false);
 
-  // Con cambios sin guardar en la hoja no se pasa a otra ficha: se perderían.
   const guard = (action: () => void) => {
     if (sheetDirty) {
       setError('Tienes cambios sin guardar en la ficha. Guárdalos o descártalos antes de continuar.');

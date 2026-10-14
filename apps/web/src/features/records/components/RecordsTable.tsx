@@ -25,15 +25,12 @@ const CARDS: { id: string; title: string; icon: React.ReactNode; color: string; 
   { id: 'locked', title: 'Bloqueadas', icon: <Lock size={18} />, color: 'text-slate-500', active: 'border-slate-500 ring-2 ring-slate-500/20', hover: 'hover:border-slate-400' },
 ];
 
-// Fichas de atención llenadas por la empresa: la historia de sus clientes.
-// El ojo abre la ficha; el botón principal lleva a las plantillas.
 export default function RecordsTable() {
   const router = useRouter();
   const { user } = useAuth();
   const vocab = useVocabulary();
   const [records, setRecords] = useState<CareRecord[]>([]);
   const [period, setPeriod] = useState('30');
-  // Rango del filtro de fecha: mientras exista, manda sobre el periodo de la pestaña.
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [query, setQuery] = useState('');

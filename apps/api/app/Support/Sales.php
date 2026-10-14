@@ -11,15 +11,8 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Ventas y sus pagos. Una venta nace pendiente, pasa a parcial con el primer
- * pago y a pagada cuando su saldo llega a cero; recién ahí se emite su
- * comprobante. El impuesto se calcula al crearla, con la regla de la empresa
- * en ese momento.
- */
 class Sales
 {
-    // Medios de pago que se registran a mano en el mostrador.
     public const METHODS = [
         'cash'     => 'Efectivo',
         'card'     => 'Tarjeta',
@@ -28,10 +21,8 @@ class Sales
         'plin'     => 'Plin',
     ];
 
-    // Otros medios que pueden aparecer en un pago (en línea, adelanto).
     public const OTHER_METHODS = ['link' => 'Link de pago', 'deposit' => 'Adelanto'];
 
-    // Medios que dejan un número de operación o voucher.
     public const NEEDS_REFERENCE = ['card', 'transfer', 'yape', 'plin'];
 
     public const STATUS_LABELS = [
@@ -41,9 +32,6 @@ class Sales
 
     public const NOT_READY = 'Falta actualizar la base de datos para usar ventas y caja: carga init.sql, seed.sql y seed_demo.sql.';
 
-    /**
-     * En una base sin resetear las tablas de ventas aún tienen la forma anterior.
-     */
     public static function ready(): bool
     {
         static $ready = null;
@@ -51,11 +39,6 @@ class Sales
         return $ready ??= Schema::hasTable('cash_registers') && Schema::hasTable('invoices') && Schema::hasTable('sale_refunds') && Schema::hasColumn('sales', 'code');
     }
 
-    /**
-     * Reglas de ventas y caja que rigen hoy para la empresa.
-     *
-     * @return array{prices_include_tax: bool, tax_rate: float, require_open_cash: bool, partial_payments: bool, cash_tolerance: float, auto_register: bool}
-     */
     public static function rules(Tenant $tenant): array
     {
         return [
@@ -71,13 +54,6 @@ class Sales
         ];
     }
 
-    /**
-     * Total de una venta a partir de la suma de sus ítems. Con precios que ya
-     * incluyen el impuesto, el total es esa suma y el impuesto se desglosa;
-     * si no lo incluyen, se agrega encima.
-     *
-     * @return array{subtotal: float, discount: float, tax: float, total: float}
-     */
     public static function totals(array $rules, float $gross, float $discount = 0): array
     {
         $net = max(0, round($gross - $discount, 2));
@@ -93,10 +69,6 @@ class Sales
         ];
     }
 
-    /**
-     * Siguiente número de un correlativo de la empresa, sin repetirse aunque
-     * dos personas lo pidan a la vez.
-     */
     public static function nextNumber(string $tenantId, string $key): int
     {
         return (int) DB::selectOne(
@@ -107,17 +79,11 @@ class Sales
         )->value;
     }
 
-    /**
-     * La empresa cobra antes de atender: tiene punto de venta y no apagó la regla.
-     */
     public static function mustPayFirst(Tenant $tenant): bool
     {
         return $tenant->hasModule('pos') && self::ready() && (bool) AppointmentFlow::rule($tenant, 'pos.pay_before_service');
     }
 
-    /**
-     * La cita ya está cobrada (una venta devuelta por completo no cuenta).
-     */
     public static function appointmentPaid(string $tenantId, string $appointmentId): bool
     {
         return DB::table('sales')
@@ -127,9 +93,6 @@ class Sales
             ->exists();
     }
 
-    /**
-     * Venta vigente (no anulada) de una cita, si ya tiene.
-     */
     public static function ofAppointment(string $tenantId, string $appointmentId): ?object
     {
         return DB::table('sales')
@@ -140,10 +103,6 @@ class Sales
             ->first();
     }
 
-    /**
-     * Crea la venta de una cita: un ítem con su servicio, al precio con que se
-     * agendó. Con un cupón, su descuento queda en la venta y el cupón gasta un uso.
-     */
     public static function createForAppointment(Tenant $tenant, Appointment $appointment, User $user, ?string $couponCode = null): object
     {
         $rules = self::rules($tenant);
@@ -194,20 +153,11 @@ class Sales
         return DB::table('sales')->where('id', $id)->first();
     }
 
-    /**
-     * Registra un pago de mostrador en una venta. Con la misma clave de
-     * operación no se registra dos veces (doble clic, reintento de red).
-     *
-     * @param array{method: string, amount: float|int|string, received?: mixed, reference?: ?string, cash_session_id?: ?string, idempotency_key?: ?string} $data
-     * @param array{doc_type: string, ruc: ?string, business_name: ?string, address: ?string} $doc
-     * @return array{sale: object, duplicate: bool, change: float}
-     */
     public static function pay(Tenant $tenant, string $saleId, array $data, array $doc, User $user): array
     {
         $rules = self::rules($tenant);
         $key = $data['idempotency_key'] ?? null;
 
-        // Bloquea la venta mientras se cobra: dos cobros a la vez no la pagan dos veces.
         $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $saleId)->lockForUpdate()->first();
         abort_unless($sale, 404);
 
@@ -243,7 +193,6 @@ class Sales
         if ($method === 'cash') {
             $open = Cash::openSessions($tenant->id, $sale->branch_id);
             $wanted = $data['cash_session_id'] ?? null;
-            // La caja que eligió; si no eligió, la que abrió quien cobra, o la primera abierta.
             $session = $wanted ? $open->firstWhere('id', $wanted) : ($open->firstWhere('opened_by', $user->id) ?? $open->first());
 
             if ($wanted && !$session) {
@@ -313,11 +262,6 @@ class Sales
         return ['sale' => $sale, 'duplicate' => false, 'change' => $change];
     }
 
-    /**
-     * La venta lista para mostrarse: ítems, pagos y comprobante.
-     *
-     * @return array<string, mixed>
-     */
     public static function present(object $sale): array
     {
         $labels = self::METHODS + self::OTHER_METHODS;

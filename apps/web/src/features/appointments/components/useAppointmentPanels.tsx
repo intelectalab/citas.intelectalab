@@ -8,21 +8,16 @@ import type { Appointment } from '../appointments';
 
 type FormInitial = {
   date?: string; time?: string; professional_id?: string; branch_id?: string;
-  // Para agendar desde un control pendiente.
   customer?: CustomerOption; customer_dependent_id?: string; service_id?: string; recall_id?: string; recall_label?: string;
-  // Para agendar a alguien de la lista de espera.
   waitlist_id?: string; origin_label?: string;
 };
 
-// Los paneles laterales de una cita (nueva, detalle y reprogramar) y cómo
-// abrirlos. La agenda y la lista de citas los usan igual.
 export function useAppointmentPanels(onChange: () => void) {
   const [formOpen, setFormOpen] = useState(false);
   const [formInitial, setFormInitial] = useState<FormInitial | undefined>(undefined);
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // Cita cuya ficha de atención está abierta, encima del detalle.
   const [recordFor, setRecordFor] = useState<string | null>(null);
 
   const openNew = (initial?: FormInitial) => {
@@ -51,7 +46,6 @@ export function useAppointmentPanels(onChange: () => void) {
       <RecordPanel
         appointmentId={recordFor}
         onClose={() => {
-          // Al cerrar la ficha se vuelve a la cita, ya con el estado de la ficha al día.
           setRecordFor(null);
           setReloadKey((key) => key + 1);
         }}
@@ -64,7 +58,6 @@ export function useAppointmentPanels(onChange: () => void) {
         reschedule={rescheduling}
         onClose={() => { setFormOpen(false); setRescheduling(null); }}
         onSaved={(appointment) => {
-          // Al reprogramar se vuelve al detalle, ya con la nueva fecha.
           if (rescheduling) {
             setDetailId(appointment.id);
             setReloadKey((key) => key + 1);
@@ -75,7 +68,6 @@ export function useAppointmentPanels(onChange: () => void) {
     </>
   );
 
-  // Hay un panel abierto: quien refresca en segundo plano espera a que se cierre.
   const isOpen = formOpen || detailId !== null || recordFor !== null;
 
   return { openNew, openDetail, panels, isOpen };

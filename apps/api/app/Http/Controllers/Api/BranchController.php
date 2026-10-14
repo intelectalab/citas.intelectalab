@@ -19,14 +19,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Sucursales de la empresa: sus datos, su horario de atención, quiénes
- * atienden en cada una y sus salas y equipos. Todo el personal las ve; las
- * cambia el administrador de la empresa.
- */
 class BranchController extends Controller
 {
-    // Citas que siguen en pie: una sede con ellas no se desactiva.
     private const ACTIVE_STATUSES = [
         AppointmentFlow::PENDING,
         AppointmentFlow::CONFIRMED,
@@ -48,9 +42,6 @@ class BranchController extends Controller
         abort_unless($user->allows('branches.edit') || $user->allows('branches.create'), 403, 'Tu cuenta no tiene permiso para cambiar las sucursales.');
     }
 
-    /**
-     * Cuántas sedes activas permite el plan. Sin el módulo Multisede, una sola.
-     */
     private function limit(Tenant $tenant): ?int
     {
         if (!$tenant->hasModule('multi_branch')) {
@@ -74,7 +65,6 @@ class BranchController extends Controller
         return response()->json([
             'branches'     => $branches->map(fn (Branch $branch) => $this->present($branch, $tenant)),
             'active'       => $active,
-            // null = sin tope.
             'limit'        => $planLimit,
             'multi_branch' => $tenant->hasModule('multi_branch'),
             'can_add'      => $planLimit === null || $active < $planLimit,
@@ -105,7 +95,6 @@ class BranchController extends Controller
                     'weekday' => (int) $s->weekday,
                     'starts'  => substr($s->starts_local, 0, 5),
                     'ends'    => substr($s->ends_local, 0, 5),
-                    // Fuera del horario de la sede: ahí no se puede agendar sin forzar.
                     'outside' => !BranchHours::covers($hours, (int) $s->weekday, substr($s->starts_local, 0, 5), substr($s->ends_local, 0, 5)),
                 ])->values(),
             ])->values();
@@ -113,7 +102,6 @@ class BranchController extends Controller
         return response()->json($this->present($branch, $tenant) + [
             'hours'         => $hours,
             'professionals' => $professionals,
-            // Con la regla de la empresa aplicada: una sala puede verse fuera de uso por su equipo.
             'rooms'         => $tenant->hasModule('resources') ? \App\Support\Rooms::listing($tenant, $branch->id) : [],
             'links_equipment' => \App\Support\Rooms::hasParent(),
             'uses_rooms'    => $tenant->hasModule('resources'),
@@ -140,7 +128,6 @@ class BranchController extends Controller
 
         $validated = $this->validated($request, $tenant);
 
-        // Toda sede cuelga de una razón social; se usa la de la empresa.
         $company = Company::where('tenant_id', $tenant->id)->orderBy('created_at')->first()
             ?? Company::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'trade_name' => $tenant->name, 'legal_name' => $tenant->name]);
 
@@ -151,7 +138,6 @@ class BranchController extends Controller
             'status'     => 'active',
         ]);
 
-        // Abre con el mismo horario que la primera sede, para no empezar en blanco.
         $first = Branch::where('tenant_id', $tenant->id)->where('id', '!=', $branch->id)->orderBy('created_at')->value('id');
         if ($first) {
             BranchHours::replace($tenant->id, $branch->id, collect(BranchHours::of($first))->flatMap(
@@ -159,7 +145,6 @@ class BranchController extends Controller
             )->all());
         }
 
-        // Con punto de venta, la sede nace con su caja (si la empresa no eligió crearlas a mano).
         if ($tenant->hasModule('pos') && \App\Support\Sales::ready()) {
             \App\Support\Cash::ensureRegisters($tenant);
         }
@@ -178,10 +163,6 @@ class BranchController extends Controller
         return response()->json($this->present($branch->fresh(), $tenant));
     }
 
-    /**
-     * Activar o desactivar. Una sede desactivada no se ofrece para agendar ni
-     * para definir horarios, pero conserva su historia.
-     */
     public function changeStatus(Request $request, string $branch)
     {
         $tenant = $this->tenant($request);
@@ -200,7 +181,6 @@ class BranchController extends Controller
                 return response()->json(['message' => 'Es tu única sucursal activa: no se puede desactivar.', 'code' => 'LAST_BRANCH'], 422);
             }
 
-            // Quien trabaja en esta sede quedaría asignado a una sede cerrada.
             $staff = \App\Models\User::where('tenant_id', $tenant->id)->where('branch_id', $branch->id)->where('status', 'active')
                 ->orderBy('first_name')->get(['first_name', 'last_name']);
 
@@ -242,10 +222,6 @@ class BranchController extends Controller
         return response()->json($this->present($branch->fresh(), $tenant));
     }
 
-    /**
-     * Horario de atención de la sede, completo. Sin ningún tramo, la sede no
-     * limita la agenda (vale el horario de cada profesional).
-     */
     public function updateHours(Request $request, string $branch)
     {
         $tenant = $this->tenant($request);
@@ -275,7 +251,6 @@ class BranchController extends Controller
         BranchHours::replace($tenant->id, $branch->id, $validated['ranges']);
         $hours = BranchHours::of($branch->id);
 
-        // Horarios de profesionales que quedaron fuera: ahí ya no se agenda sin forzar.
         $outside = ProfessionalSchedule::where('tenant_id', $tenant->id)->where('branch_id', $branch->id)
             ->with('professional:id,display_name')
             ->get()
@@ -338,7 +313,6 @@ class BranchController extends Controller
             'phone'              => $branch->phone,
             'timezone'           => $timezone,
             'status'             => $branch->status,
-            // Hoy: tramos en que abre; vacío = cerrada; null = no tiene horario definido.
             'has_hours'          => $hours !== [],
             'today'              => $hours === [] ? null : ($hours[$dayStart->dayOfWeek] ?? []),
             'open_days'          => count($hours),

@@ -21,11 +21,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Lista de espera: quién quiere una cita y no encontró horario. Desde aquí se
- * anota, se le busca un horario libre y se le avisa. Convertirla en cita lo
- * hace la agenda (POST /appointments con waitlist_id).
- */
 class WaitlistController extends Controller
 {
     private const RELATIONS = [
@@ -45,10 +40,6 @@ class WaitlistController extends Controller
         return $tenant;
     }
 
-    /**
-     * Un usuario con rol de profesional (sin ser administrador) ve a quienes
-     * lo esperan a él o a cualquiera, y solo anota para sí mismo.
-     */
     private function ownProfessionalId(User $user): ?string
     {
         if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
@@ -77,7 +68,6 @@ class WaitlistController extends Controller
             'search'          => 'nullable|string|max:100',
         ]);
 
-        // Antes de listar, salen quienes ya no tienen fecha posible.
         Waitlist::expire($tenant);
 
         $view = $validated['view'] ?? 'open';
@@ -107,7 +97,6 @@ class WaitlistController extends Controller
                 });
             })
             ->with(self::RELATIONS)
-            // En espera: primero los prioritarios y luego por orden de llegada.
             ->when($view === 'open', fn ($q) => $q->orderByDesc('priority')->orderBy('created_at'), fn ($q) => $q->orderByDesc('updated_at'))
             ->limit(500)
             ->get();
@@ -131,7 +120,6 @@ class WaitlistController extends Controller
             throw ValidationException::withMessages(['date_to' => 'La última fecha ya pasó.']);
         }
 
-        // La misma persona esperando lo mismo dos veces solo estorba.
         $duplicate = WaitlistEntry::where('tenant_id', $tenant->id)
             ->whereIn('status', WaitlistEntry::OPEN)
             ->where('customer_id', $customer->id)
@@ -178,9 +166,6 @@ class WaitlistController extends Controller
         return response()->json($this->present($entry->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
     }
 
-    /**
-     * Avisado, en espera o retirado. "Con cita" solo lo pone una cita.
-     */
     public function changeStatus(Request $request, string $entry)
     {
         $tenant = $this->tenant($request);
@@ -200,7 +185,6 @@ class WaitlistController extends Controller
             ], 422);
         }
 
-        // Volver a la lista con la última fecha ya pasada no tiene sentido.
         if ($to !== WaitlistEntry::CANCELLED && $entry->date_to && $entry->date_to->format('Y-m-d') < $this->today($tenant)->format('Y-m-d')) {
             return response()->json([
                 'message' => 'Su última fecha ya pasó. Anótalo de nuevo con fechas vigentes.',
@@ -216,9 +200,6 @@ class WaitlistController extends Controller
         return response()->json($this->present($entry->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
     }
 
-    /**
-     * Horarios libres que le sirven a esta persona, para agendarla.
-     */
     public function slots(Request $request, string $entry)
     {
         $tenant = $this->tenant($request);
@@ -270,9 +251,6 @@ class WaitlistController extends Controller
         ];
     }
 
-    /**
-     * Los datos del registro, ya comprobados contra la empresa.
-     */
     private function values(Tenant $tenant, Customer $customer, array $validated, ?string $own): array
     {
         $service = Service::where('tenant_id', $tenant->id)->findOrFail($validated['service_id']);
@@ -345,7 +323,6 @@ class WaitlistController extends Controller
             'notified_at'  => $entry->notified_at?->copy()->setTimezone($timezone)->format('Y-m-d\TH:i'),
             'created_at'   => Carbon::parse($entry->created_at)->setTimezone($timezone)->format('Y-m-d\TH:i'),
             'days_waiting' => (int) Carbon::parse($entry->created_at)->setTimezone($timezone)->startOfDay()->diffInDays($today),
-            // Días que le quedan para recibir un horario; null si no puso última fecha.
             'days_left'    => $dateTo ? (int) round($today->diffInDays($dateTo, false)) : null,
             'customer'     => $customer ? [
                 'id'         => $customer->id,

@@ -30,7 +30,6 @@ const isClosed = (coupon: Coupon) => coupon.state !== 'valid' && coupon.state !=
 const benefitOf = (coupon: Coupon) => (coupon.discount_type === 'percent' ? `${coupon.discount_value} %` : money(coupon.discount_value));
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors';
 
-// Cupones de descuento de la empresa: códigos que se aplican al cobrar.
 export default function CouponsTable() {
   const { can } = useAuth();
   const [coupons, setCoupons] = useState<Coupon[] | null>(null);

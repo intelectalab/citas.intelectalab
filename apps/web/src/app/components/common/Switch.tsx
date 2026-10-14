@@ -3,13 +3,10 @@
 interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
-  // Texto para lectores de pantalla: qué enciende o apaga.
   label: string;
   disabled?: boolean;
 }
 
-// Interruptor de encendido/apagado. Es un botón, así responde al clic por sí
-// solo y también cuando está dentro de una etiqueta (label) clicable.
 export default function Switch({ checked, onChange, label, disabled = false }: SwitchProps) {
   return (
     <button

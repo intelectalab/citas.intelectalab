@@ -23,11 +23,11 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
     district: '',
     department: '',
     postal_code: '',
-    manager_user_id: '', // <- Añadido para el responsable
+    manager_user_id: '',
   });
 
   const [typeDocuments, setTypeDocuments] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]); // <- Estado para la lista de usuarios del tenant
+  const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
     if (initialData) {
@@ -61,7 +61,6 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
     }
   }, [initialData, isOpen]);
 
-  // Cargar tipos de documento y usuarios del tenant al abrir el modal
   useEffect(() => {
     if (isOpen) {
       api.get('/type-documents')
@@ -109,7 +108,6 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           
-          {/* Tipo de Documento y Nº de Documento */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Documento</label>
@@ -182,7 +180,6 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
             </div>
           </div>
 
-          {/* Campo Propietario / Responsable Asignado */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Propietario / Responsable</label>
             <select

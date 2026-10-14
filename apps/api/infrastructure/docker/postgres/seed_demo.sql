@@ -1,17 +1,6 @@
--- =====================================================================
--- DATOS DE MUESTRA. Solo para desarrollo y pruebas: NO se carga en el servidor.
--- Crea once empresas de ejemplo (al menos una por rubro) con sus sedes, equipo,
--- servicios, clientes y citas. Se carga después de seed.sql, que trae lo esencial.
---
--- Lo que aquí parece lógica (el generador de citas, la copia del catálogo del
--- rubro, las listas de equipo y clientes) solo fabrica datos de prueba. El
--- sistema no depende de nada de este archivo: una empresa real recibe su
--- catálogo, su ficha y sus feriados desde la API al registrarse.
--- =====================================================================
 BEGIN;
 SET client_encoding = 'UTF8';
 
--- Antes de empezar: este archivo va después de seed.sql y se carga una sola vez.
 DO $check$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM business_types) THEN
@@ -31,7 +20,6 @@ INSERT INTO tenants (id, name, slug, code, business_type_id, timezone, status) V
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44', 'Centro Fisioterapia Vital', 'fisioterapia-vital', '60394872', 'b7000000-0000-0000-0000-000000000006', 'America/Lima', 'active'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', 'Laboratorio Clínico BioAnálisis', 'bioanalisis', '92716345', 'b7000000-0000-0000-0000-000000000010', 'America/Lima', 'active'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Policlínico San Judas', 'policlinico-sanjudas', '37058194', 'b7000000-0000-0000-0000-000000000005', 'America/Lima', 'suspended'),
-  -- Una empresa de una sola sede por cada rubro restante.
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', 'Salón Bella Aura', 'bella-aura', '26481905', 'b7000000-0000-0000-0000-000000000001', 'America/Lima', 'active'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a88', 'Barbería Don Filo', 'barberia-don-filo', '58130276', 'b7000000-0000-0000-0000-000000000002', 'America/Lima', 'active'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99', 'Centro de Estética Lumina', 'estetica-lumina', '81549302', 'b7000000-0000-0000-0000-000000000003', 'America/Lima', 'active'),
@@ -43,7 +31,6 @@ INSERT INTO tenant_settings (tenant_id)
 SELECT id FROM tenants
 ON CONFLICT (tenant_id) DO NOTHING;
 
--- Cada empresa guarda su copia de lo que le da su rubro (igual que al registrarse).
 UPDATE tenants AS t SET
     business_profile = jsonb_build_object(
         'vocabulary', b.vocabulary,
@@ -62,8 +49,6 @@ INSERT INTO subscriptions (id, tenant_id, plan_id, status, billing_cycle, starts
   (gen_random_uuid(), 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44', '22222222-2222-2222-2222-222222222222', 'active', 'monthly', now(), NULL, 'culqi'),
   (gen_random_uuid(), 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', '22222222-2222-2222-2222-222222222222', 'active', 'monthly', now(), NULL, 'manual'),
   (gen_random_uuid(), 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', '33333333-3333-3333-3333-333333333333', 'canceled', 'yearly', now() - interval '1 year', NULL, 'stripe'),
-  -- Barbería y veterinaria en el plan Esencial (una sede); las otras tres en el Profesional,
-  -- que es el que trae inventario, puntos, membresías y clases.
   (gen_random_uuid(), 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', '22222222-2222-2222-2222-222222222222', 'active', 'monthly', now(), NULL, 'culqi'),
   (gen_random_uuid(), 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a88', '11111111-1111-1111-1111-111111111111', 'active', 'monthly', now(), NULL, 'manual'),
   (gen_random_uuid(), 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99', '22222222-2222-2222-2222-222222222222', 'trialing', 'monthly', now(), now() + interval '14 days', 'manual'),
@@ -76,9 +61,9 @@ INSERT INTO subscription_invoices (
 ) VALUES 
 (
     gen_random_uuid(),
-    (SELECT id FROM subscriptions WHERE tenant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22'), -- Clínica DentalPlus (Enterprise: Anual 4990 PEN - Sin trial, pagado)
+    (SELECT id FROM subscriptions WHERE tenant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22'),
     'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
-    'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', -- Status: Pagado
+    'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01',
     4990.00,
     'PEN',
     'subscription_create',
@@ -89,9 +74,9 @@ INSERT INTO subscription_invoices (
 ),
 (
     gen_random_uuid(),
-    (SELECT id FROM subscriptions WHERE tenant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44'), -- Centro Fisioterapia Vital (Growth: Mensual 349 PEN)
+    (SELECT id FROM subscriptions WHERE tenant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44'),
     'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44',
-    'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', -- Status: Pagado
+    'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01',
     349.00,
     'PEN',
     'subscription_create',
@@ -177,10 +162,6 @@ INSERT INTO roles (id, tenant_id, name, slug, description, is_system) VALUES
   ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a45', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33', 'Psicólogo / Profesional', 'professional', 'Personal Mente Sana', true)
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
--- Los permisos de cada rol no se escriben aquí: la API le da a cada rol de fábrica
--- sus permisos iniciales (y su nombre: Administrador, Profesional...) la primera vez
--- que hace falta. Ver App\Support\Access::ensureRoles.
-
 INSERT INTO users (id, tenant_id, first_name, last_name, email, password_hash, is_owner, status) VALUES
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Carlos', 'Mendoza', 'admin@luxuryspa.pe', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', true, 'active'),
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Dr. Roberto', 'Guerra', 'admin@dentalplus.pe', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', true, 'active'),
@@ -195,7 +176,6 @@ INSERT INTO users (id, tenant_id, first_name, last_name, email, password_hash, i
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380abb', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380abb', 'Fernando', 'Aliaga', 'admin@huellitas.pe', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', true, 'active')
 ON CONFLICT DO NOTHING;
 
--- 1. Crear los usuarios del sistema para los doctores
 INSERT INTO users (id, tenant_id, first_name, last_name, email, password_hash, is_owner, status) VALUES
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a71', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Carlos', 'Pérez', 'carlos.perez@luxuryspa.pe', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'active'),
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a72', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'María', 'Gómez', 'maria.gomez@luxuryspa.pe', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'active')
@@ -262,8 +242,6 @@ INSERT INTO professional_specialties (tenant_id, professional_id, specialty_id) 
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', '10eebc99-9c0b-4ef8-bb6d-6bb9bd380a02')
 ON CONFLICT DO NOTHING;
 
--- Horario semanal de ejemplo (0 = domingo ... 6 = sábado). Dr. Pérez: lunes a
--- viernes en dos tramos. Dra. Gómez: lunes, miércoles y viernes, y sábado por la mañana.
 INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekday, starts_local, ends_local)
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', d, t.starts_local, t.ends_local
 FROM generate_series(1, 5) AS d, (VALUES ('09:00'::time, '13:00'::time), ('15:00'::time, '19:00'::time)) AS t(starts_local, ends_local);
@@ -274,9 +252,6 @@ INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekd
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 5, '08:00', '14:00'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 6, '09:00', '13:00');
 
--- Bloqueos de ejemplo, con fechas relativas para que sigan vigentes tras un
--- reseteo: vacaciones de la Dra. Gómez, una capacitación del Dr. Pérez el miércoles
--- de la semana siguiente (se puede forzar). Los feriados van aparte, en holidays.
 INSERT INTO availability_blocks (tenant_id, branch_id, professional_id, starts_at, ends_at, reason, kind) VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', NULL, '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02',
    (current_date + 14)::timestamp AT TIME ZONE 'America/Lima', (current_date + 21)::timestamp AT TIME ZONE 'America/Lima', 'Vacaciones', 'vacation'),
@@ -297,21 +272,15 @@ INSERT INTO customers (
 )
 ON CONFLICT DO NOTHING;
 
--- Lista de espera de ejemplo: una persona prioritaria que solo puede por la mañana y
--- otra que espera a un médico en particular.
 INSERT INTO waitlist_entries (tenant_id, branch_id, customer_id, service_id, professional_id, date_from, date_to, time_from, time_to, notes, priority, created_at) VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', NULL, current_date, current_date + 10, '08:00', '12:00', 'Solo puede antes del mediodía.', 1, now() - interval '2 days'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', current_date, NULL, NULL, NULL, NULL, 0, now() - interval '5 days');
 
--- Controles de ejemplo, con fechas relativas: uno vencido, uno para esta semana y uno más adelante.
 INSERT INTO recalls (tenant_id, customer_id, service_id, professional_id, label, due_date, status, notes) VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Control de presión arterial', current_date - 6, 'pending', 'Traer sus últimos resultados de laboratorio.'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Chequeo anual', current_date + 4, 'pending', NULL),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Revisión de tratamiento', current_date + 40, 'pending', NULL);
 
--- Acceso al portal. Los clientes ingresan con su correo; no tienen fila en users.
--- Juliana Díaz existe en dos empresas con la misma contraseña (la de las cuentas
--- de prueba) para probar el selector de empresa al iniciar sesión.
 INSERT INTO customers (id, tenant_id, code, first_name, last_name, email, phone) VALUES
   ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'CLI-0001', 'Juliana', 'Díaz', 'juliana.diaz@gmail.com', '+51 912 345 678')
 ON CONFLICT DO NOTHING;
@@ -319,17 +288,10 @@ ON CONFLICT DO NOTHING;
 UPDATE customers SET password_hash = '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', must_change_password = false
 WHERE id IN ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01');
 
--- El resto de clientes con correo y documento entra con su número de documento
--- como contraseña inicial y debe cambiarla al ingresar, igual que los que registra el personal.
 UPDATE customers
 SET password_hash = replace(crypt(document_number, gen_salt('bf', 10)), '$2a$', '$2y$'), must_change_password = true
 WHERE password_hash IS NULL AND email IS NOT NULL AND document_number IS NOT NULL;
 
--- =====================================================================
--- MÓDULOS AMPLIADOS: inventario, fidelización, marketing y fichas
--- =====================================================================
-
--- Datos demo para el tenant "Centro Médico Integral"
 INSERT INTO product_categories (id, tenant_id, name) VALUES
   ('61eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Insumos de atención'),
   ('61eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Venta al público')
@@ -356,7 +318,6 @@ INSERT INTO inventory_movements (tenant_id, warehouse_id, product_id, type, quan
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '62eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '63eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'initial', 1000, 0.10, 1000, 'Carga inicial de inventario'),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '62eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '63eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'initial', 24, 35.00, 24, 'Carga inicial de inventario');
 
--- Insumos que consume cada servicio al completarse la atención
 INSERT INTO service_supplies (tenant_id, service_id, product_id, quantity) VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '63eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 1),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '63eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 1),
@@ -427,14 +388,6 @@ INSERT INTO record_template_services (tenant_id, record_template_id, service_id)
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '69eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a02')
 ON CONFLICT DO NOTHING;
 
--- =====================================================================
--- DATOS DE DEMOSTRACIÓN: sucursales, feriados, catálogo mínimo y citas en todas las empresas
--- =====================================================================
--- Todo va con fechas relativas a hoy, para que tras cada reseteo haya historia
--- reciente y citas próximas que convivan con los bloqueos, ausencias y feriados.
-
--- Feriados nacionales de este año y del siguiente, para todas las sedes de cada
--- empresa. Es lo mismo que recibe una empresa nueva al crearse.
 INSERT INTO holidays (tenant_id, date, name)
 SELECT t.id, make_date(y.year, v.month, v.day), v.name
 FROM tenants t
@@ -448,13 +401,10 @@ CROSS JOIN (VALUES
 ) AS v(month, day, name)
 ON CONFLICT DO NOTHING;
 
--- Un feriado propio de una sola sede, que no cierra: solo se recuerda en la agenda.
 INSERT INTO holidays (tenant_id, branch_id, date, name, closed) VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', current_date + 12, 'Aniversario de la sede', false)
 ON CONFLICT DO NOTHING;
 
--- Sucursales: cada empresa tiene entre dos y cinco, para ver cómo se reparte la
--- agenda por sede. Las primeras ya existían; aquí reciben su dirección.
 UPDATE branches AS b SET address = v.address, district = v.district, department = 'Lima', phone = v.phone
 FROM (VALUES
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Av. Larco 123', 'Miraflores', '(01) 445 1100'),
@@ -483,7 +433,6 @@ FROM (VALUES
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380c61', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Sede Jesús María', 'Av. Brasil 1250', 'Jesús María', '(01) 330 1212'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380c62', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Sede Breña', 'Av. Venezuela 980', 'Breña', '(01) 424 1313'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380c63', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Sede Pueblo Libre', 'Av. Bolívar 740', 'Pueblo Libre', '(01) 461 1414'),
-  -- Las empresas de los demás rubros tienen una sola sede.
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d71', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', 'Local Barranco', 'Av. Grau 320', 'Barranco', '(01) 247 5151'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d81', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a88', 'Local Magdalena', 'Jr. Castilla 640', 'Magdalena del Mar', '(01) 263 6262'),
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d91', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99', 'Sede San Isidro', 'Calle Las Camelias 780', 'San Isidro', '(01) 422 7373'),
@@ -492,8 +441,6 @@ FROM (VALUES
 ) AS v(id, tenant_id, name, address, district, phone)
 ON CONFLICT DO NOTHING;
 
--- Horario de atención: lunes a viernes de 08:00 a 20:00 y sábados por la mañana.
--- Las sedes más pequeñas cierran a las 18:00 y, salvo una, no abren los sábados.
 INSERT INTO branch_hours (tenant_id, branch_id, weekday, opens_local, closes_local)
 SELECT b.tenant_id, b.id, d, '08:00'::time,
        CASE WHEN d = 6 THEN '14:00'::time WHEN b.id::text ~ 'c(12|23|24|42|63)$' THEN '18:00'::time ELSE '20:00'::time END
@@ -502,7 +449,6 @@ CROSS JOIN generate_series(1, 6) AS d
 WHERE NOT (d = 6 AND b.id::text ~ 'c(12|23|24|42)$')
   AND NOT EXISTS (SELECT 1 FROM branch_hours h WHERE h.branch_id = b.id);
 
--- Salas y equipos en algunas sedes nuevas (las de Centro Médico ya tenían sus consultorios).
 INSERT INTO rooms (tenant_id, branch_id, name, description, kind)
 SELECT b.tenant_id, b.id, v.name, v.description, v.kind
 FROM (VALUES
@@ -525,14 +471,11 @@ FROM (VALUES
 JOIN branches b ON b.id = v.branch_id::uuid
 ON CONFLICT DO NOTHING;
 
--- Algunos equipos están instalados en una sala de su misma sede.
 UPDATE rooms e SET parent_id = r.id
 FROM rooms r
 WHERE e.kind = 'equipment' AND r.kind = 'room' AND r.branch_id = e.branch_id
   AND (e.name, r.name) IN (('Ecógrafo', 'Consultorio 201'), ('Equipo de rayos X', 'Sillón 1'), ('Equipo láser', 'Cabina 1'));
 
--- El laboratorio está en el rubro genérico, cuyo catálogo es neutro: sus servicios
--- se escriben aquí. Las demás empresas reciben más abajo el catálogo de su rubro.
 INSERT INTO service_categories (id, tenant_id, name) VALUES
   ('20ee9999-9c0b-4ef8-bb6d-6bb9bd380a55', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', 'Análisis')
 ON CONFLICT DO NOTHING;
@@ -545,9 +488,6 @@ FROM (VALUES
 ) AS v(tenant_id, category_id, name, minutes, price)
 WHERE NOT EXISTS (SELECT 1 FROM services s WHERE s.tenant_id = v.tenant_id::uuid AND s.name = v.name);
 
--- Todas las empresas reciben el catálogo completo de su rubro (categorías, servicios
--- y plantilla de ficha), igual que una empresa que se registra
--- (Tenant::installBusinessTemplate). El rubro genérico queda fuera: su catálogo es neutro.
 INSERT INTO service_categories (tenant_id, name)
 SELECT t.id, c.item->>'name'
 FROM tenants t
@@ -573,10 +513,8 @@ CROSS JOIN LATERAL jsonb_array_elements(c.item->'services') AS s(item)
 JOIN service_categories sc ON sc.tenant_id = t.id AND sc.name = c.item->>'name'
 WHERE b.slug <> 'generic'
   AND NOT EXISTS (SELECT 1 FROM services x WHERE x.tenant_id = t.id AND (x.code = s.item->>'code' OR x.name = s.item->>'name'))
-  -- Centro Médico ya tiene su propia consulta de medicina general.
   AND NOT (t.id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AND s.item->>'code' = 'CON-01');
 
--- Controles que se agendan con otro servicio (p. ej. esterilización → control post operatorio).
 UPDATE services AS s SET recall_service_id = r.id
 FROM tenants t
 JOIN business_types b ON b.id = t.business_type_id
@@ -597,7 +535,6 @@ WHERE b.slug <> 'generic'
   AND b.template->'record_template' IS NOT NULL
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
--- Servicios que el rubro atiende con ficha.
 INSERT INTO record_template_services (tenant_id, record_template_id, service_id)
 SELECT t.id, rt.id, sv.id
 FROM tenants t
@@ -610,7 +547,6 @@ WHERE b.slug <> 'generic'
   AND coalesce((s.item->>'uses_record')::boolean, false)
 ON CONFLICT DO NOTHING;
 
--- Servicios propios de cada empresa, además de los de su rubro.
 CREATE TEMP TABLE demo_services (tenant_id uuid, category text, name text, minutes int, price numeric, kind text, capacity int) ON COMMIT DROP;
 INSERT INTO demo_services VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Procedimientos', 'Electrocardiograma', 20, 80.00, 'individual', 1),
@@ -671,11 +607,6 @@ FROM demo_services v
 JOIN service_categories sc ON sc.tenant_id = v.tenant_id AND sc.name = v.category
 WHERE NOT EXISTS (SELECT 1 FROM services s WHERE s.tenant_id = v.tenant_id AND s.name = v.name);
 
--- Un profesional atiende en una sede cuando tiene horario ahí (professional_schedules).
--- En el seed cada uno atiende en una sola sede:
---  · el primero de cada empresa, de lunes a viernes en dos tramos;
---  · el segundo, de lunes a sábado por la mañana;
---  · el resto del equipo de cada sede va más abajo, en demo_staff.
 INSERT INTO professionals (id, tenant_id, display_name, phone) VALUES
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b21', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Dra. Lucía Fernández', '+51 955 100 221'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b22', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Dr. Andrés Salas', '+51 955 100 222'),
@@ -687,7 +618,6 @@ INSERT INTO professionals (id, tenant_id, display_name, phone) VALUES
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b52', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', 'Tec. Jorge Huamán', '+51 955 100 552'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b61', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Dra. Carmen Ruiz', '+51 955 100 661'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b62', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Dr. Luis Tapia', '+51 955 100 662'),
-  -- Los de las sedes adicionales.
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b13', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Dr. Jorge Lazo', '+51 955 100 113'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b23', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Dra. Mariela Quispe', '+51 955 100 223'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b24', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Dr. Hugo Cárdenas', '+51 955 100 224'),
@@ -695,7 +625,6 @@ INSERT INTO professionals (id, tenant_id, display_name, phone) VALUES
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b43', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44', 'Lic. Bruno Alarcón', '+51 955 100 443'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b63', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Dra. Teresa Bravo', '+51 955 100 663'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b64', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', 'Dr. Mario Peralta', '+51 955 100 664'),
-  -- Los de las empresas de una sola sede.
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b71', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', 'Karla Mendívil', '+51 955 100 771'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b72', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', 'Brenda Solano', '+51 955 100 772'),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b81', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a88', 'Kevin Arroyo', '+51 955 100 881'),
@@ -708,8 +637,6 @@ INSERT INTO professionals (id, tenant_id, display_name, phone) VALUES
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380bb2', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380abb', 'Dra. Rocío Meza', '+51 955 100 112')
 ON CONFLICT DO NOTHING;
 
--- Lunes a viernes en una sola sede. Los dos tramos (mañana y tarde) son del primero
--- de cada empresa; los de las sedes adicionales atienden de corrido.
 INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekday, starts_local, ends_local)
 SELECT p.tenant_id, p.id, v.branch_id::uuid, d, t.starts_local, t.ends_local
 FROM (VALUES
@@ -717,7 +644,6 @@ FROM (VALUES
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b31', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44', true),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b41', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', true),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b51', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66', true),
-  -- La sede principal de San Judas está inactiva en el seed: atiende en Jesús María.
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b61', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380c61', true),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b71', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d71', true),
   ('40eebc99-9c0b-4ef8-bb6d-6bb9bd380b81', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380d81', true),
@@ -739,7 +665,6 @@ CROSS JOIN LATERAL (
 ) AS t
 WHERE NOT EXISTS (SELECT 1 FROM professional_schedules s WHERE s.professional_id = p.id);
 
--- El segundo de cada empresa: lunes a sábado de 08:00 a 14:00, en su sede.
 INSERT INTO professional_schedules (tenant_id, professional_id, branch_id, weekday, starts_local, ends_local)
 SELECT p.tenant_id, p.id, v.branch_id::uuid, d, '08:00'::time, '14:00'::time
 FROM (VALUES
@@ -759,11 +684,6 @@ JOIN professionals p ON p.id = v.professional_id::uuid
 CROSS JOIN generate_series(1, 6) AS d
 WHERE NOT EXISTS (SELECT 1 FROM professional_schedules s WHERE s.professional_id = p.id);
 
--- El resto del equipo: cada sede activa queda con dos a cuatro personas, cada una en
--- una sola sede. El turno se recorta al horario de la sede (branch_hours): quien
--- atiende por la mañana trabaja el sábado solo donde la sede abre ese día.
---   split = 09:00–13:00 y 15:00–18:00 · day = 09:00–17:00
---   morning = 08:00–14:00 · afternoon = 12:00–18:00
 CREATE TEMP TABLE demo_staff (branch_id uuid, name text, shift text) ON COMMIT DROP;
 INSERT INTO demo_staff VALUES
   ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'Dra. Patricia Núñez', 'afternoon'),
@@ -821,15 +741,11 @@ JOIN (VALUES
 JOIN branch_hours h ON h.branch_id = b.id AND h.opens_local <= r.starts_local AND h.closes_local >= r.ends_local
 WHERE NOT EXISTS (SELECT 1 FROM professional_schedules s WHERE s.professional_id = p.id);
 
--- Cada profesional tiene su cuenta para entrar al sistema, igual que cuando la empresa
--- lo registra desde la pantalla. Así el equipo de cada empresa de ejemplo cabe en su plan:
--- usuarios (dueño + profesionales) y profesionales dentro del tope.
 INSERT INTO roles (tenant_id, name, slug, description, is_system)
 SELECT t.id, 'Profesional', 'professional', 'Atiende sus propias citas', true
 FROM tenants t
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
--- Nombre sin el título (Dr., Dra., Ps., Lic., Tec.) y correo con el dominio de su empresa.
 CREATE TEMP TABLE demo_accounts ON COMMIT DROP AS
 SELECT p.id AS professional_id, p.tenant_id, gen_random_uuid() AS user_id,
        split_part(n.name, ' ', 1) AS first_name,
@@ -853,9 +769,6 @@ UPDATE professionals AS p SET user_id = a.user_id
 FROM demo_accounts a
 WHERE a.professional_id = p.id;
 
--- Personal que no atiende citas: recepción, caja y gerencia de sede. Los roles nacen
--- aquí sin permisos; la API se los da la primera vez (App\Support\Access::ensureRoles).
--- Solo en empresas con lugar en su plan: Don Filo y Huellitas quedan como estaban.
 INSERT INTO roles (tenant_id, name, slug, description, is_system)
 SELECT t.id, v.name, v.slug, v.description, true
 FROM tenants t
@@ -866,7 +779,6 @@ CROSS JOIN (VALUES
 ) AS v(name, slug, description)
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
--- branch_n: la sede de la persona, contando desde 0 por orden alfabético.
 CREATE TEMP TABLE demo_office ON COMMIT DROP AS
 SELECT gen_random_uuid() AS user_id, v.tenant_id::uuid AS tenant_id, v.slug, v.first_name, v.last_name, v.email, v.phone,
        (SELECT b.id FROM branches b WHERE b.tenant_id = v.tenant_id::uuid ORDER BY b.name LIMIT 1 OFFSET v.branch_n) AS branch_id
@@ -935,7 +847,6 @@ FROM (VALUES
 ) AS v(tenant_id, n, first_name, last_name, document_number, email, phone)
 WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.tenant_id = v.tenant_id::uuid AND c.email = v.email);
 
--- Catorce clientes más por empresa, armados con listas de nombres y apellidos.
 INSERT INTO customers (tenant_id, code, first_name, last_name, biological_sex, document_number, email, phone, district, department)
 SELECT t.id,
        'CLI-' || lpad((n + (SELECT count(*) FROM customers c WHERE c.tenant_id = t.id))::text, 4, '0'),
@@ -963,7 +874,6 @@ JOIN (VALUES
 ) AS l2(i, last_name) ON l2.i = (n * 7 + t.tn) % 13
 WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.tenant_id = t.id AND c.document_number = (40000000 + t.tn * 1000000 + n * 38917)::text);
 
--- Veterinaria: cada tutor tiene una o dos mascotas, y cada cita es para una de ellas.
 INSERT INTO customer_dependents (tenant_id, customer_id, name, kind, species, breed, birth_date, biological_sex)
 SELECT c.tenant_id, c.id, v.name, 'pet', v.species, v.breed, v.birth_date::date, v.sex
 FROM (VALUES
@@ -977,7 +887,6 @@ FROM (VALUES
 JOIN customers c ON c.tenant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380abb' AND c.email = v.email
 WHERE NOT EXISTS (SELECT 1 FROM customer_dependents d WHERE d.customer_id = c.id AND d.name = v.name);
 
--- Los demás tutores de la veterinaria, con una mascota cada uno.
 INSERT INTO customer_dependents (tenant_id, customer_id, name, kind, species, breed, biological_sex)
 SELECT c.tenant_id, c.id, v.name, 'pet', v.species, v.breed, v.sex
 FROM (
@@ -993,12 +902,10 @@ JOIN (VALUES
   (12, 'Duque', 'Perro', 'Golden retriever', 'M'), (13, 'Chispa', 'Perro', 'Chihuahua', 'F')
 ) AS v(i, name, species, breed, sex) ON v.i = c.i;
 
--- Igual que los que registra el personal: entran a su portal con su número de documento.
 UPDATE customers
 SET password_hash = replace(crypt(document_number, gen_salt('bf', 10)), '$2a$', '$2y$'), must_change_password = true
 WHERE password_hash IS NULL AND email IS NOT NULL AND document_number IS NOT NULL;
 
--- Una ausencia próxima en cada una de esas empresas, para ver citas dentro de un bloqueo.
 INSERT INTO availability_blocks (tenant_id, professional_id, starts_at, ends_at, reason, kind)
 SELECT p.tenant_id, p.id,
        (current_date + 6)::timestamp AT TIME ZONE 'America/Lima', (current_date + 8)::timestamp AT TIME ZONE 'America/Lima',
@@ -1007,13 +914,6 @@ FROM professionals p
 WHERE p.id::text LIKE '40eebc99-9c0b-4ef8-bb6d-6bb9bd380b_2'
   AND NOT EXISTS (SELECT 1 FROM availability_blocks b WHERE b.professional_id = p.id);
 
--- Citas de las últimas tres semanas (atendidas, canceladas y ausencias, con sus
--- tiempos reales) y de las próximas cuatro (pendientes y confirmadas), para cada
--- profesional según su horario, en la sede donde atiende cada día. No se agenda en feriados, pero sí dentro de las
--- ausencias y vacaciones registradas arriba: así se ven las "citas por resolver".
--- La última de cada empresa cae a propósito en su próximo feriado. Si el cliente
--- tiene mascotas (veterinaria), cada cita es para una de ellas. Solo se agendan
--- servicios individuales: las clases grupales del estudio fitness no son citas.
 DO $demo$
 DECLARE
   tz constant text := 'America/Lima';
@@ -1066,7 +966,6 @@ BEGIN
       FOR day_off IN -21..28 LOOP
         d := today + day_off;
 
-        -- La sede donde atiende ese día de la semana, y desde qué hora.
         first_start := NULL;
         SELECT s.branch_id, s.starts_local, s.ends_local INTO branch, first_start, first_end
           FROM professional_schedules s
@@ -1077,7 +976,6 @@ BEGIN
         CONTINUE WHEN EXISTS (SELECT 1 FROM holidays h WHERE h.tenant_id = t.id AND h.date = d AND h.closed AND (h.branch_id IS NULL OR h.branch_id = branch));
 
         FOR k IN 0..2 LOOP
-          -- Más allá de una semana la agenda está menos llena: una cita, día por medio.
           CONTINUE WHEN day_off > 7 AND (k > 0 OR (day_off + pro_index) % 2 = 0);
 
           i := 1 + (day_off + 21 + k + pro_index) % array_length(services_ids, 1);
@@ -1085,7 +983,6 @@ BEGIN
           starts := (d + first_start + (k * interval '90 minutes')) AT TIME ZONE tz;
           ends := starts + make_interval(mins => duration);
 
-          -- Los servicios largos (color, cirugía) no deben salirse del tramo ni pisar la cita anterior.
           CONTINUE WHEN ends > (d + first_end) AT TIME ZONE tz;
           CONTINUE WHEN EXISTS (SELECT 1 FROM appointments a WHERE a.professional_id = p.id AND a.starts_at < ends AND a.ends_at > starts);
 
@@ -1098,7 +995,6 @@ BEGIN
             ELSE CASE WHEN r < 0.40 THEN 'confirmed' ELSE 'pending' END
           END;
 
-          -- Un cliente no puede estar en dos citas a la vez: se toma el primero que esté libre.
           customer := NULL;
           FOR j IN 0..array_length(customers_ids, 1) - 1 LOOP
             candidate := customers_ids[1 + (day_off + 21 + k * 2 + pro_index + j) % array_length(customers_ids, 1)];
@@ -1113,7 +1009,6 @@ BEGIN
           seq := seq + 1;
           started := starts + make_interval(mins => floor(random() * 8)::int);
 
-          -- La mascota atendida, alternando entre las del cliente; NULL si no tiene.
           dependent := NULL;
           SELECT cd.id INTO dependent FROM customer_dependents cd
             WHERE cd.customer_id = customer AND cd.deleted_at IS NULL
@@ -1150,8 +1045,6 @@ BEGIN
       END LOOP;
     END LOOP;
 
-    -- Una cita agendada en el próximo feriado en que alguien atiende ese día de la
-    -- semana: aparece como "por resolver" en la pestaña de feriados.
     SELECT min(h.date) INTO holiday
       FROM holidays h
       WHERE h.tenant_id = t.id AND h.closed AND h.date > today + 1
@@ -1183,12 +1076,6 @@ BEGIN
 END
 $demo$;
 
--- ============================================================================
---  Avisos de la campana, de ejemplo
---  · Cada profesional: sus tres próximas citas, como si se las hubiera agendado la recepción.
---  · El dueño: dos reservas "desde el portal" y dos cancelaciones recientes.
---  Los avisos de ausencias próximas no van aquí: el sistema los genera solo al consultar.
--- ============================================================================
 INSERT INTO user_notifications (tenant_id, user_id, type, title, body, link, entity_type, entity_id, read_at, created_at)
 SELECT x.tenant_id, x.user_id, 'appointment.booked', 'Te agendaron una cita',
        x.customer || ' · ' || x.service || ' · ' || to_char(x.starts_at AT TIME ZONE 'America/Lima', 'DD/MM, HH24:MI'),
@@ -1230,13 +1117,9 @@ FROM (
 JOIN users u ON u.tenant_id = x.tenant_id AND u.is_owner
 WHERE x.n <= 2;
 
--- Algunas inasistencias pasan a ser de citas reservadas en línea, para que la ficha
--- de esos clientes muestre la nota (y el veto, si la empresa lo activa).
 UPDATE appointments SET source = 'online'
 WHERE status = 'no_show' AND abs(hashtext(customer_id::text)) % 3 = 0;
 
--- Cupones de ejemplo en cada empresa: uno vigente en porcentaje, uno vigente en
--- monto con compra mínima y usos limitados, y uno ya vencido.
 INSERT INTO coupons (tenant_id, code, description, discount_type, discount_value, min_purchase, max_uses, starts_at, ends_at, status)
 SELECT t.id, c.code, c.description, c.discount_type, c.discount_value, c.min_purchase, c.max_uses,
        now() + make_interval(days => c.from_days), now() + make_interval(days => c.to_days), 'active'

@@ -17,7 +17,6 @@ class Tenant extends Model
 
     public const CODE_LENGTH = 8;
 
-    // Vocabulario base cuando ni el rubro ni el tenant definen una clave.
     public const DEFAULT_VOCABULARY = [
         'client'     => 'Cliente',
         'clients'    => 'Clientes',
@@ -30,7 +29,6 @@ class Tenant extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    // Módulos ya calculados en esta petición.
     private ?array $resolvedModules = null;
 
     protected $fillable = [
@@ -53,27 +51,21 @@ class Tenant extends Model
         'business_profile_synced_at' => 'datetime',
     ];
 
-    // Partes del rubro que cada empresa guarda como copia propia.
     public const PROFILE_PARTS = ['vocabulary', 'modules_off', 'default_rules', 'dependents'];
 
     protected static function booted(): void
     {
-        // Garantiza el código de empresa aunque quien crea el tenant no lo envíe.
         static::creating(function (Tenant $tenant) {
             if (empty($tenant->code)) {
                 $tenant->code = static::generateCode();
             }
 
-            // La empresa nace con la copia de su rubro.
             if ($tenant->business_type_id && is_null($tenant->business_profile)) {
                 $tenant->fillBusinessProfile();
             }
         });
     }
 
-    /**
-     * Código de empresa de 8 dígitos, único entre todos los tenants.
-     */
     public static function generateCode(): string
     {
         do {
@@ -83,9 +75,6 @@ class Tenant extends Model
         return $code;
     }
 
-    /**
-     * Lo que el rubro define hoy para una de las partes del perfil.
-     */
     public static function profileFromType(?BusinessType $type): array
     {
         return [
@@ -96,10 +85,6 @@ class Tenant extends Model
         ];
     }
 
-    /**
-     * Una parte de lo que el rubro le dio a la empresa. Sale de su copia
-     * (business_profile); solo si la empresa aún no tiene copia se lee el rubro.
-     */
     public function businessProfile(string $part): array
     {
         if (is_array($this->business_profile)) {
@@ -109,10 +94,6 @@ class Tenant extends Model
         return static::profileFromType($this->businessType)[$part] ?? [];
     }
 
-    /**
-     * Toma del rubro la copia de la empresa, completa o solo algunas partes.
-     * No guarda: quien llama decide cuándo.
-     */
     public function fillBusinessProfile(?array $parts = null): static
     {
         $type = $this->business_type_id ? BusinessType::find($this->business_type_id) : null;
@@ -130,9 +111,6 @@ class Tenant extends Model
         return $this;
     }
 
-    /**
-     * Partes en las que la copia de la empresa ya no coincide con su rubro.
-     */
     public function outdatedProfileParts(?BusinessType $type = null): array
     {
         $current = static::profileFromType($type ?? $this->businessType);
@@ -151,10 +129,6 @@ class Tenant extends Model
         ));
     }
 
-    /**
-     * Vocabulario efectivo: base, luego el que recibió de su rubro y por último
-     * lo que el tenant haya sobrescrito en su configuración.
-     */
     public function vocabulary(): array
     {
         return array_merge(
@@ -164,11 +138,6 @@ class Tenant extends Model
         );
     }
 
-    /**
-     * Módulos activos del tenant: los base más los de su plan, menos los que
-     * apaga su rubro, los que le apaga la plataforma y los que apaga la propia
-     * empresa. Sin suscripción vigente no hay módulos.
-     */
     public function modules(): array
     {
         if ($this->resolvedModules !== null) {
@@ -198,11 +167,6 @@ class Tenant extends Model
         return in_array($key, $this->modules(), true);
     }
 
-    /**
-     * Módulos que la empresa puede apagar y volver a encender: los de su plan
-     * que no apagan ni su rubro ni la plataforma. Los módulos base no se pueden
-     * apagar y lo que no le dan no se puede encender desde la empresa.
-     */
     public function toggleableModules(): array
     {
         $plan = $this->activeSubscription?->plan;
@@ -224,21 +188,14 @@ class Tenant extends Model
         return $this->status === 'active';
     }
 
-    /**
-     * Uso actual frente a los límites del plan: usuarios, sedes, profesionales
-     * y citas y mensajes del mes. El dueño no cuenta como usuario del plan:
-     * el tope es de cuentas además de la suya.
-     */
     public function usage(): array
     {
         $monthStart = now()->startOfMonth();
 
         return [
-            // Una cuenta desactivada no entra al sistema y deja libre su lugar.
             'users'              => DB::table('users')->where('tenant_id', $this->id)->where('is_owner', false)->where('status', 'active')->count(),
             'branches'           => DB::table('branches')->where('tenant_id', $this->id)->count(),
             'professionals'      => DB::table('professionals')->where('tenant_id', $this->id)->count(),
-            // Las canceladas no cuentan contra el límite del plan.
             'appointments_month' => DB::table('appointments')->where('tenant_id', $this->id)->where('starts_at', '>=', $monthStart)
                 ->when(Schema::hasColumn('appointments', 'status'), fn ($q) => $q->where('status', '!=', 'cancelled'))
                 ->count(),
@@ -246,9 +203,6 @@ class Tenant extends Model
         ];
     }
 
-    /**
-     * Reglas de operación efectivas: las del rubro y lo que el tenant sobrescribe.
-     */
     public function rules(): array
     {
         return array_merge(
@@ -257,9 +211,6 @@ class Tenant extends Model
         );
     }
 
-    /**
-     * Configuración de dependientes del rubro (mascotas, hijos): {enabled, kind, required}.
-     */
     public function dependents(): array
     {
         return array_merge(
@@ -268,13 +219,6 @@ class Tenant extends Model
         );
     }
 
-    /**
-     * Copia al tenant el catálogo inicial de su rubro: categorías, servicios y
-     * plantilla de ficha. Pensado para un tenant recién creado; si ya tiene
-     * servicios o categorías no hace nada, para no duplicar.
-     *
-     * @return array{categories: int, services: int, record_templates: int}
-     */
     public function installBusinessTemplate(): array
     {
         $installed = ['categories' => 0, 'services' => 0, 'record_templates' => 0];
@@ -347,7 +291,6 @@ class Tenant extends Model
             }
         }
 
-        // Controles que se agendan con otro servicio (p. ej. post extracción → consulta).
         foreach ($recallServiceCodes as $serviceId => $code) {
             if (isset($serviceIdsByCode[$code])) {
                 DB::table('services')->where('id', $serviceId)->update(['recall_service_id' => $serviceIdsByCode[$code]]);
@@ -372,7 +315,6 @@ class Tenant extends Model
             ]);
             $installed['record_templates']++;
 
-            // Servicios que el rubro atiende con ficha.
             foreach ($recordServiceIds as $serviceId) {
                 DB::table('record_template_services')->insert([
                     'tenant_id'          => $this->id,
@@ -397,7 +339,6 @@ class Tenant extends Model
 
     public function activeSubscription(): HasOne
     {
-        // Una suscripción vencida deja de contar aunque su estado aún no se haya actualizado.
         return $this->hasOne(Subscription::class)
             ->whereIn('status', ['active', 'trialing'])
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()))

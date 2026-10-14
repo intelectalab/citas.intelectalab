@@ -6,7 +6,6 @@ import { api } from '@/lib/axios';
 import { portalError } from '../portal';
 
 interface PortalPasswordProps {
-  // Primer ingreso: entró con su número de documento y debe crear su contraseña.
   forced?: boolean;
   onDone: () => void;
   onCancel?: () => void;
@@ -16,7 +15,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
 
-// El cliente crea su contraseña en su primer ingreso, o la cambia después.
 export default function PortalPassword({ forced = false, onDone, onCancel }: PortalPasswordProps) {
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');

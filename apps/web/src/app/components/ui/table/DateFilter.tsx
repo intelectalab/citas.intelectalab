@@ -9,7 +9,6 @@ interface DateFilterProps {
   label: string;
   value: DateFilterValue | null;
   onChange: (value: DateFilterValue | null) => void;
-  // Ofrece también mañana, próxima semana, etc.
   future?: boolean;
 }
 
@@ -17,21 +16,18 @@ const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Las seis semanas que muestra el calendario de un mes, empezando en lunes.
 const monthGrid = (year: number, month: number): Date[] => {
   const first = new Date(year, month, 1);
   const start = new Date(year, month, 1 - ((first.getDay() + 6) % 7));
   return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
 };
 
-/** Filtro de fecha de una tabla: periodos listos, un día concreto o un rango, con calendario propio. */
 export default function DateFilter({ label, value, onChange, future = false }: DateFilterProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'list' | 'day' | 'range'>('list');
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(() => new Date());
-  // Primer día elegido de un rango, mientras falta el segundo.
   const [rangeStart, setRangeStart] = useState<string | null>(null);
 
   const today = toISO(new Date());

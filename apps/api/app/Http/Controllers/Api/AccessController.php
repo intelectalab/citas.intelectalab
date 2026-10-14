@@ -13,11 +13,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/**
- * Usuarios y roles de la empresa: quién entra al sistema, con qué rol y qué
- * puede hacer cada quien. Las rutas ya exigen el permiso users.*; aquí van las
- * reglas que protegen a la empresa de quedarse sin administrador.
- */
 class AccessController extends Controller
 {
     private function tenant(Request $request): Tenant
@@ -41,7 +36,6 @@ class AccessController extends Controller
         return Role::where('tenant_id', $tenant->id)->findOrFail($id);
     }
 
-    /** Cuentas que el plan permite además de la del dueño, y cuántas hay activas. */
     private function usage(Tenant $tenant): array
     {
         $limit = $tenant->activeSubscription?->plan?->limits['users'] ?? null;
@@ -58,7 +52,6 @@ class AccessController extends Controller
             : null;
     }
 
-    /** Por qué no se le pueden cambiar el rol ni los permisos a esta persona; null si se puede. */
     private function lockedReason(User $target, User $actor, ?Role $role): ?string
     {
         if ($target->is_owner) {
@@ -72,10 +65,6 @@ class AccessController extends Controller
         return null;
     }
 
-    /**
-     * Gente de la sede de quien consulta: con esa sede asignada, o profesionales
-     * que atienden ahí. null si quien consulta ve toda la empresa.
-     */
     private function staffOfBranch(User $actor): ?array
     {
         $limit = Access::branchLimit($actor);
@@ -98,7 +87,6 @@ class AccessController extends Controller
         abort_if($mine !== null && !in_array($target->id, $mine, true), 403, 'Esta persona no es de tu sede. ' . Access::onlyBranch($actor));
     }
 
-    /** Los roles valen para toda la empresa: los cambia quien ve toda la empresa. */
     private function assertWholeCompany(User $actor): void
     {
         abort_if(Access::branchLimit($actor) !== null, 403, 'Los roles valen para todas las sedes: los crea y los cambia quien administra la empresa.');
@@ -109,7 +97,6 @@ class AccessController extends Controller
         return Access::scopeReady() ? $role->scope : (Access::FACTORY[$role->slug]['scope'] ?? 'tenant');
     }
 
-    /** Turno de caja que esta persona abrió y sigue abierto; null si no tiene. */
     private function openCashOf(User $user): ?object
     {
         return DB::table('cash_sessions as s')
@@ -131,7 +118,6 @@ class AccessController extends Controller
 
     private function roleOptions(Tenant $tenant, ?User $actor = null): array
     {
-        // Quien trabaja solo con su sede no da roles que ven toda la empresa.
         $scoped = $actor && Access::branchLimit($actor) !== null && Access::scopeReady();
 
         return Role::where('tenant_id', $tenant->id)->when($scoped, fn ($q) => $q->where('scope', '!=', 'tenant'))->get()
@@ -152,8 +138,6 @@ class AccessController extends Controller
             ->when($actor ? Access::branchLimit($actor) : null, fn ($q, $id) => $q->where('id', $id))
             ->orderBy('name')->get(['id', 'name'])->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->all();
     }
-
-    // ---------------------------------------------------------------- Usuarios
 
     public function users(Request $request)
     {
@@ -176,7 +160,6 @@ class AccessController extends Controller
             'can'      => ['create' => $actor->allows('users.create'), 'edit' => $actor->allows('users.edit')],
             'roles'    => $this->roleOptions($tenant, $actor),
             'branches' => $this->branchOptions($tenant, $actor),
-            // La sede con la que trabaja quien consulta; null si ve toda la empresa.
             'my_branch' => $limit ? ['id' => $limit, 'name' => DB::table('branches')->where('id', $limit)->value('name')] : null,
             'users'    => $users->map(function (User $u) use ($actor, $professionals, $branches, $exceptions, $tenant) {
                 $role = $u->roles->firstWhere('tenant_id', $tenant->id);
@@ -241,7 +224,6 @@ class AccessController extends Controller
 
     private function validateUser(Request $request, Tenant $tenant, ?User $target = null): array
     {
-        // El correo se guarda en minúsculas: así "Ana@..." y "ana@..." no pasan por dos cuentas.
         $request->merge([
             'phone'     => $request->phone ?: null,
             'branch_id' => $request->branch_id ?: null,
@@ -266,7 +248,6 @@ class AccessController extends Controller
         ]);
     }
 
-    /** Reglas del rol elegido: quién puede darlo y a quién. */
     private function assertRoleAllowed(Role $role, User $actor, bool $isProfessional, ?string $branchId): void
     {
         abort_if($this->isAdminRole($role) && !$actor->isTenantAdmin(), 403, 'Solo un administrador puede dar el rol Administrador.');
@@ -334,7 +315,6 @@ class AccessController extends Controller
         $this->assertMyStaff($actor, $target);
         $validated = $this->validateUser($request, $tenant, $target);
         if (Access::branchLimit($actor) !== null && !DB::table('professionals')->where('user_id', $target->id)->exists()) {
-            // Su personal no se le va a otra sede.
             $validated['branch_id'] = Access::branchLimit($actor);
         }
         $role = $this->findRole($tenant, $validated['role_id']);
@@ -367,7 +347,6 @@ class AccessController extends Controller
             ], 422);
         }
 
-        // Volver a activar una cuenta ocupa otra vez un lugar del plan.
         if ($statusChanges && $status === 'active' && ($blocked = $this->limitReached($tenant))) {
             return response()->json(['message' => $blocked, 'code' => 'PLAN_LIMIT'], 422);
         }
@@ -384,11 +363,9 @@ class AccessController extends Controller
 
             if ($roleChanges) {
                 $this->setRole($target, $role);
-                // Lo que se le quitó o agregó era respecto de su rol anterior.
                 DB::table('user_permissions')->where('user_id', $target->id)->delete();
             }
 
-            // Sin esto seguiría dentro con la sesión que ya tenía abierta.
             if ($status !== 'active') {
                 $target->tokens()->delete();
             }
@@ -415,7 +392,6 @@ class AccessController extends Controller
         return response()->json(['email' => $target->email, 'temporary_password' => $password]);
     }
 
-    /** Enciende o apaga un permiso a una persona, respecto de lo que trae su rol. */
     public function setUserPermission(Request $request, string $user)
     {
         $tenant = $this->tenant($request);
@@ -448,7 +424,6 @@ class AccessController extends Controller
         return $this->showUser($request, $target->id);
     }
 
-    /** Deja a la persona con lo que trae su rol, sin nada quitado ni agregado. */
     public function resetUserPermissions(Request $request, string $user)
     {
         $tenant = $this->tenant($request);
@@ -463,8 +438,6 @@ class AccessController extends Controller
         return $this->showUser($request, $target->id);
     }
 
-    // ------------------------------------------------------------------- Roles
-
     private function presentRoleRow(Role $role, int $users, int $permissions, int $total): array
     {
         $admin = $this->isAdminRole($role);
@@ -476,7 +449,6 @@ class AccessController extends Controller
             'description' => $role->description,
             'is_system'   => (bool) $role->is_system,
             'scope'       => Access::scopeReady() ? $role->scope : (Access::FACTORY[$role->slug]['scope'] ?? 'tenant'),
-            // El administrador no se recorta.
             'locked'      => $admin,
             'users'       => $users,
             'permissions' => $admin ? $total : $permissions,
@@ -561,7 +533,6 @@ class AccessController extends Controller
         ]);
 
         $source = !empty($validated['copy_from']) ? $this->findRole($tenant, $validated['copy_from']) : null;
-        // Copiar del administrador es copiar todo; nadie reparte más de lo que tiene.
         $names = $source ? ($this->isAdminRole($source) ? Access::all() : Access::rolePermissions($source->id)) : [];
         $names = array_values(array_filter($names, fn (string $name) => $actor->allows($name)));
 
@@ -604,7 +575,6 @@ class AccessController extends Controller
         return response()->json(['id' => $role->id]);
     }
 
-    /** Enciende o apaga un permiso del rol: rige al instante para todos los que lo tienen. */
     public function setRolePermission(Request $request, string $role)
     {
         $tenant = $this->tenant($request);
@@ -627,14 +597,12 @@ class AccessController extends Controller
             DB::table('role_permissions')->where('role_id', $role->id)->where('permission_id', $permissionId)->delete();
         }
 
-        // Una excepción que ya coincide con el rol deja de ser excepción.
         DB::table('user_permissions')->where('permission_id', $permissionId)->where('granted', (bool) $validated['on'])
             ->whereIn('user_id', DB::table('user_roles')->where('role_id', $role->id)->pluck('user_id'))->delete();
 
         return $this->showRole($request, $role->id);
     }
 
-    /** Qué tanto ve quien tiene el rol: toda la empresa, solo su sede o solo lo suyo. */
     public function setRoleScope(Request $request, string $role)
     {
         $tenant = $this->tenant($request);
@@ -648,7 +616,6 @@ class AccessController extends Controller
         abort_if($role->slug === 'professional' && $validated['scope'] !== 'own', 422, 'El rol Profesional ve solo lo suyo: sus citas, sus fichas y sus controles.');
         abort_if($role->slug !== 'professional' && $validated['scope'] === 'own', 422, '"Solo lo suyo" es para quien atiende citas: el rol Profesional.');
 
-        // Nadie con este rol puede quedar sin sede: se le asigna en el mismo paso.
         if ($validated['scope'] === 'branch') {
             $missing = User::whereIn('id', DB::table('user_roles')->where('role_id', $role->id)->pluck('user_id'))
                 ->whereNull('branch_id')->orderBy('first_name')->get();
@@ -681,7 +648,6 @@ class AccessController extends Controller
         return response()->json($this->showRole($request, $role->id)->getData(true) + ['assigned' => 0]);
     }
 
-    /** Devuelve un rol de fábrica a los permisos con que nació. */
     public function restoreRole(Request $request, string $role)
     {
         $tenant = $this->tenant($request);
@@ -692,7 +658,6 @@ class AccessController extends Controller
         abort_unless($request->user()->isTenantAdmin(), 403, 'Solo un administrador restablece un rol de fábrica.');
 
         Access::setRolePermissions($role->id, Access::factoryPermissions($role->slug));
-        // También vuelve a ver lo que veía al nacer (su sede, toda la empresa).
         if (Access::scopeReady()) {
             $role->update(['scope' => Access::FACTORY[$role->slug]['scope']]);
         }

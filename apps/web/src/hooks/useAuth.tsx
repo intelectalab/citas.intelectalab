@@ -33,7 +33,6 @@ export interface UserTenant {
   modules?: string[];
   rules?: Record<string, string | number | boolean>;
   dependents?: { enabled: boolean; kind: string | null; required: boolean };
-  // Fases de la cita con el nombre que usa la empresa.
   appointment_statuses?: AppointmentStatus[];
 }
 
@@ -51,20 +50,14 @@ export interface User {
   email: string;
   is_owner?: boolean;
   is_saas_admin?: boolean;
-  // Soporte de la plataforma: ve las empresas y entra a su panel, sin cambiar planes ni catálogos.
   is_saas_support?: boolean;
-  // Presente cuando la sesión la abrió la plataforma para dar soporte a esta empresa.
   impersonator?: { name: string } | null;
-  // Dueño o administrador de su empresa: el único que cambia su configuración.
   is_tenant_admin?: boolean;
-  // Los clientes inician sesión con su ficha (no están en users); el personal es 'staff'.
   account_type?: 'staff' | 'customer';
-  // Cliente que sigue con su contraseña inicial (su número de documento).
   must_change_password?: boolean;
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
   roles?: string[];
-  // Lo que su rol le permite ("customers.delete"...), ya con lo quitado y lo agregado a ella.
   permissions?: string[];
   role_name?: string | null;
   plan_slug?: string | null;
@@ -80,17 +73,13 @@ interface AuthContextType {
   hasFeature: (featureKey: string) => boolean;
   hasModule: (moduleKey: string) => boolean;
   hasRole: (roleSlug: string) => boolean;
-  // Si su rol le permite una acción, por ejemplo can('customers.delete').
   can: (permission: string) => boolean;
-  // Entrar al panel de una empresa desde la consola de la plataforma, y volver.
   startImpersonation: (tenantId: string) => Promise<void>;
   stopImpersonation: () => Promise<void>;
 }
 
-// Token del equipo de plataforma mientras está dentro del panel de una empresa.
 const PLATFORM_TOKEN_KEY = 'platform_auth_token';
 
-// Vuelve a la sesión de la plataforma. Devuelve false si no había una guardada.
 const restorePlatformSession = (): boolean => {
   const platformToken = localStorage.getItem(PLATFORM_TOKEN_KEY);
   if (!platformToken) return false;
@@ -143,7 +132,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
 
       if (error.response?.status === 401) {
-        // La sesión de soporte caduca sola: se vuelve a la consola de la plataforma.
         if (restorePlatformSession()) return;
 
         console.warn('[useAuth] Token inválido o expirado. Limpiando sesión...');
@@ -227,8 +215,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return !!user?.features?.[featureKey];
   };
 
-  // Módulos activos del tenant: su plan, menos lo que apagan el rubro y la empresa.
-  // Solo decide qué se muestra; la API valida lo mismo con el middleware `module`.
   const hasModule = (moduleKey: string): boolean => {
     if (user?.is_saas_admin) return true;
     return user?.tenant?.modules?.includes(moduleKey) ?? false;
@@ -239,9 +225,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return user?.roles?.includes(roleSlug) ?? false;
   };
 
-  // Permisos de su rol. Solo decide qué se muestra; la API valida lo mismo con el
-  // middleware `perm`. Una sesión guardada antes de que existieran los permisos no
-  // los trae: mientras llegan, el administrador conserva todo.
   const can = (permission: string): boolean => {
     if (user?.permissions) return user.permissions.includes(permission);
     return Boolean(user?.is_tenant_admin);

@@ -3,10 +3,8 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Cuántas filas se muestran a la vez en tablas y listas.
 export const PAGE_SIZE = 6;
 
-/** Reparte una lista en páginas. Si la lista se acorta, la página se ajusta sola. */
 export function usePaged<T>(items: T[], size: number = PAGE_SIZE) {
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(items.length / size));
@@ -24,7 +22,6 @@ interface PagerProps {
 
 const button = 'p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#022340] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors';
 
-/** "Página 1 de 3" con sus flechas. */
 export function Pager({ page, pages, onChange, className = '' }: PagerProps) {
   return (
     <div className={`flex items-center justify-end gap-3 ${className}`} data-pager>
@@ -48,10 +45,6 @@ interface PagedListProps<T> {
   size?: number;
 }
 
-/**
- * Lista de a seis con su paginación al pie. Dos listas lado a lado miden lo
- * mismo: la paginación queda siempre abajo.
- */
 export function PagedList<T>({ items, renderRow, empty, size = PAGE_SIZE }: PagedListProps<T>) {
   const { rows, page, pages, setPage } = usePaged(items, size);
 

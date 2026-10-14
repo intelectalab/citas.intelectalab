@@ -1,6 +1,3 @@
-// Módulos del producto que se activan por plan. Las claves coinciden con la
-// tabla saas_modules. Los módulos base (agenda y crm) van en todos los planes
-// y por eso no se eligen aquí.
 export interface ModuleGroup {
   key: string;
   title: string;
@@ -73,9 +70,6 @@ export const OPTIONAL_MODULE_KEYS: string[] = MODULE_GROUPS.flatMap((group) =>
   group.items.map((item) => item.key)
 );
 
-// Secciones del menú que aún no tienen pantalla: nombre y módulo del que dependen.
-// La página provisional /modules/<clave> las muestra igual que a un módulo.
-// Hoy no queda ninguna: las del grupo Agenda ya tienen su pantalla.
 export const PENDING_SECTIONS: Record<string, { label: string; module: string }> = {};
 
 export const MODULE_LABELS: Record<string, string> = {

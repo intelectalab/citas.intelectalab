@@ -3,7 +3,6 @@ interface CredentialsNoteProps {
   password: string;
 }
 
-// Correo y contraseña temporal de una cuenta: se muestran una sola vez.
 export default function CredentialsNote({ email, password }: CredentialsNoteProps) {
   return (
     <div className="space-y-4 pt-1" data-credentials>

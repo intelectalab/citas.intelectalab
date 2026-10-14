@@ -22,15 +22,12 @@ const VIEWS: { id: string; label: string; test: (sale: SaleRow) => boolean }[] =
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Ventas de la empresa: cada una con su detalle, sus pagos y su comprobante.
-// Una venta pagada no se edita: se corrige con una devolución.
 export default function SalesTable() {
   const [sales, setSales] = useState<SaleRow[] | null>(null);
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({ branch_id: '', status: '' });
   const [viewing, setViewing] = useState<string | null>(null);
-  // Citas atendidas sin cobrar: solo llegan si la empresa no cobra antes de atender.
   const [unbilled, setUnbilled] = useState<SaleRow[] | null>(null);
   const [charging, setCharging] = useState<SaleRow | null>(null);
   const [error, setError] = useState('');

@@ -27,7 +27,6 @@ export interface BusinessType {
   dependents?: { enabled?: boolean; kind?: string | null; required?: boolean };
   template?: any;
   tenants_count?: number;
-  // Empresas del rubro que aún no reciben sus últimos cambios.
   outdated_tenants_count?: number;
 }
 
@@ -142,7 +141,6 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
         kind: form.dependents_kind || null,
         required: form.dependents_required,
       },
-      // Se guardan también las reglas que este formulario no muestra (las conserva tal cual).
       default_rules: form.rules,
       template: cleanTemplate(form.template),
     };

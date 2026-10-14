@@ -6,14 +6,8 @@ use App\Models\Holiday;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Feriados: el calendario nacional que se le carga a cada empresa y la
- * consulta que usa la agenda para saber si un día se atiende.
- */
 class Holidays
 {
-    // Feriados nacionales del Perú de fecha fija (mes-día). Semana Santa cambia
-    // cada año y cada empresa la agrega a mano.
     public const NATIONAL = [
         '01-01' => 'Año Nuevo',
         '05-01' => 'Día del Trabajo',
@@ -31,9 +25,6 @@ class Holidays
         '12-25' => 'Navidad',
     ];
 
-    /**
-     * La base puede ir un esquema por detrás: sin la tabla, no hay feriados.
-     */
     public static function available(): bool
     {
         static $has = null;
@@ -41,12 +32,6 @@ class Holidays
         return $has ??= Schema::hasTable('holidays');
     }
 
-    /**
-     * Carga los feriados nacionales de un año para todas las sedes de la
-     * empresa. No repite los días que ya tienen un feriado general.
-     *
-     * @return int Cuántos se agregaron.
-     */
     public static function loadNational(Tenant $tenant, int $year, ?string $userId = null): int
     {
         if (!self::available()) {
@@ -81,12 +66,6 @@ class Holidays
         return $added;
     }
 
-    /**
-     * Feriados de un día en una sede (los de todas las sedes y los propios).
-     * Con $closedOnly, solo los que cierran la sede.
-     *
-     * @return \Illuminate\Support\Collection<int, Holiday>
-     */
     public static function on(Tenant $tenant, string $branchId, string $date, bool $closedOnly = false)
     {
         if (!self::available()) {

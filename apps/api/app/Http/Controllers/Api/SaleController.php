@@ -13,11 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-/**
- * Cobro de una cita: crea su venta, registra los pagos y, al quedar pagada,
- * emite su comprobante. Quien puede gestionar la cita puede cobrarla (un
- * profesional, solo las suyas).
- */
 class SaleController extends AppointmentController
 {
     private function assertReady(): void
@@ -25,9 +20,6 @@ class SaleController extends AppointmentController
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
     }
 
-    /**
-     * Por qué una cita no se puede cobrar, si es el caso.
-     */
     private function blocked(Tenant $tenant, Appointment $appointment): ?string
     {
         if (in_array($appointment->status, AppointmentFlow::RELEASED, true)) {
@@ -41,21 +33,16 @@ class SaleController extends AppointmentController
         return null;
     }
 
-    /**
-     * @param string|null $couponCode Cupón que se quiere probar antes de cobrar (aún sin venta).
-     */
     private function payload(Tenant $tenant, Appointment $appointment, ?string $couponCode = null): array
     {
         $rules = Sales::rules($tenant);
         $sale = Sales::ofAppointment($tenant->id, $appointment->id);
-        // El cupón se aplica al crear la venta: con la venta ya creada no cambia.
         $applied = !$sale && $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price) : null;
         $customer = $appointment->customer;
         $company = DB::table('companies')->where('tenant_id', $tenant->id)->orderBy('created_at')->first();
 
         return [
             'sale'             => $sale ? Sales::present($sale) : null,
-            // Lo que se cobraría si aún no hay venta.
             'preview'          => Sales::totals($rules, (float) $appointment->price, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax']],
             'coupon'           => $applied ? Coupons::summary($applied['coupon'], $applied['discount']) : null,
             'blocked'          => $sale ? null : $this->blocked($tenant, $appointment),
@@ -118,11 +105,9 @@ class SaleController extends AppointmentController
             'received.numeric' => 'Escribe lo recibido como un número.',
         ]);
 
-        // El comprobante se revisa antes de cobrar: no debe quedar una venta pagada sin poder emitirlo.
         $doc = Invoicing::validated($tenant, $validated);
 
         $result = DB::transaction(function () use ($tenant, $appointment, $validated, $doc, $user) {
-            // La cita se bloquea para que dos personas no le creen dos ventas.
             Appointment::where('id', $appointment->id)->lockForUpdate()->first();
             $sale = Sales::ofAppointment($tenant->id, $appointment->id);
 
@@ -137,9 +122,6 @@ class SaleController extends AppointmentController
         return response()->json($this->payload($tenant, $appointment) + ['change' => $result['change'], 'duplicate' => $result['duplicate']]);
     }
 
-    /**
-     * Emite el comprobante de una venta ya pagada que quedó sin él.
-     */
     public function issueInvoice(Request $request, string $appointment)
     {
         $this->assertReady();

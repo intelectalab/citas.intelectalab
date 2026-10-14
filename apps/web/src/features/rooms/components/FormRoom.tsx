@@ -14,9 +14,7 @@ interface FormRoomProps {
   onClose: () => void;
   initialData: RoomRow | null;
   branches: { id: string; name: string }[];
-  // Salas donde puede estar instalado un equipo (vacío: aún no se puede indicar).
   rooms: RoomRow[];
-  // Sede que se está viendo, para abrir el panel ya con ella.
   defaultBranchId?: string;
   onSaved: () => void;
 }
@@ -27,7 +25,6 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-sl
 
 const empty = { branch_id: '', parent_id: '', name: '', description: '', kind: 'room' as RoomRow['kind'], active: true };
 
-// Panel para registrar una sala o un equipo, o cambiar sus datos.
 export default function FormRoom({ isOpen, onClose, initialData, branches, rooms, defaultBranchId, onSaved }: FormRoomProps) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -84,7 +81,6 @@ export default function FormRoom({ isOpen, onClose, initialData, branches, rooms
 
   const formId = 'room-form';
   const isEquipment = form.kind === 'equipment';
-  // Un equipo solo puede estar en una sala de su misma sede.
   const roomsHere = rooms.filter((r) => r.branch_id === form.branch_id);
 
   return (
@@ -111,7 +107,6 @@ export default function FormRoom({ isOpen, onClose, initialData, branches, rooms
           </div>
 
           <div>
-            {/* Una sala no se muda de sede: se registra otra en la sede nueva. */}
             <Select
               label="Sede *"
               placeholder="Elige la sede"

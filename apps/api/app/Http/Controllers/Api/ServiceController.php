@@ -34,10 +34,6 @@ class ServiceController extends Controller
         return response()->json($query->orderBy('created_at', 'desc')->get());
     }
 
-    /**
-     * Reglas comunes de alta y edición. La categoría y el servicio de control
-     * deben ser del mismo tenant.
-     */
     private function rules(Request $request, ?string $serviceId = null): array
     {
         $tenantId = $request->user()->tenant_id;
@@ -66,10 +62,6 @@ class ServiceController extends Controller
         ];
     }
 
-    /**
-     * Deja coherentes los datos que dependen entre sí: el cupo solo aplica a
-     * las clases grupales y el servicio de control solo si hay control.
-     */
     private function normalize(array $data, ?Service $service = null): array
     {
         $kind = $data['kind'] ?? $service?->kind ?? Service::KIND_INDIVIDUAL;
@@ -93,7 +85,6 @@ class ServiceController extends Controller
 
         $validated = $request->validate($this->rules($request));
 
-        // Las clases grupales dependen del módulo de clases del tenant.
         if (($validated['kind'] ?? null) === Service::KIND_GROUP && !$this->canUseClasses($request)) {
             return $this->classesDisabled();
         }
@@ -149,7 +140,6 @@ class ServiceController extends Controller
     {
         $tenant = $request->user()->tenant;
 
-        // El admin SaaS no pertenece a un tenant y no está sujeto a módulos.
         return !$tenant || $tenant->hasModule('classes');
     }
 

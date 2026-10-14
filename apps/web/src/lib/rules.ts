@@ -1,6 +1,3 @@
-// Reglas de operación que un rubro define por defecto y que cada empresa puede
-// sobrescribir. Las claves son las de business_types.default_rules y
-// tenant_settings.rules; aquí se les da nombre, explicación y tipo de control.
 export type RuleValue = string | number | boolean;
 
 export interface RuleDefinition {
@@ -8,7 +5,6 @@ export interface RuleDefinition {
   label: string;
   hint: string;
   type: 'boolean' | 'number';
-  // Unidad que acompaña al número: horas, días, %.
   unit?: string;
 }
 

@@ -10,11 +10,9 @@ export interface AppNotification {
   title: string;
   body: string | null;
   link: string | null;
-  // A qué se refiere: 'appointment' abre la cita ahí mismo; lo demás lleva a `link`.
   entity_type: string | null;
   entity_id: string | null;
   read: boolean;
-  // Hora de la empresa, sin zona: 2026-10-19T09:00
   created_at: string;
   seconds_ago: number;
 }
@@ -25,7 +23,6 @@ export interface NotificationList {
   items: AppNotification[];
 }
 
-// Icono y color de cada tipo de aviso.
 const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   'appointment.booked': { icon: CalendarPlus, tone: 'bg-[#84D0D9]/25 text-[#022340]' },
   'appointment.moved': { icon: CalendarClock, tone: 'bg-amber-50 text-amber-600' },
@@ -58,7 +55,6 @@ export const timeAgo = (seconds: number): string => {
 
 const CHANGED = 'notifications:changed';
 
-/** Los avisos de quien tiene la sesión abierta, con cómo marcarlos como leídos. */
 export function useNotifications(limit: number, enabled: boolean) {
   const [data, setData] = useState<NotificationList>({ unread: 0, total: 0, items: [] });
   const [loaded, setLoaded] = useState(false);
@@ -68,14 +64,12 @@ export function useNotifications(limit: number, enabled: boolean) {
 
     api.get('/notifications', { params: { limit } })
       .then((res) => setData({ unread: res.data?.unread ?? 0, total: res.data?.total ?? 0, items: Array.isArray(res.data?.items) ? res.data.items : [] }))
-      // Sin avisos no se rompe nada: la campana queda vacía.
       .catch(() => undefined)
       .finally(() => setLoaded(true));
   }, [limit, enabled]);
 
   useEffect(() => { load(); }, [load]);
 
-  // La campana y la página de notificaciones se avisan entre sí al marcar algo como leído.
   useEffect(() => {
     window.addEventListener(CHANGED, load);
     return () => window.removeEventListener(CHANGED, load);

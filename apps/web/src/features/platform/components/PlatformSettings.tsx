@@ -17,7 +17,6 @@ interface PlatformValues {
   impersonation_hours: number;
 }
 
-// Colores sugeridos para el acento. El primero es el predeterminado.
 const ACCENT_PRESETS: { name: string; value: string }[] = [
   { name: 'Verde', value: '#10B981' },
   { name: 'Turquesa', value: '#14B8A6' },
@@ -45,7 +44,6 @@ function Title({ icon, title, hint }: { icon: React.ReactNode; title: string; hi
   );
 }
 
-// Muestra del anillo de uso con el color y los umbrales elegidos.
 function RingSample({ percent, color, label }: { percent: number; color: string; label: string }) {
   const radius = 22;
   const circumference = 2 * Math.PI * radius;
@@ -67,7 +65,6 @@ function RingSample({ percent, color, label }: { percent: number; color: string;
   );
 }
 
-// Configuración de la plataforma. Solo la ve y la cambia el administrador SaaS.
 export default function PlatformSettings() {
   const { user, loading: authLoading } = useAuth();
   const { applyPlatform } = usePlatform();
@@ -107,7 +104,6 @@ export default function PlatformSettings() {
       setMessage(null);
       const res = await api.put('/admin/platform-settings', { ...values, support_email: values.support_email || null });
       setValues(res.data.values);
-      // El color y la marca cambian en toda la aplicación sin recargar.
       applyPlatform(res.data.values);
       setMessage({ type: 'ok', text: 'Configuración guardada.' });
     } catch (err: any) {
@@ -154,7 +150,6 @@ export default function PlatformSettings() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        {/* ============ Apariencia ============ */}
         <section className={`xl:col-span-7 ${card}`}>
           <Title
             icon={<Palette size={16} />}
@@ -204,7 +199,6 @@ export default function PlatformSettings() {
             )}
           </div>
 
-          {/* Vista previa con el color elegido, antes de guardar */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" style={{ ['--accent' as string]: accent }}>
             <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Vista previa</span>
             <div className="flex flex-wrap items-center gap-8">
@@ -219,7 +213,6 @@ export default function PlatformSettings() {
           </div>
         </section>
 
-        {/* ============ Umbrales de uso ============ */}
         <section className={`xl:col-span-5 ${card}`}>
           <Title
             icon={<Gauge size={16} />}
@@ -248,7 +241,6 @@ export default function PlatformSettings() {
           </p>
         </section>
 
-        {/* ============ Marca ============ */}
         <section className={`xl:col-span-5 ${card}`}>
           <Title icon={<Tag size={16} />} title="Marca y contacto" hint="El nombre que se ve en el menú y a dónde escribir si alguien necesita ayuda." />
           <div>
@@ -261,7 +253,6 @@ export default function PlatformSettings() {
           </div>
         </section>
 
-        {/* ============ Registro ============ */}
         <section className={`xl:col-span-4 ${card}`}>
           <Title icon={<DoorOpen size={16} />} title="Registro de empresas" hint="Si cualquiera puede crear su empresa desde la página de registro." />
           <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3.5 cursor-pointer">
@@ -275,7 +266,6 @@ export default function PlatformSettings() {
           </label>
         </section>
 
-        {/* ============ Soporte ============ */}
         <section className={`xl:col-span-3 ${card}`}>
           <Title icon={<LifeBuoy size={16} />} title="Sesión de soporte" hint="Cuánto dura la sesión al entrar al panel de una empresa." />
           <div>

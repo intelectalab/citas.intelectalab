@@ -27,7 +27,6 @@ const METHOD_ICONS: Record<string, React.ReactNode> = {
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Todo el dinero que entró y salió por ventas: cada cobro y cada devolución.
 export default function PaymentsTable() {
   const [payments, setPayments] = useState<PaymentRow[] | null>(null);
   const [methods, setMethods] = useState<{ value: string; label: string }[]>([]);

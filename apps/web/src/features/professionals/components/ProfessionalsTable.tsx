@@ -71,7 +71,6 @@ export default function ProfessionalsTable() {
     message: '',
   });
   const [isActionLoading, setIsActionLoading] = useState(false);
-  // Uso frente al plan: cada profesional ocupa un lugar de profesional y una cuenta de usuario.
   const [planUsage, setPlanUsage] = useState<PlanUsage[]>([]);
 
   const fetchPlanUsage = async () => {
@@ -79,7 +78,6 @@ export default function ProfessionalsTable() {
       const res = await api.get('/company');
       setPlanUsage(Array.isArray(res.data?.usage) ? res.data.usage : []);
     } catch {
-      // Sin este dato el botón queda disponible; la API igual rechaza al guardar si no hay lugar.
       setPlanUsage([]);
     }
   };
@@ -210,7 +208,6 @@ export default function ProfessionalsTable() {
 
   const safeProfessionals = Array.isArray(professionals) ? professionals : [];
 
-  // Conteos calculados para las tarjetas
   const totalActive = safeProfessionals.filter(p => p.status?.slug === 'active' || p.status?.name?.toLowerCase() === 'activo').length;
   const totalInactive = safeProfessionals.filter(p => p.status?.slug === 'inactive' || p.status?.name?.toLowerCase() === 'inactivo').length;
 
@@ -222,7 +219,6 @@ export default function ProfessionalsTable() {
     : reached(userUsage)
       ? `Tu plan permite hasta ${userUsage!.limit} cuentas de usuario además de la del dueño y ya tienes ${userUsage!.used}. Para agregar otro, cambia de plan.`
       : '';
-  // El tope que se alcanza primero es el que se muestra en la tarjeta.
   const shownUsage = [proUsage, userUsage]
     .filter((u): u is PlanUsage => typeof u?.limit === 'number')
     .sort((a, b) => ((a.limit as number) - a.used) - ((b.limit as number) - b.used))[0];
@@ -253,7 +249,6 @@ export default function ProfessionalsTable() {
     }
   ];
 
-  // La columna de colegiatura solo aparece en los rubros que la usan.
   const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
 
   const allColumns: (Column<Professional> | null)[] = [

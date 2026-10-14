@@ -1,10 +1,7 @@
-// Tipos y utilidades que comparten el cobro de una cita y la caja.
-
 export interface SaleInvoice {
   id: string;
   doc_type: 'ticket' | 'boleta' | 'factura' | 'nota_credito';
   doc_type_label: string;
-  // Serie y número: B001-00000001
   number: string;
   customer_doc_type: string | null;
   customer_doc_number: string | null;
@@ -14,11 +11,9 @@ export interface SaleInvoice {
   tax: string;
   total: string;
   status: string;
-  // No se envió a SUNAT de verdad: la empresa aún no conecta su proveedor.
   simulated: boolean;
   sunat_status: 'pending' | 'accepted' | 'rejected' | 'not_applicable';
   sunat_message: string | null;
-  // Solo en una nota de crédito: por qué se emitió.
   reason?: string | null;
   issued_at: string;
 }
@@ -53,17 +48,14 @@ export interface Sale {
   paid_at: string | null;
   items: { id: string; description: string; quantity: number; unit_price: number; discount: number; total: number }[];
   payments: SalePayment[];
-  // Cupón con que se creó la venta, si usó alguno.
   coupon: AppliedCoupon | null;
   invoice: SaleInvoice | null;
-  // Total devuelto al cliente.
   refunded?: number;
 }
 
 export interface AppliedCoupon {
   code: string;
   description: string | null;
-  // "10 %" o "S/ 20.00"
   benefit: string;
   discount: number;
 }
@@ -77,7 +69,6 @@ export interface Coupon {
   min_purchase: number;
   max_uses: number | null;
   used_count: number;
-  // AAAA-MM-DD, en la hora de la empresa.
   starts_on: string | null;
   ends_on: string | null;
   status: 'active' | 'inactive';
@@ -85,13 +76,10 @@ export interface Coupon {
   created_at: string;
 }
 
-// Lo que hace falta para cobrar una cita: su venta (si ya tiene) y las opciones de cobro.
 export interface ChargeContext {
   sale: Sale | null;
   preview: { subtotal: number; discount: number; tax: number; total: number; tax_rate: number; prices_include_tax: boolean };
-  // Cupón que se está probando antes de cobrar (aún sin venta).
   coupon?: AppliedCoupon | null;
-  // Por qué no se puede cobrar, si es el caso.
   blocked: string | null;
   item: string | null;
   methods: { value: string; label: string; needs_reference: boolean }[];
@@ -133,7 +121,6 @@ export interface CashSession {
   expense: number;
   withdrawal: number;
   refund: number;
-  // Efectivo que debe haber (abierto) o que debía haber al cerrar.
   expected_amount: number;
   closing_amount: number | null;
   difference: number | null;
@@ -161,17 +148,14 @@ export interface CashBoardData {
   sessions: CashSession[];
 }
 
-// 1234.5 -> "S/ 1,234.50"
 export const money = (value: number | string | null | undefined): string =>
   `S/ ${Number(value ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// "12 oct 2026, 15:30" en la hora del navegador.
 export const momentOf = (iso: string | null | undefined): string =>
   iso
     ? new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\./g, '')
     : '—';
 
-// Deja escribir solo un monto: dígitos y un punto con hasta dos decimales.
 export const cleanAmount = (text: string): string => {
   const [whole, ...rest] = text.replace(',', '.').replace(/[^\d.]/g, '').split('.');
   return rest.length ? `${whole.slice(0, 7)}.${rest.join('').slice(0, 2)}` : whole.slice(0, 7);
@@ -184,7 +168,6 @@ export const SUNAT_LABELS: Record<SaleInvoice['sunat_status'], string> = {
   not_applicable: 'Comprobante interno',
 };
 
-// Una fila de la pantalla Ventas.
 export interface SaleRow {
   id: string;
   code: string;
@@ -202,12 +185,10 @@ export interface SaleRow {
   refunded: number;
   invoice_number: string | null;
   invoice_label: string | null;
-  // Cita atendida que nadie cobró: aún no tiene venta.
   unbilled?: boolean;
   appointment_id?: string;
 }
 
-// Lo que la API entrega por cada cita atendida sin cobrar.
 export interface UnbilledAppointment {
   appointment_id: string;
   appointment_code: string;
@@ -229,7 +210,6 @@ export interface SaleRefund {
   credit_note: SaleInvoice | null;
 }
 
-// La venta completa, con lo que se puede hacer con ella.
 export interface SaleDetail extends Sale {
   branch: { id: string; name: string | null };
   customer: { id: string; name: string } | null;
@@ -238,7 +218,6 @@ export interface SaleDetail extends Sale {
   issuer: { name: string; tax_id: string | null; address: string | null };
   refunds: SaleRefund[];
   can_manage: boolean;
-  // Por qué no se puede anular o devolver, si es el caso.
   void_blocked: string | null;
   refund_available: number;
   refund_blocked: string | null;
@@ -246,7 +225,6 @@ export interface SaleDetail extends Sale {
   cash_sessions: { id: string; register_name: string }[];
 }
 
-// Una fila de la pantalla Pagos: un cobro o una devolución (monto negativo).
 export interface PaymentRow {
   id: string;
   at: string;

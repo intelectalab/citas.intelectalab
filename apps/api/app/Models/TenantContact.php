@@ -21,17 +21,11 @@ class TenantContact extends Model
         'position',
     ];
 
-    /**
-     * Relación con el Tenant (Inquilino)
-     */
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
     }
 
-    /**
-     * Relación opcional con el Usuario del sistema
-     */
     public function user()
     {
         return $this->belongsTo(User::class);

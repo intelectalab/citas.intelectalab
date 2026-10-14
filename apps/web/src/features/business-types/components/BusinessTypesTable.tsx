@@ -15,7 +15,6 @@ export default function BusinessTypesTable() {
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({ status: '' });
-  // Filtro rápido de las tarjetas que no dependen del estado: en uso, sin empresas, etc.
   const [quickFilter, setQuickFilter] = useState<'' | 'in_use' | 'unused' | 'outdated' | 'no_catalog'>('');
 
   const [showFormModal, setShowFormModal] = useState(false);

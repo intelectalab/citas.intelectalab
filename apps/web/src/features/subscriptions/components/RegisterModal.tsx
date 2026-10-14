@@ -43,8 +43,8 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
     address: '',
     department: 'Lima',
     district: '',
-    first_name: '', // ➔ Modificado
-    last_name: '',  // ➔ Modificado
+    first_name: '',
+    last_name: '',
     email: '',
     password: '',
   });
@@ -109,19 +109,16 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
           <X className="w-5 h-5" />
         </button>
 
-        {/* Encabezado */}
         <div>
           <h2 className="text-xl font-extrabold text-[#022340]">Crear cuenta empresarial</h2>
           <p className="text-xs text-slate-500 mt-0.5">Completa los datos para activar tu empresa.</p>
         </div>
 
-        {/* Barra de Progreso */}
         <div className="grid grid-cols-2 gap-2 pt-1">
           <div className={`h-1.5 rounded-full transition-all ${modalStep >= 1 ? 'bg-[#022340]' : 'bg-slate-200'}`} />
           <div className={`h-1.5 rounded-full transition-all ${modalStep >= 2 ? 'bg-[#022340]' : 'bg-slate-200'}`} />
         </div>
 
-        {/* Resumen del plan */}
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between text-xs">
           <div>
             <span className="text-slate-400 font-medium block">Plan seleccionado</span>

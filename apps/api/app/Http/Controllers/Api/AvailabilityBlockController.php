@@ -18,15 +18,10 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Bloqueos de agenda: ausencias de un profesional o cierres de una sede.
- * Las horas se reciben y se devuelven en la zona horaria de la empresa.
- */
 class AvailabilityBlockController extends Controller
 {
     private const LOCAL_FORMAT = 'Y-m-d\TH:i';
 
-    // Citas que un bloqueo deja sin quien las atienda: las que aún ocupan horario.
     private const AFFECTED_STATUSES = [
         AppointmentFlow::PENDING,
         AppointmentFlow::CONFIRMED,
@@ -47,10 +42,6 @@ class AvailabilityBlockController extends Controller
         return $tenant->timezone ?: 'America/Lima';
     }
 
-    /**
-     * Un usuario con rol de profesional (sin ser administrador) solo maneja
-     * sus propias ausencias. Devuelve su profesional, o null si ve todo.
-     */
     private function ownProfessionalId(User $user): ?string
     {
         if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
@@ -60,9 +51,6 @@ class AvailabilityBlockController extends Controller
         return Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id') ?? 'none';
     }
 
-    /**
-     * Lo que necesita el formulario: a quién se puede bloquear y con qué tipos.
-     */
     public function options(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -82,9 +70,7 @@ class AvailabilityBlockController extends Controller
                 ->values(),
             'professional_kinds' => $kinds(AvailabilityBlock::PROFESSIONAL_KINDS),
             'branch_kinds'       => $kinds(AvailabilityBlock::BRANCH_KINDS),
-            // Cerrar una sede completa no es decisión de un profesional.
             'can_block_branch'   => $own === null,
-            // Los feriados los cambia quien tenga ese permiso (de fábrica, administración y gerencia).
             'can_manage_holidays' => $request->user()->allows('holidays.edit'),
         ]);
     }
@@ -105,16 +91,13 @@ class AvailabilityBlockController extends Controller
         $own = $this->ownProfessionalId($request->user());
         $past = $request->input('period') === 'past';
 
-        // Sin rango, solo los que aún no terminan.
         $from = $request->filled('from') ? Carbon::parse($request->input('from'), $timezone) : now();
 
         $blocks = AvailabilityBlock::where('tenant_id', $tenant->id)
             ->with(['professional:id,display_name', 'branch:id,name'])
-            // Un profesional ve sus ausencias y los cierres de sede.
             ->when($own, fn ($q) => $q->where(fn ($q) => $q->where('professional_id', $own)->orWhereNull('professional_id')))
             ->when($request->filled('professional_id'), fn ($q) => $q->where('professional_id', $request->input('professional_id')))
             ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->input('branch_id')))
-            // Quien trabaja solo con su sede ve los cierres de su sede y las ausencias de quienes atienden ahí.
             ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where(fn ($q) => $q->where('branch_id', $id)->orWhereIn('professional_id', Access::professionalsAt($id))))
             ->when($past, fn ($q) => $q->where('ends_at', '<=', now()->toIso8601String())->orderByDesc('starts_at')->limit(200))
             ->when(!$past, fn ($q) => $q->where('ends_at', '>', $from->toIso8601String())->orderBy('starts_at'))
@@ -124,9 +107,6 @@ class AvailabilityBlockController extends Controller
         return response()->json($blocks->map(fn (AvailabilityBlock $block) => $this->present($block, $tenant, $own)));
     }
 
-    /**
-     * Un bloqueo con las citas que caen dentro de él.
-     */
     public function show(Request $request, string $id)
     {
         $tenant = $this->tenant($request);
@@ -139,9 +119,6 @@ class AvailabilityBlockController extends Controller
         ]);
     }
 
-    /**
-     * Citas que quedarían dentro de un bloqueo, antes de guardarlo.
-     */
     public function affected(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -187,10 +164,6 @@ class AvailabilityBlockController extends Controller
         return response()->json(['message' => 'Bloqueo eliminado correctamente']);
     }
 
-    /**
-     * Quien trabaja solo con su sede maneja los cierres de su sede y las
-     * ausencias de quienes atienden ahí.
-     */
     private function assertBranch(Request $request, ?string $professionalId, ?string $branchId): void
     {
         $limit = Access::branchLimit($request->user());
@@ -203,9 +176,6 @@ class AvailabilityBlockController extends Controller
         abort_unless($mine, 403, Access::otherBranch($request->user()));
     }
 
-    /**
-     * @param bool $manage Exige que quien consulta pueda cambiarlo, no solo verlo.
-     */
     private function find(Tenant $tenant, string $id, ?string $own, bool $manage = true): AvailabilityBlock
     {
         $block = AvailabilityBlock::where('tenant_id', $tenant->id)
@@ -219,9 +189,6 @@ class AvailabilityBlockController extends Controller
         return $block;
     }
 
-    /**
-     * @return array{0: array{professional_id: ?string, branch_id: ?string, kind: string, reason: string}, 1: Carbon, 2: Carbon}
-     */
     private function validated(Request $request, Tenant $tenant, ?string $own, bool $full = true): array
     {
         $validated = $request->validate([
@@ -240,7 +207,6 @@ class AvailabilityBlockController extends Controller
         ]);
 
         $professionalId = $validated['professional_id'] ?? null;
-        // Una ausencia rige en todas las sedes donde atiende esa persona.
         $branchId = $professionalId ? null : ($validated['branch_id'] ?? null);
 
         if ($professionalId) {
@@ -297,7 +263,6 @@ class AvailabilityBlockController extends Controller
             ->when(!$professionalId, fn ($q) => $q->where('branch_id', $branchId))
             ->where('starts_at', '<', $endsAt->toIso8601String())
             ->where('ends_at', '>', $startsAt->toIso8601String())
-            // Lo que ya pasó no hay que resolverlo.
             ->where('ends_at', '>', now()->toIso8601String());
     }
 

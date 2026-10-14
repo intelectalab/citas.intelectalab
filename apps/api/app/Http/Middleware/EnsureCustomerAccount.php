@@ -7,11 +7,6 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * Las rutas del portal son solo para clientes. El personal usa el panel de la
- * empresa. Mientras el cliente siga con su contraseña inicial (su documento)
- * solo puede ver su resumen y crear la suya.
- */
 class EnsureCustomerAccount
 {
     public function handle(Request $request, Closure $next): Response

@@ -59,7 +59,7 @@ export default function ContactsTable() {
       id: 'owner_id',
       label: 'Propietario del contacto',
       type: 'select',
-      options: managersOptions // Dinámico desde la BD
+      options: managersOptions
     },
     {
       id: 'lead_status',
@@ -87,7 +87,7 @@ export default function ContactsTable() {
       const res = await api.get('/contacts', {
         params: { 
           search,
-          ...currentFilters // Envía owner_id, lead_status, created_at, etc., a Laravel
+          ...currentFilters
         }
       });
       setContacts(res.data);
@@ -231,7 +231,6 @@ export default function ContactsTable() {
         onTabChange={setActiveTab}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
-        // Pasamos la configuración y estado de los filtros dinámicos
         filterConfigs={contactFilterConfigs}
         filterValues={filters}
         onFilterChange={handleFilterChange}

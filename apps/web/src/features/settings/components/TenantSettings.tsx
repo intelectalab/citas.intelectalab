@@ -12,7 +12,6 @@ interface SettingsModule {
   is_core: boolean;
   enabled: boolean;
   can_toggle: boolean;
-  // Por qué la empresa no puede cambiarlo: módulo base, plan, rubro o sin suscripción.
   locked: 'core' | 'plan' | 'business_type' | 'platform' | 'no_subscription' | null;
 }
 
@@ -20,21 +19,16 @@ interface SettingsPayload {
   tenant: { name: string; code: string; business_type_name: string | null; plan_name: string | null };
   modules: SettingsModule[];
   vocabulary: { defaults: Record<string, string>; overrides: Record<string, string> };
-  // Los términos de dependientes solo se editan si el rubro los usa.
   dependents?: { enabled: boolean };
   appointment_statuses?: AppointmentStatus[];
   booking_rules?: BookingRules & { uses_confirmation: boolean };
-  // Solo llega si la empresa tiene el módulo de salas y equipos.
   resources?: { equipment_down: EquipmentDown } | null;
-  // Solo llega si la empresa tiene punto de venta y caja.
   sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
-  // Solo llega si la empresa tiene reserva en línea.
   booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
 
-// Qué pasa con una sala cuando un equipo instalado en ella queda fuera de uso.
 const EQUIPMENT_DOWN_OPTIONS: { id: EquipmentDown; title: string; hint: string; icon: React.ReactNode }[] = [
   { id: 'none', title: 'No pasa nada', hint: 'La sala sigue en uso y no se muestra ningún aviso.', icon: <Minus size={18} /> },
   { id: 'observe', title: 'Mostrarlo como observación', hint: 'La sala sigue en uso, con una nota que dice qué equipo suyo está fuera de uso.', icon: <Eye size={18} /> },
@@ -45,7 +39,6 @@ type OnMiss = 'notify' | 'notify_release' | 'release';
 
 type MissAction = 'none' | 'note' | 'block';
 
-// Qué pasa con un cliente que reserva en línea y no asiste.
 const MISS_OPTIONS: { id: MissAction; title: string; hint: string; icon: React.ReactNode }[] = [
   { id: 'none', title: 'No pasa nada', hint: 'La cita queda como "No asistió" y nada más.', icon: <Minus size={18} /> },
   { id: 'note', title: 'Dejar una nota', hint: 'Su ficha y la lista de clientes muestran cuántas veces faltó a una cita reservada en línea.', icon: <NotebookPen size={18} /> },
@@ -53,15 +46,12 @@ const MISS_OPTIONS: { id: MissAction; title: string; hint: string; icon: React.R
 ];
 
 interface BookingRules {
-  // Horas antes de la cita en que debe estar confirmada; 0 = sin plazo.
   confirm_deadline_hours: number;
   confirm_on_miss: OnMiss;
-  // En "avisar y luego liberar": a cuántas horas de la cita se libera.
   confirm_release_hours: number;
   cancel_window_hours: number;
 }
 
-// Qué puede hacer la empresa con una cita que nadie confirmó a tiempo.
 const ON_MISS_OPTIONS: { id: OnMiss; title: string; hint: string; icon: React.ReactNode }[] = [
   { id: 'notify', title: 'Solo avisar', hint: 'La cita se mantiene. Se avisa al equipo para que llame a confirmar.', icon: <BellRing size={18} /> },
   { id: 'notify_release', title: 'Avisar y luego liberar', hint: 'Primero se avisa. Si más cerca de la hora sigue sin confirmar, la cita se cancela y el horario queda libre.', icon: <Hourglass size={18} /> },
@@ -87,26 +77,20 @@ const LOCK_REASONS: Record<string, string> = {
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
-// Configuración que la empresa maneja por su cuenta. Solo la usa su
-// administrador y solo dentro de lo que le dan su plan y su rubro: apaga y
-// vuelve a encender módulos que ya tiene; no puede activar otros.
 export default function TenantSettings() {
   const { user, loading: authLoading, refetchUser, can } = useAuth();
   const [data, setData] = useState<SettingsPayload | null>(null);
   const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [vocabulary, setVocabulary] = useState<Record<string, string>>({});
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
-  // Las horas se editan como texto para poder dejar el campo vacío mientras se escribe.
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
-  // Los números se editan como texto para poder dejar el campo vacío mientras se escribe.
   const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
   const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
-  // Quien puede ver la configuración; guardarla pide además el permiso de cambiarla.
   const isAdmin = can('settings.view');
   const canSave = can('settings.edit');
 
@@ -114,7 +98,6 @@ export default function TenantSettings() {
     setData(payload);
     setModulesOff(payload.modules.filter((m) => m.can_toggle && !m.enabled).map((m) => m.key));
     setVocabulary({ ...payload.vocabulary.overrides });
-    // Solo los nombres que la empresa cambió; el resto queda vacío y usa el de por defecto.
     setStatusNames(Object.fromEntries(
       (payload.appointment_statuses ?? []).filter((s) => s.name !== s.default_name).map((s) => [s.key, s.name]),
     ));
@@ -153,7 +136,6 @@ export default function TenantSettings() {
       .finally(() => setLoading(false));
   }, [authLoading, isAdmin]);
 
-  // Solo dígitos, hasta tres: las horas son números enteros.
   const setHours = (field: 'deadline' | 'release' | 'cancel', value: string) => {
     setMessage(null);
     setBookingRules((current) => (current ? { ...current, [field]: value.replace(/\D/g, '').slice(0, 3) } : current));
@@ -197,7 +179,6 @@ export default function TenantSettings() {
         } : {}),
       });
       apply(res.data);
-      // El menú y los nombres dependen de estos datos.
       await refetchUser();
       setMessage({ type: 'ok', text: 'Configuración guardada.' });
     } catch (err: any) {
@@ -237,7 +218,6 @@ export default function TenantSettings() {
 
   const toggleable = data.modules.filter((m) => m.can_toggle);
   const core = data.modules.filter((m) => m.locked === 'core');
-  // Lo que su rubro no usa no se lista: la empresa no puede hacer nada al respecto.
   const unavailable = data.modules.filter((m) => !m.can_toggle && m.locked !== 'core' && m.locked !== 'business_type');
 
   return (

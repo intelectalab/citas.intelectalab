@@ -13,19 +13,15 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        // Un cliente inicia sesión con su ficha: no tiene roles ni plan que mostrar.
         if ($user instanceof \App\Models\Customer) {
             return $this->customer($user);
         }
 
         $user->load(['roles', 'tenant.businessType', 'tenant.settings']);
 
-        // is_saas_admin se mantiene para todo el equipo de plataforma con permisos
-        // completos; el soporte SaaS va aparte porque solo ve empresas y entra a su panel.
         $isSaasAdmin = $user->isSaasAdmin();
         $isSaasSupport = $user->isSaasSupport();
 
-        // Sesión abierta por la plataforma para dar soporte: el token lo indica.
         $tokenName = (string) $user->currentAccessToken()?->name;
         $impersonator = str_starts_with($tokenName, 'impersonation:')
             ? \App\Models\User::find(substr($tokenName, strlen('impersonation:')))
@@ -33,7 +29,6 @@ class AuthController extends Controller
         $subscriptionFeatures = [];
         $planSlug = null;
 
-        // El plan y sus módulos solo interesan al personal del tenant.
         if ($user->tenant_id) {
             $subscription = \App\Models\Subscription::with('plan')
                 ->where('tenant_id', $user->tenant_id)
@@ -65,7 +60,6 @@ class AuthController extends Controller
             ] : null,
             'account_type' => 'staff',
             'roles' => $user->roles ? $user->roles->pluck('slug') : [],
-            // Lo que su rol le permite ("customers.delete"...), ya con lo quitado y lo agregado a ella.
             'permissions' => \App\Support\Access::of($user),
             'role_name' => $user->tenant_id ? $user->roles->first()?->name : null,
             'plan_slug' => $planSlug,
@@ -87,9 +81,6 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * La misma forma que la del personal, con lo que el portal necesita.
-     */
     private function customer(\App\Models\Customer $customer)
     {
         $customer->load(['tenant.businessType', 'tenant.settings']);
@@ -114,7 +105,6 @@ class AuthController extends Controller
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
-                // El código de empresa lo reparte el personal; el cliente no lo necesita.
                 'code' => null,
                 'business_type' => $tenant->businessType?->slug,
                 'business_type_name' => $tenant->businessType?->short_name,

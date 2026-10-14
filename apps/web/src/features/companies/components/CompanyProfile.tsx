@@ -16,8 +16,6 @@ const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wide
 
 const shortDate = (date: string) => formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' });
 
-// Datos generales de la propia empresa: quién es, cómo ubicarla, su plan y
-// cuánto usa de lo que su plan permite. La edita su administrador.
 export default function CompanyProfile() {
   const { refetchUser } = useAuth();
   const vocab = useVocabulary();
@@ -66,7 +64,6 @@ export default function CompanyProfile() {
       await navigator.clipboard.writeText(tenant.code);
       done = true;
     } catch {
-      // Sin permiso para el portapapeles (o sin https): se copia desde un campo temporal.
       const field = document.createElement('textarea');
       field.value = tenant.code;
       field.style.position = 'fixed';
@@ -86,7 +83,6 @@ export default function CompanyProfile() {
       {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-        {/* Quién es la empresa */}
         <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="company">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -118,7 +114,6 @@ export default function CompanyProfile() {
           </dl>
         </section>
 
-        {/* Uso frente a lo que permite el plan */}
         <div className="xl:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
           {data.usage.map((item) => {
             const meta = usageLabels[item.key];
@@ -152,7 +147,6 @@ export default function CompanyProfile() {
           })}
         </div>
 
-        {/* Plan */}
         <section className={`${card} p-6 space-y-4`} data-card="plan">
           <h2 className={cardTitle}><CreditCard size={16} className="text-[#3F768C]" /> Tu plan</h2>
           {subscription ? (
@@ -173,7 +167,6 @@ export default function CompanyProfile() {
           <p className="text-xs text-slate-500">El plan y el rubro los cambia el equipo de la plataforma.</p>
         </section>
 
-        {/* Código de empresa */}
         <section className={`${card} p-6 space-y-4`} data-card="code">
           <h2 className={cardTitle}><KeyRound size={16} className="text-[#3F768C]" /> Código de empresa</h2>
           <div className="flex items-center justify-between gap-3">
@@ -187,7 +180,6 @@ export default function CompanyProfile() {
           </p>
         </section>
 
-        {/* A dónde seguir */}
         <section className={`${card} p-6 space-y-3 xl:col-span-3`} data-card="links">
           <h2 className={cardTitle}><Settings size={16} className="text-[#3F768C]" /> Lo demás de tu empresa</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

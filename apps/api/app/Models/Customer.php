@@ -10,14 +10,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
 
-/**
- * Cliente del tenant (antes "Patient"). El término visible puede variar
- * por rubro (paciente, alumno, tutor), pero la entidad es una sola.
- *
- * También es su cuenta del portal: ingresa con su correo y su contraseña, que
- * viven aquí. Los clientes no tienen fila en users, así sus datos están una
- * sola vez. La contraseña inicial es su número de documento.
- */
 class Customer extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasUuids, SoftDeletes;
@@ -51,7 +43,6 @@ class Customer extends Authenticatable
         'last_activity_at',
     ];
 
-    // La contraseña nunca viaja en una respuesta, ni la del personal que lista clientes.
     protected $hidden = [
         'password_hash',
         'remember_token',
@@ -66,12 +57,10 @@ class Customer extends Authenticatable
         'last_login_at' => 'datetime',
     ];
 
-    // Estado del acceso al portal, para mostrarlo al personal.
     protected $appends = ['portal_access'];
 
     protected static function booted(): void
     {
-        // Garantiza el código correlativo aunque quien crea el registro no lo envíe.
         static::creating(function (Customer $customer) {
             if (empty($customer->code)) {
                 $customer->code = static::nextCode($customer->tenant_id);
@@ -79,10 +68,6 @@ class Customer extends Authenticatable
         });
     }
 
-    /**
-     * Siguiente código correlativo del tenant (CLI-0001, CLI-0002, ...).
-     * Considera registros eliminados para no reutilizar códigos.
-     */
     public static function nextCode(?string $tenantId): string
     {
         $max = static::withTrashed()
@@ -120,19 +105,11 @@ class Customer extends Authenticatable
         return $this->password_hash;
     }
 
-    // Sin "recordarme": la sesión del portal va por token.
     public function getRememberTokenName()
     {
         return '';
     }
 
-    /**
-     * Estado del acceso al portal:
-     *  - no_email / no_document: falta el dato para darle acceso;
-     *  - disabled: el personal se lo quitó;
-     *  - pending: puede entrar con su documento y aún no creó su contraseña;
-     *  - active: ya entra con su propia contraseña.
-     */
     public function getPortalAccessAttribute(): string
     {
         if (!$this->email) {
@@ -153,11 +130,6 @@ class Customer extends Authenticatable
         return (bool) $this->email && (bool) $this->password_hash && $this->portal_enabled !== false;
     }
 
-    /**
-     * Deja la contraseña igual al número de documento y obliga a cambiarla al
-     * ingresar. Se usa al registrar al cliente y cuando el personal restablece
-     * su acceso. Sin correo o sin documento no hay acceso que dar.
-     */
     public function resetPortalPassword(): bool
     {
         $document = trim((string) $this->document_number);
@@ -175,11 +147,6 @@ class Customer extends Authenticatable
         return true;
     }
 
-    /**
-     * Tras crear o editar la ficha: da el acceso inicial si ya tiene correo y
-     * documento, y sigue al documento mientras el cliente no haya creado su
-     * propia contraseña. Una contraseña que el cliente ya eligió no se toca.
-     */
     public function syncPortalPassword(bool $documentChanged = false): void
     {
         if (!$this->password_hash || ($documentChanged && $this->must_change_password)) {
@@ -187,8 +154,6 @@ class Customer extends Authenticatable
         }
     }
 
-    // Las rutas y controladores preguntan esto a quien inició sesión, sea
-    // personal (User) o cliente. Un cliente nunca es personal ni plataforma.
     public function isCustomer(): bool
     {
         return true;
@@ -214,9 +179,6 @@ class Customer extends Authenticatable
         return false;
     }
 
-    /**
-     * Dependientes del cliente (mascotas, hijos) en los rubros que los usan.
-     */
     public function dependents()
     {
         return $this->hasMany(CustomerDependent::class, 'customer_id');

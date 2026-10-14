@@ -7,11 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Ficha llenada en una atención. Guarda una copia de los campos de la
- * plantilla (template_snapshot), así la historia no cambia si la empresa
- * edita la plantilla después.
- */
 class CareRecord extends Model
 {
     use HasUuids;
@@ -58,9 +53,6 @@ class CareRecord extends Model
 
     protected $dateFormat = 'Y-m-d H:i:sP';
 
-    /**
-     * Estado real: una ficha firmada pasa a bloqueada cuando vence su plazo de edición.
-     */
     public function currentStatus(): string
     {
         if ($this->status === self::SIGNED && $this->locked_at && $this->locked_at->isPast()) {

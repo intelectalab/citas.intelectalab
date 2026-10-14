@@ -6,10 +6,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Un paso en la vida de la cita: un cambio de fase o una reprogramación
- * (en ese caso la fase de origen y la de destino son la misma).
- */
 class AppointmentStatusHistory extends Model
 {
     use HasUuids;
@@ -41,9 +37,6 @@ class AppointmentStatusHistory extends Model
         return $this->belongsTo(User::class, 'actor_user_id');
     }
 
-    /**
-     * El cliente, cuando el paso lo dio él mismo desde el portal.
-     */
     public function customerActor(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'actor_customer_id')->withTrashed();

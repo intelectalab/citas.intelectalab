@@ -11,14 +11,11 @@ import { apiError } from '@/features/appointments/appointments';
 import FormRoom from './FormRoom';
 import type { Room } from '@/features/branches/branches';
 
-// El mismo tipo que usa la página de la sucursal.
 export type RoomRow = Room & { created_at?: string };
 
 interface RoomList {
   can_manage: boolean;
-  // none: no pasa nada · observe: se muestra como observación · disable: la sala queda fuera de uso.
   equipment_down?: 'none' | 'observe' | 'disable';
-  // La base ya permite decir en qué sala está un equipo.
   links_equipment?: boolean;
   branches: { id: string; name: string }[];
   rooms: RoomRow[];
@@ -35,8 +32,6 @@ const VIEWS = [
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors';
 
-// Salas y equipos de todas las sedes: consultorios, cabinas, sillones y equipos
-// con los que se atiende. Los registra y los cambia el administrador.
 export default function RoomsTable() {
   const [list, setList] = useState<RoomList | null>(null);
   const [view, setView] = useState('all');

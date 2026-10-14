@@ -9,9 +9,6 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Vencimientos de suscripción. Una suscripción vencida ya deja de dar módulos
-// por su fecha (Tenant::activeSubscription); este comando deja además su
-// estado al día para la consola de la plataforma y los reportes.
 Artisan::command('subscriptions:expire', function () {
     $trials = DB::table('subscriptions')
         ->where('status', 'trialing')

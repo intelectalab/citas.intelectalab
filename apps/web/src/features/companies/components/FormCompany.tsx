@@ -21,7 +21,6 @@ const formId = 'company-form';
 
 const empty = { name: '', legal_name: '', tax_id: '', phone: '', address: '', district: '', department: '' };
 
-// Panel para cambiar los datos generales de la empresa.
 export default function FormCompany({ isOpen, onClose, initialData, onSaved }: FormCompanyProps) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);

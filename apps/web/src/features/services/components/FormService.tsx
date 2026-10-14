@@ -57,7 +57,6 @@ interface FormServiceProps {
   onClose: () => void;
   initialData?: Service | null;
   categories: ServiceCategory[];
-  // Recibe el servicio guardado (útil cuando se crea desde otro formulario).
   onSubmitSuccess?: (service?: any) => void;
 }
 
@@ -75,7 +74,6 @@ export default function FormService({
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
 
   const { hasModule } = useAuth();
-  // Las clases con cupo dependen del módulo de clases grupales del tenant.
   const canUseClasses = hasModule('classes');
   const [otherServices, setOtherServices] = useState<{ id: string; name: string }[]>([]);
 
@@ -120,7 +118,6 @@ export default function FormService({
   useEffect(() => {
     if (!isOpen) return;
 
-    // Servicios con los que se puede agendar el control de seguimiento.
     api.get('/services')
       .then((res) => setOtherServices((res.data as { id: string; name: string }[]).filter((item) => item.id !== initialData?.id)))
       .catch((err) => console.error('Error cargando servicios:', err));
@@ -128,13 +125,11 @@ export default function FormService({
 
   useEffect(() => {
     if (isOpen) {
-      // Cargar los estados dinámicos para el módulo de servicios
       api.get('/statuses', {
         params: { module: 'services' }
       })
         .then(res => {
           setStatuses(res.data);
-          // Si no hay status_id seleccionado, seleccionamos por defecto el 'is_default' o el primero
           if (!form.status_id && res.data.length > 0) {
             const defaultStatus = res.data.find((s: any) => s.is_default) || res.data[0];
             setForm(prev => ({ ...prev, status_id: defaultStatus.id }));

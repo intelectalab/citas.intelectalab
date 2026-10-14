@@ -12,27 +12,16 @@ use Illuminate\Support\Facades\DB;
 class CustomerController extends Controller
 {
 
-    /**
-     * Consulta base de clientes limitada al tenant del usuario autenticado.
-     * Garantiza que ningún tenant pueda ver ni manipular clientes de otro.
-     */
     private function tenantQuery(Request $request)
     {
         return Customer::where('tenant_id', $request->user()->tenant_id);
     }
 
-    /**
-     * Obtiene un cliente por id dentro del tenant actual o responde 404.
-     */
     private function findForTenant(Request $request, string $id): Customer
     {
         return $this->tenantQuery($request)->findOrFail($id);
     }
 
-    /**
-     * Relaciones que acompañan al cliente. Los dependientes solo viajan si el
-     * rubro del tenant los usa.
-     */
     private function relations(Request $request): array
     {
         $relations = ['typeDocument', 'status'];
@@ -44,10 +33,6 @@ class CustomerController extends Controller
         return $relations;
     }
 
-    /**
-     * Solo los rubros de salud guardan datos clínicos del cliente (tipo de
-     * sangre). En los demás ni se muestran ni se aceptan.
-     */
     private function withoutClinicalFields(Request $request, array $validated): array
     {
         if (empty($request->user()->tenant?->rules()['customers.clinical_fields'])) {
@@ -68,7 +53,6 @@ class CustomerController extends Controller
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
-                // Sin distinguir mayúsculas ni tildes, y también por nombre completo.
                 Search::contains($q, "coalesce(first_name, '') || ' ' || coalesce(last_name, '')", $search);
 
                 foreach (['document_number', 'phone', 'email', 'code'] as $column) {
@@ -85,12 +69,10 @@ class CustomerController extends Controller
             $query->where('status_id', $statusId);
         }
 
-        // Los buscadores piden pocos; la tabla de clientes pide la lista completa para filtrar y ordenar.
         $perPage = min(max((int) $request->input('per_page', 10), 1), 500);
 
         $customers = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
-        // Inasistencias a citas reservadas en línea (nota y veto), según lo que eligió la empresa.
         if ($tenant = $request->user()->tenant) {
             $states = \App\Support\OnlineBooking::states($tenant, $customers->getCollection()->pluck('id')->all());
             $customers->getCollection()->each(fn (Customer $c) => $c->setAttribute('online_booking', $states[$c->id] ?? null));
@@ -121,7 +103,6 @@ class CustomerController extends Controller
             'department' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
             'medical_notes' => 'nullable|string',
-            // Mascotas u otros dependientes registrados junto con el cliente.
             'dependents' => 'sometimes|array|max:20',
         ] + CustomerDependent::rules('dependents.*.'));
 
@@ -140,8 +121,6 @@ class CustomerController extends Controller
 
             $customer = Customer::create($validated);
 
-            // Con correo y documento ya puede entrar a su portal: su contraseña
-            // inicial es su número de documento y la cambia al ingresar.
             $customer->syncPortalPassword();
 
             if ($this->usesDependents($request)) {
@@ -181,10 +160,6 @@ class CustomerController extends Controller
         ]);
     }
 
-    /**
-     * La empresa perdona las inasistencias del cliente a citas reservadas en
-     * línea: dejan de contar y puede volver a reservar por el portal.
-     */
     public function forgiveBooking(Request $request, string $customer)
     {
         abort_unless($request->user()->allows('customers.forgive'), 403, 'Tu cuenta no tiene permiso para perdonar inasistencias.');
@@ -224,8 +199,6 @@ class CustomerController extends Controller
 
         $customer->update($this->withoutClinicalFields($request, $validated));
 
-        // Si recién ahora tiene correo y documento, recibe su acceso. Mientras no
-        // haya creado su contraseña, esta sigue a su número de documento.
         $customer->syncPortalPassword($customer->wasChanged('document_number'));
 
         return response()->json([
@@ -235,10 +208,6 @@ class CustomerController extends Controller
     }
 
 
-    /**
-     * El personal enciende o apaga el acceso del cliente a su portal. Al
-     * apagarlo se cierran sus sesiones abiertas.
-     */
     public function portalAccess(Request $request, string $customer)
     {
         $customer = $this->findForTenant($request, $customer);
@@ -258,10 +227,6 @@ class CustomerController extends Controller
         ]);
     }
 
-    /**
-     * Vuelve a dejar como contraseña el número de documento (olvidó la suya)
-     * y cierra sus sesiones. Tendrá que crear una nueva al ingresar.
-     */
     public function resetPortalPassword(Request $request, string $customer)
     {
         $customer = $this->findForTenant($request, $customer);
@@ -284,7 +249,6 @@ class CustomerController extends Controller
     public function destroy(Request $request, string $customer)
     {
         $customer = $this->findForTenant($request, $customer);
-        // Un cliente eliminado ya no entra a su portal.
         $customer->tokens()->delete();
         $customer->delete();
 

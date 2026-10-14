@@ -12,11 +12,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Suscripción y cobros de una empresa, manejados por el administrador SaaS:
- * registrar un pago (pasa de prueba a activa o renueva), mover el vencimiento
- * y cancelar.
- */
 class TenantSubscriptionController extends Controller
 {
     private function subscription(string $tenantId): array
@@ -29,11 +24,6 @@ class TenantSubscriptionController extends Controller
         return [$tenant, $subscription];
     }
 
-    /**
-     * Registra un pago. La suscripción queda activa y su vencimiento avanza un
-     * periodo: desde el vencimiento actual si sigue vigente (no pierde días) o
-     * desde la fecha de pago si ya había vencido o estaba en prueba.
-     */
     public function registerPayment(Request $request, string $tenant)
     {
         [$tenant, $subscription] = $this->subscription($tenant);
@@ -51,7 +41,6 @@ class TenantSubscriptionController extends Controller
         $paidAt = isset($validated['paid_at']) ? Carbon::parse($validated['paid_at']) : now();
         $wasTrial = $subscription->status === 'trialing';
 
-        // Un periodo de prueba no se suma: el periodo pagado empieza con el pago.
         $periodStart = !$wasTrial && $subscription->status === 'active' && $subscription->ends_at?->isFuture()
             ? $subscription->ends_at->copy()
             : $paidAt->copy();
@@ -103,10 +92,6 @@ class TenantSubscriptionController extends Controller
         return response()->json(app(TenantController::class)->detail($tenant));
     }
 
-    /**
-     * Mueve la fecha de vencimiento sin registrar un cobro (cortesía, acuerdo
-     * comercial o corrección). Si estaba vencida, vuelve a quedar vigente.
-     */
     public function extend(Request $request, string $tenant)
     {
         [$tenant, $subscription] = $this->subscription($tenant);
@@ -120,7 +105,6 @@ class TenantSubscriptionController extends Controller
         $isTrial = $subscription->status === 'trialing';
 
         $subscription->update([
-            // Una suscripción vencida o cancelada vuelve a activa; la prueba sigue siendo prueba.
             'status'        => $isTrial ? 'trialing' : 'active',
             'ends_at'       => $endsAt,
             'trial_ends_at' => $isTrial ? $endsAt : null,
@@ -132,10 +116,6 @@ class TenantSubscriptionController extends Controller
         return response()->json(app(TenantController::class)->detail($tenant));
     }
 
-    /**
-     * Cancela la suscripción: la empresa se queda sin módulos de inmediato,
-     * pero puede seguir iniciando sesión para elegir un plan.
-     */
     public function cancel(Request $request, string $tenant)
     {
         [$tenant, $subscription] = $this->subscription($tenant);

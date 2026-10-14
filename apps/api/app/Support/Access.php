@@ -9,34 +9,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
-/**
- * Permisos del personal de una empresa. Cada persona tiene un rol; el rol trae
- * permisos "módulo.acción" y a una persona concreta se le puede quitar uno que
- * su rol tiene o dar uno que su rol no tiene (user_permissions).
- *
- * El administrador (dueño o rol owner/admin) siempre puede todo.
- */
 class Access
 {
     public const NOT_READY = 'Falta actualizar la base de datos: carga init.sql, seed.sql y seed_demo.sql.';
 
     public const ACTIONS = ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Editar', 'delete' => 'Eliminar'];
 
-    /**
-     * Permisos especiales: cosas delicadas que no son ver, crear, editar ni
-     * eliminar. Cada pantalla tiene a lo más uno; en la rejilla van en su columna.
-     */
     public const SPECIAL = [
         'override'  => 'Forzar horario',
         'emergency' => 'Acceso de emergencia',
         'forgive'   => 'Perdonar faltas',
     ];
 
-    /**
-     * Lo que se puede permitir, pantalla por pantalla. `module` es el módulo del
-     * plan que la empresa debe tener activo; cada acción explica qué deja hacer.
-     * {clients} y {pros} se cambian por las palabras del rubro (pacientes, médicos).
-     */
     public const CATALOG = [
         'agenda' => ['label' => 'Agenda y citas', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver la agenda y las citas',
@@ -143,10 +127,6 @@ class Access
 
     private const EVERYTHING = ['view', 'create', 'edit', 'delete'];
 
-    /**
-     * Roles de fábrica y lo que cada uno puede al nacer. El administrador no
-     * necesita lista: puede todo y no se recorta.
-     */
     public const FACTORY = [
         'owner' => [
             'name' => 'Administrador',
@@ -165,7 +145,6 @@ class Access
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'rooms' => self::EVERYTHING,
                 'sales' => self::EVERYTHING, 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
                 'branches' => ['view'],
-                // Su personal: crea, desactiva y ajusta a la gente de su sede.
                 'users' => ['view', 'create', 'edit'],
             ],
         ],
@@ -204,29 +183,22 @@ class Access
         ],
     ];
 
-    /** Qué tanto ve quien tiene un rol. */
     public const SCOPES = [
         'tenant' => 'Toda la empresa',
         'branch' => 'Solo su sede',
         'own'    => 'Solo lo suyo',
     ];
 
-    /** Sede que no existe: quien debe ver solo su sede y no tiene una asignada no ve nada. */
     public const NO_BRANCH = '00000000-0000-0000-0000-000000000000';
 
     private static ?bool $ready = null;
     private static ?bool $scoped = null;
 
-    /** La base ya guarda qué tanto ve cada rol (roles.scope). */
     public static function scopeReady(): bool
     {
         return self::$scoped ??= Schema::hasColumn('roles', 'scope');
     }
 
-    /**
-     * Qué tanto ve una persona: toda la empresa, solo su sede o solo lo suyo.
-     * El administrador siempre ve toda la empresa.
-     */
     public static function scopeOf(User $user): string
     {
         if (!$user->tenant_id) {
@@ -247,13 +219,8 @@ class Access
         return $user->scopeCache = isset(self::SCOPES[$scope]) ? $scope : 'tenant';
     }
 
-    /**
-     * La sede a la que se limita lo que ve una persona, o null si no se limita.
-     * Sin sede asignada devuelve NO_BRANCH: así no ve nada en vez de verlo todo.
-     */
     public static function branchLimit(mixed $user): ?string
     {
-        // El cliente del portal y el equipo de la plataforma no tienen sede de trabajo.
         if (!$user instanceof User || self::scopeOf($user) !== 'branch') {
             return null;
         }
@@ -261,10 +228,6 @@ class Access
         return $user->branch_id ?: self::NO_BRANCH;
     }
 
-    /**
-     * Rechaza lo que pertenece a otra sede. $branchId null es algo de toda la
-     * empresa (un feriado nacional): se deja ver, pero no cambiar.
-     */
     public static function assertBranch(mixed $user, ?string $branchId, bool $changing = false): void
     {
         $limit = self::branchLimit($user);
@@ -280,19 +243,16 @@ class Access
         abort(403, self::otherBranch($user, $branchId === null));
     }
 
-    /** Ids de quienes tienen horario en una sede, para usar dentro de una consulta. */
     public static function professionalsAt(string $branchId)
     {
         return DB::table('professional_schedules')->where('branch_id', $branchId)->select('professional_id');
     }
 
-    /** Si un profesional atiende en esa sede. */
     public static function worksAt(string $professionalId, string $branchId): bool
     {
         return DB::table('professional_schedules')->where('branch_id', $branchId)->where('professional_id', $professionalId)->exists();
     }
 
-    /** "Tu cuenta trabaja solo con Sede San Borja." */
     public static function onlyBranch(User $user): string
     {
         $name = $user->branch_id ? DB::table('branches')->where('id', $user->branch_id)->value('name') : null;
@@ -313,13 +273,11 @@ class Access
             : "Esto es de otra sede. Tu cuenta trabaja solo con {$name}.";
     }
 
-    /** La base ya tiene lo que este módulo necesita (si no, rige lo de fábrica y no se guarda nada). */
     public static function ready(): bool
     {
         return self::$ready ??= Schema::hasTable('user_permissions') && Schema::hasColumn('roles', 'permissions_seeded_at');
     }
 
-    /** Todos los permisos que existen: "agenda.view", "agenda.create"... */
     public static function all(): array
     {
         $names = [];
@@ -333,7 +291,6 @@ class Access
         return $names;
     }
 
-    /** Permisos de fábrica de un rol, como lista de nombres. */
     public static function factoryPermissions(string $slug): array
     {
         if ($slug === 'owner') {
@@ -353,13 +310,11 @@ class Access
         return $names;
     }
 
-    /** El rol de una persona dentro de su empresa (tiene uno solo). */
     public static function roleOf(User $user): ?Role
     {
         return $user->roles()->where('roles.tenant_id', $user->tenant_id)->orderBy('roles.created_at')->first();
     }
 
-    /** Lo que una persona puede hacer, ya con lo que se le quitó y lo que se le agregó. */
     public static function of(User $user): array
     {
         if (!$user->tenant_id) {
@@ -406,7 +361,6 @@ class Access
         return in_array($permission, self::of($user), true);
     }
 
-    /** Nombres de los permisos de un rol. */
     public static function rolePermissions(string $roleId): array
     {
         return DB::table('role_permissions')
@@ -416,7 +370,6 @@ class Access
             ->all();
     }
 
-    /** Excepciones de una persona: nombre del permiso => true (agregado) o false (quitado). */
     public static function overrides(string $userId): array
     {
         if (!self::ready()) {
@@ -431,7 +384,6 @@ class Access
             ->all();
     }
 
-    /** Deja en la tabla permissions todo el catálogo y devuelve nombre => id. */
     public static function permissionIds(): array
     {
         $ids = DB::table('permissions')->whereIn('name', self::all())->pluck('id', 'name')->all();
@@ -455,7 +407,6 @@ class Access
         return $ids;
     }
 
-    /** Reemplaza los permisos de un rol por la lista indicada. */
     public static function setRolePermissions(string $roleId, array $names): void
     {
         $ids = self::permissionIds();
@@ -467,11 +418,6 @@ class Access
         ));
     }
 
-    /**
-     * Crea los roles de fábrica que a la empresa le falten y les da sus permisos
-     * iniciales. A un rol que ya los recibió no lo vuelve a tocar: lo que la
-     * empresa haya cambiado se respeta.
-     */
     public static function ensureRoles(Tenant $tenant): void
     {
         if (!self::ready()) {
@@ -493,17 +439,11 @@ class Access
                     'permissions_seeded_at' => now(),
                 ] + (self::scopeReady() ? ['scope' => $definition['scope']] : []))->save();
 
-                // El administrador puede todo sin necesidad de lista.
                 self::setRolePermissions($role->id, $slug === 'owner' ? [] : self::factoryPermissions($slug));
             }
         });
     }
 
-    /**
-     * La rejilla que se muestra en pantalla: cada módulo activo de la empresa con
-     * sus acciones. `role` dice si lo trae el rol, `override` si a la persona se
-     * le agregó (true) o se le quitó (false), y `on` el resultado.
-     */
     public static function grid(Tenant $tenant, array $roleNames, array $overrides = [], bool $everything = false): array
     {
         $vocabulary = $tenant->vocabulary();
@@ -544,7 +484,6 @@ class Access
         return $modules;
     }
 
-    /** Explicación para quien intenta algo que no tiene permitido. */
     public static function denial(string $permission, ?Tenant $tenant = null): string
     {
         [$key, $action] = array_pad(explode('.', $permission), 2, '');

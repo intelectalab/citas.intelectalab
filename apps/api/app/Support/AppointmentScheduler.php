@@ -12,15 +12,8 @@ use App\Models\Tenant;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Decide si un profesional puede atender un servicio en un horario, y por qué
- * no cuando no puede. Lo usan el alta, la reprogramación y la lista de horarios
- * libres, para que las tres respondan lo mismo.
- */
 class AppointmentScheduler
 {
-    // :name es quien atiende. Se usa su nombre y no "el profesional" para que
-    // el aviso hable como la empresa (médico, estilista, entrenador).
     public const MESSAGES = [
         'SERVICE_INACTIVE' => 'El servicio no está activo',
         'PRO_INACTIVE'     => ':name no está disponible para agendar',
@@ -38,14 +31,8 @@ class AppointmentScheduler
         'BUFFER'           => 'Choca con el tiempo de preparación o limpieza de otra cita',
     ];
 
-    // Lo único que se puede forzar con un motivo (sobre-agenda). Nunca una doble reserva
-    // ni un feriado (HOLIDAY), unas vacaciones, un permiso o un cierre de sede (BLOCKED).
     public const OVERRIDABLE = ['BRANCH_CLOSED', 'OUT_OF_SCHEDULE', 'BUFFER', 'BLOCKED_SOFT'];
 
-    /**
-     * @param bool $online Reserva hecha por el cliente desde el portal: además
-     *                     aplica la anticipación mínima y máxima de la empresa.
-     */
     public function __construct(private Tenant $tenant, private bool $online = false)
     {
     }
@@ -55,9 +42,6 @@ class AppointmentScheduler
         return $branch->timezone ?: ($tenant->timezone ?: 'America/Lima');
     }
 
-    /**
-     * @return array{ok: bool, reasons: array<int, array{code: string, message: string, detail: string}>, overridable: bool}
-     */
     public function check(Service $service, Professional $professional, Branch $branch, Carbon $start, int $duration, ?string $ignoreId = null): array
     {
         $day = $this->dayContext($professional, $branch, $start->copy()->startOfDay(), $ignoreId);
@@ -65,10 +49,6 @@ class AppointmentScheduler
         return $this->evaluate($day, $service, $professional, $start, $duration);
     }
 
-    /**
-     * Horarios de inicio libres de un día, por profesional. Sin profesional,
-     * recorre a todos los que pueden atender el servicio en esa sede.
-     */
     public function slots(Service $service, Branch $branch, Carbon $date, ?Professional $professional = null, ?string $ignoreId = null): array
     {
         $interval = max(5, (int) AppointmentFlow::rule($this->tenant, 'agenda.slot_interval'));
@@ -112,10 +92,6 @@ class AppointmentScheduler
         return $result;
     }
 
-    /**
-     * Lo que condiciona la agenda de un profesional en una sede ese día: su
-     * horario, sus bloqueos y sus otras citas.
-     */
     private function dayContext(Professional $professional, Branch $branch, Carbon $dayStart, ?string $ignoreId): array
     {
         $timezone = $dayStart->getTimezone();
@@ -154,17 +130,14 @@ class AppointmentScheduler
             ->map(fn (Appointment $a) => [
                 'code'   => $a->code,
                 'starts' => $a->starts_at->copy()->setTimezone($timezone),
-                // Una cita atendida antes de tiempo libera el resto de su horario.
                 'ends'   => AppointmentTiming::occupiedUntil($a)->copy()->setTimezone($timezone),
                 'before' => (int) ($a->service?->buffer_before_minutes ?? 0),
                 'after'  => (int) ($a->service?->buffer_after_minutes ?? 0),
             ])
             ->all();
 
-        // Feriado en que la sede cierra: ese día no atiende nadie.
         $holiday = Holidays::on($this->tenant, $branch->id, $dayStart->format('Y-m-d'), true)->first()?->name;
 
-        // Horario de atención de la sede; vacío si no lo tiene definido.
         $branchHours = BranchHours::of($branch->id);
 
         return compact('schedules', 'blocks', 'appointments', 'holiday', 'branchHours');
@@ -265,13 +238,8 @@ class AppointmentScheduler
         ];
     }
 
-    // Profesionales asignados a cada servicio, ya consultados en esta petición.
     private array $assigned = [];
 
-    /**
-     * Si el servicio tiene profesionales asignados, solo ellos lo atienden.
-     * Sin asignaciones, lo atiende cualquiera.
-     */
     private function assignedProfessionals(Service $service): array
     {
         return $this->assigned[$service->id] ??= DB::table('service_professionals')

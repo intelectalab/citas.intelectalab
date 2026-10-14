@@ -4,11 +4,6 @@ namespace App\Support;
 
 use App\Models\Tenant;
 
-/**
- * Fases de la cita y pasos permitidos entre ellas. Son fijas para todas las
- * empresas: el flujo, los avisos y las reglas dependen de la clave. Cada
- * empresa solo cambia el nombre con que las ve.
- */
 class AppointmentFlow
 {
     public const PENDING = 'pending';
@@ -19,7 +14,6 @@ class AppointmentFlow
     public const CANCELLED = 'cancelled';
     public const NO_SHOW = 'no_show';
 
-    // Nombre por defecto y tono (para el color en pantalla), en el orden del flujo.
     public const STATUSES = [
         self::PENDING     => ['name' => 'Pendiente',   'tone' => 'warn'],
         self::CONFIRMED   => ['name' => 'Confirmada',  'tone' => 'info'],
@@ -30,7 +24,6 @@ class AppointmentFlow
         self::NO_SHOW     => ['name' => 'No asistió',  'tone' => 'bad'],
     ];
 
-    // A qué fases se puede pasar desde cada una.
     public const TRANSITIONS = [
         self::PENDING     => [self::CONFIRMED, self::CHECKED_IN, self::CANCELLED, self::NO_SHOW],
         self::CONFIRMED   => [self::CHECKED_IN, self::IN_PROGRESS, self::CANCELLED, self::NO_SHOW, self::PENDING],
@@ -41,13 +34,10 @@ class AppointmentFlow
         self::NO_SHOW     => [],
     ];
 
-    // Fases que ya no ocupan el horario del profesional.
     public const RELEASED = [self::CANCELLED, self::NO_SHOW];
 
-    // Fases en las que la cita todavía se puede mover de fecha u hora.
     public const RESCHEDULABLE = [self::PENDING, self::CONFIRMED];
 
-    // Valor de las reglas de agenda cuando ni el rubro ni la empresa las definen.
     public const RULE_DEFAULTS = [
         'agenda.require_confirmation' => true,
         'agenda.checkin_step'         => true,
@@ -69,31 +59,20 @@ class AppointmentFlow
         'booking.require_deposit'     => true,
         'cancel.client_allowed'       => true,
         'reschedule.max_times'        => 2,
-        // Plazo para confirmar: horas antes de la cita (0 = sin plazo), qué pasa si no se
-        // confirma (notify, notify_release, release) y a cuántas horas se libera.
         'confirm.deadline_hours'      => 24,
         'confirm.on_miss'             => 'notify',
         'confirm.release_hours'       => 6,
-        // Si un equipo instalado en una sala queda fuera de uso: none (no pasa nada),
-        // observe (la sala lo muestra como observación) o disable (la sala queda fuera de uso).
         'resources.equipment_down'    => 'none',
-        // Ventas y caja: los precios ya incluyen el impuesto (18 %), el efectivo exige una
-        // caja abierta, la venta se cobra completa (sin pagos por partes) y el cierre no tolera diferencias sin nota.
         'pos.prices_include_tax'      => true,
         'pos.tax_rate'                => 18,
         'pos.require_open_cash'       => true,
         'pos.partial_payments'        => false,
         'cash.tolerance'              => 0,
-        // Días desde la venta en que aún se puede devolver (0 = sin plazo).
         'pos.refund_days'             => 30,
-        // Cada sede nueva recibe sola su caja. Apagarlo no quita las cajas que ya existen.
         'cash.auto_register'          => true,
         'invoice.default_type'        => 'boleta',
-        // La cita se paga antes de atenderla, y al cliente se le pide llegar unos minutos antes para pagar.
         'pos.pay_before_service'      => true,
         'pos.arrive_minutes'          => 15,
-        // Quien reserva en línea y no asiste: none (nada), note (una nota en su ficha) o block
-        // (además, tras tantas inasistencias no reserva en línea por tantos días; 0 = sin fecha de fin).
         'booking.miss_action'         => 'note',
         'booking.miss_limit'          => 2,
         'booking.block_days'          => 30,
@@ -109,10 +88,6 @@ class AppointmentFlow
         return $tenant->rules()[$key] ?? self::RULE_DEFAULTS[$key] ?? null;
     }
 
-    /**
-     * Fases a las que puede pasar una cita. Sin el paso de llegada, una cita
-     * pendiente o confirmada se puede dar por atendida directamente.
-     */
     public static function next(Tenant $tenant, string $status): array
     {
         $next = self::TRANSITIONS[$status] ?? [];
@@ -124,10 +99,6 @@ class AppointmentFlow
         return $next;
     }
 
-    /**
-     * Las fases como las ve la empresa: clave, nombre propio (o el de por
-     * defecto) y tono.
-     */
     public static function forTenant(Tenant $tenant): array
     {
         $names = $tenant->settings?->appointment_statuses ?? [];

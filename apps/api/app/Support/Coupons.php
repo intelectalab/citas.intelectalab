@@ -7,19 +7,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Cupones de descuento: un código que el cliente dice al pagar. Se revisa que
- * esté activo, dentro de su vigencia, con usos disponibles y que la compra
- * llegue al mínimo; el descuento queda registrado en la venta.
- */
 class Coupons
 {
     public const PERCENT = 'percent';
     public const AMOUNT = 'amount';
 
-    /**
-     * Estado de un cupón tal como se ve en pantalla.
-     */
     public static function state(object $coupon): string
     {
         $now = now();
@@ -33,11 +25,6 @@ class Coupons
         };
     }
 
-    /**
-     * Revisa un código contra una compra y devuelve el cupón con su descuento.
-     *
-     * @return array{coupon: object, discount: float}
-     */
     public static function check(string $tenantId, string $code, float $gross): array
     {
         $fail = fn (string $message) => throw ValidationException::withMessages(['coupon_code' => $message]);
@@ -71,9 +58,6 @@ class Coupons
         return ['coupon' => $coupon, 'discount' => $discount];
     }
 
-    /**
-     * Deja registrado que el cupón se usó en una venta.
-     */
     public static function redeem(object $coupon, string $saleId, ?string $customerId, float $discount): void
     {
         DB::table('coupon_redemptions')->insert([
@@ -84,9 +68,6 @@ class Coupons
         DB::table('coupons')->where('id', $coupon->id)->increment('used_count');
     }
 
-    /**
-     * Cupón con que se creó una venta, si usó alguno.
-     */
     public static function ofSale(string $saleId): ?array
     {
         $row = DB::table('coupon_redemptions as r')

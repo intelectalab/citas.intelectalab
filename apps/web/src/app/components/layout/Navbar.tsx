@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import NotificationsBell from '@/features/notifications/components/NotificationsBell';
 
-// Correo con el que la pantalla de ingreso abre tras "Cambiar de cuenta".
 export const SWITCH_ACCOUNT_EMAIL_KEY = 'switch_account_email';
 
 export default function Navbar() {
@@ -20,7 +19,6 @@ export default function Navbar() {
   : 'Usuario';
   const initial = userName.charAt(0).toUpperCase();
 
-  // Qué es esta cuenta: equipo de la plataforma, o su papel en la empresa.
   const roleLabel = user?.is_saas_admin
     ? 'Administrador SaaS'
     : user?.is_saas_support
@@ -50,8 +48,6 @@ export default function Navbar() {
     };
   }, [isOpen]);
 
-  // Cierra esta sesión y deja el correo listo en la pantalla de ingreso: si ese
-  // correo tiene cuenta en varias empresas, ahí se elige a cuál entrar.
   const handleSwitchAccount = async () => {
     if (user?.email) sessionStorage.setItem(SWITCH_ACCOUNT_EMAIL_KEY, user.email);
     await logout();

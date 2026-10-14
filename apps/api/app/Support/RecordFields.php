@@ -4,22 +4,12 @@ namespace App\Support;
 
 use Illuminate\Support\Str;
 
-/**
- * Campos de una ficha de atención: qué tipos existen, cómo se guarda la
- * definición de una plantilla y cómo se validan los valores que se llenan.
- */
 class RecordFields
 {
     public const TYPES = ['text', 'textarea', 'number', 'select', 'multiselect', 'date', 'boolean', 'scale', 'odontogram', 'next_control'];
 
-    // Estados que se pueden marcar en cada pieza del odontograma.
     public const TOOTH_STATES = ['caries', 'restored', 'missing', 'crown', 'treatment'];
 
-    /**
-     * Deja la definición de campos lista para guardar. Un campo nuevo recibe
-     * su clave interna a partir de su nombre; la de uno existente no cambia,
-     * para que las fichas ya llenadas sigan encontrando su valor.
-     */
     public static function clean(array $fields): array
     {
         $taken = collect($fields)->pluck('key')->filter()->all();
@@ -61,9 +51,6 @@ class RecordFields
         return $clean;
     }
 
-    /**
-     * Problemas de una definición de campos, en palabras para quien la edita.
-     */
     public static function problems(array $fields): array
     {
         $problems = [];
@@ -86,12 +73,6 @@ class RecordFields
         return $problems;
     }
 
-    /**
-     * Valores de una ficha, ya limpios según sus campos. Con $strict (al
-     * firmar) también devuelve qué campos obligatorios faltan.
-     *
-     * @return array{0: array, 1: array<string, string>}
-     */
     public static function values(array $fields, array $data, bool $strict = false): array
     {
         $values = [];
@@ -111,11 +92,6 @@ class RecordFields
         return [$values, $errors];
     }
 
-    /**
-     * Fecha del próximo control que indica la ficha, si tiene alguno.
-     *
-     * @return array{label: string, date: string}|null
-     */
     public static function nextControl(array $fields, array $data): ?array
     {
         foreach ($fields as $field) {

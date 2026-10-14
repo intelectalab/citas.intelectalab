@@ -14,8 +14,6 @@ interface Tenant {
   status: string;
 }
 
-// Datos del alta: además de la empresa, su rubro, su plan, su razón social, su
-// sede principal y su administrador. Al editar solo se usan los cuatro primeros.
 export interface TenantFormData extends Tenant {
   business_type_id: string;
   plan_id: string;
@@ -96,7 +94,6 @@ export default function FormTenant({
     }
   }, [initialData, isOpen]);
 
-  // Los catálogos solo hacen falta para dar de alta una empresa.
   useEffect(() => {
     if (!isOpen || isEditing) return;
 

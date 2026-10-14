@@ -12,10 +12,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Horario semanal de un profesional, por sede. Se guarda completo por sede:
- * lo que se envía reemplaza los tramos que esa sede tenía.
- */
 class ProfessionalScheduleController extends Controller
 {
     private const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -28,11 +24,6 @@ class ProfessionalScheduleController extends Controller
         return Professional::where('tenant_id', $tenantId)->findOrFail($id);
     }
 
-    /**
-     * Horarios de todo el equipo: cada sede activa con su horario de atención y
-     * quiénes atienden ahí cada día. Un profesional sin horario en ninguna sede
-     * sale aparte, para que no pase desapercibido.
-     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -43,7 +34,6 @@ class ProfessionalScheduleController extends Controller
         $schedules = ProfessionalSchedule::where('tenant_id', $tenantId)->orderBy('weekday')->orderBy('starts_local')->get();
         $minutes = fn (ProfessionalSchedule $s) => (strtotime($s->ends_local) - strtotime($s->starts_local)) / 60;
 
-        // Quien trabaja solo con su sede ve el horario de su sede.
         $branches = Branch::where('tenant_id', $tenantId)->where('status', 'active')->when(Access::branchLimit($user), fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name'])
             ->map(function (Branch $branch) use ($professionals, $schedules, $minutes) {
                 $here = $schedules->where('branch_id', $branch->id);
@@ -51,7 +41,6 @@ class ProfessionalScheduleController extends Controller
                 return [
                     'id'    => $branch->id,
                     'name'  => $branch->name,
-                    // Por día de la semana; vacío = la sede no limita el horario.
                     'hours' => (object) BranchHours::of($branch->id),
                     'professionals' => $professionals
                         ->filter(fn (Professional $p) => $here->contains('professional_id', $p->id))
@@ -104,7 +93,6 @@ class ProfessionalScheduleController extends Controller
         $branch = Branch::where('tenant_id', $professional->tenant_id)->findOrFail($validated['branch_id']);
         Access::assertBranch($request->user(), $branch->id, true);
 
-        // Tramos de las otras sedes: no puede atender en dos sedes a la vez.
         $taken = ProfessionalSchedule::where('professional_id', $professional->id)
             ->where('branch_id', '!=', $branch->id)
             ->get()

@@ -48,10 +48,6 @@ class SaaSPlan extends Model
         'features' => 'array',
     ];
 
-    /**
-     * Claves de módulo que incluye el plan. `modules` las guarda agrupadas
-     * por categoría ({"sales": ["pos", "quotes"]}); aquí salen en una sola lista.
-     */
     public function moduleKeys(): array
     {
         return collect($this->modules ?? [])->flatten()->filter()->unique()->values()->all();

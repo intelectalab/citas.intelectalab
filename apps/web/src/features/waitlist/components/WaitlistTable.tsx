@@ -22,7 +22,6 @@ const VIEWS = [
   { id: 'closed', label: 'Cerrados' },
 ];
 
-// Tarjetas que filtran a quienes siguen esperando.
 const CARDS: { id: string; title: string; match: (e: WaitlistEntry) => boolean; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'priority', title: 'Prioritarios', match: (e) => e.priority, icon: <Star size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
   { id: 'ending', title: 'Les quedan 3 días o menos', match: (e) => e.days_left !== null && e.days_left <= 3, icon: <AlertTriangle size={18} />, color: 'text-rose-700', active: 'border-rose-500 ring-2 ring-rose-500/20', hover: 'hover:border-rose-300' },
@@ -32,8 +31,6 @@ const CARDS: { id: string; title: string; match: (e: WaitlistEntry) => boolean; 
 
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-50';
 
-// Lista de espera: quién quiere una cita y no encontró horario. Desde aquí se
-// anota, se le busca un horario libre que le sirva y se le agenda.
 export default function WaitlistTable() {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
@@ -54,7 +51,6 @@ export default function WaitlistTable() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  // Persona a la que se le está buscando horario, y lo encontrado.
   const [finding, setFinding] = useState<WaitlistEntry | null>(null);
   const [slotDays, setSlotDays] = useState<WaitlistSlotDay[]>([]);
   const [searchedUntil, setSearchedUntil] = useState('');
@@ -118,13 +114,11 @@ export default function WaitlistTable() {
       .finally(() => setSlotsLoading(false));
   };
 
-  // Abre "Nueva cita" con todo puesto: solo falta confirmar.
   const book = async (entry: WaitlistEntry, date: string, time: string, professionalId: string) => {
     if (!entry.customer) return;
 
     try {
       setSlotsError('');
-      // La ficha completa trae sus mascotas o dependientes, que la cita puede necesitar.
       const res = await api.get(`/customers/${entry.customer.id}`);
 
       setFinding(null);
@@ -146,7 +140,6 @@ export default function WaitlistTable() {
 
   const card = view === 'open' ? CARDS.find((c) => c.id === activeCard) : undefined;
   const rows = card ? entries.filter(card.match) : entries;
-  // Puesto en la lista completa, no en la filtrada.
   const position = (entry: WaitlistEntry) => entries.findIndex((e) => e.id === entry.id) + 1;
 
   const metricCards: MetricCardItem[] = view !== 'open' ? [] : [

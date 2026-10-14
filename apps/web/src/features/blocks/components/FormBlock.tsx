@@ -39,8 +39,6 @@ const emptyForm = () => ({
   reason: '',
 });
 
-// Panel para registrar o editar un bloqueo: a quién aplica, de qué tipo es,
-// cuándo y por qué. Mientras se llena avisa qué citas quedan dentro.
 export default function FormBlock({ isOpen, onClose, initialData, options, onSaved }: FormBlockProps) {
   const vocab = useVocabulary();
   const [form, setForm] = useState(emptyForm);
@@ -81,7 +79,6 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
       professional_id: professionals.length === 1 ? professionals[0].id : '',
       branch_id: branches.length === 1 ? branches[0].id : '',
     });
-    // Solo al abrir: las listas no cambian mientras el panel está abierto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialData]);
 
@@ -97,12 +94,10 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
   const datesReady = Boolean(form.startDate && form.endDate && (form.allDay || (form.startTime && form.endTime)));
   const rangeValid = datesReady && endsAt > startsAt;
 
-  // Sedes a las que se aplica: una, o todas (un bloqueo por sede).
   const targetBranches = form.branch_id === ALL_BRANCHES ? branches.map((b) => b.id) : form.branch_id ? [form.branch_id] : [];
   const targetReady = form.scope === 'professional' ? Boolean(form.professional_id) : targetBranches.length > 0;
   const targetKey = form.scope === 'professional' ? form.professional_id : targetBranches.join(',');
 
-  // Citas que quedarían dentro del rango, para avisar antes de guardar.
   useEffect(() => {
     if (!isOpen || !targetReady || !rangeValid) {
       setAffected([]);

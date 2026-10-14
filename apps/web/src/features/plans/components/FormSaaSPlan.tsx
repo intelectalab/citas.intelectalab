@@ -57,7 +57,6 @@ interface FormSaaSPlanProps {
   totalPlansCount?: number;
 }
 
-// Objeto por defecto para limpiar el formulario cuando es un plan nuevo
 const defaultFormState = {
   name: '',
   code_internal: '',
@@ -132,7 +131,6 @@ export default function FormSaaSPlan({
 
   const [formData, setFormData] = useState(defaultFormState);
 
-  // Solución: Limpiar o mapear según corresponda cada vez que se abra el modal o cambie initialData
   useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
       console.log("📥 Mapeando datos reales desde la BD:", initialData);
@@ -205,7 +203,6 @@ export default function FormSaaSPlan({
         features: mappedFeatures,
       });
     } else {
-      // Si es un nuevo plan, reseteamos el formulario por completo
       setFormData(defaultFormState);
     }
   }, [initialData, isOpen]);
@@ -227,7 +224,6 @@ export default function FormSaaSPlan({
         .replace(/[^\w\s-]/g, '')
         .replace(/[\s_-]+/g, '-');
 
-      // Se guardan agrupados por categoría, solo con las claves marcadas.
       const modulesPayload: Record<string, string[]> = {};
       MODULE_GROUPS.forEach((group) => {
         const selected = group.items.map((item) => item.key).filter((key) => formData.modules[key]);

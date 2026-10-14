@@ -58,20 +58,15 @@ export interface FilterConfig {
   options?: FilterOption[];
 }
 
-/** Filtro de fecha: la tabla lo aplica sola sobre las filas que recibe. */
 export interface DateFilterConfig<T> {
   id: string;
   label: string;
-  // Fecha de la fila; con `end`, la fila ocupa un tramo de días.
   value: (item: T) => string | null | undefined;
   end?: (item: T) => string | null | undefined;
-  // La fecha puede ser futura (citas, controles): ofrece mañana, próxima semana, etc.
   future?: boolean;
-  // Para pantallas que piden sus filas por periodo: se les avisa del rango elegido.
   onRange?: (range: DateRange | null) => void;
 }
 
-/** Un criterio de "Ordenar por". */
 export interface SortOption<T> {
   id: string;
   label: string;
@@ -79,7 +74,6 @@ export interface SortOption<T> {
   value: (item: T) => string | number | null | undefined;
 }
 
-// Cómo se llama cada sentido según lo que se ordena.
 const SORT_DIRECTIONS: Record<'text' | 'number' | 'date', { first: 'asc' | 'desc'; asc: string; desc: string }> = {
   text: { first: 'asc', asc: 'A → Z', desc: 'Z → A' },
   number: { first: 'desc', asc: 'Menor primero', desc: 'Mayor primero' },
@@ -105,7 +99,6 @@ interface DataTableProps<T> {
   title: string;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
-  /** Si viene, el botón principal queda bloqueado y muestra este motivo. */
   primaryActionBlocked?: string;
   tabs?: TabOption[];
   activeTab?: string;
@@ -126,7 +119,6 @@ interface DataTableProps<T> {
   entityLabel?: string;
   
   metricCards?: MetricCardItem[];
-  // Filas por página.
   pageSize?: number;
 }
 
@@ -187,7 +179,6 @@ export function DataTable<T extends Record<string, any>>({
     if (option) setSortDir(SORT_DIRECTIONS[option.type ?? 'text'].first);
   };
 
-  // Las filas que se ven: lo que llega, menos lo que dejan fuera las fechas, en el orden elegido.
   const data = useMemo(() => {
     let rows = allData;
 
@@ -206,7 +197,6 @@ export function DataTable<T extends Record<string, any>>({
       const va = activeSort.value(a);
       const vb = activeSort.value(b);
 
-      // Lo que no tiene dato va siempre al final.
       if (empty(va) || empty(vb)) return empty(va) === empty(vb) ? 0 : empty(va) ? 1 : -1;
 
       if (type === 'number') return (Number(va) - Number(vb)) * factor;
@@ -216,21 +206,18 @@ export function DataTable<T extends Record<string, any>>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allData, dateValues, sortId, sortDir]);
 
-  // Paginación: la tabla muestra una página; el tablero, todo.
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(data.length / pageSize));
   const currentPage = Math.min(page, pages);
   const pageRows = data.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const filterKey = JSON.stringify(filterValues);
 
-  // Al buscar, filtrar, ordenar o cambiar de pestaña se vuelve a la primera página.
   useEffect(() => {
     setPage(1);
   }, [searchTerm, activeTab, filterKey, dateValues, sortId, sortDir]);
 
   return (
     <div className={styles.container}>
-      {/* Header Superior (Título y botón principal) */}
       <div className={styles.header}>
         <div className={styles.headerTop}>
           <div className={styles.titleGroup}>
@@ -262,7 +249,6 @@ export function DataTable<T extends Record<string, any>>({
           </div>
         </div>
 
-        {/* Pestañas (Pill Control) */}
         {tabs.length > 0 && (
           <div className={styles.tabsContainer}>
             <div className={styles.tabsList}>
@@ -301,7 +287,6 @@ export function DataTable<T extends Record<string, any>>({
         )}
       </div>
 
-      {/* Contenedor Padre Exclusivo para las Tarjetas de Métricas (Espaciado equilibrado) */}
       {metricCards && metricCards.length > 0 && (
         <div className="mt-5 mb-5 px-4 relative z-10">
           <div className={`grid grid-cols-1 sm:grid-cols-3 ${metricCards.length > 3 ? "xl:grid-cols-6 gap-4" : "gap-5"}`}>
@@ -334,7 +319,6 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      {/* Barra de Filtros */}
       <div className={styles.filterSection}>
         <div className={styles.filterTopRow}>
           <div className={styles.filterLeftGroup}>
@@ -408,7 +392,6 @@ export function DataTable<T extends Record<string, any>>({
           </div>
         </div>
 
-        {/* Drawer de Filtros */}
         <AnimatePresence>
           {showFilters && (
             <motion.div
@@ -493,7 +476,6 @@ export function DataTable<T extends Record<string, any>>({
           )}
         </AnimatePresence>
 
-        {/* Barra de orden: mismo diseño que la de filtros; con ambas abiertas queda debajo. */}
         <AnimatePresence>
           {showSort && sortOptions.length > 0 && (
             <motion.div

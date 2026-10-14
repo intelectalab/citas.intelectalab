@@ -6,19 +6,15 @@ import type { PortalAppointment } from '../portal';
 
 interface PortalAppointmentCardProps {
   appointment: PortalAppointment;
-  // Destacada: la próxima cita, en la portada.
   featured?: boolean;
   busy?: boolean;
   onConfirm?: (appointment: PortalAppointment) => void;
   onReschedule?: (appointment: PortalAppointment) => void;
   onCancel?: (appointment: PortalAppointment) => void;
-  // Qué hace la empresa con una cita que no se confirma a tiempo.
   onMiss?: 'notify' | 'notify_release' | 'release';
-  // Minutos antes de la hora en que conviene llegar para pagar.
   arriveMinutes?: number;
 }
 
-// Una cita del cliente, con lo que puede hacer con ella desde el portal.
 export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel, onMiss = 'notify', arriveMinutes = 0 }: PortalAppointmentCardProps) {
   const date = dateOf(appointment.starts_at);
   const hasActions = appointment.can_confirm || appointment.can_reschedule || appointment.can_cancel;

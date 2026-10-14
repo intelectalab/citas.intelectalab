@@ -21,8 +21,6 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-sl
 
 const empty = { name: '', address: '', district: '', department: 'Lima', phone: '', timezone: 'America/Lima' };
 
-// Panel para abrir una sucursal o cambiar sus datos. El horario de atención
-// se define aparte, en su propio panel.
 export default function FormBranch({ isOpen, onClose, initialData, onSaved }: FormBranchProps) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -70,7 +68,6 @@ export default function FormBranch({ isOpen, onClose, initialData, onSaved }: Fo
   };
 
   const formId = 'branch-form';
-  // Una zona que no está en la lista (puesta por la plataforma) se conserva.
   const zones = TIMEZONES.some((z) => z.value === form.timezone) ? TIMEZONES : [...TIMEZONES, { value: form.timezone, label: form.timezone }];
 
   return (

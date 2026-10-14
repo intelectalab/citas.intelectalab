@@ -6,10 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Configuración de la plataforma (del SaaS, no de una empresa). Una fila por
- * clave. Solo la cambia el administrador SaaS.
- */
 class PlatformSetting extends Model
 {
     protected $table = 'platform_settings';
@@ -22,22 +18,16 @@ class PlatformSetting extends Model
 
     protected $casts = ['value' => 'array'];
 
-    // Valores cuando una clave aún no se ha guardado.
     public const DEFAULTS = [
         'product_name'          => 'CoreERP',
         'support_email'         => null,
-        // Color de lo que está "encendido" o "bien": interruptores y anillos de uso.
         'accent_color'          => '#10B981',
-        // Desde qué porcentaje del límite el uso se pinta de aviso y de alerta.
         'usage_warning_percent' => 70,
         'usage_danger_percent'  => 90,
-        // Si cualquiera puede registrar una empresa desde /register.
         'allow_tenant_signup'   => true,
-        // Cuántas horas dura la sesión al entrar al panel de una empresa.
         'impersonation_hours'   => 2,
     ];
 
-    // Lo que puede leer cualquiera, sin sesión: marca y apariencia.
     public const PUBLIC_KEYS = [
         'product_name', 'support_email', 'accent_color',
         'usage_warning_percent', 'usage_danger_percent', 'allow_tenant_signup',
@@ -54,7 +44,6 @@ class PlatformSetting extends Model
         try {
             $stored = static::query()->pluck('value', 'key')->all();
         } catch (\Throwable $e) {
-            // La tabla puede no existir todavía si el esquema no se ha reseteado.
             Log::warning('platform_settings no disponible; se usan los valores por defecto.');
             $stored = [];
         }
@@ -69,7 +58,6 @@ class PlatformSetting extends Model
 
     public static function put(array $values): array
     {
-        // Todo o nada: si una clave falla no queda la configuración a medias.
         DB::transaction(function () use ($values) {
             foreach (array_intersect_key($values, static::DEFAULTS) as $key => $value) {
                 static::updateOrCreate(['key' => $key], ['value' => $value]);

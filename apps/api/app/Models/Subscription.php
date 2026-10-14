@@ -34,10 +34,6 @@ class Subscription extends Model
         'canceled_at' => 'datetime',
     ];
 
-    /**
-     * Vigente: en prueba o activa y sin haber pasado su fecha de fin.
-     * Una suscripción sin fecha de fin no vence.
-     */
     public function isCurrent(): bool
     {
         return in_array($this->status, ['active', 'trialing'], true)

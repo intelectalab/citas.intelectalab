@@ -6,11 +6,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Alguien que quiere una cita y no encontró horario: qué servicio, con quién,
- * entre qué fechas y a qué horas le sirve. Cuando se libera un horario, el
- * personal lo agenda desde aquí.
- */
 class WaitlistEntry extends Model
 {
     use HasUuids;
@@ -29,7 +24,6 @@ class WaitlistEntry extends Model
         self::CANCELLED => 'Retirado',
     ];
 
-    // Sigue esperando un horario.
     public const OPEN = [self::WAITING, self::NOTIFIED];
     public const CLOSED = [self::EXPIRED, self::CANCELLED];
 
@@ -92,9 +86,6 @@ class WaitlistEntry extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 
-    /**
-     * Cita que se le consiguió.
-     */
     public function appointment(): BelongsTo
     {
         return $this->belongsTo(Appointment::class, 'appointment_id');

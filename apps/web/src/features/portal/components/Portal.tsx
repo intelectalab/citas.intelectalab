@@ -15,7 +15,6 @@ import { portalError, type PortalAppointment, type PortalCatalog, type PortalOve
 
 type Tab = 'home' | 'book' | 'appointments' | 'profile';
 
-// Portal del cliente: su próxima cita, reservar en línea y sus citas.
 export default function Portal() {
   const { user, loading: authLoading, logout } = useAuth();
   const vocab = useVocabulary();
@@ -34,7 +33,6 @@ export default function Portal() {
   const [editingPhone, setEditingPhone] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
 
-  // El portal es solo para cuentas de cliente; el personal vuelve a su panel.
   useEffect(() => {
     if (isStaff) window.location.replace('/home');
   }, [isStaff]);
@@ -50,17 +48,14 @@ export default function Portal() {
     load();
   }, [user, isStaff, load]);
 
-  // Lo que espera, con los horarios que ya le sirven.
   const loadWaiting = useCallback(() => {
     api.get('/portal/waitlist')
       .then((res) => setWaiting(Array.isArray(res.data) ? res.data : []))
       .catch(() => setWaiting([]));
   }, []);
 
-  // Primer ingreso con su número de documento: antes de nada, crea su contraseña.
   const mustChangePassword = Boolean(overview?.customer.must_change_password);
 
-  // El catálogo solo existe si la empresa ofrece reserva en línea.
   useEffect(() => {
     if (!overview?.policies.booking_enabled || catalog || mustChangePassword) return;
 
@@ -82,11 +77,9 @@ export default function Portal() {
   const tenant = user.tenant;
   const policies = overview?.policies;
   const appointments = overview?.appointments ?? [];
-  // Vienen de la más nueva a la más antigua: las próximas se muestran al revés.
   const upcoming = appointments.filter((a) => a.is_upcoming).reverse();
   const past = appointments.filter((a) => !a.is_upcoming);
   const next = upcoming[0] ?? null;
-  // Con varias inasistencias a citas reservadas en línea, la empresa puede cerrarle esta vía.
   const block = overview?.booking_block ?? null;
   const canBook = Boolean(policies?.booking_enabled) && !block?.blocked;
 
@@ -143,7 +136,6 @@ export default function Portal() {
   return (
     <div className="min-h-screen bg-slate-100/70 font-sans text-[#1F2937]">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        {/* La empresa en una esquina y cerrar sesión en la otra; el menú sigue alineado con el contenido. */}
         <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4" data-portal-bar>
           <div className="flex items-center gap-3 min-w-0">
             <span className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0" style={{ backgroundColor: tenant?.color ?? '#022340' }}>

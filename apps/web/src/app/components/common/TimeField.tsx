@@ -5,19 +5,15 @@ import { Clock } from 'lucide-react';
 import Floating from './Floating';
 
 interface TimeFieldProps {
-  // HH:MM en 24 horas, o vacío si no hay hora.
   value: string;
   onChange: (value: string) => void;
   id?: string;
   ariaLabel?: string;
   placeholder?: string;
-  // Cada cuántos minutos se ofrecen opciones.
   step?: number;
   required?: boolean;
   disabled?: boolean;
-  // Ofrece "Quitar hora". Por defecto, solo si la hora no es obligatoria.
   clearable?: boolean;
-  // 'compact': para filas, donde el campo es más bajo y angosto.
   size?: 'field' | 'compact';
   className?: string;
 }
@@ -25,7 +21,6 @@ interface TimeFieldProps {
 const pad = (n: number) => String(n).padStart(2, '0');
 const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
 
-/** Campo de hora de un formulario: dos columnas propias, horas y minutos. */
 export default function TimeField({
   value,
   onChange,
@@ -49,12 +44,10 @@ export default function TimeField({
   const minute = current ? current.slice(3, 5) : '';
   const canClear = clearable ?? !required;
 
-  // Los minutos de la lista, más el que ya tiene el campo si no cae en un paso (23:59).
   const minutes = Array.from({ length: Math.ceil(60 / step) }, (_, i) => pad(i * step));
   if (minute && !minutes.includes(minute)) minutes.push(minute);
   minutes.sort();
 
-  // Al abrir, cada columna se desplaza hasta lo que está elegido.
   useEffect(() => {
     if (!open) return;
     [hoursRef.current, minutesRef.current].forEach((column) => {
@@ -90,7 +83,6 @@ export default function TimeField({
         <Clock size={15} className="text-slate-400 shrink-0" />
       </button>
 
-      {/* Deja que el formulario exija la hora igual que cualquier otro campo obligatorio. */}
       {required && (
         <input
           tabIndex={-1}

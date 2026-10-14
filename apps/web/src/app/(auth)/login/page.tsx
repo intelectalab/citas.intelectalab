@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
-import { useAuth } from '@/hooks/useAuth'; // Ruta correcta
+import { useAuth } from '@/hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TenantSelectModal, LoginAccount } from '@/features/auth/components/TenantSelectModal';
 import { 
@@ -26,17 +26,13 @@ export default function AuthPage() {
   const router = useRouter();
   const { login: authContextLogin } = useAuth();
   
-  // Estado para alternar entre 'login' y 'register'
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Campos de Login
   const [loginEmail, setLoginEmail] = useState('admin@luxuryspa.pe');
 
-  // Al venir de "Cambiar de cuenta" el correo ya llega puesto: si tiene cuenta
-  // en varias empresas, al ingresar se elige a cuál entrar.
   useEffect(() => {
     const switchEmail = sessionStorage.getItem('switch_account_email');
     if (switchEmail) {
@@ -46,19 +42,16 @@ export default function AuthPage() {
   }, []);
   const [loginPassword, setLoginPassword] = useState('Admin123456!');
 
-  // Campos de registro de cliente (cuenta del portal con código de empresa)
   const [regFirstName, setRegFirstName] = useState('');
   const [regLastName, setRegLastName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regTenantCode, setRegTenantCode] = useState('');
 
-  // Selector de empresa: el mismo correo y contraseña son válidos en varias
   const [accounts, setAccounts] = useState<LoginAccount[]>([]);
   const [loadingAccountId, setLoadingAccountId] = useState<string | null>(null);
   const [selectError, setSelectError] = useState<string | null>(null);
 
-  // Guarda la sesión y lleva al portal de cliente o al panel de la empresa.
   const completeSession = async (data: any) => {
     const token = data.access_token || data.token;
     const userData = data.user || data.data;
@@ -77,14 +70,12 @@ export default function AuthPage() {
       try {
         await authContextLogin(token, userData);
       } catch {
-        // Si el login del contexto no requiere argumentos
       }
     }
 
     router.push(userData?.account_type === 'customer' ? '/portal' : '/home');
   };
 
-  // Manejador de Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -112,8 +103,6 @@ export default function AuthPage() {
     }
   };
 
-  // El usuario eligió empresa: se reutilizan el correo y la contraseña ya
-  // ingresados (solo viven en memoria) para autenticar en esa empresa.
   const handleSelectAccount = async (account: LoginAccount) => {
     setLoadingAccountId(account.account_id);
     setSelectError(null);
@@ -134,7 +123,6 @@ export default function AuthPage() {
     }
   };
 
-  // Manejador de registro de cliente
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -170,7 +158,6 @@ export default function AuthPage() {
     <div className="min-h-screen w-full bg-slate-100/70 flex items-center justify-center p-4 md:p-8 font-sans text-[#1F2937]">
       <div className="w-full max-w-5xl bg-white rounded-3xl border border-slate-200/80 shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px]">
         
-        {/* PANEL IZQUIERDO */}
         <div className="hidden lg:flex lg:col-span-5 bg-gradient-to-br from-[#022340] via-[#012840] to-[#011B30] text-white p-10 flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#84D0D9]/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#3F768C]/20 rounded-full blur-2xl pointer-events-none" />
@@ -222,7 +209,6 @@ export default function AuthPage() {
           </div>
         </div>
 
-        {/* PANEL DERECHO */}
         <div className="lg:col-span-7 p-8 sm:p-12 flex flex-col justify-between bg-white relative overflow-hidden">
           
           <AnimatePresence mode="wait">
@@ -347,7 +333,7 @@ export default function AuthPage() {
                     <span>¿No tienes una cuenta de empresa?</span>
                     <button 
                       type="button"
-                      onClick={() => router.push('/register')} // Redirige a la página de planes y registro
+                      onClick={() => router.push('/register')}
                       className="inline-flex items-center gap-1 text-[#3F768C] hover:text-[#022340] font-bold transition-colors cursor-pointer"
                     >
                       <UserPlus className="w-3.5 h-3.5" />

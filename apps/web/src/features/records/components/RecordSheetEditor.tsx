@@ -10,11 +10,9 @@ import { FIELD_TYPES, NEW_FIELD, type RecordField, type RecordTemplate } from '.
 
 interface RecordSheetEditorProps {
   template: RecordTemplate;
-  // Color de la empresa: tiñe la cabecera de la hoja.
   color: string;
   companyName: string;
   onSaved: (template: RecordTemplate) => void;
-  // Avisa si la hoja tiene cambios sin guardar, para no perderlos al elegir otra.
   onDirtyChange?: (dirty: boolean) => void;
 }
 
@@ -32,21 +30,16 @@ const toDraft = (template: RecordTemplate): Draft => ({
   require_consent: template.require_consent,
 });
 
-// Texto que se edita en su sitio: parece texto de la hoja y muestra su borde al pasar o escribir.
 const inlineText =
   'bg-transparent rounded-md border border-transparent hover:border-slate-200 focus:border-[#3F768C] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3F768C]/15 transition-colors';
 const tool = 'p-1 rounded-md text-slate-400 hover:text-[#022340] hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
 
-// La ficha, editable sobre la propia hoja: se cambia el título, cada campo
-// (nombre, tipo, obligatorio, opciones, orden) y el consentimiento, viendo
-// siempre cómo va a quedar. Nada se guarda hasta pulsar "Guardar ficha".
 export default function RecordSheetEditor({ template, color, companyName, onSaved, onDirtyChange }: RecordSheetEditorProps) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(template));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
 
-  // Otra plantilla elegida, o la misma recién guardada: se parte de lo guardado.
   useEffect(() => {
     setDraft(toDraft(template));
     setError('');
@@ -129,7 +122,6 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
         <p className="text-xs opacity-80 mt-0.5">{companyName}</p>
       </div>
 
-      {/* Datos que la ficha toma de la cita */}
       <div className="grid grid-cols-3 gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
         {['Cliente', 'Servicio', 'Fecha'].map((label) => (
           <div key={label}>

@@ -1,4 +1,3 @@
-// Lo que entrega la API sobre la propia empresa (GET /company).
 export interface CompanyProfileData {
   can_edit: boolean;
   tenant: {
@@ -23,7 +22,6 @@ export interface CompanyProfileData {
     trial_ends_at: string | null;
     ends_at: string | null;
   } | null;
-  // Uso frente al tope del plan; limit null = sin tope.
   usage: { key: string; used: number; limit: number | null }[];
   totals: { customers: number; services: number };
 }

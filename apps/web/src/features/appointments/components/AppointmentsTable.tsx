@@ -12,7 +12,6 @@ import { useAutoRefresh } from './useAutoRefresh';
 import { RELEASED, addDays, dateOf, formatDate, statusStyle, timeOf, todayISO, type Appointment } from '../appointments';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 
-// Periodos de la lista. Cada pestaña pide a la API su rango de fechas.
 const PERIODS: { id: string; label: string; range: () => { from: string; to: string } }[] = [
   { id: 'today', label: 'Hoy', range: () => ({ from: todayISO(), to: todayISO() }) },
   { id: 'week', label: 'Próximos 7 días', range: () => ({ from: todayISO(), to: addDays(todayISO(), 7) }) },
@@ -20,7 +19,6 @@ const PERIODS: { id: string; label: string; range: () => { from: string; to: str
   { id: 'past', label: 'Últimos 30 días', range: () => ({ from: addDays(todayISO(), -30), to: addDays(todayISO(), -1) }) },
 ];
 
-// Tarjetas que agrupan fases y filtran la tabla.
 const CARDS: { id: string; title: string; statuses: string[]; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'pending', title: 'Pendientes', statuses: ['pending'], icon: <Hourglass size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
   { id: 'confirmed', title: 'Confirmadas', statuses: ['confirmed'], icon: <ThumbsUp size={18} />, color: 'text-sky-600', active: 'border-sky-500 ring-2 ring-sky-500/20', hover: 'hover:border-sky-300' },
@@ -29,15 +27,12 @@ const CARDS: { id: string; title: string; statuses: string[]; icon: React.ReactN
   { id: 'released', title: 'Canceladas y ausencias', statuses: RELEASED, icon: <CalendarX2 size={18} />, color: 'text-rose-700', active: 'border-rose-500 ring-2 ring-rose-500/20', hover: 'hover:border-rose-300' },
 ];
 
-// Lista de citas de la empresa por periodo, con búsqueda y filtros. El ojo y
-// el código abren el panel de la cita.
 export default function AppointmentsTable() {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<{ id: string; display_name: string }[]>([]);
   const [period, setPeriod] = useState('week');
-  // Rango del filtro de fecha: mientras exista, manda sobre el periodo de la pestaña.
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({ status: '', professional_id: '' });
@@ -66,7 +61,6 @@ export default function AppointmentsTable() {
 
   useEffect(() => { load(); }, [load]);
 
-  // La lista se actualiza sola para mostrar lo que agendan otras personas.
   useAutoRefresh(load, isOpen, 30000);
 
   useEffect(() => {
@@ -91,7 +85,6 @@ export default function AppointmentsTable() {
     setFilters((current) => ({ ...current, status: '' }));
   };
 
-  // La fase se filtra aquí para que las tarjetas sigan mostrando sus totales.
   const card = CARDS.find((c) => c.id === activeCard);
   const rows = appointments.filter((a) =>
     card ? card.statuses.includes(a.status) : filters.status ? a.status === filters.status : true,

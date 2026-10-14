@@ -10,11 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Comprobantes de una venta. Con el módulo de facturación la empresa emite
- * boletas y facturas, que pasan por su proveedor (una simulación mientras no
- * configure uno real). Sin ese módulo emite un comprobante interno (ticket).
- */
 class Invoicing
 {
     public const TICKET = 'ticket';
@@ -29,20 +24,12 @@ class Invoicing
         self::CREDIT_NOTE => 'Nota de crédito',
     ];
 
-    // Serie con que nace cada tipo de comprobante.
     private const SERIES = [self::TICKET => 'T001', self::BOLETA => 'B001', self::FACTURA => 'F001'];
 
-    // Serie de la nota de crédito según el comprobante que corrige.
     private const CREDIT_SERIES = [self::TICKET => 'TC01', self::BOLETA => 'BC01', self::FACTURA => 'FC01'];
 
-    // Proveedores reales disponibles: clave => clase. Por ahora ninguno.
     private const PROVIDERS = [];
 
-    /**
-     * Tipos de comprobante que la empresa puede emitir.
-     *
-     * @return array<int, string>
-     */
     public static function types(Tenant $tenant): array
     {
         return $tenant->hasModule('invoicing') ? [self::BOLETA, self::FACTURA] : [self::TICKET];
@@ -69,13 +56,6 @@ class Invoicing
         return $class ? new $class($integration) : new SimulatedInvoiceProvider();
     }
 
-    /**
-     * Revisa los datos del comprobante antes de cobrar, para no dejar una
-     * venta pagada sin poder emitirlo.
-     *
-     * @param array<string, mixed> $input
-     * @return array{doc_type: string, ruc: ?string, business_name: ?string, address: ?string}
-     */
     public static function validated(Tenant $tenant, array $input): array
     {
         $type = $input['doc_type'] ?? self::defaultType($tenant);
@@ -104,12 +84,6 @@ class Invoicing
         ];
     }
 
-    /**
-     * Emite el comprobante de una venta pagada. Una venta tiene un solo
-     * comprobante vigente: si ya lo tiene, devuelve ese.
-     *
-     * @param array{doc_type: string, ruc: ?string, business_name: ?string, address: ?string} $doc
-     */
     public static function issue(Tenant $tenant, object $sale, array $doc, ?User $user): object
     {
         $existing = self::ofSale($sale->id);
@@ -125,7 +99,6 @@ class Invoicing
             ? DB::table('type_documents')->where('id', $customer->type_document_id)->value('name')
             : null;
 
-        // El número se toma con una sola sentencia: dos cobros a la vez no lo repiten.
         DB::table('invoice_series')->insertOrIgnore([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'doc_type' => $type, 'serie' => $serie, 'next_number' => 1, 'created_at' => now(),
         ]);
@@ -161,7 +134,6 @@ class Invoicing
         ];
 
         if ($type === self::TICKET) {
-            // El comprobante interno no va a SUNAT.
             $row += ['provider' => 'internal', 'simulated' => false, 'sunat_status' => 'not_applicable', 'sunat_message' => null, 'external_id' => null];
         } else {
             $provider = self::provider($tenant);
@@ -172,7 +144,6 @@ class Invoicing
                     'items'  => DB::table('sale_items')->where('sale_id', $sale->id)->get(['description', 'quantity', 'unit_price', 'discount', 'total'])->all(),
                 ]);
             } catch (\Throwable $e) {
-                // El proveedor no respondió: el comprobante queda emitido y pendiente de envío.
                 report($e);
                 $answer = ['status' => 'pending', 'message' => 'El proveedor de facturación no respondió. Queda pendiente de envío.', 'external_id' => null, 'simulated' => false];
             }
@@ -191,19 +162,11 @@ class Invoicing
         return DB::table('invoices')->where('id', $id)->first();
     }
 
-    /**
-     * Comprobante vigente de una venta (no sus notas de crédito).
-     */
     public static function ofSale(string $saleId): ?object
     {
         return DB::table('invoices')->where('sale_id', $saleId)->where('status', 'issued')->where('doc_type', '!=', self::CREDIT_NOTE)->first();
     }
 
-    /**
-     * Nota de crédito por una devolución. Solo si la venta tenía comprobante:
-     * corrige ese comprobante por el monto devuelto y pasa por el mismo
-     * proveedor (o simulación) que lo emitió.
-     */
     public static function creditNote(Tenant $tenant, object $sale, float $amount, string $reason, ?User $user): ?object
     {
         $origin = self::ofSale($sale->id);
@@ -222,7 +185,6 @@ class Invoicing
             [$tenant->id, self::CREDIT_NOTE, $serie],
         )->number;
 
-        // El impuesto de la nota guarda la misma proporción que en la venta.
         $tax = (float) $sale->total > 0 ? round((float) $sale->tax * $amount / (float) $sale->total, 2) : 0;
 
         $id = (string) Str::uuid();

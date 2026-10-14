@@ -36,7 +36,6 @@ export const AppModal: React.FC<AppModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
       <div className={`bg-white rounded-2xl p-6 ${maxWidth} w-full shadow-2xl border border-slate-100 transform transition-all`}>
         
-        {/* Encabezado con icono representativo */}
         <div className="flex items-start gap-4">
           <div className={`p-2.5 rounded-xl shrink-0 ${
             isDanger ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-700'
@@ -46,7 +45,6 @@ export const AppModal: React.FC<AppModalProps> = ({
 
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-            {/* Si es string usamos whitespace-pre-line, si es nodo se renderiza directamente */}
             {typeof message === 'string' ? (
               <p className="text-sm text-slate-500 mt-1.5 leading-relaxed whitespace-pre-line">
                 {message}
@@ -59,7 +57,6 @@ export const AppModal: React.FC<AppModalProps> = ({
           </div>
         </div>
         
-        {/* Botones de acción */}
         <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
           {type === 'confirm' && (
             <button

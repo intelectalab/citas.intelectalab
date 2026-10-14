@@ -45,7 +45,6 @@ interface FormProfessionalProps {
 export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, initialData }: FormProfessionalProps) {
   const vocab = useVocabulary();
   const { user } = useAuth();
-  // La colegiatura solo se pide en los rubros que la usan (regla del rubro).
   const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
   const [form, setForm] = useState({
     display_name: '',
@@ -65,7 +64,6 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
   const [specialtiesList, setSpecialtiesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Especialidad nueva sin salir del formulario: se crea y queda marcada.
   const [newSpecialty, setNewSpecialty] = useState('');
   const [addingSpecialty, setAddingSpecialty] = useState(false);
 
@@ -107,7 +105,6 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     }
   }, [isOpen]);
 
-  // Al abrir el panel no debe quedar el aviso de un intento anterior.
   useEffect(() => { if (isOpen) setError(''); }, [isOpen]);
 
   useEffect(() => {
@@ -162,7 +159,6 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
       if (initialData) {
         await api.put(`/professionals/${initialData.id}`, payload);
         onClose();
-        // Sin credenciales: solo avisa a la tabla para que vuelva a cargar.
         onSubmitSuccess();
       } else {
         const res = await api.post('/professionals', payload);

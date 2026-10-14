@@ -27,7 +27,6 @@ const TYPES: { id: Coupon['discount_type']; title: string; hint: string }[] = [
   { id: 'amount', title: 'Un monto fijo', hint: 'Ej. S/ 20 menos' },
 ];
 
-// Panel para crear un cupón de descuento o cambiar sus condiciones.
 export default function FormCoupon({ isOpen, onClose, initialData, onSaved }: FormCouponProps) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);

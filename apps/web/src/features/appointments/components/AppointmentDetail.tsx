@@ -15,30 +15,22 @@ import { money, SALE_BADGES, type ChargeContext } from '@/features/sales/sales';
 interface AppointmentDetailProps {
   appointmentId: string | null;
   onClose: () => void;
-  // La cita cambió (fase o notas): quien abre el panel refresca su lista.
   onChanged: (appointment: Appointment) => void;
   onReschedule: (appointment: Appointment) => void;
-  // Abre la ficha de atención de la cita.
   onOpenRecord: (appointment: Appointment) => void;
-  // Cambia cuando la cita se modificó desde fuera (reprogramación) y hay que volver a leerla.
   reloadKey?: number;
 }
 
-// El camino normal de una cita. Cancelada y no asistió quedan fuera: son salidas.
 const FLOW = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
 
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
-// Panel lateral de una cita: sus datos, la fase en que está, las acciones que
-// la mueven de fase, sus notas y su historial.
 export default function AppointmentDetail({ appointmentId, onClose, onChanged, onReschedule, onOpenRecord, reloadKey = 0 }: AppointmentDetailProps) {
   const { user, hasModule, can } = useAuth();
   const vocab = useVocabulary();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
-  // Cobro de la cita (solo con el módulo de punto de venta y a quien su rol le deja
-  // cobrar o ver las ventas): su venta y el panel para cobrar.
   const canCharge = hasModule('pos') && !user?.is_saas_admin && (can('sales.create') || can('sales.view'));
   const [charge, setCharge] = useState<ChargeContext | null>(null);
   const [chargeNote, setChargeNote] = useState('');
@@ -53,7 +45,6 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
 
   const statusNames = Object.fromEntries((user?.tenant?.appointment_statuses ?? []).map((s) => [s.key, s.name]));
 
-  // Los cambios de fase no traen el promedio del cliente: se conserva el que ya se tenía.
   const apply = (data: Appointment) => {
     setAppointment((current) => ({ ...data, customer_timing: data.customer_timing ?? current?.customer_timing }));
     setNotes(data.notes ?? '');
@@ -82,7 +73,6 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
 
     api.get(`/appointments/${appointmentId}/sale`)
       .then((res) => setCharge(res.data))
-      // Si la base aún no tiene las tablas de ventas, se dice en vez de ocultar el cobro.
       .catch((err) => setChargeNote(apiError(err, 'No se pudo cargar el cobro de esta cita.')));
   }, [appointmentId, reloadKey, canCharge]);
 
@@ -97,7 +87,6 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       apply(res.data);
       setCancelling(false);
       setCancelReason('');
-      // Avisos tras cancelar: fuera de plazo, y si el horario libre le sirve a alguien que espera.
       const waiting = Number(res.data.waitlist_matches ?? 0);
       const notices = [
         res.data.late_cancel ? 'Se canceló fuera del plazo sin costo de tu empresa.' : '',
@@ -145,7 +134,6 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const showTiming = Boolean(timing && (timing.running || timing.wait_seconds != null || timing.service_seconds != null))
     || Boolean(customerTiming?.measured);
 
-  // El nombre del cliente y el del profesional llevan a su página.
   const rows: [string, React.ReactNode][] = appointment ? [
     [vocab.client, appointment.customer
       ? <><CustomerLink id={appointment.customer.id}>{appointment.customer.name}</CustomerLink> · {appointment.customer.code}</>
@@ -195,7 +183,6 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
               <ol className="flex items-start">
                 {FLOW.map((key, index) => {
                   const current = index === flowIndex;
-                  // La última fase, al alcanzarla, ya está cumplida.
                   const done = index < flowIndex || (current && index === FLOW.length - 1);
                   return (
                     <li key={key} className="flex-1 flex flex-col items-center text-center relative">

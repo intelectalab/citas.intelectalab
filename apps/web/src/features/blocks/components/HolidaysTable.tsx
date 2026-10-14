@@ -13,16 +13,13 @@ import FormHoliday from './FormHoliday';
 import { holidayDueLabel, type Holiday } from '../blocks';
 
 interface HolidaysTableProps {
-  // Las pestañas son las de Bloqueos y ausencias: esta es una más.
   tabs: TabOption[];
   activeTab: string;
   onTabChange: (id: string) => void;
   branches: { id: string; name: string }[];
-  // Para que la pestaña muestre cuántos feriados vienen.
   onCount: (count: number) => void;
 }
 
-// Tarjetas que filtran la tabla.
 const CARDS: { id: string; title: string; match: (h: Holiday) => boolean; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'soon', title: 'En los próximos 30 días', match: (h) => h.days_left >= 0 && h.days_left <= 30, icon: <CalendarClock size={18} />, color: 'text-sky-600', active: 'border-sky-500 ring-2 ring-sky-500/20', hover: 'hover:border-sky-300' },
   { id: 'affected', title: 'Con citas ese día', match: (h) => h.affected_count > 0, icon: <AlertTriangle size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
@@ -31,9 +28,6 @@ const CARDS: { id: string; title: string; match: (h: Holiday) => boolean; icon: 
 
 const normalize = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Feriados de la empresa, dentro de Bloqueos y ausencias: los nacionales que
-// se cargan por año y los propios. En un feriado en que la sede cierra, la
-// agenda no ofrece horarios.
 export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, onCount }: HolidaysTableProps) {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [years, setYears] = useState<number[]>([]);
@@ -49,7 +43,6 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  // Feriado cuyas citas de ese día se están viendo.
   const [reviewing, setReviewing] = useState<Holiday | null>(null);
 
   const year = filters.year ? Number(filters.year) : null;
@@ -62,7 +55,6 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
         setYears(res.data.years ?? []);
         setMissing(res.data.missing ?? []);
         setCanManage(Boolean(res.data.can_manage));
-        // La pestaña cuenta los que vienen, no los de un año elegido.
         if (!year) onCount(list.length);
       })
       .catch((err) => { console.error('Error al cargar feriados:', err); setHolidays([]); });

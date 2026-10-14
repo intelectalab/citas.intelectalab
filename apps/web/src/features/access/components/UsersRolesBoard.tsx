@@ -17,8 +17,6 @@ import { initialsOf, scopeTitle, type BranchOption, type PlanUsage, type RoleOpt
 
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors';
 
-// Usuarios y roles: quién entra al sistema, con qué rol, y qué puede cada rol.
-// El nombre de una persona o de un rol abre su página, con todos sus permisos.
 export default function UsersRolesBoard() {
   const router = useRouter();
   const [tab, setTab] = useState<'users' | 'roles'>('users');
@@ -28,7 +26,6 @@ export default function UsersRolesBoard() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [usage, setUsage] = useState<PlanUsage | null>(null);
   const [blocked, setBlocked] = useState('');
-  // La sede de quien consulta si trabaja solo con ella (un gerente de sede).
   const [myBranch, setMyBranch] = useState<BranchOption | null>(null);
   const [can, setCan] = useState({ create: false, edit: false, delete: false });
   const [error, setError] = useState('');
@@ -59,7 +56,6 @@ export default function UsersRolesBoard() {
         setCan((current) => ({ ...current, create: res.data.can.create, edit: res.data.can.edit }));
         setError('');
       })
-      // Si la base aún no tiene las tablas nuevas, se dice en vez de mostrar la pantalla vacía.
       .catch((err) => { setUsers([]); setError(apiError(err, 'No se pudieron cargar los usuarios.')); });
 
     api.get('/access/roles')
@@ -72,7 +68,6 @@ export default function UsersRolesBoard() {
   const all = users ?? [];
   const term = searchTerm.trim().toLowerCase();
   const changedOf = (user: StaffUser) => (user.granted ?? 0) + (user.revoked ?? 0);
-  // Su rol trabaja solo con su sede y no tiene una asignada.
   const lacksBranch = (user: StaffUser) => user.role?.scope === 'branch' && !user.branch;
 
   const userRows = all.filter((user) =>

@@ -29,9 +29,7 @@ class RegisterTenantController extends Controller
             'district'        => 'nullable|string|max:100',
             'first_name'      => 'required|string|max:150',
             'last_name'       => 'required|string|max:150',
-            // El correo solo debe ser único dentro de un tenant, y este tenant es nuevo.
             'email'           => 'required|email|max:190',
-            // Si no llega, la empresa queda en el rubro genérico.
             'business_type_id' => ['nullable', 'uuid', Rule::exists('business_types', 'id')->where('status', 'active')],
             'password'        => 'required|string|min:8',
             'plan_id'         => ['required', 'uuid', Rule::exists('saas_plans', 'id')->where('status', 'active')->where('is_public_catalog', true)],

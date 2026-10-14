@@ -38,11 +38,9 @@ interface ProfessionalScheduleProps {
   isOpen: boolean;
   onClose: () => void;
   professional: { id: string; display_name: string } | null;
-  // Sede en la que se abre el panel (por ejemplo, la que se está viendo).
   initialBranchId?: string | null;
 }
 
-// Lunes primero; el número es el día de la semana que guarda la API (0 = domingo).
 const DAYS: { weekday: number; label: string }[] = [
   { weekday: 1, label: 'Lunes' },
   { weekday: 2, label: 'Martes' },
@@ -53,7 +51,6 @@ const DAYS: { weekday: number; label: string }[] = [
   { weekday: 0, label: 'Domingo' },
 ];
 
-// Tipos de ausencia de una persona. Solo el bloqueo de horario admite sobre-agenda.
 const BLOCK_KINDS = [
   { value: 'vacation', label: 'Vacaciones' },
   { value: 'leave', label: 'Permiso o descanso médico' },
@@ -68,7 +65,6 @@ const inputClass =
   'text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
-// Al elegir solo el día, la ausencia toma el día completo.
 const MOMENTS: { key: 'starts_at' | 'ends_at'; label: string; time: string }[] = [
   { key: 'starts_at', label: 'Desde', time: '00:00' },
   { key: 'ends_at', label: 'Hasta', time: '23:59' },
@@ -88,8 +84,6 @@ const firstError = (error: any, fallback: string): string => {
   return error?.response?.data?.message || fallback;
 };
 
-// Horario semanal de un profesional (por sede) y sus ausencias. El horario se
-// guarda completo por sede; las ausencias se agregan y se quitan una a una.
 export default function ProfessionalSchedule({ isOpen, onClose, professional, initialBranchId }: ProfessionalScheduleProps) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
@@ -130,7 +124,6 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
       .then(([scheduleRes, blocksRes]) => {
         const branchList: Branch[] = scheduleRes.data.branches ?? [];
         const allRows: ScheduleRow[] = scheduleRes.data.schedules ?? [];
-        // Abre en la sede pedida; si no, en la primera donde la persona ya atiende.
         const firstBranch = branchList.find((b) => b.id === initialBranchId)?.id
           ?? branchList.find((b) => allRows.some((row) => row.branch_id === b.id))?.id
           ?? branchList[0]?.id ?? '';
@@ -157,8 +150,6 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
     setSaved(false);
   };
 
-  // Al encender un día toma el horario del día anterior que atiende, para no
-  // escribir lo mismo siete veces.
   const toggleDay = (weekday: number, on: boolean) => {
     if (!on) return updateDay(weekday, []);
 
@@ -206,7 +197,6 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
     }
   };
 
-  // La ausencia viaja como "AAAA-MM-DDTHH:MM"; en pantalla son una fecha y una hora.
   const setMoment = (key: 'starts_at' | 'ends_at', part: { day?: string; hour?: string }, fallbackHour: string) => {
     const [day = '', hour = ''] = blockForm[key].split('T');
     const nextDay = part.day ?? (day || new Date().toLocaleDateString('en-CA'));

@@ -8,10 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-/**
- * Cita. La fase (status) es una de las claves fijas de AppointmentFlow.
- * Las fechas se guardan con zona horaria; la API las entrega en la hora de la sede.
- */
 class Appointment extends Model
 {
     use HasUuids;
@@ -59,13 +55,8 @@ class Appointment extends Model
         'reschedule_count' => 'integer',
     ];
 
-    // Las fechas se envían a la base con su desplazamiento, para que no
-    // dependan de la zona horaria de la conexión.
     protected $dateFormat = 'Y-m-d H:i:sP';
 
-    /**
-     * Siguiente código correlativo de la empresa (C-0001, C-0002, ...).
-     */
     public static function nextCode(string $tenantId): string
     {
         $max = static::where('tenant_id', $tenantId)
@@ -102,9 +93,6 @@ class Appointment extends Model
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 
-    /**
-     * Ficha de atención llenada en esta cita, si tiene.
-     */
     public function record(): HasOne
     {
         return $this->hasOne(CareRecord::class, 'appointment_id');

@@ -6,12 +6,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Control o seguimiento pendiente de un cliente: una vacuna, una profilaxis,
- * un retoque, la próxima sesión. Nace de la ficha de atención, del servicio
- * atendido o lo registra el personal, y se cierra cuando se convierte en una
- * cita atendida o cuando se descarta.
- */
 class Recall extends Model
 {
     use HasUuids;
@@ -30,7 +24,6 @@ class Recall extends Model
         self::CANCELLED => 'Descartado',
     ];
 
-    // Aún hay que conseguir que el cliente vuelva.
     public const OPEN = [self::PENDING, self::NOTIFIED];
     public const CLOSED = [self::DONE, self::CANCELLED];
 
@@ -84,17 +77,11 @@ class Recall extends Model
         return $this->belongsTo(Professional::class, 'professional_id');
     }
 
-    /**
-     * Cita en la que se convirtió el control.
-     */
     public function appointment(): BelongsTo
     {
         return $this->belongsTo(Appointment::class, 'appointment_id');
     }
 
-    /**
-     * Cita de la atención que originó el control.
-     */
     public function sourceAppointment(): BelongsTo
     {
         return $this->belongsTo(Appointment::class, 'source_appointment_id');

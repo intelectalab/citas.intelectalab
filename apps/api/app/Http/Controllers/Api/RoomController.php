@@ -10,10 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Support\Access;
 
-/**
- * Salas y equipos de una sucursal (consultorios, cabinas, sillones, equipos).
- * Por ahora se registran y se listan; asignarlos a las citas vendrá después.
- */
 class RoomController extends Controller
 {
     private function assertCanManage(Request $request): void
@@ -39,7 +35,6 @@ class RoomController extends Controller
             'description' => 'nullable|string|max:255',
             'kind'        => ['nullable', Rule::in(['room', 'equipment'])],
             'status'      => ['nullable', Rule::in(['active', 'inactive'])],
-            // Solo para un equipo: la sala de la misma sede donde está instalado.
             'parent_id'   => ['nullable', 'uuid', Rule::exists('rooms', 'id')->where('branch_id', $branchId)->where('kind', 'room')],
         ], [
             'name.required' => 'Escribe el nombre.',
@@ -63,15 +58,11 @@ class RoomController extends Controller
         return DB::table('rooms')->where('id', $id)->first(['id', 'branch_id', 'name', 'description', 'kind', 'status']);
     }
 
-    /**
-     * Todas las salas y equipos de la empresa, con la sede de cada uno.
-     */
     public function index(Request $request)
     {
         $user = $request->user();
         abort_unless($user->tenant_id, 403);
 
-        // Quien trabaja solo con su sede ve y registra las salas de su sede.
         $limit = Access::branchLimit($user);
         $branches = Branch::where('tenant_id', $user->tenant_id)->when($limit, fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name', 'status']);
         $names = $branches->pluck('name', 'id');
@@ -83,16 +74,11 @@ class RoomController extends Controller
             'can_manage' => $user->allows('rooms.edit'),
             'equipment_down' => $mode,
             'links_equipment' => Rooms::hasParent(),
-            // Solo en sedes activas se registra algo nuevo.
             'branches'   => $branches->where('status', 'active')->map(fn (Branch $b) => ['id' => $b->id, 'name' => $b->name])->values(),
             'rooms'      => $rooms,
         ]);
     }
 
-    /**
-     * Si lo que cambió es un equipo instalado en una sala y pasó de estar en
-     * uso a fuera de uso (o al revés), la administración se entera.
-     */
     private function notifyIfEquipmentChanged(Request $request, object $before): void
     {
         $after = DB::table('rooms')->where('id', $before->id)->first();
@@ -131,9 +117,6 @@ class RoomController extends Controller
         return response()->json($this->present($room->id));
     }
 
-    /**
-     * Se elimina si ninguna cita la usó; si ya tiene historia, se desactiva.
-     */
     public function destroy(Request $request, string $room)
     {
         $this->assertCanManage($request);

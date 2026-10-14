@@ -41,7 +41,6 @@ import {
 } from 'lucide-react';
 
 interface DashboardData {
-  // 'own' = un profesional viendo solo lo suyo.
   scope: 'own' | 'company';
   today: {
     total: number;
@@ -100,7 +99,6 @@ export default function HomePage() {
       .catch((err) => setError(err?.response?.data?.message || 'No se pudo cargar el resumen de tu empresa.'));
   }, []);
 
-  // El resumen se refresca solo cada minuto, como la agenda.
   useEffect(() => {
     if (loading || !showsDashboard) return;
 
@@ -118,7 +116,6 @@ export default function HomePage() {
     );
   }
 
-  // Vista de selección de plan si la cuenta está inactiva
   if (!hasActiveSubscription) {
     return (
       <div className="max-w-7xl mx-auto space-y-6 pb-10 font-sans text-[#1F2937]">
@@ -143,7 +140,6 @@ export default function HomePage() {
   const client = vocab.client.toLowerCase();
   const clients = vocab.clients.toLowerCase();
 
-  // Atajos según lo que la empresa usa: su rubro y su plan deciden los módulos.
   const quickActions = hasTenant
     ? [
         { label: 'Nueva cita', icon: CalendarDays, href: '/agenda' },

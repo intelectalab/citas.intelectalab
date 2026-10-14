@@ -8,27 +8,21 @@ import { ACTION_LABELS, ACTION_ORDER, type GridAction, type GridModule } from '.
 
 interface PermissionGridProps {
   grid: GridModule[];
-  // En la página de una persona se marca lo agregado y lo quitado respecto de su rol.
   mode: 'user' | 'role';
   canEdit: boolean;
-  // Permiso que se está guardando: su interruptor espera.
   busy?: string;
   onToggle: (action: GridAction) => void;
   empty?: string;
 }
 
-// La rejilla de permisos: una fila por pantalla y un interruptor por acción.
-// Tocar el nombre de la pantalla explica con palabras qué deja hacer cada uno.
 export default function PermissionGrid({ grid, mode, canEdit, busy, onToggle, empty = 'Nada que mostrar.' }: PermissionGridProps) {
   const { rows, page, pages, setPage } = usePaged(grid);
   const [open, setOpen] = useState<string | null>(null);
 
   if (grid.length === 0) return <p className="px-6 py-5 text-sm text-slate-400">{empty}</p>;
 
-  // Permisos especiales (forzar horario, acceso de emergencia...): van en su propia columna.
   const hasSpecial = grid.some((module) => module.actions.some((a) => a.special));
 
-  // Un interruptor con su marca; el especial lleva su nombre debajo.
   const cell = (action: GridAction, caption?: string) => (
     <span className="inline-flex flex-col items-center gap-1" data-perm={action.name} data-on={action.on ? '1' : '0'} title={action.hint}>
       <Switch checked={action.on} disabled={!canEdit || busy === action.name} label={action.hint} onChange={() => onToggle(action)} />

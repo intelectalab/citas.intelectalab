@@ -24,7 +24,6 @@ interface Customer {
   document_number?: string;
   district?: string;
   dependents?: { id: string; name: string; species?: string | null }[];
-  // Inasistencias a citas reservadas en línea, si tiene.
   online_booking?: OnlineBookingState | null;
   status?: {
     id: string;
@@ -113,7 +112,6 @@ export default function CustomersTable() {
     fetchCustomers(searchTerm, updatedFilters);
   };
 
-  // Función corregida para hacer funcionales los clics en las tarjetas métricas
   const handleMetricCardClick = (sexValue: string) => {
     const newSex = filters.biological_sex === sexValue ? '' : sexValue;
     const updatedFilters = { ...filters, biological_sex: newSex };
@@ -186,7 +184,6 @@ export default function CustomersTable() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              {/* El nombre lleva a la página del cliente, con su historia. */}
               <Link href={`/customers/${pat.id}`} data-customer-link={pat.id} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>
                 {`${pat.first_name} ${pat.last_name}`}
               </Link>
@@ -330,7 +327,6 @@ export default function CustomersTable() {
         onClose={() => {
           setShowFormModal(false);
           setEditingCustomer(null);
-          // Las mascotas se guardan al momento, sin pasar por "Actualizar".
           if (usesDependents) fetchCustomers(searchTerm, filters);
         }}
         initialData={editingCustomer}

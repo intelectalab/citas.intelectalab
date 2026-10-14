@@ -15,8 +15,6 @@ const inputClass =
 const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1';
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
 
-// Editor de los campos de una ficha: agregar, quitar, renombrar, ordenar y
-// elegir el tipo de cada uno. Es el mismo criterio del editor de la plataforma.
 export default function RecordFieldsEditor({ value, onChange }: RecordFieldsEditorProps) {
   const [openField, setOpenField] = useState<number | null>(null);
 

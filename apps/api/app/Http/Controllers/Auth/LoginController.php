@@ -10,18 +10,6 @@ use Illuminate\Support\Facades\Hash;
 
 class LoginController extends Controller
 {
-    /**
-     * Un solo ingreso para todos: el personal está en users y los clientes en
-     * customers (su ficha es su cuenta). Un mismo correo puede tener cuenta en
-     * varias empresas, cada una con su contraseña. Se prueba la contraseña
-     * contra todas las cuentas del correo:
-     *  - ninguna coincide: credenciales incorrectas;
-     *  - una coincide: se inicia sesión en esa cuenta;
-     *  - varias coinciden: se devuelven esas empresas para que la persona elija
-     *    y el cliente repite la llamada con `account_id`.
-     * Solo se listan empresas donde la contraseña ya fue validada, así no se
-     * revela a terceros en qué empresas está registrado un correo.
-     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -34,7 +22,6 @@ class LoginController extends Controller
 
         $staff = User::with('tenant.businessType')->where('email', $email)->get();
 
-        // Clientes con acceso al portal. El personal pudo escribir el correo con mayúsculas.
         $customers = Customer::with('tenant.businessType')
             ->whereRaw('lower(email) = ?', [mb_strtolower($email)])
             ->whereNotNull('password_hash')
@@ -54,8 +41,6 @@ class LoginController extends Controller
             ], 401);
         }
 
-        // Cuentas desactivadas y empresas suspendidas no entran. Se revisa después
-        // de validar la contraseña, así el aviso solo lo ve el dueño de la cuenta.
         $enabled = fn (User|Customer $account) => $account instanceof Customer
             ? $account->portal_enabled !== false
             : $account->status === 'active';
@@ -108,10 +93,6 @@ class LoginController extends Controller
         ]);
     }
 
-    /**
-     * Lo mínimo que la pantalla de ingreso necesita para saber a dónde llevar
-     * a la persona. El detalle lo entrega /api/user.
-     */
     public static function sessionUser(User|Customer $account): array
     {
         $isCustomer = $account instanceof Customer;

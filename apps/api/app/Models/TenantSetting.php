@@ -5,9 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Configuración propia del tenant (una fila por tenant).
- */
 class TenantSetting extends Model
 {
     protected $table = 'tenant_settings';

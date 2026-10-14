@@ -18,16 +18,12 @@ interface SelectProps {
   onChange: (e: { target: { value: string | number } }) => void;
   required?: boolean;
   error?: string;
-  // Sin la opción vacía: para listas donde siempre hay algo elegido.
   clearable?: boolean;
   disabled?: boolean;
-  // 'chip': versión pequeña, sin caja, para ir dentro de una fila o un filtro.
   variant?: 'field' | 'chip';
-  // Botón "+" junto a la lista, para crear lo que falta sin salir del formulario.
   onAdd?: () => void;
   addLabel?: string;
   ariaLabel?: string;
-  // Hacia dónde se alinea el menú de la versión chip.
   align?: 'left' | 'right';
 }
 
@@ -50,7 +46,6 @@ export default function Select({
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
 
-  // Encontrar la opción seleccionada actualmente para mostrar su etiqueta
   const selectedOption = options.find((opt) => opt.value === value);
 
   const handleSelect = (optionValue: string | number) => {
@@ -61,7 +56,6 @@ export default function Select({
   const toggle = () => { if (!disabled) setIsOpen(!isOpen); };
   const isChip = variant === 'chip';
 
-  // El menú flota sobre la página: no lo recorta el panel o la barra donde está la lista.
   const menu = (
     <Floating
       anchorRef={triggerRef}
@@ -139,7 +133,6 @@ export default function Select({
       )}
 
       <div className={onAdd ? 'flex items-center gap-2' : undefined}>
-        {/* Botón principal que simula el input */}
         <div
           ref={triggerRef}
           role="combobox"
@@ -159,7 +152,6 @@ export default function Select({
               : 'border-slate-200 hover:border-slate-300'
           } ${error ? 'border-red-500 ring-red-200' : ''}`}
         >
-          {/* Ícono izquierdo */}
           {icon && (
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400 mt-6">
               {icon}
@@ -190,7 +182,6 @@ export default function Select({
         )}
       </div>
 
-      {/* Menú desplegable flotante personalizado */}
       {menu}
 
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}

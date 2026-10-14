@@ -10,7 +10,6 @@ import { portalError, type PortalWaitlistEntry } from '../portal';
 interface PortalWaitlistProps {
   entries: PortalWaitlistEntry[];
   proWord: string;
-  // Tras reservar o salir de la lista: se vuelve a pedir todo.
   onChanged: (notice: string) => void;
 }
 
@@ -20,10 +19,6 @@ const timeLabel = (entry: PortalWaitlistEntry) =>
     : entry.time_from ? `desde las ${entry.time_from}`
     : 'a cualquier hora';
 
-/**
- * Lo que el cliente está esperando. Si ya hay horarios libres que le sirven,
- * se le muestran para que reserve con un clic.
- */
 export default function PortalWaitlist({ entries, proWord, onChanged }: PortalWaitlistProps) {
   const [picked, setPicked] = useState<{ entry: PortalWaitlistEntry; date: string; time: string; professionalId: string; professionalName: string } | null>(null);
   const [leaving, setLeaving] = useState<PortalWaitlistEntry | null>(null);

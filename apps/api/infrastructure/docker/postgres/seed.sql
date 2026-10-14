@@ -1,11 +1,3 @@
--- =====================================================================
--- DATOS ESENCIALES. Es lo que el sistema necesita para funcionar y lo único
--- que va al servidor: catálogos, módulos, planes, rubros con su catálogo
--- inicial y las cuentas de la plataforma. No crea ninguna empresa.
---
--- Las empresas de ejemplo, con sus citas y demás datos de prueba, están en
--- seed_demo.sql, que se carga después de este y solo en desarrollo.
--- =====================================================================
 BEGIN;
 SET client_encoding = 'UTF8';
 
@@ -17,9 +9,6 @@ INSERT INTO type_documents (id, name, length, minimum, value, status) VALUES
 ('b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'OTROS', 15, 1, NULL, 1)
 ON CONFLICT DO NOTHING;
 
--- Permisos de la plataforma. Los de las empresas ("agenda.view", "customers.delete"...)
--- no se escriben aquí: salen del catálogo de la API (App\Support\Access::CATALOG), que
--- los registra sola junto con los roles de fábrica de cada empresa.
 INSERT INTO permissions (id, name, module, description) VALUES
   ('10000000-0000-0000-0000-000000000010', 'saas.tenants.manage', 'saas_admin', 'Crear, suspender y administrar inquilinos'),
   ('10000000-0000-0000-0000-000000000011', 'saas.plans.manage', 'saas_admin', 'Gestionar catálogo de planes y precios'),
@@ -35,16 +24,13 @@ INSERT INTO status_modules (id, name, description) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO statuses (id, module_id, name, slug, color, is_default) VALUES
-  -- Módulo: payments (e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a04)
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a04', 'Pagado', 'paid', '#28A745', true),
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a04', 'Pendiente', 'pending', '#FFC107', false),
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a04', 'Anulado', 'void', '#DC3545', false),
   
-  -- Módulo: customers (e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01)
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Activo', 'active', '#28A745', true),
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Inactivo', 'inactive', '#6C757D', false),
 
-  -- Módulo: professionals (e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05)
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a31', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'Activo', 'active', '#28A745', true),
   ('f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a32', 'e1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'Inactivo', 'inactive', '#6C757D', false),
 
@@ -53,7 +39,6 @@ INSERT INTO statuses (id, module_id, name, slug, color, is_default) VALUES
 
 ON CONFLICT DO NOTHING;
 
--- Catálogo de módulos del producto (los 20 del prototipo). Los base van en todos los planes.
 INSERT INTO saas_modules (key, name, is_core, sort_order) VALUES
   ('agenda', 'Agenda y citas', true, 1),
   ('crm', 'Clientes / CRM 360', true, 2),
@@ -77,8 +62,6 @@ INSERT INTO saas_modules (key, name, is_core, sort_order) VALUES
   ('walkin', 'Cola de llegada sin cita', false, 20)
 ON CONFLICT (key) DO NOTHING;
 
--- Planes del prototipo: Esencial, Profesional y Empresarial. `modules` agrupa las
--- claves de saas_modules que el plan incluye (los módulos base no se listan).
 INSERT INTO saas_plans (
     id, name, slug, code_internal, description, price_monthly, price_yearly, currency, 
     trial_config, subscription_config, modules, limits, consumption, support, features, status, presentation_order
@@ -121,8 +104,6 @@ INSERT INTO saas_plans (
 )
 ON CONFLICT (slug) DO NOTHING;
 
--- Rubros de negocio (los 10 del prototipo). El vocabulario define cómo se nombra
--- al cliente y al profesional en la interfaz del tenant.
 INSERT INTO business_types (id, slug, name, short_name, description, icon, color, vocabulary, sort_order) VALUES
   ('b7000000-0000-0000-0000-000000000001', 'salon', 'Salón de belleza y spa', 'Salón y spa', 'Peluquería, color, uñas, faciales y masajes.', 'scissors', '#1F7A63', '{"client":"Cliente","clients":"Clientes","pro":"Estilista","pros":"Equipo"}', 1),
   ('b7000000-0000-0000-0000-000000000002', 'barber', 'Barbería', 'Barbería', 'Cortes y barba con atención por orden de llegada.', 'scissors', '#7A4B1F', '{"client":"Cliente","clients":"Clientes","pro":"Barbero","pros":"Barberos"}', 2),
@@ -136,7 +117,6 @@ INSERT INTO business_types (id, slug, name, short_name, description, icon, color
   ('b7000000-0000-0000-0000-000000000010', 'generic', 'Otro rubro (genérico)', 'Genérico', 'Punto de partida neutro; todo se ajusta después.', 'layers', '#3C7DC4', '{"client":"Cliente","clients":"Clientes","pro":"Profesional","pros":"Profesionales"}', 10)
 ON CONFLICT (slug) DO NOTHING;
 
--- Diferencias por rubro (prototipo): módulos que no usa, reglas por defecto y dependientes.
 UPDATE business_types AS b SET modules_off = v.modules_off::jsonb, default_rules = v.default_rules::jsonb, dependents = v.dependents::jsonb
 FROM (VALUES
   ('salon', '["quotes", "walkin", "classes"]', '{"pos.pay_before_service": false, "noshow.fee_percent": 50, "pos.tips_enabled": true, "records.require_on_complete": false}', '{}'),
@@ -152,8 +132,6 @@ FROM (VALUES
 ) AS v(slug, modules_off, default_rules, dependents)
 WHERE b.slug = v.slug;
 
--- Catálogo inicial por rubro (prototipo): categorías, servicios y plantilla de ficha.
--- Se copia al tenant cuando la empresa se registra (Tenant::installBusinessTemplate).
 UPDATE business_types AS b SET template = v.template::jsonb
 FROM (VALUES
   ('salon', $tpl${"categories":[{"name":"Cabello","services":[{"code":"CAB-01","name":"Corte de dama","duration_minutes":45,"price":60,"buffer_after_minutes":0,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1},{"code":"CAB-02","name":"Brushing","duration_minutes":40,"price":40,"buffer_after_minutes":0,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1},{"code":"CAB-03","name":"Coloración completa","duration_minutes":120,"price":200,"buffer_after_minutes":10,"uses_record":true,"requires_deposit":true,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1,"recall":{"label":"Retoque de raíz","days":42}},{"code":"CAB-04","name":"Mechas / balayage","duration_minutes":180,"price":350,"buffer_after_minutes":10,"uses_record":true,"requires_deposit":true,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1,"recall":{"label":"Retoque de mechas","days":60}},{"code":"CAB-05","name":"Tratamiento de keratina","duration_minutes":150,"price":300,"buffer_after_minutes":10,"uses_record":true,"requires_deposit":true,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1,"recall":{"label":"Mantenimiento de keratina","days":90}}]},{"name":"Uñas","services":[{"code":"UNA-01","name":"Manicure clásica","duration_minutes":40,"price":30,"buffer_after_minutes":0,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1},{"code":"UNA-02","name":"Manicure semipermanente","duration_minutes":60,"price":50,"buffer_after_minutes":0,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1},{"code":"UNA-03","name":"Pedicure spa","duration_minutes":60,"price":55,"buffer_after_minutes":10,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1}]},{"name":"Facial y spa","services":[{"code":"FAC-01","name":"Limpieza facial","duration_minutes":60,"price":110,"buffer_after_minutes":10,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1},{"code":"MAS-01","name":"Masaje relajante","duration_minutes":60,"price":130,"buffer_after_minutes":10,"uses_record":false,"requires_deposit":false,"online_booking":true,"is_virtual":false,"kind":"individual","capacity":1}]}],"record_template":{"name":"Ficha técnica de color","consent_text":"Declaro que se me informó del procedimiento y que la prueba de alergia se realizó o la rechacé voluntariamente.","require_consent":false,"fields":[{"key":"hair","label":"Tipo de cabello","type":"select","required":false,"options":["Liso","Ondulado","Rizado","Afro"]},{"key":"base","label":"Altura de tono base","type":"select","required":false,"options":["1–3","4–5","6–7","8–10"]},{"key":"formula","label":"Fórmula aplicada","type":"text","required":true,"placeholder":"Ej.: 7.1 + 7.0 (1:1)"},{"key":"ox","label":"Oxidante","type":"select","required":false,"options":["10 vol","20 vol","30 vol","40 vol"]},{"key":"time","label":"Tiempo de exposición (min)","type":"number","required":false},{"key":"allergy","label":"Prueba de alergia","type":"select","required":false,"options":["Negativa","Positiva","No realizada"]},{"key":"obs","label":"Observaciones","type":"textarea","required":false},{"key":"next","label":"Retoque de raíz","type":"next_control","required":false,"days":42}]}}$tpl$),
@@ -175,7 +153,6 @@ INSERT INTO pipelines (id, name) VALUES
 ('c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'Pipeline de Procesamiento de Exámenes')
 ON CONFLICT (id) DO NOTHING;
 
--- Solo si aún no hay etapas: así volver a cargar este archivo no las duplica.
 INSERT INTO pipeline_stages (id, pipeline_id, name, color, probability, stage_order)
 SELECT v.id, v.pipeline_id::uuid, v.name, v.color, v.probability, v.stage_order
 FROM (VALUES
@@ -197,7 +174,6 @@ FROM (VALUES
 ) AS v(id, pipeline_id, name, color, probability, stage_order)
 WHERE NOT EXISTS (SELECT 1 FROM pipeline_stages);
 
--- Unidades de medida globales (tenant_id NULL = disponibles para todos)
 INSERT INTO units (id, tenant_id, name, abbreviation) VALUES
   ('60eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', NULL, 'Unidad', 'UND'),
   ('60eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', NULL, 'Caja', 'CJA'),
@@ -208,10 +184,8 @@ INSERT INTO units (id, tenant_id, name, abbreviation) VALUES
   ('60eebc99-9c0b-4ef8-bb6d-6bb9bd380a07', NULL, 'Kilogramo', 'KG')
 ON CONFLICT DO NOTHING;
 
--- Roles y cuentas de la plataforma (sin empresa).
 INSERT INTO roles (id, tenant_id, name, slug, description, is_system) VALUES
   ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a00', NULL, 'Administrador SaaS', 'saas_admin', 'Admin global', true),
-  -- Soporte de la plataforma: ve las empresas y entra a su panel para ayudarlas; no cambia planes ni catálogos.
   ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', NULL, 'Soporte SaaS', 'saas_support', 'Soporte de la plataforma', true)
 ON CONFLICT DO NOTHING;
 
@@ -219,8 +193,6 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a00'::uuid, id FROM permissions WHERE module = 'saas_admin'
 ON CONFLICT DO NOTHING;
 
--- OJO AL DESPLEGAR: estas dos cuentas nacen con la contraseña de prueba. En el
--- servidor hay que cambiarla (o cambiar el correo y la contraseña) antes de abrir el acceso.
 INSERT INTO users (id, tenant_id, first_name, last_name, email, password_hash, is_owner, status) VALUES
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a00', NULL, 'Super', 'Admin SaaS', 'admin@tusaas.com', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'active'),
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', NULL, 'Sofía', 'Soporte SaaS', 'soporte@tusaas.com', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'active')

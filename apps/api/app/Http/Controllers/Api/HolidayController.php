@@ -16,10 +16,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Feriados de la empresa: los nacionales que se le cargan y los propios. Todo
- * el personal los ve; los cambia el administrador de la empresa.
- */
 class HolidayController extends Controller
 {
     private const AFFECTED_STATUSES = [
@@ -59,7 +55,6 @@ class HolidayController extends Controller
 
         $today = now($this->timezone($tenant))->startOfDay();
 
-        // Sin año, los que vienen; con año, todos los de ese año.
         $holidays = Holiday::where('tenant_id', $tenant->id)
             ->with('branch:id,name')
             ->when($validated['year'] ?? null, fn ($q, $year) => $q->whereYear('date', $year), fn ($q) => $q->where('date', '>=', $today->format('Y-m-d')))
@@ -73,7 +68,6 @@ class HolidayController extends Controller
 
         return response()->json([
             'holidays'   => $holidays->map(fn (Holiday $holiday) => $this->present($holiday, $tenant, $today, $canManage)),
-            // Años con feriados cargados, y si falta cargar los nacionales de este año o del siguiente.
             'years'      => Holiday::where('tenant_id', $tenant->id)->selectRaw('distinct extract(year from date)::int as year')->orderBy('year')->pluck('year'),
             'missing'    => collect([$today->year, $today->year + 1])
                 ->filter(fn (int $year) => !Holiday::where('tenant_id', $tenant->id)->whereNull('branch_id')->whereYear('date', $year)->exists())
@@ -82,9 +76,6 @@ class HolidayController extends Controller
         ]);
     }
 
-    /**
-     * Un feriado con las citas agendadas ese día.
-     */
     public function show(Request $request, string $holiday)
     {
         $tenant = $this->tenant($request);
@@ -151,16 +142,12 @@ class HolidayController extends Controller
         return response()->json(['message' => 'Feriado eliminado correctamente']);
     }
 
-    /**
-     * Carga los feriados nacionales de un año que aún no estén.
-     */
     public function loadNational(Request $request)
     {
         $tenant = $this->tenant($request);
         $this->assertCanManage($request);
 
         $validated = $request->validate(['year' => 'required|integer|min:2000|max:2100']);
-        // Los nacionales valen para todas las sedes.
         Access::assertBranch($request->user(), null, true);
         $added = Holidays::loadNational($tenant, (int) $validated['year'], $request->user()->id);
 
@@ -193,7 +180,6 @@ class HolidayController extends Controller
 
         Access::assertBranch($request->user(), $branchId, true);
 
-        // Dos feriados el mismo día para las mismas sedes solo confunden.
         $duplicate = Holiday::where('tenant_id', $tenant->id)
             ->where('date', $validated['date'])
             ->where(fn ($q) => $branchId ? $q->where('branch_id', $branchId) : $q->whereNull('branch_id'))
@@ -212,9 +198,6 @@ class HolidayController extends Controller
         ];
     }
 
-    /**
-     * Citas que siguen en pie ese día en las sedes del feriado.
-     */
     private function affectedQuery(Tenant $tenant, Holiday $holiday): Builder
     {
         $timezone = $this->timezone($tenant);
@@ -236,11 +219,9 @@ class HolidayController extends Controller
             'id'             => $holiday->id,
             'name'           => $holiday->name,
             'date'           => $holiday->date->format('Y-m-d'),
-            // Días que faltan; negativo si ya pasó.
             'days_left'      => (int) round($today->diffInDays($date, false)),
             'branch_id'      => $holiday->branch_id,
             'branch'         => $holiday->branch ? ['id' => $holiday->branch->id, 'name' => $holiday->branch->name] : null,
-            // Si la sede cierra, ese día no se agenda. Si no, solo se recuerda.
             'closed'         => (bool) $holiday->closed,
             'affected_count' => $holiday->closed ? $this->affectedQuery($tenant, $holiday)->count() : 0,
             'can_manage'     => $canManage,

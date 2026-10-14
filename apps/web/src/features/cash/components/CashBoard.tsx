@@ -15,7 +15,6 @@ const iconButton = 'p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:b
 
 const squared = (session: CashSession) => (session.difference ?? 0) === 0;
 
-// Caja: las cajas de cada sede con su turno, y los turnos ya cerrados.
 export default function CashBoard() {
   const [data, setData] = useState<CashBoardData | null>(null);
   const [error, setError] = useState('');
@@ -41,7 +40,6 @@ export default function CashBoard() {
   const registers = data?.registers ?? [];
   const sessions = data?.sessions ?? [];
   const canManage = Boolean(data?.can_manage);
-  // Abrir, anotar movimientos y cerrar: quien opera la caja.
   const canOperate = Boolean((data as { can_operate?: boolean } | null)?.can_operate);
   const term = searchTerm.trim().toLowerCase();
 

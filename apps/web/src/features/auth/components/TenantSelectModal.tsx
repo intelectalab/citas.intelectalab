@@ -21,7 +21,6 @@ interface TenantSelectModalProps {
   onClose: () => void;
 }
 
-// Se muestra cuando el mismo correo y contraseña son válidos en varias empresas.
 export function TenantSelectModal({
   isOpen,
   accounts,

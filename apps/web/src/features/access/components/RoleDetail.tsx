@@ -35,8 +35,6 @@ interface Detail {
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340]';
 
-// Página de un rol: lo que permite, pantalla por pantalla, y quiénes lo tienen.
-// Cada interruptor rige al instante para todas esas personas.
 export default function RoleDetail() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -45,7 +43,6 @@ export default function RoleDetail() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  // Al pasar a "solo su sede": quienes tienen el rol y no tienen sede, para asignársela en el mismo paso.
   const [needsBranch, setNeedsBranch] = useState<{ message: string; people: { id: string; name: string; email: string }[]; branches: { id: string; name: string }[] } | null>(null);
   const [assign, setAssign] = useState<Record<string, string>>({});
   const [focus, setFocus] = useState('');
@@ -77,7 +74,6 @@ export default function RoleDetail() {
     }
   };
 
-  // Qué tanto ve quien tiene el rol: rige al instante para todas esas personas.
   const changeScope = async (scope: Scope, branches?: Record<string, string>) => {
     if (!detail || (detail.role.scope === scope && !branches)) return;
 
@@ -94,7 +90,6 @@ export default function RoleDetail() {
         ? `Listo: quien tiene este rol ahora ve ${option?.title.toLowerCase()}. Se le asignó su sede a ${res.data.assigned === 1 ? 'una persona' : `${res.data.assigned} personas`}.`
         : `Listo: quien tiene este rol ahora ve ${option?.title.toLowerCase()}.`);
     } catch (err: any) {
-      // Hay gente sin sede: se le pide elegirla antes de aplicar el cambio.
       if (err?.response?.data?.code === 'NEEDS_BRANCH') {
         setNeedsBranch(err.response.data);
         const only = err.response.data.branches.length === 1 ? err.response.data.branches[0].id : '';
@@ -185,7 +180,6 @@ export default function RoleDetail() {
       {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-        {/* El rol y quiénes lo tienen */}
         <section className={`${card} overflow-hidden`} data-card="role">
           <div className="p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">

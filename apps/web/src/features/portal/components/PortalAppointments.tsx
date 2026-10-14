@@ -29,7 +29,6 @@ const chip = 'flex items-center gap-1 bg-white pl-3 pr-1.5 py-1 rounded-lg borde
 const chipLabel = 'text-xs leading-5 text-slate-500';
 const sectionTitle = 'text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 
-// Las opciones de una lista salen de las propias citas: solo lo que la persona tiene.
 const optionsOf = (appointments: PortalAppointment[], pick: (a: PortalAppointment) => { id: string; label: string } | null) => {
   const seen = new Map<string, string>();
   appointments.forEach((a) => {
@@ -52,14 +51,12 @@ function CardList({ items, empty, actions }: { items: PortalAppointment[]; empty
   );
 }
 
-/** "Mis citas" del portal: filtros por fase, servicio, quién atiende, sede y fecha, y las citas de a seis. */
 export default function PortalAppointments({ upcoming, past, policies, proWord, actions }: PortalAppointmentsProps) {
   const [status, setStatus] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [professionalId, setProfessionalId] = useState('');
   const [branchId, setBranchId] = useState('');
   const [date, setDate] = useState<DateFilterValue | null>(null);
-  // Los filtros están guardados tras el botón "Filtrar": se despliegan al pedirlos.
   const [open, setOpen] = useState(false);
 
   const all = useMemo(() => [...upcoming, ...past], [upcoming, past]);
@@ -79,7 +76,6 @@ export default function PortalAppointments({ upcoming, past, policies, proWord, 
   const shownUpcoming = upcoming.filter(matches);
   const shownPast = past.filter(matches);
   const active = [status, serviceId, professionalId, branchId, date].filter(Boolean).length;
-  // Al cambiar un filtro, las listas vuelven a su primera página.
   const filterKey = `${status}|${serviceId}|${professionalId}|${branchId}|${JSON.stringify(date)}`;
 
   const clear = () => { setStatus(''); setServiceId(''); setProfessionalId(''); setBranchId(''); setDate(null); };
@@ -120,7 +116,6 @@ export default function PortalAppointments({ upcoming, past, policies, proWord, 
       {all.length > 0 && open && (
         <div className="flex flex-wrap items-center gap-2 px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl" data-portal-filters>
 
-          {/* Una lista con una sola opción no filtra nada: no se muestra. */}
           {lists.filter((list) => list.options.length > 1).map((list) => (
             <div key={list.label} className={chip}>
               <span className={chipLabel}>{list.label}:</span>

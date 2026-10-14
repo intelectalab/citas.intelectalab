@@ -6,20 +6,16 @@ import Floating from './Floating';
 import { formatDay, fromISO, toISO } from '@/app/components/ui/table/dateFilters';
 
 interface DateFieldProps {
-  // AAAA-MM-DD, o vacío si no hay fecha.
   value: string;
   onChange: (value: string) => void;
   id?: string;
   ariaLabel?: string;
   placeholder?: string;
-  // Días fuera de este tramo no se pueden elegir.
   min?: string;
   max?: string;
   required?: boolean;
   disabled?: boolean;
-  // Ofrece "Quitar fecha". Por defecto, solo si la fecha no es obligatoria.
   clearable?: boolean;
-  // 'compact': para filas y barras, donde el campo es más bajo.
   size?: 'field' | 'compact';
   rounded?: 'lg' | 'xl';
   align?: 'left' | 'right';
@@ -30,17 +26,12 @@ const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const YEARS_PER_PAGE = 12;
 
-// Las seis semanas que muestra el calendario de un mes, empezando en lunes.
 const monthGrid = (year: number, month: number): Date[] => {
   const first = new Date(year, month, 1);
   const start = new Date(year, month, 1 - ((first.getDay() + 6) % 7));
   return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
 };
 
-/**
- * Campo de fecha de un formulario, con calendario propio. El título del calendario
- * lleva a elegir mes y año, para llegar rápido a una fecha lejana (un nacimiento).
- */
 export default function DateField({
   value,
   onChange,
@@ -124,7 +115,6 @@ export default function DateField({
         <CalendarDays size={16} className="text-slate-400 shrink-0" />
       </button>
 
-      {/* Deja que el formulario exija la fecha igual que cualquier otro campo obligatorio. */}
       {required && (
         <input
           tabIndex={-1}

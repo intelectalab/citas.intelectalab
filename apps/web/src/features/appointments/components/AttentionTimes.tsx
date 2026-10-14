@@ -29,8 +29,6 @@ const PERIODS: { id: string; label: string; days: number }[] = [
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 
-// Diferencia frente al tiempo asignado, con signo y color: verde si terminan
-// antes, rojo si se pasan.
 function Diff({ minutes }: { minutes: number | null }) {
   if (minutes === null) return <span className="text-slate-400">—</span>;
   if (Math.round(minutes) === 0) return <span className="text-slate-500">En su tiempo</span>;
@@ -50,7 +48,6 @@ function TimingTable({ title, hint, firstColumn, rows, tableKey, showTotal = fal
   tableKey: string;
   showTotal?: boolean;
 }) {
-  // Quien más cerca o por debajo de su tiempo asignado atiende, entre quienes tienen medición.
   const measured = rows.filter((row) => row.diff_minutes !== null);
   const best = measured.length > 1 ? measured.reduce((a, b) => ((a.diff_minutes as number) <= (b.diff_minutes as number) ? a : b)) : null;
   const longest = Math.max(1, ...rows.map((row) => row.avg_minutes ?? 0));
@@ -123,8 +120,6 @@ function TimingTable({ title, hint, firstColumn, rows, tableKey, showTotal = fal
   );
 }
 
-// Cuánto duran de verdad las atenciones frente al tiempo que tienen asignado:
-// en general, por profesional, por servicio y por cliente.
 export default function AttentionTimes() {
   const vocab = useVocabulary();
   const [period, setPeriod] = useState('30');

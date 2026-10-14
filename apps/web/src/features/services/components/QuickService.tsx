@@ -15,12 +15,9 @@ export interface CreatedService {
 interface QuickServiceProps {
   isOpen: boolean;
   onClose: () => void;
-  // El servicio recién creado, para dejarlo elegido en el formulario que lo pidió.
   onCreated: (service: CreatedService) => void;
 }
 
-// Servicio nuevo sin salir del formulario en que se estaba (cita, lista de
-// espera, control): abre el mismo panel de Servicios y devuelve lo creado.
 export default function QuickService({ isOpen, onClose, onCreated }: QuickServiceProps) {
   const [categories, setCategories] = useState<{ label: string; value: string }[]>([]);
 

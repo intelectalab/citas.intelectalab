@@ -21,7 +21,6 @@ class ProfessionalController extends Controller
         $query = Professional::where('tenant_id', $currentUser->tenant_id)
             ->with(['status', 'specialties', 'user', 'typeDocument']);
 
-        // Quien trabaja solo con su sede ve a quienes atienden ahí y a quienes aún no tienen horario.
         if ($limit = Access::branchLimit($currentUser)) {
             $query->where(fn ($q) => $q->whereIn('id', Access::professionalsAt($limit))
                 ->orWhereNotIn('id', \Illuminate\Support\Facades\DB::table('professional_schedules')->select('professional_id')));
@@ -61,10 +60,6 @@ class ProfessionalController extends Controller
         return response()->json($professionals);
     }
 
-    /**
-     * Mensaje cuando el plan de la empresa ya no admite otro profesional u otra
-     * cuenta de usuario; null si todavía hay lugar (o el plan no pone tope).
-     */
     private function planLimitReached(?\App\Models\Tenant $tenant): ?string
     {
         $limits = $tenant?->activeSubscription?->plan?->limits ?? [];
@@ -81,10 +76,6 @@ class ProfessionalController extends Controller
         return null;
     }
 
-    /**
-     * Quien trabaja solo con su sede cambia a quienes atienden en ella, o a
-     * quienes aún no tienen horario en ninguna.
-     */
     private function assertOwnBranch(\App\Models\User $user, string $professionalId): void
     {
         $limit = Access::branchLimit($user);
@@ -105,7 +96,6 @@ class ProfessionalController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        // Cada profesional nuevo ocupa un lugar de profesional y una cuenta de usuario del plan.
         if ($blocked = $this->planLimitReached($currentUser->tenant)) {
             return response()->json(['message' => $blocked, 'code' => 'PLAN_LIMIT'], 422);
         }
@@ -144,8 +134,6 @@ class ProfessionalController extends Controller
             'status' => 'active',
         ]);
 
-        // Sin este rol la cuenta vería las citas de todos: se crea si la empresa aún no lo tiene,
-        // con sus permisos de fábrica.
         \App\Support\Access::ensureRoles($currentUser->tenant);
         $roleProfessional = \App\Models\Role::firstOrCreate(
             ['tenant_id' => $currentUser->tenant_id, 'slug' => 'professional'],
@@ -237,7 +225,6 @@ class ProfessionalController extends Controller
             'specialties.*' => 'exists:specialties,id',
         ]);
 
-        // 1. Actualizar usuario
         if ($professional->user) {
             $userData = [];
             if (isset($validated['first_name'])) $userData['first_name'] = $validated['first_name'];
@@ -249,7 +236,6 @@ class ProfessionalController extends Controller
             }
         }
 
-        // 2. Actualizar profesional
         $professional->update([
             'display_name' => $validated['display_name'] ?? $professional->display_name,
             'type_document_id' => array_key_exists('type_document_id', $validated) ? $validated['type_document_id'] : $professional->type_document_id,
@@ -259,7 +245,6 @@ class ProfessionalController extends Controller
             'status_id' => $validated['status_id'] ?? $professional->status_id,
         ]);
 
-        // 3. Sincronizar especialidades
         if (isset($validated['specialties'])) {
             $syncData = [];
             foreach ($validated['specialties'] as $specialtyId) {

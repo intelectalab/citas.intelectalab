@@ -26,7 +26,6 @@ interface DayProfessional {
   blocks: { starts: string; ends: string; reason: string | null; kind?: string }[];
 }
 
-// Cita que se soltó en otro horario y espera confirmación.
 interface PendingMove {
   appointment: Appointment;
   professional: DayProfessional;
@@ -36,17 +35,14 @@ interface PendingMove {
 interface DayPayload {
   date: string;
   now: string;
-  // Feriados de ese día en la sede; si cierra, nadie atiende.
   holidays?: { name: string; closed: boolean }[];
   professionals: DayProfessional[];
   appointments: Appointment[];
 }
 
-// Alto de un minuto en la grilla, en píxeles.
 const PX = 1.5;
 const DEFAULT_RANGE = { start: 8 * 60, end: 20 * 60 };
 
-// Tarjetas del día. Cada una filtra la grilla por las fases que agrupa.
 const CARDS: { id: string; title: string; statuses: string[]; icon: React.ReactNode; color: string; active: string }[] = [
   { id: 'pending', title: 'Pendientes', statuses: ['pending'], icon: <Hourglass size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20' },
   { id: 'confirmed', title: 'Confirmadas', statuses: ['confirmed'], icon: <ThumbsUp size={18} />, color: 'text-sky-600', active: 'border-sky-500 ring-2 ring-sky-500/20' },
@@ -55,8 +51,6 @@ const CARDS: { id: string; title: string; statuses: string[]; icon: React.ReactN
   { id: 'released', title: 'Canceladas y ausencias', statuses: RELEASED, icon: <CalendarX2 size={18} />, color: 'text-rose-700', active: 'border-rose-500 ring-2 ring-rose-500/20' },
 ];
 
-// Reparte en carriles las citas que se cruzan en una misma columna, para que
-// ninguna tape a otra (pasa con la sobre-agenda y al ver las canceladas).
 function withLanes(appointments: Appointment[]) {
   const sorted = [...appointments].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const placed: { appointment: Appointment; lane: number; lanes: number }[] = [];
@@ -86,8 +80,6 @@ function withLanes(appointments: Appointment[]) {
   return placed;
 }
 
-// Agenda de un día en una sede: una columna por profesional, con su horario,
-// sus bloqueos y sus citas. Un clic en un espacio libre abre una cita nueva a esa hora.
 export default function AgendaDay() {
   const { can } = useAuth();
   const vocab = useVocabulary();
@@ -101,7 +93,6 @@ export default function AgendaDay() {
   const [activeCard, setActiveCard] = useState('');
   const [updatedAt, setUpdatedAt] = useState('');
 
-  // Arrastre de una cita: cuál se arrastra, dónde caería y el cambio por confirmar.
   const dragging = useRef<{ appointment: Appointment; grabOffset: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dropTarget, setDropTarget] = useState<{ professionalId: string; minutes: number } | null>(null);
@@ -124,8 +115,6 @@ export default function AgendaDay() {
 
   const { openNew, openDetail, panels, isOpen: panelOpen } = useAppointmentPanels(load);
 
-  // La agenda se actualiza sola para mostrar lo que agendan otras personas. Espera
-  // mientras hay un panel abierto o una cita a medio mover, para no interrumpir.
   useAutoRefresh(load, panelOpen || isDragging || pendingMove !== null);
 
   useEffect(() => {
@@ -147,13 +136,11 @@ export default function AgendaDay() {
   const appointments = day?.appointments ?? [];
   const card = CARDS.find((c) => c.id === activeCard);
 
-  // Las canceladas y las ausencias ya no ocupan el horario: solo se ven al pedirlas.
   const visible = useMemo(
     () => appointments.filter((a) => (card ? card.statuses.includes(a.status) : !RELEASED.includes(a.status))),
     [appointments, card],
   );
 
-  // Horas que muestra la grilla: de la primera a la última con horario o citas.
   const range = useMemo(() => {
     const starts: number[] = [];
     const ends: number[] = [];
@@ -176,7 +163,6 @@ export default function AgendaDay() {
   const nowMinutes = day ? toMinutes(timeOf(day.now)) : 0;
 
   const newAt = (professionalId: string, event: React.MouseEvent<HTMLDivElement>) => {
-    // Sin permiso para agendar, el clic en un espacio libre no abre nada.
     if (!can('agenda.create')) return;
 
     const offset = event.clientY - event.currentTarget.getBoundingClientRect().top;
@@ -184,7 +170,6 @@ export default function AgendaDay() {
     openNew({ date, time: fromMinutes(minutes), professional_id: professionalId, branch_id: branchId });
   };
 
-  // Hora en la que caería la cita arrastrada: su borde superior, ajustado al intervalo.
   const dropMinutes = (event: React.DragEvent<HTMLDivElement>) => {
     const offset = event.clientY - event.currentTarget.getBoundingClientRect().top - (dragging.current?.grabOffset ?? 0);
     const duration = dragging.current?.appointment.duration_minutes ?? 0;
@@ -206,7 +191,6 @@ export default function AgendaDay() {
     endDrag();
 
     if (!dragged) return;
-    // Soltarla donde estaba no cambia nada.
     if (dragged.professional?.id === professional.id && timeOf(dragged.starts_at) === time) return;
 
     setMoveError('');
@@ -395,7 +379,6 @@ export default function AgendaDay() {
                     className={`flex-1 min-w-[200px] relative border-l border-slate-200 bg-slate-100 ${can('agenda.create') ? 'cursor-pointer' : ''}`}
                     style={{ height }}
                   >
-                    {/* Horas en que atiende */}
                     {professional.schedules.map((schedule, index) => (
                       <div
                         key={index}
@@ -408,7 +391,6 @@ export default function AgendaDay() {
                       <div key={minutes} className="absolute inset-x-0 border-t border-slate-200/70 pointer-events-none" style={{ top: top(minutes) }} />
                     ))}
 
-                    {/* Bloqueos y ausencias */}
                     {professional.blocks.map((block, index) => {
                       const from = top(toMinutes(block.starts));
                       const to = top(block.ends === '24:00' ? 24 * 60 : toMinutes(block.ends));
@@ -427,7 +409,6 @@ export default function AgendaDay() {
                       );
                     })}
 
-                    {/* Dónde caería la cita que se está arrastrando */}
                     {dropTarget?.professionalId === professional.id && dragging.current && (
                       <div
                         data-drop-target
@@ -440,7 +421,6 @@ export default function AgendaDay() {
 
                     {withLanes(visible.filter((a) => a.professional?.id === professional.id)).map(({ appointment, lane, lanes }) => {
                       const from = top(toMinutes(timeOf(appointment.starts_at)));
-                      // Si la atención terminó antes, el bloque llega hasta ahí: el resto quedó libre.
                       const occupiedMinutes = Math.max(0, toMinutes(timeOf(appointment.occupied_until)) - toMinutes(timeOf(appointment.starts_at)))
                         || appointment.duration_minutes;
                       const blockHeight = Math.max(22, Math.min(occupiedMinutes, appointment.duration_minutes) * PX - 2);
@@ -452,7 +432,6 @@ export default function AgendaDay() {
                           key={appointment.id}
                           type="button"
                           data-appointment={appointment.id}
-                          // Solo se mueven las citas que aún se pueden reprogramar.
                           draggable={appointment.can_reschedule}
                           onDragStart={(event) => {
                             dragging.current = { appointment, grabOffset: event.clientY - event.currentTarget.getBoundingClientRect().top };
@@ -478,7 +457,6 @@ export default function AgendaDay() {
                           <span className="flex items-center gap-1.5 text-xs font-bold leading-tight">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
                             <span className="truncate">{timeOf(appointment.starts_at)} {appointment.dependent?.name ?? appointment.customer?.name}</span>
-                            {/* Cronómetro: cuánto lleva en atención o esperando */}
                             {timing.running && (
                               <Stopwatch
                                 seconds={(timing.running === 'service' ? timing.service_seconds : timing.wait_seconds) ?? 0}

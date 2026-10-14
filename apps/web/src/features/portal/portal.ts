@@ -1,11 +1,8 @@
-// Tipos del portal del cliente: lo que entrega /api/portal.
-
 export interface PortalAppointment {
   id: string;
   code: string;
   status: string;
   status_name: string;
-  // Hora de la sede, sin zona: 2026-10-19T09:00
   starts_at: string;
   ends_at: string;
   duration_minutes: number;
@@ -15,14 +12,10 @@ export interface PortalAppointment {
   branch: { id: string; name: string } | null;
   dependent: { id: string; name: string; species: string | null } | null;
   cancel_reason: string | null;
-  // Hasta cuándo conviene confirmarla (hora de la sede) y si ya se pasó ese plazo.
   confirm_by?: string | null;
   confirmation_overdue?: boolean;
-  // Aún no ocurre y sigue en pie (pendiente o confirmada).
   is_upcoming: boolean;
-  // Aún no está pagada y la empresa cobra antes de atender: debe llegar antes para pagar.
   pay_on_arrival?: boolean;
-  // La atención es por videollamada.
   is_virtual?: boolean;
   can_confirm: boolean;
   can_cancel: boolean;
@@ -30,7 +23,6 @@ export interface PortalAppointment {
 }
 
 export interface PortalPolicies {
-  // La empresa ofrece reservar en línea (lo tiene en su plan y no lo apagó).
   booking_enabled: boolean;
   choose_professional: boolean;
   min_lead_minutes: number;
@@ -39,14 +31,11 @@ export interface PortalPolicies {
   cancel_allowed: boolean;
   cancel_window_hours: number;
   reschedule_max: number;
-  // Plazo para confirmar: horas antes de la cita (0 = sin plazo) y qué pasa si no se confirma.
   confirm_deadline_hours?: number;
   confirm_on_miss?: 'notify' | 'notify_release' | 'release';
   confirm_release_hours?: number;
-  // La cita se paga en la sede antes de atenderse, y cuántos minutos antes conviene llegar.
   pay_before_service?: boolean;
   arrive_minutes?: number;
-  // Qué pasa si reserva en línea y no asiste: nada, una nota, o nota y veto tras `limit` veces por `block_days` días (0 = sin fecha).
   miss?: { action: 'none' | 'note' | 'block'; limit: number; block_days: number };
 }
 
@@ -60,11 +49,9 @@ export interface PortalDependent {
 export interface PortalOverview {
   customer: {
     id: string; code: string; first_name: string; last_name: string; phone: string | null; email: string | null;
-    // Sigue con su contraseña inicial (su número de documento): debe crear la suya.
     must_change_password?: boolean;
   };
   policies: PortalPolicies;
-  // Sus inasistencias a citas reservadas en línea; con `blocked` ya no puede reservar por aquí.
   booking_block?: { misses: number; blocked: boolean; blocked_until: string | null; limit: number | null; message: string | null } | null;
   dependents: { enabled: boolean; required: boolean; items: PortalDependent[] };
   appointments: PortalAppointment[];
@@ -77,9 +64,7 @@ export interface PortalService {
   duration_minutes: number;
   price: string;
   is_virtual: boolean;
-  // Exige adelanto: por ahora se agenda en la sede.
   needs_deposit: boolean;
-  // Vacío = lo atiende cualquiera.
   professional_ids: string[];
 }
 
@@ -89,11 +74,9 @@ export interface PortalCatalog {
   professionals: { id: string; display_name: string; branch_ids: string[] }[];
 }
 
-// Algo que el cliente espera: un servicio para el que no encontró horario.
 export interface PortalWaitlistEntry {
   id: string;
   service: { id: string; name: string } | null;
-  // Sin profesional: lo atiende cualquiera.
   professional: { id: string; display_name: string } | null;
   branch: { id: string; name: string } | null;
   dependent: { id: string; name: string } | null;
@@ -102,7 +85,6 @@ export interface PortalWaitlistEntry {
   time_from: string | null;
   time_to: string | null;
   created_at: string | null;
-  // Días con horarios libres que hoy le sirven; vacío = aún no hay.
   days: { date: string; groups: { professional: { id: string; display_name: string }; slots: string[] }[] }[];
 }
 
@@ -112,7 +94,6 @@ export interface PortalAvailability {
   professionals: { professional: { id: string; display_name: string }; slots: string[] }[];
 }
 
-// Primer mensaje útil de un error de la API, dicho para el cliente.
 export const portalError = (error: any, fallback: string): string => {
   const errors = error?.response?.data?.errors;
   if (errors) {

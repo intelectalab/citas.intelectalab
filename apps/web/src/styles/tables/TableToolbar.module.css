@@ -112,7 +112,6 @@
   transition: opacity 0.2s ease;
 }
 
-/* Responsivo para comprimir texto en pantallas medianas/pequeñas */
 @media (max-width: 1024px) {
   .btnTextCollapse {
     display: none;

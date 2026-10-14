@@ -2,7 +2,6 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 interface PersonLinkProps {
-  // Sin id (dato que no llegó) se muestra el nombre como texto.
   id?: string | null;
   children: ReactNode;
   className?: string;
@@ -21,11 +20,8 @@ const personLink = (base: string) =>
     );
   };
 
-/** El nombre de un profesional, que lleva a su página. */
 export const ProfessionalLink = personLink('/professionals');
 
-/** El nombre de alguien del personal, que lleva a su página de accesos. */
 export const UserLink = personLink('/users');
 
-/** El nombre de un cliente, que lleva a su página. */
 export const CustomerLink = personLink('/customers');

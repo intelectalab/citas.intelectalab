@@ -2,10 +2,6 @@
 
 namespace App\Support\Billing;
 
-/**
- * Simulación: acepta todo comprobante sin enviarlo a ningún lado. Es lo que se
- * usa mientras la empresa no configure su proveedor de facturación.
- */
 class SimulatedInvoiceProvider implements InvoiceProvider
 {
     public function key(): string

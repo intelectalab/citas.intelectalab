@@ -39,9 +39,7 @@ interface CustomerData {
   emergency_contact_phone?: string | null;
   medical_notes?: string | null;
   created_at?: string;
-  // Acceso al portal: el cliente entra con el correo de su ficha.
   portal_access?: PortalAccess;
-  // Inasistencias a citas reservadas en línea (nota y veto), si tiene.
   online_booking?: OnlineBookingState | null;
   dependents?: { id: string; name: string; species?: string | null; breed?: string | null }[];
 }
@@ -50,7 +48,6 @@ const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
-// Tarjetas de números que funcionan como filtro, y cómo se titula la lista que dejan.
 const CLICKABLE = ['completed', 'upcoming', 'missed', 'records'];
 const FOCUS_TITLES: Record<string, string> = { completed: 'Atenciones', upcoming: 'Citas próximas', missed: 'Canceladas y ausencias' };
 
@@ -63,8 +60,6 @@ const ageFrom = (birthDate?: string | null): string | null => {
   return age >= 0 ? `${age} años` : null;
 };
 
-// Página de un cliente: sus datos, sus números y su historia (fichas de
-// atención y citas). Se llega desde el ojo o el nombre en la tabla de clientes.
 export default function CustomerDetail() {
   const params = useParams<{ id: string }>();
   const { user, hasModule, can } = useAuth();
@@ -78,7 +73,6 @@ export default function CustomerDetail() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [recordFor, setRecordFor] = useState<string | null>(null);
-  // Tarjeta de números elegida: filtra la lista de citas.
   const [focus, setFocus] = useState('');
 
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
@@ -110,7 +104,6 @@ export default function CustomerDetail() {
 
   const { openDetail, panels } = useAppointmentPanels(loadHistory);
 
-  // Las citas vienen de la más antigua a la más nueva.
   const today = todayISO();
   const upcoming = useMemo(
     () => appointments.filter((a) => dateOf(a.starts_at) >= today && !RELEASED.includes(a.status) && a.status !== 'completed'),
@@ -132,7 +125,6 @@ export default function CustomerDetail() {
     : focus === 'missed' ? appointments.filter((a) => RELEASED.includes(a.status)).reverse()
     : [];
 
-  // Las tarjetas de números filtran la lista de citas de esta misma página.
   const pickStat = (id: string) => {
     const target = id === 'records' ? 'records' : 'appointments';
     if (id !== 'records') setFocus((current) => (current === id ? '' : id));
@@ -186,7 +178,6 @@ export default function CustomerDetail() {
 
   const appointmentRow = (a: Appointment) => (
     <li key={a.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
-      {/* La fecha y la fase abren la cita; el nombre del profesional lleva a su página. */}
       <button type="button" data-appointment={a.id} onClick={() => openDetail(a.id)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
         <div className="w-28 shrink-0">
           <span className="block text-sm font-semibold text-slate-800 first-letter:uppercase">{formatDate(dateOf(a.starts_at), { weekday: 'short', day: '2-digit', month: 'short' })}</span>
@@ -209,7 +200,6 @@ export default function CustomerDetail() {
       {backLink}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-        {/* Datos del cliente */}
         <section className={`${card} p-6 space-y-5`} data-card="customer">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -302,7 +292,6 @@ export default function CustomerDetail() {
           )}
         </section>
 
-        {/* Números y, pegada debajo, la historia */}
         <div className="xl:col-span-2 space-y-5">
         <div className={`grid grid-cols-2 gap-4 ${stats.length > 4 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           {stats.map((stat) => (
@@ -330,7 +319,6 @@ export default function CustomerDetail() {
           ))}
         </div>
 
-        {/* Historia: fichas de atención */}
         {usesRecords && (
           <section className={`${card} overflow-hidden scroll-mt-4`} data-card="records">
             <div className="px-6 pt-5 pb-3">
@@ -378,7 +366,6 @@ export default function CustomerDetail() {
         )}
         </div>
 
-        {/* Citas */}
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">

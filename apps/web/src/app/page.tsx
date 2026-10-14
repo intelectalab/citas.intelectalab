@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
 import { Building2, Check, ArrowRight, Sparkles } from 'lucide-react';
-// 1. Importa tu componente de modal creado previamente
 import { RegisterModal } from '@/features/subscriptions/components/RegisterModal';
 
 interface Plan {
@@ -21,7 +20,6 @@ export default function LandingPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   
-  // Control de apertura del modal (true/false)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -41,13 +39,12 @@ export default function LandingPage() {
 
   const handleSelectPlan = (plan: Plan) => {
     setSelectedPlan(plan);
-    setIsModalOpen(true); // Abre el modal reutilizable
+    setIsModalOpen(true);
   };
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-[#1F2937] font-sans flex flex-col">
       
-      {/* Header */}
       <header className="w-full bg-white border-b border-slate-200/80 px-6 lg:px-16 py-4 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-[#022340] text-[#84D0D9] flex items-center justify-center font-bold">
@@ -84,7 +81,6 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
       <div className="flex-1 max-w-6xl mx-auto px-6 lg:px-16 py-12 md:py-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
         <div className="space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#84D0D9]/15 border border-[#84D0D9]/30 text-[#022340] text-xs font-bold uppercase tracking-wider">
@@ -132,7 +128,6 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Sección de Planes */}
       <div id="planes" className="bg-white border-t border-slate-200/80 py-20 px-6 lg:px-16">
         <div className="max-w-5xl mx-auto space-y-12">
           <div className="text-center space-y-3 max-w-2xl mx-auto">
@@ -195,7 +190,6 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* 2. Renderizamos el Modal externo que ya tenías creado */}
       <RegisterModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

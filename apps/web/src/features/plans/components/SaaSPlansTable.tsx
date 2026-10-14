@@ -5,7 +5,7 @@ import { Ticket, Pencil, Trash2, Users, Store, Briefcase, CheckCircle, Clock, XC
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormSaaSPlan from './FormSaaSPlan';
-import PlanDetailsModal from './PlanDetailsModal'; // <-- Importas el componente nuevo
+import PlanDetailsModal from './PlanDetailsModal';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
 
@@ -44,7 +44,6 @@ export default function SaaSPlansTable() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SaaSPlan | null>(null);
 
-  // Estado para controlar el modal del ojito
   const [viewingPlan, setViewingPlan] = useState<SaaSPlan | null>(null);
 
   const [modalConfig, setModalConfig] = useState<{
@@ -246,9 +245,7 @@ export default function SaaSPlansTable() {
       cell: (plan) => {
         let totalModulesCount = 0;
 
-        // Verificamos si plan.modules existe y es un objeto
         if (plan.modules && typeof plan.modules === 'object') {
-          // Recorremos cada categoría (ej. core, finance, operations, crm)
           Object.values(plan.modules).forEach((categoryItems) => {
             if (Array.isArray(categoryItems)) {
               totalModulesCount += categoryItems.length;
@@ -331,7 +328,6 @@ export default function SaaSPlansTable() {
       header: 'Acciones',
       cell: (plan) => (
         <div key={`actions-${plan.id}`} className="flex items-center gap-1">
-          {/* Botón del Ojito */}
           <button 
             onClick={() => setViewingPlan(plan)}
             title="Ver detalles"
@@ -400,7 +396,6 @@ export default function SaaSPlansTable() {
         totalPlansCount={safePlans.length}
       />
 
-      {/* Modal dedicado para ver detalles de forma ordenada */}
       <PlanDetailsModal
         isOpen={Boolean(viewingPlan)}
         onClose={() => setViewingPlan(null)}

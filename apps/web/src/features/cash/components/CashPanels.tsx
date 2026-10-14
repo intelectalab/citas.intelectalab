@@ -30,7 +30,6 @@ const Footer = ({ onClose, formId, saving, label, savingLabel }: { onClose: () =
   </div>
 );
 
-// Abrir el turno de una caja: con cuánto efectivo empieza.
 export function OpenCashPanel({ register, onClose, onSaved }: PanelProps & { register: CashRegister | null }) {
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -78,7 +77,6 @@ const MOVEMENT_TYPES: { id: 'income' | 'expense' | 'withdrawal'; title: string; 
   { id: 'withdrawal', title: 'Retiro: se saca dinero de la caja', hint: 'Para guardarlo en otro lugar o llevarlo al banco. No es un gasto: el dinero sigue siendo de la empresa.', icon: <Banknote size={18} /> },
 ];
 
-// Ingreso, gasto o retiro de efectivo durante el turno.
 export function CashMovementPanel({ session, registerName, onClose, onSaved }: PanelProps & { session: CashSession | null; registerName?: string }) {
   const [type, setType] = useState<'income' | 'expense' | 'withdrawal'>('expense');
   const [amount, setAmount] = useState('');
@@ -153,7 +151,6 @@ export function CashMovementPanel({ session, registerName, onClose, onSaved }: P
   );
 }
 
-// Cierre con arqueo: se cuenta el efectivo y se compara con lo que debía haber.
 export function CloseCashPanel({ session, registerName, tolerance, onClose, onSaved }: PanelProps & { session: CashSession | null; registerName?: string; tolerance: number }) {
   const [counted, setCounted] = useState('');
   const [notes, setNotes] = useState('');
@@ -236,7 +233,6 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
   );
 }
 
-// Crear una caja o cambiar su nombre y si está en uso.
 export function RegisterPanel({ isOpen, register, branches, onClose, onSaved }: PanelProps & { isOpen: boolean; register: CashRegister | null; branches: { id: string; name: string }[] }) {
   const [branchId, setBranchId] = useState('');
   const [name, setName] = useState('');
@@ -314,7 +310,6 @@ export function RegisterPanel({ isOpen, register, branches, onClose, onSaved }: 
   );
 }
 
-// El turno completo: sus números, lo cobrado por cada medio y cada movimiento.
 export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | null; onClose: () => void }) {
   const [session, setSession] = useState<CashSession | null>(null);
   const [error, setError] = useState('');

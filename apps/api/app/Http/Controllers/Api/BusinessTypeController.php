@@ -11,11 +11,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/**
- * Catálogo de rubros, administrado por el administrador SaaS: vocabulario,
- * módulos que el rubro apaga, reglas por defecto, dependientes y el catálogo
- * inicial que recibe cada empresa al registrarse.
- */
 class BusinessTypeController extends Controller
 {
     public function index(Request $request)
@@ -33,7 +28,6 @@ class BusinessTypeController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        // La plantilla va oculta en el catálogo público; aquí sí se necesita.
         $types = $query->orderBy('sort_order')->get()->makeVisible('template');
         $types->each(fn (BusinessType $type) => $type->setAttribute('outdated_tenants_count', count($this->outdatedTenants($type))));
 
@@ -48,10 +42,6 @@ class BusinessTypeController extends Controller
         return response()->json($type);
     }
 
-    /**
-     * Empresas del rubro y qué les cambiaría si se les aplica el rubro tal
-     * como está hoy. Editar el rubro no las toca: esto es la vista previa.
-     */
     public function tenants(string $id)
     {
         $type = BusinessType::findOrFail($id);
@@ -67,7 +57,6 @@ class BusinessTypeController extends Controller
                 'status'    => $tenant->status,
                 'synced_at' => $tenant->business_profile_synced_at,
                 'outdated'  => $outdated->has($tenant->id) ? $outdated[$tenant->id]['parts'] : [],
-                // Módulos que ganaría o perdería por el cambio del rubro.
                 'modules_gained' => array_values(array_diff($own, $current['modules_off'])),
                 'modules_lost'   => array_values(array_diff($current['modules_off'], $own)),
             ];
@@ -76,11 +65,6 @@ class BusinessTypeController extends Controller
         return response()->json($tenants);
     }
 
-    /**
-     * Aplica el rubro, tal como está hoy, a las empresas elegidas. Es la única
-     * forma de que un cambio del rubro llegue a empresas que ya existen.
-     * Lo que cada empresa personalizó en su configuración no se toca.
-     */
     public function apply(Request $request, string $id)
     {
         $type = BusinessType::findOrFail($id);
@@ -120,9 +104,6 @@ class BusinessTypeController extends Controller
         ]);
     }
 
-    /**
-     * Empresas del rubro cuya copia ya no coincide con el rubro.
-     */
     private function outdatedTenants(BusinessType $type): array
     {
         return Tenant::where('business_type_id', $type->id)->get()
@@ -227,7 +208,6 @@ class BusinessTypeController extends Controller
         ]);
 
         if (isset($validated['vocabulary'])) {
-            // Solo las claves conocidas y sin vacíos: lo vacío usa el término base.
             $validated['vocabulary'] = collect($validated['vocabulary'])
                 ->only(array_keys(Tenant::DEFAULT_VOCABULARY))
                 ->map(fn ($value) => trim((string) $value))
@@ -246,8 +226,6 @@ class BusinessTypeController extends Controller
                 : [];
         }
 
-        // La validación solo devuelve las claves declaradas; la plantilla se
-        // guarda completa para no perder datos como opciones de campos.
         if ($request->has('template')) {
             $validated['template'] = $request->input('template') ?: [];
         }

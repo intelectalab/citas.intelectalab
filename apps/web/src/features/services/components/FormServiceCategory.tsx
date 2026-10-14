@@ -23,7 +23,6 @@ export default function FormServiceCategory({
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [isDuplicate, setIsDuplicate] = useState(false);
 
-    // Validación previa en tiempo real (evita llamar al backend y generar errores en consola)
     useEffect(() => {
         const trimmed = name.trim().toLowerCase();
         if (!trimmed) {
@@ -74,7 +73,6 @@ export default function FormServiceCategory({
             }, 700);
 
         } catch (error: any) {
-            // Si por alguna razón pasara al backend, capturamos sin ensuciar la consola con errores genéricos
             if (error.response && error.response.status === 422) {
                 setErrorMessage(error.response.data?.message || 'Ya existe una categoría con este nombre.');
                 setIsDuplicate(true);

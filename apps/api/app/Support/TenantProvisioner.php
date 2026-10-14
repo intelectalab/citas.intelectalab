@@ -16,30 +16,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
-/**
- * Alta completa de una empresa: tenant con la copia de su rubro, catálogo
- * inicial, razón social, sede principal, cuenta del dueño con su rol y
- * suscripción. La usan el registro público y el alta desde la consola de la
- * plataforma, para que una empresa quede igual venga de donde venga.
- */
 class TenantProvisioner
 {
-    /**
-     * @param array{
-     *   name: string, legal_name?: ?string, trade_name?: ?string, tax_id?: ?string, phone?: ?string,
-     *   address?: ?string, department?: ?string, district?: ?string, business_type_id?: ?string,
-     *   plan_id: string, start_trial?: bool, billing_cycle?: string, branch_name?: ?string,
-     *   timezone?: ?string, status?: ?string, first_name: string, last_name: string, email: string, password: string
-     * } $data
-     * @return array{tenant: Tenant, user: User, installed: array}
-     */
     public static function provision(array $data): array
     {
         return DB::transaction(function () use ($data) {
             $tenantId = (string) Str::uuid();
             $timezone = $data['timezone'] ?? 'America/Lima';
 
-            // El código de empresa de 8 dígitos y la copia del rubro los pone el modelo Tenant.
             $tenant = Tenant::create([
                 'id'               => $tenantId,
                 'name'             => $data['name'],
@@ -51,7 +35,6 @@ class TenantProvisioner
 
             TenantSetting::create(['tenant_id' => $tenantId]);
 
-            // Catálogo inicial del rubro: categorías, servicios y plantilla de ficha.
             $installed = $tenant->installBusinessTemplate();
 
             $company = Company::create([
@@ -107,7 +90,6 @@ class TenantProvisioner
                 ]
             );
 
-            // Los demás roles de fábrica (gerente de sede, recepción, caja y profesional) con sus permisos.
             Access::ensureRoles($tenant);
 
             DB::table('user_roles')->insert([
@@ -119,7 +101,6 @@ class TenantProvisioner
             $cycle = $data['billing_cycle'] ?? 'monthly';
 
             if ($data['start_trial'] ?? true) {
-                // Los días de prueba los define el plan (Empresarial da 30).
                 $trialDays = (int) (SaaSPlan::find($data['plan_id'])->trial_config['trial_days'] ?? 14);
                 $endsAt = now()->addDays($trialDays);
                 $subscription = ['status' => 'trialing', 'trial_ends_at' => $endsAt, 'ends_at' => $endsAt];
@@ -135,7 +116,6 @@ class TenantProvisioner
                 'starts_at'     => now(),
             ]);
 
-            // Feriados nacionales de este año y del siguiente, para todas sus sedes.
             $year = (int) now($timezone)->format('Y');
             Holidays::loadNational($tenant, $year);
             Holidays::loadNational($tenant, $year + 1);

@@ -15,7 +15,6 @@ const VIEWS: { id: 'all' | 'unread'; label: string }[] = [
   { id: 'unread', label: 'Sin leer' },
 ];
 
-// Todas las notificaciones de quien tiene la sesión abierta, de a seis.
 export default function NotificationsPage() {
   const { user, hasModule } = useAuth();
   const router = useRouter();

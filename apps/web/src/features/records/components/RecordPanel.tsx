@@ -12,10 +12,8 @@ import RecordFieldInput from './RecordFieldInput';
 import { RECORD_STATUS, isEmptyValue, type AppointmentRecord, type CareRecord, type RecordData, type RecordField, type RecordValue } from '../records';
 
 interface RecordPanelProps {
-  // Cita cuya ficha se llena o se consulta. null = panel cerrado.
   appointmentId: string | null;
   onClose: () => void;
-  // La ficha se guardó o se firmó: quien abrió el panel refresca lo suyo.
   onChanged?: () => void;
 }
 
@@ -23,7 +21,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
-// Los campos de una ficha con sus valores, sin poder editarlos.
 function ReadOnlyFields({ fields, data }: { fields: RecordField[]; data: RecordData }) {
   const filled = fields.filter((field) => !isEmptyValue(data[field.key]));
 
@@ -41,9 +38,6 @@ function ReadOnlyFields({ fields, data }: { fields: RecordField[]; data: RecordD
   );
 }
 
-// Panel lateral de la ficha de atención de una cita: se llena, se guarda como
-// borrador y se firma. Firmada, se puede corregir hasta que vence el plazo de
-// la empresa; después solo admite notas.
 export default function RecordPanel({ appointmentId, onClose, onChanged }: RecordPanelProps) {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
@@ -103,7 +97,6 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
       setErrors({});
       setMessage(null);
       const res = await api.put(`/appointments/${context.appointment.id}/record`, { data, consent_accepted: consent, sign });
-      // Firmada ya no se ofrece pasarla a la plantilla actual.
       setContext({ ...context, record: res.data, uses_record: true, template_update: sign ? null : context.template_update });
       applyRecord(res.data);
       setConfirmUpdate(false);
@@ -123,15 +116,12 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
     }
   };
 
-  // Qué cambia si el borrador pasa a la plantilla actual del servicio: los campos
-  // nuevos y los que se quitan (o cambian de tipo) y ya tienen algo escrito.
   const update = context?.template_update ?? null;
   const updateAdds = update ? update.fields.filter((field) => !fields.some((old) => old.key === field.key)) : [];
   const updateLoses = update
     ? fields.filter((old) => !isEmptyValue(data[old.key]) && !update.fields.some((field) => field.key === old.key && field.type === old.type))
     : [];
 
-  // Pasa el borrador a la plantilla actual. Lo escrito en pantalla viaja con el pedido.
   const updateTemplate = async () => {
     if (!context) return;
 
@@ -172,8 +162,6 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
     }
   };
 
-  // Acceso de emergencia del administrador a una ficha privada ajena: pide un
-  // motivo, queda en la bitácora y solo permite leer.
   const requestAccess = async () => {
     if (!context || !record) return;
 

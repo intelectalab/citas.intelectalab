@@ -11,11 +11,9 @@ import { apiError } from '@/features/appointments/appointments';
 import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type ChargeContext, type SalePayment } from '../sales';
 
 interface ChargePanelProps {
-  // Cita que se cobra; null = panel cerrado.
   appointmentId: string | null;
   appointmentCode?: string;
   onClose: () => void;
-  // Se registró un pago: quien abre el panel refresca lo suyo.
   onChanged?: (context: ChargeContext) => void;
 }
 
@@ -45,8 +43,6 @@ const chip = (active: boolean) =>
 
 const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
-// Panel para cobrar una cita: lo que se debe, el pago que se registra y, al
-// quedar pagada, su comprobante.
 export default function ChargePanel({ appointmentId, appointmentCode, onClose, onChanged }: ChargePanelProps) {
   const [context, setContext] = useState<ChargeContext | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,12 +59,10 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
   const [ruc, setRuc] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [address, setAddress] = useState('');
-  // Cupón: lo que se escribe y el que ya se aplicó a lo que se va a cobrar.
   const [couponInput, setCouponInput] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [couponError, setCouponError] = useState('');
   const [checkingCoupon, setCheckingCoupon] = useState(false);
-  // Identifica este intento de cobro: un doble clic no cobra dos veces.
   const attempt = useRef(newKey());
 
   const balanceOf = (data: ChargeContext) => (data.sale ? data.sale.balance : data.preview.total);
@@ -110,20 +104,16 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
   const balance = context ? balanceOf(context) : 0;
   const paidSale = sale?.status === 'paid' ? sale : null;
   const isPaid = paidSale !== null;
-  // Una venta devuelta conserva su comprobante a la vista.
   const invoice = sale?.invoice ?? null;
-  // Solo se cobra lo que aún no tiene venta o tiene saldo.
   const canPay = !sale || sale.status === 'pending' || sale.status === 'partial';
   const isCash = method === 'cash';
   const needsReference = context?.methods.find((m) => m.value === method)?.needs_reference ?? false;
   const cashClosed = Boolean(context && isCash && context.cash.required && context.cash.sessions.length === 0);
   const amountNumber = Number(amount || 0);
   const change = isCash && received ? Math.max(0, Number(received) - amountNumber) : 0;
-  // El comprobante se elige con el pago que completa la venta.
   const completes = amountNumber >= balance - 0.001;
   const appliedCoupon = sale ? sale.coupon : context?.coupon ?? null;
 
-  // Prueba un cupón (o lo quita, con el código vacío) y recalcula lo que se cobra.
   const applyCoupon = async (code: string) => {
     if (!appointmentId) return;
 

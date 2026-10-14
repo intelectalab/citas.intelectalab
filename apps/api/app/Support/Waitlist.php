@@ -8,31 +8,19 @@ use App\Models\WaitlistEntry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
-/**
- * Cómo se mueve la lista de espera con las citas: una cita agendada desde la
- * lista deja a la persona "con cita"; si esa cita se cancela o no asiste,
- * vuelve a esperar. Y al liberarse un horario se sabe a quiénes les sirve.
- */
 class Waitlist
 {
-    /**
-     * La cita se agendó para esta persona de la lista.
-     */
     public static function book(WaitlistEntry $entry, Appointment $appointment): void
     {
         $entry->update(['status' => WaitlistEntry::BOOKED, 'appointment_id' => $appointment->id]);
     }
 
-    /**
-     * Llamar después de cambiar la fase de una cita.
-     */
     public static function appointmentChanged(Tenant $tenant, Appointment $appointment): void
     {
         if (!in_array($appointment->status, AppointmentFlow::RELEASED, true)) {
             return;
         }
 
-        // La cita se cayó: la persona sigue necesitando un horario.
         WaitlistEntry::where('tenant_id', $tenant->id)
             ->where('appointment_id', $appointment->id)
             ->where('status', WaitlistEntry::BOOKED)
@@ -41,11 +29,6 @@ class Waitlist
         self::slotFreed($tenant, $appointment);
     }
 
-    /**
-     * Una cita futura se cayó y dejó libre su horario: si a alguien de la lista
-     * le sirve, se avisa a la administración. La persona lo ve en su portal, que
-     * le muestra en vivo los horarios libres que calzan con lo que pidió.
-     */
     public static function slotFreed(Tenant $tenant, Appointment $appointment): void
     {
         try {
@@ -63,9 +46,6 @@ class Waitlist
         }
     }
 
-    /**
-     * Quienes ya no pueden recibir un horario porque su última fecha pasó.
-     */
     public static function expire(Tenant $tenant): void
     {
         WaitlistEntry::where('tenant_id', $tenant->id)
@@ -75,11 +55,6 @@ class Waitlist
             ->update(['status' => WaitlistEntry::EXPIRED, 'updated_at' => now()]);
     }
 
-    /**
-     * Personas en espera a las que les sirve el horario que deja libre una
-     * cita: misma sede y servicio, ese profesional o cualquiera, y el día y la
-     * hora dentro de lo que pidieron.
-     */
     public static function matching(Tenant $tenant, Appointment $appointment): Builder
     {
         $timezone = AppointmentScheduler::timezone($appointment->branch ?? new \App\Models\Branch(), $tenant);
@@ -99,13 +74,6 @@ class Waitlist
             ->where(fn ($q) => $q->whereNull('time_to')->orWhere('time_to', '>=', $end->format('H:i:s')));
     }
 
-    /**
-     * Horarios libres que le sirven a alguien de la lista, día por día, desde
-     * hoy (o desde su primera fecha). Se detiene al juntar unos cuantos días
-     * con horarios, o al revisar tres semanas.
-     *
-     * @return array{days: array<int, array{date: string, groups: array}>, searched_until: string}
-     */
     public static function slots(Tenant $tenant, WaitlistEntry $entry, int $maxDays = 5, int $scan = 21): array
     {
         $branch = $entry->branch;

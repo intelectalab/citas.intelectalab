@@ -12,15 +12,10 @@ const readTheme = (): Theme => {
   return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
 };
 
-// El tema se marca en <html data-theme>; los estilos de globals.css lo leen de ahí.
 const applyTheme = (theme: Theme) => {
   document.documentElement.dataset.theme = theme;
 };
 
-/**
- * Tema claro u oscuro del panel. Se guarda en el navegador de cada persona.
- * Varios componentes pueden usar el hook a la vez: se avisan entre sí.
- */
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>('light');
 

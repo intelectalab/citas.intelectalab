@@ -23,7 +23,6 @@ interface TenantModule {
   is_core: boolean;
   in_plan: boolean;
   enabled: boolean;
-  // Por qué la empresa no lo tiene: sin suscripción, plan, rubro, plataforma o la propia empresa.
   off_reason: 'no_subscription' | 'plan' | 'business_type' | 'platform' | 'tenant' | null;
   platform_off: boolean;
 }
@@ -77,7 +76,6 @@ const OFF_REASONS: Record<string, string> = {
   tenant: 'Apagado por la empresa',
 };
 
-// Cada medida de uso con su nombre, ícono y color propio para la tarjeta.
 const USAGE: Record<string, { label: string; icon: React.ReactNode; tint: string; iconColor: string }> = {
   users: { label: 'Usuarios', icon: <UserRound size={18} />, tint: 'bg-sky-50 border-sky-100', iconColor: 'text-sky-600 bg-sky-100' },
   branches: { label: 'Sedes', icon: <Store size={18} />, tint: 'bg-violet-50 border-violet-100', iconColor: 'text-violet-600 bg-violet-100' },
@@ -108,7 +106,6 @@ function CardTitle({ icon, title, aside }: { icon: React.ReactNode; title: strin
   );
 }
 
-// Uso frente al límite del plan: anillo que se llena y cambia de color al acercarse.
 function UsageTile({ item }: { item: { key: string; used: number; limit: number | null } }) {
   const { platform } = usePlatform();
   const warnAt = platform.usage_warning_percent / 100;
@@ -157,8 +154,6 @@ function UsageTile({ item }: { item: { key: string; used: number; limit: number 
   );
 }
 
-// Ficha completa de una empresa para la consola de la plataforma. El soporte
-// SaaS la ve y entra al panel; los cambios son del administrador SaaS.
 export default function TenantDetail() {
   const params = useParams<{ id: string }>();
   const { user, startImpersonation } = useAuth();
@@ -201,7 +196,6 @@ export default function TenantDetail() {
     api.get('/admin/business-types').then((res) => setBusinessTypes(res.data ?? [])).catch(() => setBusinessTypes([]));
   }, [canManage]);
 
-  // Ejecuta una acción de la plataforma sobre la empresa y refresca la ficha.
   const run = async (request: () => Promise<any>, okText: string) => {
     try {
       setBusy(true);
@@ -266,7 +260,6 @@ export default function TenantDetail() {
   const renderModule = (key: string, label: string) => {
     const module = moduleByKey[key];
     if (!module) return null;
-    // El interruptor de la plataforma solo tiene sentido si su plan y su rubro le dan el módulo.
     const canToggle = canManage && module.in_plan && !module.is_core && module.off_reason !== 'business_type';
     const isPlatformOff = platformOff.includes(key);
 
@@ -310,7 +303,6 @@ export default function TenantDetail() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        {/* ============ Empresa ============ */}
         <section className="xl:col-span-8 bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
           <div className="h-2" style={{ backgroundColor: color }} />
           <div className="p-6 flex flex-wrap items-start justify-between gap-4 flex-1">
@@ -364,7 +356,6 @@ export default function TenantDetail() {
           </div>
         </section>
 
-        {/* ============ Plan ============ */}
         <section className="xl:col-span-4 rounded-3xl p-6 text-white bg-gradient-to-br from-[#022340] via-[#06375f] to-[#3F768C] shadow-lg flex flex-col justify-between gap-5">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -411,12 +402,10 @@ export default function TenantDetail() {
           )}
         </section>
 
-        {/* ============ Uso frente a los límites ============ */}
         <section className="xl:col-span-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
           {detail.usage.map((item) => <UsageTile key={item.key} item={item} />)}
         </section>
 
-        {/* ============ Módulos ============ */}
         <section className={`xl:col-span-7 ${card}`}>
           <CardTitle
             icon={<Puzzle size={16} />}
@@ -461,7 +450,6 @@ export default function TenantDetail() {
           )}
         </section>
 
-        {/* ============ Gestión de la suscripción ============ */}
         <section className={`xl:col-span-5 ${card} space-y-5`}>
           <CardTitle icon={<CreditCard size={16} />} title="Suscripción y cobros" />
 
@@ -586,7 +574,6 @@ export default function TenantDetail() {
           </div>
         </section>
 
-        {/* ============ Configuración de la empresa ============ */}
         <section className={`xl:col-span-4 ${card}`}>
           <CardTitle icon={<Settings2 size={16} />} title="Su configuración" />
           <p className="text-xs text-slate-500 mb-4">Lo que la empresa ajustó por su cuenta. Solo ella lo cambia, desde su panel.</p>
@@ -632,7 +619,6 @@ export default function TenantDetail() {
           </div>
         </section>
 
-        {/* ============ Rubro ============ */}
         <section className={`xl:col-span-4 ${card}`}>
           <CardTitle icon={<Layers size={16} />} title="Rubro" />
           <div className="flex items-center gap-3 mb-4">
@@ -689,7 +675,6 @@ export default function TenantDetail() {
           )}
         </section>
 
-        {/* ============ Acceso ============ */}
         <section className={`xl:col-span-4 rounded-3xl border p-6 ${detail.status === 'active' ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-rose-50 border-rose-200'}`}>
           <CardTitle icon={<ShieldAlert size={16} />} title="Acceso" />
           {detail.status === 'active' ? (
@@ -729,7 +714,6 @@ export default function TenantDetail() {
           )}
         </section>
 
-        {/* ============ Personal ============ */}
         <section className={`xl:col-span-12 ${card}`}>
           <CardTitle
             icon={<Users size={16} />}

@@ -11,7 +11,6 @@ interface TypeTenant {
   name: string;
   status: string;
   synced_at: string | null;
-  // Partes del rubro que cambiaron desde que la empresa recibió su copia.
   outdated: string[];
   modules_gained: string[];
   modules_lost: string[];
@@ -20,7 +19,6 @@ interface TypeTenant {
 interface BusinessTypeTenantsProps {
   businessTypeId: string;
   businessTypeName: string;
-  // Cambia cuando el rubro se edita, para volver a comparar.
   refreshKey: number;
   onApplied: () => void;
 }
@@ -32,9 +30,6 @@ const PART_LABELS: Record<string, string> = {
   dependents: 'Dependientes',
 };
 
-// Empresas que usan el rubro. Cada una guarda su propia copia de lo que el
-// rubro le dio, así que editar el rubro no las cambia. Desde aquí se ve a
-// cuáles les falta el cambio y se les aplica de forma explícita.
 export default function BusinessTypeTenants({ businessTypeId, businessTypeName, refreshKey, onApplied }: BusinessTypeTenantsProps) {
   const [tenants, setTenants] = useState<TypeTenant[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -47,7 +42,6 @@ export default function BusinessTypeTenants({ businessTypeId, businessTypeName, 
       .then((res) => {
         const rows: TypeTenant[] = res.data ?? [];
         setTenants(rows);
-        // Por defecto quedan marcadas todas las que tienen cambios pendientes.
         setSelected(rows.filter((row) => row.outdated.length > 0).map((row) => row.id));
       })
       .catch(() => setNotice({ type: 'error', text: 'No se pudo cargar las empresas de este rubro.' }));

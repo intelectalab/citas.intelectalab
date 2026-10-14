@@ -21,10 +21,8 @@ const PERIODS = [
   { id: 'past', label: 'Anteriores' },
 ];
 
-// Los feriados son una pestaña más, con su propia tabla.
 const HOLIDAYS_TAB = 'holidays';
 
-// Tarjetas que filtran la tabla.
 const CARDS: { id: string; title: string; match: (b: Block) => boolean; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'current', title: 'En curso ahora', match: (b) => b.state === 'current', icon: <PlayCircle size={18} />, color: 'text-emerald-600', active: 'border-emerald-500 ring-2 ring-emerald-500/20', hover: 'hover:border-emerald-300' },
   { id: 'upcoming', title: 'Próximos', match: (b) => b.state === 'upcoming', icon: <CalendarClock size={18} />, color: 'text-sky-600', active: 'border-sky-500 ring-2 ring-sky-500/20', hover: 'hover:border-sky-300' },
@@ -34,9 +32,6 @@ const CARDS: { id: string; title: string; match: (b: Block) => boolean; icon: Re
 
 const normalize = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Bloqueos y ausencias de la empresa: vacaciones y permisos de cada persona,
-// feriados y cierres de sede. Desde aquí se registran, se editan y se ve qué
-// citas quedaron dentro de cada uno.
 export default function BlocksTable() {
   const { can } = useAuth();
   const vocab = useVocabulary();
@@ -52,10 +47,8 @@ export default function BlocksTable() {
   const [deleting, setDeleting] = useState<Block | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  // Bloqueo cuyas citas afectadas se están viendo.
   const [reviewing, setReviewing] = useState<Block | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
-  // Cuántos feriados vienen, para la pestaña.
   const [holidayCount, setHolidayCount] = useState<number | undefined>(undefined);
 
   const load = useCallback(() => {
@@ -74,7 +67,6 @@ export default function BlocksTable() {
       .finally(() => setReviewLoading(false));
   }, []);
 
-  // Al cambiar una cita desde aquí, la lista y el bloqueo abierto se ponen al día.
   const reviewingId = reviewing?.id;
   const refresh = useCallback(() => {
     load();

@@ -71,7 +71,6 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
   const [submittingPlanId, setSubmittingPlanId] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
-  // Cargar planes desde el Backend
   useEffect(() => {
     let isMounted = true;
     const fetchPlans = async () => {
@@ -110,7 +109,6 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
         billing_cycle: billingCycle,
       });
 
-      // Extraer token por si el flujo de suscripción devuelve uno actualizado
       const token = response.data?.token;
       if (token) {
         localStorage.setItem('auth_token', token);
@@ -142,7 +140,6 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
 
   return (
     <div className={`bg-slate-50/50 rounded-3xl p-6 md:p-10 border border-slate-200/80 shadow-xs ${isEmbedded ? 'w-full' : ''}`}>
-      {/* Encabezado */}
       <div className="text-center max-w-2xl mx-auto space-y-3 mb-8">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#84D0D9]/20 text-[#022340] text-xs font-bold uppercase tracking-wider">
           <Zap className="w-3.5 h-3.5 text-[#3F768C]" />
@@ -155,7 +152,6 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
           Elige la opción que mejor se adapte a tu empresa para acceder a todas las funcionalidades del ERP.
         </p>
 
-        {/* Switch Ciclo de Facturación */}
         <div className="pt-2 flex items-center justify-center gap-3 text-xs font-semibold">
           <span className={billingCycle === 'monthly' ? 'text-[#022340]' : 'text-slate-400'}>Facturación Mensual</span>
           <button
@@ -169,7 +165,6 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
         </div>
       </div>
 
-      {/* Grid de Planes */}
       {loadingPlans ? (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />

@@ -8,11 +8,6 @@ use App\Models\PlatformSetting;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 
-/**
- * Entrar al panel de una empresa para darle soporte. El administrador SaaS o
- * el soporte SaaS reciben una sesión temporal como el dueño de la empresa.
- * Cada ingreso queda en la bitácora y la sesión caduca sola.
- */
 class ImpersonationController extends Controller
 {
     public const TOKEN_PREFIX = 'impersonation:';
@@ -34,7 +29,6 @@ class ImpersonationController extends Controller
             ], 422);
         }
 
-        // El nombre del token guarda quién entró: así /api/user puede avisarlo en pantalla.
         $token = $owner->createToken(
             self::TOKEN_PREFIX . $request->user()->id,
             ['*'],
@@ -54,9 +48,6 @@ class ImpersonationController extends Controller
         ]);
     }
 
-    /**
-     * Cierra la sesión de soporte. Solo aplica a una sesión abierta por la plataforma.
-     */
     public function stop(Request $request)
     {
         $token = $request->user()->currentAccessToken();

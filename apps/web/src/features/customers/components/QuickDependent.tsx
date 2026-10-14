@@ -21,8 +21,6 @@ interface QuickDependentProps {
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 
-// Mascota (u otro dependiente) nueva sin salir del formulario: lo mínimo para
-// seguir. El resto de sus datos se completa después en la ficha del cliente.
 export default function QuickDependent({ customerId, onCreated, onCancel }: QuickDependentProps) {
   const { user } = useAuth();
   const vocab = useVocabulary();

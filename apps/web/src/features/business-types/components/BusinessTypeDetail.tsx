@@ -37,7 +37,6 @@ function SectionTitle({ icon, title, aside }: { icon: React.ReactNode; title: st
   );
 }
 
-// Íconos pequeños con lo que tiene activo un servicio del catálogo.
 function ServiceFlags({ service }: { service: TemplateService }) {
   const flags = [
     service.online_booking !== false && { icon: <Globe size={12} />, label: 'Reserva en línea' },
@@ -58,15 +57,12 @@ function ServiceFlags({ service }: { service: TemplateService }) {
   );
 }
 
-// Página de solo lectura con todo lo que define a un rubro: datos, vocabulario,
-// módulos, reglas, catálogo inicial y la ficha de atención con forma de hoja.
 export default function BusinessTypeDetail() {
   const params = useParams<{ id: string }>();
   const [type, setType] = useState<BusinessType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  // Sube cada vez que el rubro se guarda, para volver a comparar con sus empresas.
   const [version, setVersion] = useState(0);
 
   const load = () => {
@@ -121,7 +117,6 @@ export default function BusinessTypeDetail() {
         <span className="font-semibold text-slate-500 truncate">{type.name}</span>
       </nav>
 
-      {/* Cabecera */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="h-1.5" style={{ backgroundColor: color }} />
         <div className="p-6 flex flex-wrap items-start justify-between gap-4">
@@ -174,7 +169,6 @@ export default function BusinessTypeDetail() {
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
-        {/* Columna izquierda */}
         <div className="xl:col-span-3 space-y-6">
           <section className={cardClass}>
             <SectionTitle icon={<Type size={16} />} title="Vocabulario" />
@@ -309,7 +303,6 @@ export default function BusinessTypeDetail() {
           </section>
         </div>
 
-        {/* Columna derecha: la ficha con forma de hoja */}
         <div className="xl:col-span-2 space-y-3">
           {template.record_template ? (
             <RecordPreview record={template.record_template} color={color} businessTypeName={type.name} />

@@ -8,9 +8,6 @@ interface RulesEditorProps {
   onChange: (value: Record<string, RuleValue>) => void;
 }
 
-// Reglas de operación del rubro, cada una con su nombre y su control: un
-// interruptor para las de sí/no y un número con su unidad para las demás.
-// Un número vacío no se guarda: la regla queda sin límite ni cargo.
 export default function RulesEditor({ value, onChange }: RulesEditorProps) {
   const setRule = (key: string, next: RuleValue | undefined) => {
     const updated = { ...value };
@@ -47,7 +44,6 @@ export default function RulesEditor({ value, onChange }: RulesEditorProps) {
     );
   };
 
-  // Lo que este rubro tiene activo: interruptores encendidos y números con valor.
   const activeRules = RULE_GROUPS.flatMap((group) => group.rules).filter((rule) =>
     rule.type === 'boolean' ? value[rule.key] === true : value[rule.key] !== undefined
   );

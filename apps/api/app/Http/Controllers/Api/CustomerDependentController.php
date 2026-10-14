@@ -7,10 +7,6 @@ use App\Models\Customer;
 use App\Models\CustomerDependent;
 use Illuminate\Http\Request;
 
-/**
- * Dependientes de un cliente (mascotas, hijos). Solo responde a los tenants
- * cuyo rubro los activa, y siempre dentro del tenant del usuario.
- */
 class CustomerDependentController extends Controller
 {
     private function customer(Request $request, string $customerId): Customer

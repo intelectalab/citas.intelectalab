@@ -11,9 +11,7 @@ import type { RoleOption } from '../access';
 interface FormRoleProps {
   isOpen: boolean;
   onClose: () => void;
-  // Con un rol, se le cambia el nombre; sin él, se crea uno.
   initialData: Pick<RoleOption, 'id' | 'name' | 'description'> | null;
-  // Roles de los que se puede copiar al crear.
   roles: RoleOption[];
   onSaved: (id: string) => void;
 }
@@ -22,7 +20,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold text-slate-600 mb-1.5';
 
-// Panel para crear un rol propio o cambiarle el nombre a uno que ya existe.
 export default function FormRole({ isOpen, onClose, initialData, roles, onSaved }: FormRoleProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

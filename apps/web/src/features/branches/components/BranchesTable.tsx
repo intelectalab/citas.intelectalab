@@ -18,7 +18,6 @@ const VIEWS = [
   { id: 'inactive', label: 'Inactivas' },
 ];
 
-// Tarjetas que filtran la tabla.
 const CARDS: { id: string; title: string; match: (b: Branch) => boolean; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'open', title: 'Abren hoy', match: (b) => b.today !== null && b.today.length > 0, icon: <Clock size={18} />, color: 'text-emerald-600', active: 'border-emerald-500 ring-2 ring-emerald-500/20', hover: 'hover:border-emerald-300' },
   { id: 'no-hours', title: 'Sin horario definido', match: (b) => !b.has_hours, icon: <Clock size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
@@ -28,8 +27,6 @@ const CARDS: { id: string; title: string; match: (b: Branch) => boolean; icon: R
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-50';
 const normalize = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Sucursales de la empresa: dónde atiende, en qué horario y con quién. El ojo
-// y el nombre llevan a la página de cada una.
 export default function BranchesTable() {
   const vocab = useVocabulary();
   const [list, setList] = useState<BranchList | null>(null);
@@ -94,7 +91,6 @@ export default function BranchesTable() {
 
   const metricCards: MetricCardItem[] = view !== 'active' ? [] : [
     {
-      // El tope del plan a la vista: cuántas tiene frente a cuántas puede tener.
       title: list?.limit ? `Sucursales activas de ${list.limit}` : 'Sucursales activas',
       value: list?.active ?? 0,
       icon: <Store size={18} />,

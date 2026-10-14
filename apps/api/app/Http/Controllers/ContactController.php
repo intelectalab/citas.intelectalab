@@ -38,7 +38,6 @@ class ContactController extends Controller
    return response()->json($query->orderBy('created_at', 'desc')->get());
 }
 
-    // Crear un nuevo contacto
     public function store(Request $request)
     {
         $user = $request->user();
@@ -80,7 +79,6 @@ class ContactController extends Controller
         ], 201);
     }
 
-    // Actualizar un contacto existente
     public function update(Request $request, $id)
     {
         $user = $request->user();

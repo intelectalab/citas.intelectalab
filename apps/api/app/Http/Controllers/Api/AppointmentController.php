@@ -29,10 +29,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
-/**
- * Citas de la empresa: alta, consulta, cambio de fase y reprogramación.
- * Las horas se reciben y se entregan en la zona horaria de la sede.
- */
 class AppointmentController extends Controller
 {
     protected const LOCAL_FORMAT = 'Y-m-d\TH:i';
@@ -47,10 +43,6 @@ class AppointmentController extends Controller
         return $tenant->loadMissing(['settings', 'activeSubscription.plan']);
     }
 
-    /**
-     * Si quien consulta es un profesional (y no administra la empresa), solo
-     * ve y gestiona sus propias citas. Devuelve su id de profesional.
-     */
     protected function ownProfessionalId(User $user): ?string
     {
         if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
@@ -68,7 +60,6 @@ class AppointmentController extends Controller
         $appointment = Appointment::where('tenant_id', $tenant->id)->with(self::RELATIONS)->findOrFail($id);
 
         abort_if($own && $appointment->professional_id !== $own, 403, 'Solo puedes gestionar tus propias citas.');
-        // Quien trabaja solo con su sede no abre citas de otra.
         Access::assertBranch($request->user(), $appointment->branch_id);
 
         return $appointment;
@@ -90,7 +81,6 @@ class AppointmentController extends Controller
             'search'          => 'nullable|string|max:100',
         ]);
 
-        // Sin fechas ni cliente se entrega el día de hoy.
         $from = $validated['date'] ?? $validated['from'] ?? null;
         $to = $validated['date'] ?? $validated['to'] ?? null;
 
@@ -111,7 +101,6 @@ class AppointmentController extends Controller
             ->when($own ?? ($validated['professional_id'] ?? null), fn ($q, $id) => $q->where('professional_id', $id))
             ->when($statuses, fn ($q) => $q->whereIn('status', $statuses))
             ->when($validated['search'] ?? null, function ($q, $search) {
-                // Sin distinguir mayúsculas ni tildes.
                 $q->where(fn ($q) => Search::contains($q, 'code', $search)
                     ->orWhereHas('customer', function ($q) use ($search) {
                         $q->where(function ($q) use ($search) {
@@ -128,15 +117,10 @@ class AppointmentController extends Controller
         return response()->json($appointments->map(fn (Appointment $a) => $this->present($a, $tenant)));
     }
 
-    /**
-     * Lo que necesita el formulario de cita: sedes, profesionales y servicios
-     * que se pueden agendar.
-     */
     public function context(Request $request)
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
-        // Quien trabaja solo con su sede agenda solo ahí y con quienes atienden ahí.
         $limit = Access::branchLimit($request->user());
 
         $assigned = DB::table('service_professionals')->where('tenant_id', $tenant->id)->get()->groupBy('service_id');
@@ -155,7 +139,6 @@ class AppointmentController extends Controller
                     'id'           => $p->id,
                     'display_name' => $p->display_name,
                     'color_code'   => $p->color_code,
-                    // Sedes donde tiene horario.
                     'branch_ids'   => ($worksAt[$p->id] ?? collect())->pluck('branch_id')->unique()->values(),
                 ])->values(),
             'services' => Service::where('tenant_id', $tenant->id)
@@ -169,7 +152,6 @@ class AppointmentController extends Controller
                     'name'             => $s->name,
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
-                    // Vacío = lo atiende cualquier profesional.
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
                 ])->values(),
             'can_override' => (bool) AppointmentFlow::rule($tenant, 'agenda.allow_override') && $request->user()->allows('agenda.override'),
@@ -177,10 +159,6 @@ class AppointmentController extends Controller
         ]);
     }
 
-    /**
-     * La agenda de un día en una sede: una columna por profesional con su
-     * horario, sus bloqueos y sus citas.
-     */
     public function day(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -218,14 +196,12 @@ class AppointmentController extends Controller
             ->where('ends_at', '>', $dayStart->toIso8601String())
             ->get();
 
-        // Hora del día, recortada a ese día: un bloqueo de varios días ocupa el día entero.
         $clip = function (string $value) use ($dayStart, $dayEnd, $timezone) {
             $date = Carbon::parse($value)->setTimezone($timezone);
 
             return $date->lte($dayStart) ? '00:00' : ($date->gte($dayEnd) ? '24:00' : $date->format('H:i'));
         };
 
-        // Feriados del día. Si la sede cierra, la columna de cada profesional sale bloqueada.
         $holidays = \App\Support\Holidays::on($tenant, $branch->id, $validated['date']);
         $closedBy = $holidays->firstWhere('closed', true);
 
@@ -263,7 +239,6 @@ class AppointmentController extends Controller
         $appointment = $this->find($request, $appointment);
 
         return response()->json($this->present($appointment, $this->tenant($request), true) + [
-            // Cuánto suelen durar las atenciones de este cliente.
             'customer_timing' => AppointmentTiming::summarize(
                 Appointment::where('tenant_id', $appointment->tenant_id)
                     ->where('customer_id', $appointment->customer_id)
@@ -273,10 +248,6 @@ class AppointmentController extends Controller
         ]);
     }
 
-    /**
-     * Tiempos reales de atención de un periodo: en general y por profesional,
-     * por servicio y por cliente. Solo cuentan las citas atendidas.
-     */
     public function metrics(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -302,7 +273,6 @@ class AppointmentController extends Controller
             ->with(['customer', 'service', 'professional'])
             ->get();
 
-        // Agrupa y ordena: primero quien más atenciones tiene.
         $group = fn (string $key, callable $label) => $appointments
             ->groupBy($key)
             ->map(fn ($items, $id) => ['id' => $id, 'name' => $label($items->first())] + AppointmentTiming::summarize($items))
@@ -319,9 +289,6 @@ class AppointmentController extends Controller
         ]);
     }
 
-    /**
-     * Horarios libres de un día para un servicio en una sede.
-     */
     public function availability(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -365,9 +332,7 @@ class AppointmentController extends Controller
             'duration_minutes'      => 'nullable|integer|min:5|max:720',
             'notes'                 => 'nullable|string|max:2000',
             'override_reason'       => 'nullable|string|max:255',
-            // Control pendiente que esta cita viene a cumplir.
             'recall_id'             => 'nullable|uuid',
-            // Persona de la lista de espera a la que se le consiguió este horario.
             'waitlist_id'           => 'nullable|uuid',
         ]);
 
@@ -393,7 +358,6 @@ class AppointmentController extends Controller
         $end = $start->copy()->addMinutes($duration);
 
         return DB::transaction(function () use ($tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall, $waiting) {
-            // Una cita a la vez por empresa: evita dobles reservas y códigos repetidos.
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($response = $this->limitReached($tenant, $start)) {
@@ -444,9 +408,6 @@ class AppointmentController extends Controller
         });
     }
 
-    /**
-     * Solo las notas. La fecha, la hora y el profesional se cambian reprogramando.
-     */
     public function update(Request $request, string $appointment)
     {
         $appointment = $this->find($request, $appointment);
@@ -486,7 +447,6 @@ class AppointmentController extends Controller
                 throw ValidationException::withMessages(['reason' => 'Indica el motivo de la cancelación.']);
             }
 
-            // En los rubros que lo exigen, no se da por atendida sin la ficha firmada.
             if ($to === AppointmentFlow::COMPLETED
                 && AppointmentFlow::rule($tenant, 'records.require_on_complete')
                 && $this->usesRecord($tenant, $appointment)
@@ -497,7 +457,6 @@ class AppointmentController extends Controller
                 ], 422);
             }
 
-            // Si la empresa cobra antes de atender, la cita no pasa a atención sin estar pagada.
             if (in_array($to, [AppointmentFlow::IN_PROGRESS, AppointmentFlow::COMPLETED], true)
                 && (float) $appointment->price > 0
                 && \App\Support\Sales::mustPayFirst($tenant)
@@ -524,8 +483,6 @@ class AppointmentController extends Controller
             $now = now();
             $changes = ['status' => $to];
 
-            // Cancelación tardía (pasado el plazo sin costo): por ahora solo se informa;
-            // el cargo se aplicará cuando exista la caja.
             $lateCancel = $to === AppointmentFlow::CANCELLED
                 && $now->lt($appointment->starts_at)
                 && $now->diffInMinutes($appointment->starts_at) < 60 * (float) AppointmentFlow::rule($tenant, 'cancel.window_hours');
@@ -557,13 +514,11 @@ class AppointmentController extends Controller
 
             $appointment->update($changes);
             $this->log($appointment, $from, $to, $user, $reason);
-            // Los controles ligados a la cita siguen su suerte, y un servicio puede dejar el suyo.
             \App\Support\Recalls::appointmentChanged($tenant, $appointment);
             \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
 
             return response()->json($this->present($appointment, $tenant, true) + [
                 'late_cancel' => $lateCancel,
-                // Al liberarse el horario: cuántas personas de la lista de espera podrían tomarlo.
                 'waitlist_matches' => $to === AppointmentFlow::CANCELLED && $appointment->starts_at->gt($now)
                     ? \App\Support\Waitlist::matching($tenant, $appointment)->count()
                     : 0,
@@ -611,7 +566,6 @@ class AppointmentController extends Controller
             $end = $start->copy()->addMinutes($duration);
             $previous = $appointment->starts_at->copy()->setTimezone($timezone);
 
-            // Solo cuenta contra el límite si la cita pasa a otro mes.
             if ($previous->format('Y-m') !== $start->format('Y-m') && ($response = $this->limitReached($tenant, $start))) {
                 return $response;
             }
@@ -642,10 +596,6 @@ class AppointmentController extends Controller
         });
     }
 
-    /**
-     * Valida la mascota (o dependiente) de la cita según el rubro: obligatoria
-     * si el rubro la exige, y siempre del mismo cliente.
-     */
     protected function resolveDependent(Tenant $tenant, Customer $customer, ?string $dependentId): ?string
     {
         $config = $tenant->dependents();
@@ -677,10 +627,6 @@ class AppointmentController extends Controller
         return $dependent->id;
     }
 
-    /**
-     * Respuesta de rechazo si la empresa ya llegó al límite de citas de su
-     * plan en el mes de la cita. Las canceladas no cuentan.
-     */
     protected function limitReached(Tenant $tenant, Carbon $start): ?JsonResponse
     {
         $limit = $tenant->activeSubscription?->plan?->limits['appointments_month'] ?? null;
@@ -707,10 +653,6 @@ class AppointmentController extends Controller
         ], 422);
     }
 
-    /**
-     * Registro de la lista de espera que la cita viene a resolver: de la
-     * empresa, del mismo cliente y todavía en espera.
-     */
     protected function waitlistToBook(Tenant $tenant, Customer $customer, ?string $id): ?WaitlistEntry
     {
         if (!$id) {
@@ -730,10 +672,6 @@ class AppointmentController extends Controller
         return $entry;
     }
 
-    /**
-     * Control que la cita viene a cumplir: de la empresa, del mismo cliente y
-     * todavía sin cita.
-     */
     protected function recallToBook(Tenant $tenant, Customer $customer, ?string $id): ?Recall
     {
         if (!$id) {
@@ -753,10 +691,6 @@ class AppointmentController extends Controller
         return $recall;
     }
 
-    /**
-     * Motivo de la sobre-agenda si se puede forzar el horario: la regla lo
-     * permite, lo pide el administrador de la empresa y no hay doble reserva.
-     */
     protected function override(Tenant $tenant, User $user, array $check, ?string $reason): ?string
     {
         $reason = trim((string) $reason);
@@ -786,9 +720,6 @@ class AppointmentController extends Controller
         ], 409);
     }
 
-    /**
-     * Un cliente no puede tener dos citas que se crucen (regla agenda.client_overlap).
-     */
     protected function assertCustomerFree(Tenant $tenant, Customer $customer, Carbon $start, Carbon $end, ?string $ignoreId = null): void
     {
         if (!AppointmentFlow::rule($tenant, 'agenda.client_overlap')) {
@@ -817,18 +748,12 @@ class AppointmentController extends Controller
         }
     }
 
-    /**
-     * La cita lleva ficha: la empresa tiene el módulo y el servicio tiene una
-     * plantilla asignada (o la cita ya tiene una ficha llenada).
-     */
     protected function usesRecord(Tenant $tenant, Appointment $appointment): bool
     {
         if (!$tenant->hasModule('records')) {
             return false;
         }
 
-        // Servicios con ficha: se consultan una vez por petición (se guardan en ella,
-        // no en el controlador, que puede vivir más que una petición).
         $attributes = request()->attributes;
 
         if (!$attributes->has('record_services')) {
@@ -843,9 +768,6 @@ class AppointmentController extends Controller
         return $appointment->record !== null || in_array($appointment->service_id, $attributes->get('record_services'), true);
     }
 
-    /**
-     * @param User|Customer $actor Quien da el paso: el personal, o el cliente desde su portal.
-     */
     protected function log(Appointment $appointment, ?string $from, string $to, User|Customer $actor, ?string $reason): void
     {
         AppointmentStatusHistory::create([
@@ -858,7 +780,6 @@ class AppointmentController extends Controller
             'actor_customer_id' => $actor instanceof Customer ? $actor->id : null,
         ]);
 
-        // Avisa en la campana a quien deba enterarse (el profesional, la administración).
         \App\Support\Notifier::appointmentStep($appointment, $from, $to, $actor);
     }
 
@@ -868,8 +789,6 @@ class AppointmentController extends Controller
         $local = fn (?Carbon $date) => $date?->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT);
         $customer = $appointment->customer;
         $dependent = $appointment->dependent;
-        // Quien no puede cambiar citas las ve sin botones de paso ni de reprogramar.
-        // (El cliente en su portal tiene sus propias reglas.)
         $viewer = request()->user();
         $canEdit = !$viewer instanceof User || $viewer->allows('agenda.edit');
 
@@ -894,16 +813,13 @@ class AppointmentController extends Controller
             'started_at'       => $local($appointment->started_at),
             'completed_at'     => $local($appointment->completed_at),
             'cancelled_at'     => $local($appointment->cancelled_at),
-            // Plazo para confirmar: hasta cuándo y si ya venció con la cita aún pendiente.
             'confirm_by'       => $local(\App\Support\Confirmations::deadline($tenant, $appointment)),
             'confirmation_overdue' => \App\Support\Confirmations::overdue($tenant, $appointment),
             'timing'           => AppointmentTiming::of($appointment),
-            // Ficha de atención: si el servicio la usa y en qué estado está la de esta cita.
             'record'           => [
                 'uses'   => $this->usesRecord($tenant, $appointment),
                 'status' => $appointment->record?->currentStatus(),
             ],
-            // Hasta qué hora ocupa al profesional: antes de lo asignado si terminó antes.
             'occupied_until'   => $local(AppointmentTiming::occupiedUntil($appointment)),
             'customer'         => $customer ? [
                 'id'    => $customer->id,

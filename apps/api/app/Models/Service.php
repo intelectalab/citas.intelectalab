@@ -14,7 +14,6 @@ class Service extends Model
 
     protected $table = 'services';
 
-    // Configuración para UUIDs
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -61,9 +60,6 @@ class Service extends Model
         return $this->belongsTo(Status::class, 'status_id');
     }
 
-    /**
-     * Servicio con el que se agenda el control de seguimiento (si no es el mismo).
-     */
     public function recallService()
     {
         return $this->belongsTo(Service::class, 'recall_service_id');

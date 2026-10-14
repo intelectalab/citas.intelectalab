@@ -6,8 +6,6 @@ import { Construction, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { MODULE_LABELS, PENDING_SECTIONS } from '@/lib/modules';
 
-// Página provisional de los módulos que ya se activan por plan y rubro pero
-// todavía no tienen pantallas. Se reemplaza por la ruta real de cada módulo.
 export default function ModulePage() {
   const params = useParams<{ key: string }>();
   const { hasModule, loading } = useAuth();

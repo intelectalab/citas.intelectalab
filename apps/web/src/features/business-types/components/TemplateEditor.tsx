@@ -7,8 +7,6 @@ import {
   Globe, HandCoins, Video, FileText, Users, CalendarClock
 } from 'lucide-react';
 
-// Catálogo inicial de un rubro: lo que recibe una empresa al registrarse.
-// Las claves coinciden con business_types.template en la base.
 export interface TemplateService {
   code?: string | null;
   name: string;
@@ -91,7 +89,6 @@ const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider tex
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
 const addLink = 'inline-flex items-center gap-1 text-xs font-bold text-sky-600 hover:text-sky-700 transition-colors';
 
-// Clave interna de un campo a partir de su etiqueta: "Motivo de consulta" → "motivo_de_consulta".
 const fieldKeyFrom = (label: string, taken: string[]): string => {
   const base = label
     .normalize('NFD')
@@ -107,7 +104,6 @@ const fieldKeyFrom = (label: string, taken: string[]): string => {
   return key;
 };
 
-// Faltantes que impedirían guardar; el primero se muestra al usuario.
 export function templateProblems(template: BusinessTemplate): string[] {
   const problems: string[] = [];
   const names = template.categories.map((category) => category.name.trim().toLowerCase());
@@ -139,7 +135,6 @@ export function templateProblems(template: BusinessTemplate): string[] {
   return problems;
 }
 
-// Deja la plantilla lista para guardar: sin vacíos y con los tipos que espera la API.
 export function cleanTemplate(template: BusinessTemplate): Record<string, any> {
   const categories = template.categories.map((category) => ({
     ...category,
@@ -179,7 +174,6 @@ export function cleanTemplate(template: BusinessTemplate): Record<string, any> {
       require_consent: Boolean(record.require_consent),
       fields: record.fields.map((field, index) => {
         const { options, days, ...rest } = field;
-        // Un campo nuevo recibe su clave interna a partir de su nombre.
         const takenKeys = record.fields.filter((_, i) => i !== index).map((other) => other.key).filter(Boolean);
         const cleaned: Record<string, any> = {
           ...rest,
@@ -226,18 +220,15 @@ function Toggle({ icon, label, checked, onChange }: { icon: React.ReactNode; lab
 interface TemplateEditorProps {
   value: BusinessTemplate;
   onChange: (value: BusinessTemplate) => void;
-  // Si el rubro apaga las clases grupales no se ofrece esa modalidad.
   allowGroupClasses: boolean;
 }
 
 export default function TemplateEditor({ value, onChange, allowGroupClasses }: TemplateEditorProps) {
-  // Qué está desplegado: "c0" categoría, "c0s1" servicio, "f2" campo de la ficha.
   const [openCategory, setOpenCategory] = useState<number | null>(value.categories.length === 1 ? 0 : null);
   const [openService, setOpenService] = useState<string | null>(null);
   const [openField, setOpenField] = useState<number | null>(null);
 
   const totalServices = value.categories.reduce((total, category) => total + category.services.length, 0);
-  // Servicios con código: son los que otro servicio puede usar como su control.
   const servicesWithCode = value.categories.flatMap((category) => category.services).filter((service) => service.code?.trim());
 
   const setCategories = (categories: TemplateCategory[]) => onChange({ ...value, categories });
@@ -265,7 +256,6 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
 
   return (
     <div className="space-y-6">
-      {/* ================= Categorías y servicios ================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -332,7 +322,6 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
 
                     return (
                       <div key={serviceIndex} className={`border rounded-lg ${isServiceOpen ? 'border-[#3F768C]/50 shadow-sm' : 'border-slate-200'}`}>
-                        {/* Fila resumen */}
                         <button
                           type="button"
                           onClick={() => setOpenService(isServiceOpen ? null : serviceId)}
@@ -356,7 +345,6 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                           <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-200 ${isServiceOpen ? 'rotate-180' : ''}`} />
                         </button>
 
-                        {/* Detalle */}
                         {isServiceOpen && (
                           <div className="px-3 pb-3 pt-1 space-y-3 border-t border-slate-100">
                             <div className="grid grid-cols-3 gap-2 pt-2">
@@ -483,7 +471,6 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
         </button>
       </div>
 
-      {/* ================= Ficha de atención ================= */}
       <div className="space-y-3 pt-5 border-t border-slate-200">
         <div className="flex items-start justify-between gap-3">
           <div>

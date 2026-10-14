@@ -33,17 +33,12 @@ interface AppointmentFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (appointment: Appointment) => void;
-  // Valores con los que abre el formulario (por ejemplo, la casilla de la agenda donde se hizo clic).
   initial?: {
     date?: string; time?: string; professional_id?: string; branch_id?: string;
-    // Cita que nace de un control pendiente: llega con el cliente y el servicio ya elegidos.
     customer?: CustomerOption; customer_dependent_id?: string; service_id?: string; recall_id?: string; recall_label?: string;
-    // Cita para alguien de la lista de espera.
     waitlist_id?: string;
-    // Texto corto que dice de dónde viene la cita.
     origin_label?: string;
   };
-  // Con una cita, el formulario la reprograma en lugar de crear otra.
   reschedule?: Appointment | null;
 }
 
@@ -51,8 +46,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
-// Panel lateral para agendar una cita o reprogramar una existente. Los
-// horarios libres salen de la API; también se puede escribir otra hora.
 export default function AppointmentForm({ isOpen, onClose, onSaved, initial, reschedule }: AppointmentFormProps) {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
@@ -60,7 +53,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   const isReschedule = Boolean(reschedule);
 
   const [context, setContext] = useState<AppointmentContext | null>(null);
-  // Crear lo que falta sin salir de la cita: una mascota o un servicio.
   const [addingDependent, setAddingDependent] = useState(false);
   const [serviceFormOpen, setServiceFormOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
@@ -81,15 +73,11 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // El horario no está libre pero se puede forzar con un motivo.
   const [canForce, setCanForce] = useState(false);
-  // Formulario de cliente nuevo, abierto encima de este panel.
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
-  // Sin horarios ese día: la persona quedó anotada en la lista de espera.
   const [waitlisted, setWaitlisted] = useState(false);
   const [waitlisting, setWaitlisting] = useState(false);
 
-  // Al abrir: carga sedes, profesionales y servicios, y deja el formulario en su punto de partida.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -135,7 +123,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       .catch((err) => setError(apiError(err, 'No se pudieron cargar los datos para agendar.')));
   }, [isOpen, reschedule, initial]);
 
-  // Búsqueda de clientes mientras se escribe.
   useEffect(() => {
     if (!isOpen || customer || customerQuery.trim().length < 2) {
       setCustomerResults([]);
@@ -155,7 +142,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
 
   const service = context?.services.find((s) => s.id === serviceId) ?? null;
 
-  // Profesionales que atienden en la sede elegida y, si el servicio tiene asignados, solo esos.
   const professionals = useMemo(() => {
     if (!context) return [];
     return context.professionals.filter((p) =>
@@ -164,7 +150,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     );
   }, [context, branchId, service]);
 
-  // Horarios libres del día para el servicio, la sede y el profesional elegidos.
   useEffect(() => {
     if (!isOpen || !serviceId || !branchId || !date) {
       setSlotGroups([]);
@@ -239,7 +224,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     }
   };
 
-  // No hay horario ese día: se anota para avisarle cuando se libere uno, desde esa fecha.
   const addToWaitlist = async () => {
     if (!customer || !serviceId || !branchId) return;
 
@@ -276,7 +260,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     <>
     <FormDrawer
       isOpen={isOpen}
-      // Con el formulario de cliente encima, Escape cierra solo ese.
       onClose={customerFormOpen ? () => {} : onClose}
       title={reschedule ? `Reprogramar cita ${reschedule.code}` : 'Nueva cita'}
       subtitle={reschedule
@@ -557,7 +540,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       </div>
     </FormDrawer>
 
-    {/* Servicio nuevo sin salir de la cita: al guardarlo queda elegido. */}
     <QuickService
       isOpen={isOpen && serviceFormOpen}
       onClose={() => setServiceFormOpen(false)}
@@ -568,7 +550,6 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       }}
     />
 
-    {/* Cliente nuevo sin salir de la cita: al guardarlo queda elegido. */}
     <FormCustomer
       isOpen={isOpen && customerFormOpen}
       onClose={() => setCustomerFormOpen(false)}

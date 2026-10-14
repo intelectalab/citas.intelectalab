@@ -1,14 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  /* Paleta Base del ERP */
   --color-bg-app: #F2F2F2;
   --color-sidebar-bg: #022340;
   --color-sidebar-hover: #012840;
   --color-accent-cyan: #84D0D9;
   --color-accent-blue: #3F768C;
 
-  /* Colores de Acento y Estados */
   --color-cta-orange: #FF7A00;
   --color-status-success: #10B981;
   --color-status-warning: #FBBF24;
@@ -27,11 +25,6 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* ------------------------------------------------------------------
-   Color de acento de la plataforma: lo que está "encendido" o "bien"
-   (interruptores, anillos de uso). El administrador SaaS lo cambia en
-   /admin/configuration; usePlatform lo aplica sobre :root.
-------------------------------------------------------------------- */
 :root {
   --accent: #10B981;
   --brand-ink: #022340;
@@ -41,12 +34,6 @@ body {
   --ring-track: #ffffff;
 }
 
-/* ------------------------------------------------------------------
-   Tema oscuro. Se aplica al panel (clase .theme-scope), no al menú
-   lateral, que ya es oscuro. En lugar de reescribir cada pantalla se
-   redefine la paleta que usan las utilidades de Tailwind: lo claro pasa
-   a ser superficie oscura y los textos oscuros pasan a claros.
-------------------------------------------------------------------- */
 html[data-theme='dark'] body {
   background-color: #0a1626;
 }
@@ -73,7 +60,6 @@ html[data-theme='dark'] .theme-scope {
   --color-gray-600: #b7c5d5;
   --color-gray-700: #cfd9e4;
 
-  /* Tonos pastel de avisos y etiquetas: fondo translúcido y texto claro. */
   --color-emerald-50: #10b9811f; --color-emerald-100: #10b98133; --color-emerald-200: #10b98159;
   --color-emerald-600: #34d399; --color-emerald-700: #6ee7b7; --color-emerald-800: #a7f3d0;
   --color-amber-50: #f59e0b1f; --color-amber-100: #f59e0b33; --color-amber-200: #f59e0b59;
@@ -97,12 +83,10 @@ html[data-theme='dark'] .theme-scope {
   --ring-track: #1b3049;
 }
 
-/* El blanco de la paleta ahora es la superficie; el texto blanco sigue siendo blanco. */
 html[data-theme='dark'] .theme-scope .text-white {
   color: #ffffff;
 }
 
-/* Colores de marca escritos como valor fijo en las pantallas. */
 html[data-theme='dark'] .theme-scope,
 html[data-theme='dark'] .theme-scope [class*='bg-[#F2F2F2]'] { background-color: #0a1626; }
 html[data-theme='dark'] .theme-scope [class~='text-[#022340]'],
@@ -124,10 +108,6 @@ html[data-theme='dark'] .theme-scope [class~='border-[#030336]'],
 html[data-theme='dark'] .theme-scope [class~='focus:border-[#022340]']:focus,
 html[data-theme='dark'] .theme-scope [class~='focus:border-[#030336]']:focus { border-color: #5aa0d0; }
 
-/* ---------------------------------------------------------------------------
-   Barra de desplazamiento del menú lateral: delgada, sin fondo y del color del
-   menú. Solo se nota al pasar el cursor por el menú.
-   --------------------------------------------------------------------------- */
 .sidebar-scroll {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -140,5 +120,4 @@ html[data-theme='dark'] .theme-scope [class~='focus:border-[#030336]']:focus { b
 .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(132, 208, 217, 0.5); }
 
-/* Barra de desplazamiento de las listas desplegables: delgada y discreta. */
 .select-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }

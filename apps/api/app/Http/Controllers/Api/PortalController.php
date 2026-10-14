@@ -20,29 +20,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Portal del cliente: ve sus citas y, si el plan de la empresa lo incluye,
- * reserva, confirma, cancela y reprograma en línea. Usa las mismas reglas de
- * agenda que el panel de la empresa (por eso extiende su controlador), más las
- * de la reserva en línea. Cada cuenta solo alcanza sus propias citas.
- */
 class PortalController extends AppointmentController
 {
-    // Quien inicia sesión en el portal es el propio cliente (su ficha es su cuenta).
     private function customer(Request $request): Customer
     {
         return $request->user();
     }
 
-    /**
-     * Reglas de la reserva en línea, como las necesita la pantalla.
-     */
     private function policies(Tenant $tenant): array
     {
         $rule = fn (string $key) => AppointmentFlow::rule($tenant, $key);
 
         return [
-            // La empresa tiene el módulo en su plan y no apagó la reserva.
             'booking_enabled'    => $tenant->hasModule('booking') && (bool) $rule('booking.enabled'),
             'choose_professional' => (bool) $rule('booking.choose_professional'),
             'min_lead_minutes'   => (int) $rule('booking.min_lead_minutes'),
@@ -51,14 +40,11 @@ class PortalController extends AppointmentController
             'cancel_allowed'     => (bool) $rule('cancel.client_allowed'),
             'cancel_window_hours' => (int) $rule('cancel.window_hours'),
             'reschedule_max'     => (int) $rule('reschedule.max_times'),
-            // Plazo para confirmar y qué pasa si no se confirma.
             'confirm_deadline_hours' => \App\Support\Confirmations::deadlineHours($tenant),
             'confirm_on_miss'    => \App\Support\Confirmations::mode($tenant),
             'confirm_release_hours' => \App\Support\Confirmations::releaseHours($tenant),
-            // La cita se paga en la sede antes de atenderse: cuántos minutos antes conviene llegar.
             'pay_before_service' => \App\Support\Sales::mustPayFirst($tenant),
             'arrive_minutes'     => \App\Support\Sales::rules($tenant)['arrive_minutes'],
-            // Qué pasa si reserva en línea y no asiste.
             'miss'               => \App\Support\OnlineBooking::policy($tenant),
         ];
     }
@@ -68,9 +54,6 @@ class PortalController extends AppointmentController
         abort_unless(AppointmentFlow::rule($tenant, 'booking.enabled'), 403, 'La reserva en línea no está disponible. Comunícate con la sede.');
     }
 
-    /**
-     * Cita del cliente que consulta. La de otra persona no existe para él.
-     */
     private function ownAppointment(Request $request, string $id): Appointment
     {
         return Appointment::where('tenant_id', $this->tenant($request)->id)
@@ -79,24 +62,17 @@ class PortalController extends AppointmentController
             ->findOrFail($id);
     }
 
-    /**
-     * Todavía se puede cambiar en línea: faltan más horas que el plazo de la empresa.
-     */
     private function insideWindow(Tenant $tenant, Appointment $appointment): bool
     {
         return now()->gt($appointment->starts_at->copy()->subHours((int) AppointmentFlow::rule($tenant, 'cancel.window_hours')));
     }
 
-    /**
-     * Lo que el cliente ve al entrar: sus datos, las reglas de la reserva y sus citas.
-     */
     public function overview(Request $request)
     {
         $tenant = $this->tenant($request);
         $customer = $this->customer($request);
         $dependents = $tenant->dependents();
 
-        // Si alguna cita suya ya venció sin confirmar, el cliente debe verla como quedó.
         \App\Support\Confirmations::process($tenant);
 
         $appointments = Appointment::where('tenant_id', $tenant->id)
@@ -114,11 +90,9 @@ class PortalController extends AppointmentController
                 'last_name'  => $customer->last_name,
                 'phone'      => $customer->phone,
                 'email'      => $customer->email,
-                // Sigue con su contraseña inicial: la pantalla le pide crear la suya.
                 'must_change_password' => (bool) $customer->must_change_password,
             ],
             'policies'     => $this->policies($tenant),
-            // Inasistencias a citas reservadas en línea y si por eso ya no puede reservar por aquí.
             'booking_block' => ($state = \App\Support\OnlineBooking::state($tenant, $customer->id))
                 ? $state + ['message' => $state['blocked'] ? \App\Support\OnlineBooking::blockedMessage($tenant, $state) : null]
                 : null,
@@ -133,9 +107,6 @@ class PortalController extends AppointmentController
         ]);
     }
 
-    /**
-     * Lo que se puede reservar en línea: sedes, servicios y quién atiende cada uno.
-     */
     public function catalog(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -161,11 +132,9 @@ class PortalController extends AppointmentController
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
                     'is_virtual'       => $s->is_virtual,
-                    // Exige adelanto y aún no hay pago en línea: se reserva en la sede.
                     'needs_deposit'    => $depositRule && $s->requires_deposit,
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
                 ])->values(),
-            // Solo quienes tienen horario en alguna sede.
             'professionals' => Professional::where('tenant_id', $tenant->id)
                 ->whereIn('id', $worksAt->keys())
                 ->with('status')
@@ -180,10 +149,6 @@ class PortalController extends AppointmentController
         ]);
     }
 
-    /**
-     * Horarios que el cliente puede reservar un día. Con ignore_id (al
-     * reprogramar) la propia cita no cuenta como ocupada.
-     */
     public function portalAvailability(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -203,13 +168,11 @@ class PortalController extends AppointmentController
             ? null
             : Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
 
-        // Solo se puede ignorar una cita propia.
         $ignoreId = empty($validated['ignore_id']) ? null : $this->ownAppointment($request, $validated['ignore_id'])->id;
 
         $date = Carbon::createFromFormat('Y-m-d', $validated['date'], AppointmentScheduler::timezone($branch, $tenant));
         $groups = (new AppointmentScheduler($tenant, true))->slots($service, $branch, $date, $professional, $ignoreId);
 
-        // Sin elegir profesional, el cliente ve solo las horas; al reservar se le asigna quien esté libre.
         $times = collect($groups)->flatMap(fn (array $group) => $group['slots'])->unique()->sort()->values();
 
         return response()->json([
@@ -233,11 +196,9 @@ class PortalController extends AppointmentController
             'customer_dependent_id' => 'nullable|uuid',
             'starts_at'             => 'required|date_format:' . self::LOCAL_FORMAT,
             'notes'                 => 'nullable|string|max:1000',
-            // Reserva hecha desde su lista de espera: al guardarse deja de esperar.
             'waitlist_id'           => 'nullable|uuid',
         ]);
 
-        // Con varias inasistencias a citas reservadas en línea, la empresa puede cerrarle esta vía.
         $strikes = \App\Support\OnlineBooking::state($tenant, $customer->id);
 
         if ($strikes && $strikes['blocked']) {
@@ -265,7 +226,6 @@ class PortalController extends AppointmentController
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($response = $this->limitReached($tenant, $start)) {
-                // El límite del plan es asunto de la empresa: al cliente no se le explica.
                 return response()->json(['message' => 'No hay cupos en línea para esa fecha. Comunícate con la sede.', 'code' => 'UNAVAILABLE'], 422);
             }
 
@@ -295,7 +255,6 @@ class PortalController extends AppointmentController
                 'price'                 => $service->price,
                 'notes'                 => $validated['notes'] ?? null,
                 'confirmed_at'          => $status === AppointmentFlow::CONFIRMED ? now() : null,
-                // created_by es del personal; la reserva del cliente queda en el historial.
                 'created_by'            => null,
             ]);
 
@@ -316,9 +275,6 @@ class PortalController extends AppointmentController
         });
     }
 
-    /**
-     * El cliente confirma que asistirá.
-     */
     public function confirm(Request $request, string $appointment)
     {
         $tenant = $this->tenant($request);
@@ -359,16 +315,12 @@ class PortalController extends AppointmentController
             'cancelled_by'  => 'customer',
         ]);
         $this->log($appointment, $from, AppointmentFlow::CANCELLED, $request->user(), $reason);
-        // Si la cita venía de un control, vuelve a quedar pendiente de agendar.
         \App\Support\Recalls::appointmentChanged($tenant, $appointment);
         \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
 
         return response()->json($this->presentForCustomer($appointment, $tenant));
     }
 
-    /**
-     * El cliente mueve su cita a otro horario.
-     */
     public function move(Request $request, string $appointment)
     {
         $tenant = $this->tenant($request);
@@ -412,7 +364,6 @@ class PortalController extends AppointmentController
                 return response()->json(['message' => 'No hay cupos en línea para esa fecha. Comunícate con la sede.', 'code' => 'UNAVAILABLE'], 422);
             }
 
-            // Por defecto sigue con quien ya lo atendía.
             $scheduler = new AppointmentScheduler($tenant, true);
             [$professional, $check] = $this->pickProfessional(
                 $tenant, $scheduler, $service, $branch, $start, $duration,
@@ -439,13 +390,6 @@ class PortalController extends AppointmentController
         });
     }
 
-    /**
-     * El cliente crea o cambia su contraseña. Con la inicial (su documento) es
-     * obligatorio antes de usar el portal.
-     */
-    /**
-     * Lo que el cliente está esperando, con los horarios libres que hoy le sirven.
-     */
     public function waitlist(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -463,9 +407,6 @@ class PortalController extends AppointmentController
         return response()->json($entries->map(fn (WaitlistEntry $entry) => $this->presentWaiting($tenant, $entry))->values());
     }
 
-    /**
-     * El cliente se anota en la lista de espera de un servicio.
-     */
     public function joinWaitlist(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -477,9 +418,7 @@ class PortalController extends AppointmentController
             'branch_id'             => 'required|uuid',
             'professional_id'       => 'nullable|uuid',
             'customer_dependent_id' => 'nullable|uuid',
-            // Cualquier hora, por la mañana o por la tarde.
             'time_of_day'           => 'nullable|in:any,morning,afternoon',
-            // Hasta cuándo le sirve: días desde hoy; vacío = sin fecha límite.
             'within_days'           => 'nullable|integer|min:1|max:120',
             'notes'                 => 'nullable|string|max:500',
         ]);
@@ -529,16 +468,12 @@ class PortalController extends AppointmentController
             'time_to'               => $timeTo,
             'notes'                 => trim((string) ($validated['notes'] ?? '')) ?: 'Se anotó desde el portal.',
             'status'                => WaitlistEntry::WAITING,
-            // created_by es del personal: aquí se anotó el propio cliente.
             'created_by'            => null,
         ]);
 
         return response()->json($this->presentWaiting($tenant, $entry->fresh(['service.status', 'professional.status', 'branch', 'dependent'])), 201);
     }
 
-    /**
-     * El cliente deja de esperar.
-     */
     public function leaveWaitlist(Request $request, string $entry)
     {
         $tenant = $this->tenant($request);
@@ -556,12 +491,10 @@ class PortalController extends AppointmentController
 
     private function presentWaiting(Tenant $tenant, WaitlistEntry $entry): array
     {
-        // Hasta tres días con horarios: lo que puede reservar ya mismo.
         $found = $entry->service && $entry->branch
             ? \App\Support\Waitlist::slots($tenant, $entry, 3)
             : ['days' => []];
 
-        // No se le ofrecen horas en las que él mismo ya tiene otra cita.
         $timezone = $entry->branch ? AppointmentScheduler::timezone($entry->branch, $tenant) : ($tenant->timezone ?: 'America/Lima');
         $duration = (int) ($entry->service?->duration_minutes ?? 0);
         $own = Appointment::where('tenant_id', $tenant->id)
@@ -606,7 +539,6 @@ class PortalController extends AppointmentController
             'time_from'    => $entry->time_from ? substr($entry->time_from, 0, 5) : null,
             'time_to'      => $entry->time_to ? substr($entry->time_to, 0, 5) : null,
             'created_at'   => $entry->created_at?->format('Y-m-d'),
-            // Días con horarios libres que le sirven, con quién atiende en cada uno.
             'days'         => collect($found['days'])->map(fn (array $day) => [
                 'date'   => $day['date'],
                 'groups' => collect($day['groups'])->map(fn (array $group) => [
@@ -645,7 +577,6 @@ class PortalController extends AppointmentController
             'password_changed_at'  => now(),
         ])->save();
 
-        // Las demás sesiones abiertas con la contraseña anterior se cierran.
         $customer->tokens()->where('id', '!=', $customer->currentAccessToken()->id)->delete();
 
         return response()->json(['message' => 'Tu contraseña quedó guardada.']);
@@ -664,9 +595,6 @@ class PortalController extends AppointmentController
         return response()->json(['phone' => $customer->phone]);
     }
 
-    /**
-     * El cliente registra una mascota (o dependiente) para poder reservarle.
-     */
     public function storeDependent(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -682,9 +610,6 @@ class PortalController extends AppointmentController
         return response()->json($dependent->only(['id', 'name', 'species', 'breed']), 201);
     }
 
-    /**
-     * Motivo por el que una cita ya no se cambia en línea, si lo hay.
-     */
     private function cannotChange(Tenant $tenant, Appointment $appointment, string $verb): ?JsonResponse
     {
         if (!in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true)) {
@@ -703,12 +628,6 @@ class PortalController extends AppointmentController
         return null;
     }
 
-    /**
-     * Quién atenderá: el profesional elegido o, si no eligió (o la empresa no
-     * deja elegir), el primero que tenga libre ese horario.
-     *
-     * @return array{0: ?Professional, 1: array}
-     */
     private function pickProfessional(Tenant $tenant, AppointmentScheduler $scheduler, Service $service, Branch $branch, Carbon $start, int $duration, ?string $professionalId, ?string $ignoreId = null): array
     {
         $candidates = Professional::where('tenant_id', $tenant->id)->with('status')
@@ -717,7 +636,6 @@ class PortalController extends AppointmentController
             ->orderBy('display_name')
             ->get();
 
-        // Al reprogramar se prefiere a quien ya lo atendía.
         if ($professionalId) {
             $candidates = $candidates->sortByDesc(fn (Professional $p) => $p->id === $professionalId)->values();
         }
@@ -735,10 +653,6 @@ class PortalController extends AppointmentController
         return [null, $check];
     }
 
-    /**
-     * Rechazo de un horario, dicho para el cliente: sin códigos de otras
-     * citas ni detalles internos de la agenda.
-     */
     private function unavailableForCustomer(array $check, string $prefix = ''): JsonResponse
     {
         $codes = array_column($check['reasons'], 'code');
@@ -754,9 +668,6 @@ class PortalController extends AppointmentController
         return response()->json(['message' => $prefix . $message, 'code' => 'SLOT_UNAVAILABLE'], 409);
     }
 
-    /**
-     * La cita como la ve su cliente: sin notas internas ni datos de la agenda.
-     */
     private function presentForCustomer(Appointment $appointment, Tenant $tenant): array
     {
         $full = $this->present($appointment, $tenant);
@@ -780,13 +691,10 @@ class PortalController extends AppointmentController
             'branch'           => $full['branch'],
             'dependent'        => $full['dependent'],
             'cancel_reason'    => $full['cancel_reason'],
-            // Hasta cuándo puede confirmar sin quedar fuera de plazo, y si ya se le pasó.
             'confirm_by'       => $appointment->status === AppointmentFlow::PENDING ? $full['confirm_by'] : null,
             'confirmation_overdue' => $full['confirmation_overdue'],
             'is_upcoming'      => $appointment->starts_at->isFuture() && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true),
-            // Por videollamada: no hay recepción donde pagar al llegar.
             'is_virtual'       => (bool) $appointment->service?->is_virtual,
-            // Aún no está pagada y la empresa cobra antes de atender: debe llegar antes para pagar.
             'pay_on_arrival'   => $upcoming && (float) $appointment->price > 0 && $policies['pay_before_service']
                 && !\App\Support\Sales::appointmentPaid($tenant->id, $appointment->id),
             'can_confirm'      => $policies['booking_enabled'] && $appointment->status === AppointmentFlow::PENDING && $appointment->starts_at->isFuture(),

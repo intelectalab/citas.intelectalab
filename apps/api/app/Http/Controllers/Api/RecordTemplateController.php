@@ -12,12 +12,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Plantillas de ficha de la empresa. Todo el personal las ve (las necesita
- * para llenar fichas); solo el administrador de la empresa las cambia.
- * Editar una plantilla no toca las fichas ya llenadas: cada ficha guarda su
- * propia copia de los campos.
- */
 class RecordTemplateController extends Controller
 {
     private function tenant(Request $request, bool $mustAdmin = false): Tenant
@@ -44,7 +38,6 @@ class RecordTemplateController extends Controller
             ->orderBy('name')
             ->get();
 
-        // A qué plantilla pertenece cada servicio: uno solo puede usar una ficha.
         $owner = $templates->flatMap(fn (RecordTemplate $t) => $t->services->mapWithKeys(fn ($s) => [$s->id => $t->id]));
 
         return response()->json([
@@ -103,7 +96,6 @@ class RecordTemplateController extends Controller
                 'fields'          => $data['fields'],
                 'consent_text'    => $data['consent_text'],
                 'require_consent' => $data['require_consent'],
-                // La versión cuenta los cambios en los campos.
                 'version'         => $template->version + ($fieldsChanged ? 1 : 0),
             ]);
 
@@ -118,7 +110,6 @@ class RecordTemplateController extends Controller
         $tenant = $this->tenant($request, true);
         $template = RecordTemplate::where('tenant_id', $tenant->id)->findOrFail($recordTemplate);
 
-        // Las fichas ya llenadas conservan su copia de los campos.
         $template->delete();
 
         return response()->json(['message' => 'Plantilla eliminada correctamente']);
@@ -154,7 +145,6 @@ class RecordTemplateController extends Controller
             throw ValidationException::withMessages(['consent_text' => 'Escribe el texto del consentimiento o desmarca que es obligatorio.']);
         }
 
-        // Solo servicios de la empresa.
         $serviceIds = Service::where('tenant_id', $tenant->id)->whereIn('id', $validated['service_ids'])->pluck('id')->all();
 
         return [
@@ -167,9 +157,6 @@ class RecordTemplateController extends Controller
         ];
     }
 
-    /**
-     * Un servicio usa una sola ficha: al asignarlo aquí sale de la que tenía.
-     */
     private function syncServices(RecordTemplate $template, array $serviceIds): void
     {
         DB::table('record_template_services')

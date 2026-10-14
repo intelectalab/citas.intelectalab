@@ -42,15 +42,9 @@ class User extends Authenticatable
         'is_owner'          => 'boolean',
     ];
 
-    // Lo que esta persona puede hacer, calculado una vez por petición (App\Support\Access).
     public ?array $accessCache = null;
-    // Qué tanto ve: 'tenant', 'branch' u 'own' (App\Support\Access::scopeOf).
     public ?string $scopeCache = null;
 
-    /**
-     * Si su rol (con lo que se le quitó o agregó a ella) le permite algo, por
-     * ejemplo "customers.delete". El administrador de la empresa puede todo.
-     */
     public function allows(string $permission): bool
     {
         return \App\Support\Access::allows($this, $permission);
@@ -71,10 +65,6 @@ class User extends Authenticatable
         return $this->belongsTo(Tenant::class, 'tenant_id');
     }
 
-    /**
-     * Administrador de su empresa: el dueño o quien tenga el rol owner o admin.
-     * Es el único que puede cambiar la configuración del tenant.
-     */
     public function isTenantAdmin(): bool
     {
         if (!$this->tenant_id || $this->isCustomer()) {
@@ -84,19 +74,11 @@ class User extends Authenticatable
         return $this->is_owner || $this->roles()->whereIn('slug', ['owner', 'admin'])->exists();
     }
 
-    /**
-     * Equipo de la plataforma: cuentas de personal sin empresa. Incluye al
-     * administrador SaaS y al soporte SaaS.
-     */
     public function isPlatformUser(): bool
     {
         return is_null($this->tenant_id) && !$this->isCustomer();
     }
 
-    /**
-     * Soporte SaaS: ve las empresas y entra a su panel para ayudarlas, pero no
-     * cambia planes, rubros, catálogos ni cobros.
-     */
     public function isSaasSupport(): bool
     {
         return $this->isPlatformUser() && $this->roles()->where('slug', 'saas_support')->exists();
@@ -107,10 +89,6 @@ class User extends Authenticatable
         return $this->isPlatformUser() && !$this->isSaasSupport();
     }
 
-    /**
-     * Los clientes del portal no están en users: su cuenta es su ficha
-     * (Customer). Se conserva para preguntar lo mismo a quien inició sesión.
-     */
     public function isCustomer(): bool
     {
         return false;

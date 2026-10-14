@@ -3,11 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Concerns\HasUuids; // Si usas Laravel 9+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class ServiceCategory extends Model
 {
-    use HasUuids; // Esto le dice a Laravel que maneje automáticamente los UUIDs
+    use HasUuids;
 
     protected $keyType = 'string';
     public $incrementing = false;

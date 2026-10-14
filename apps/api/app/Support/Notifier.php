@@ -12,21 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
-/**
- * Avisos de la campana. Decide quién se entera de qué:
- *
- *  - El profesional: cuando otra persona le agenda, reprograma o cancela una cita,
- *    y lo que su cliente hace desde el portal (reservar, confirmar, cambiar, cancelar).
- *  - Los administradores: lo que hacen los clientes desde el portal y las
- *    cancelaciones. No reciben cada cita que agenda la recepción.
- *  - Ambos: una ausencia que empieza dentro de los próximos días.
- *
- * Nadie recibe un aviso de lo que hizo él mismo. Un fallo al avisar nunca
- * impide la acción que lo originó.
- */
 class Notifier
 {
-    // Con cuántos días de anticipación se avisa de una ausencia.
     public const ABSENCE_DAYS_AHEAD = 3;
 
     public static function available(): bool
@@ -36,9 +23,6 @@ class Notifier
         return $available ??= Schema::hasTable('user_notifications');
     }
 
-    /**
-     * Un paso en una cita: creación ($from nulo), reprogramación ($from igual a $to) o cambio de fase.
-     */
     public static function appointmentStep(Appointment $appointment, ?string $from, string $to, User|Customer $actor): void
     {
         try {
@@ -67,7 +51,6 @@ class Notifier
                     $cancelled => ['appointment.portal_cancelled', 'Un cliente canceló su cita'],
                     default    => ['appointment.portal_confirmed', 'Cita confirmada por el cliente'],
                 };
-                // La confirmación le interesa a quien atiende; lo demás, también a la administración.
                 $recipients = $confirmed ? [$professionalUser] : [$professionalUser, ...$admins];
             } else {
                 [$type, $title] = match (true) {
@@ -86,7 +69,6 @@ class Notifier
             $with = $appointment->professional?->display_name;
 
             foreach (array_unique($recipients) as $userId) {
-                // A quien atiende no hace falta decirle con quién es la cita.
                 $parts = [$who, $appointment->service?->name, $when, $userId === $professionalUser ? null : $with];
 
                 self::send($appointment->tenant_id, $userId, $type, $title, implode(' · ', array_filter($parts)), '/agenda', 'appointment', $appointment->id);
@@ -96,10 +78,6 @@ class Notifier
         }
     }
 
-    /**
-     * Ausencias de profesionales que empiezan pronto. Se puede llamar cuantas
-     * veces haga falta: cada persona recibe el aviso de cada ausencia una sola vez.
-     */
     public static function upcomingAbsences(Tenant $tenant): void
     {
         try {
@@ -148,14 +126,6 @@ class Notifier
         }
     }
 
-    /**
-     * Citas que siguen pendientes con el plazo para confirmar vencido. A quien
-     * atiende se le avisa de cada una; a la administración, una sola vez por día
-     * con cuántas son, para no llenarle la campana.
-     *
-     * @param \Illuminate\Support\Collection<int, Appointment> $appointments
-     * @param int|null $releaseHours Si la empresa libera después: a cuántas horas de la cita.
-     */
     public static function unconfirmed(Tenant $tenant, $appointments, ?int $releaseHours = null): void
     {
         try {
@@ -214,9 +184,6 @@ class Notifier
         }
     }
 
-    /**
-     * Una cita que el sistema liberó porque nadie la confirmó a tiempo.
-     */
     public static function released(Tenant $tenant, Appointment $appointment): void
     {
         try {
@@ -250,9 +217,6 @@ class Notifier
         }
     }
 
-    /**
-     * Se liberó un horario que le sirve a alguien de la lista de espera.
-     */
     public static function waitlistSlotFreed(Tenant $tenant, Appointment $appointment, int $count): void
     {
         try {
@@ -283,11 +247,6 @@ class Notifier
         }
     }
 
-    /**
-     * Cuentas que administran la empresa: el dueño y quien tenga rol de dueño o administrador.
-     *
-     * @return array<int, string>
-     */
     public static function adminIds(string $tenantId): array
     {
         return User::where('tenant_id', $tenantId)
@@ -296,9 +255,6 @@ class Notifier
             ->all();
     }
 
-    /**
-     * Con $dedupeKey, la misma persona no recibe dos veces el mismo aviso.
-     */
     public static function send(string $tenantId, string $userId, string $type, string $title, ?string $body, ?string $link, ?string $entityType = null, ?string $entityId = null, ?string $dedupeKey = null): void
     {
         DB::table('user_notifications')->insertOrIgnore([

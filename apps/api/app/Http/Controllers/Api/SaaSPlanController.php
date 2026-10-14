@@ -16,7 +16,6 @@ class SaaSPlanController extends Controller
         $q->whereIn('status', ['active', 'trialing']);
     }]);
 
-    // 1. Búsqueda por texto
     if ($request->filled('search')) {
         $search = $request->input('search');
         $query->where(function($q) use ($search) {
@@ -26,12 +25,10 @@ class SaaSPlanController extends Controller
         });
     }
 
-    // 2. Filtro por estado (Cambiado de 'filter_status' a 'status' para que coincida con el frontend)
     if ($request->filled('status')) {
         $query->where('status', $request->input('status'));
     }
 
-    // 3. Filtro por periodo de prueba (has_trial)
     if ($request->filled('has_trial')) {
         $hasTrial = filter_var($request->input('has_trial'), FILTER_VALIDATE_BOOLEAN);
         $query->where('trial_config->has_trial', $hasTrial);

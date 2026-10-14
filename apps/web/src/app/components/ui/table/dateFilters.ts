@@ -1,12 +1,9 @@
-// Filtro de fecha de las tablas: periodos listos (hoy, esta semana…), un día o un rango.
-
 export type DateFilterValue =
   | { kind: 'preset'; id: string }
   | { kind: 'day'; date: string }
   | { kind: 'range'; from: string; to: string };
 
 export interface DateRange {
-  // AAAA-MM-DD, ambos incluidos.
   from: string;
   to: string;
 }
@@ -15,7 +12,6 @@ export interface DatePreset {
   id: string;
   label: string;
   hint: string;
-  // Periodos que miran hacia adelante: no se ofrecen para fechas que siempre son pasadas.
   future?: boolean;
   range: () => DateRange;
 }
@@ -36,7 +32,6 @@ const shift = (days: number): string => {
   return toISO(date);
 };
 
-// La semana empieza el lunes.
 const weekRange = (offset: number): DateRange => {
   const start = new Date();
   start.setDate(start.getDate() - ((start.getDay() + 6) % 7) + offset * 7);
@@ -91,10 +86,6 @@ export const describeDateFilter = (value: DateFilterValue | null | undefined): s
   return DATE_PRESETS.find((preset) => preset.id === value.id)?.label ?? 'Todas';
 };
 
-/**
- * Día (AAAA-MM-DD) de un valor de la API. Las horas que ya vienen en hora local
- * ("2026-10-19T09:00") se toman tal cual; las que traen zona se pasan a la del navegador.
- */
 export const dayOf = (raw: string | null | undefined): string | null => {
   if (!raw) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
@@ -105,7 +96,6 @@ export const dayOf = (raw: string | null | undefined): string | null => {
   return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
 };
 
-// Un registro entra si su día (o su tramo, cuando dura varios días) toca el rango.
 export const inDateRange = (range: DateRange, start: string | null | undefined, end?: string | null): boolean => {
   const first = dayOf(start);
   if (!first) return false;

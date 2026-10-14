@@ -14,15 +14,12 @@ import { NO_BRANCH_NOTE, countAll, countOn, countOverride, initialsOf, type Bran
 
 interface Detail {
   user: StaffUser;
-  // Administrador: puede todo.
   everything: boolean;
-  // Motivo por el que sus permisos no se cambian aquí.
   locked: string | null;
   can_edit: boolean;
   grid: GridModule[];
   roles: RoleOption[];
   branches: BranchOption[];
-  // Qué tanto ve: toda la empresa, solo su sede o solo lo suyo.
   scope?: 'tenant' | 'branch' | 'own';
   scope_label?: string;
 }
@@ -38,9 +35,6 @@ const FOCUS_TITLES: Record<string, string> = {
   revoked: 'Lo que se le quitó a esta persona',
 };
 
-// Página de una persona del equipo: a qué puede acceder, pantalla por pantalla.
-// Cada interruptor enciende o apaga un permiso solo para ella; lo que difiere de
-// su rol queda marcado como "Agregado" o "Quitado".
 export default function UserAccessDetail() {
   const params = useParams<{ id: string }>();
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -141,7 +135,6 @@ export default function UserAccessDetail() {
             : true;
   const shown = focus ? grid.filter((module) => module.actions.some(matches)) : grid;
 
-  // "Entra" a una pantalla si puede verla o, donde no hay "ver", si puede hacer algo en ella.
   const enters = (module: GridModule) => {
     const view = module.actions.find((a) => a.action === 'view');
     return view ? view.on : module.actions.some((a) => a.on);
@@ -169,7 +162,6 @@ export default function UserAccessDetail() {
       {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-        {/* La persona */}
         <section className={`${card} p-6 space-y-5`} data-card="user">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -231,7 +223,6 @@ export default function UserAccessDetail() {
           </div>
         </section>
 
-        {/* Números que filtran la rejilla y, debajo, a qué entra */}
         <div className="xl:col-span-2 space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {stats.map((stat) => (
@@ -281,7 +272,6 @@ export default function UserAccessDetail() {
           </section>
         </div>
 
-        {/* La rejilla */}
         <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="permissions">
           <div className="px-6 pt-5 pb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">

@@ -19,21 +19,17 @@ export interface PickedCustomer {
 interface CustomerPickerProps {
   value: PickedCustomer | null;
   onChange: (customer: PickedCustomer | null) => void;
-  // Mientras el panel que lo contiene esté cerrado no busca.
   active?: boolean;
 }
 
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 
-// Buscador de clientes para los paneles laterales: se escribe, se elige uno y
-// queda fijo con una X para cambiarlo.
 export default function CustomerPicker({ value, onChange, active = true }: CustomerPickerProps) {
   const vocab = useVocabulary();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PickedCustomer[]>([]);
   const [searching, setSearching] = useState(false);
-  // Cliente nuevo sin salir del panel: al guardarlo queda elegido.
   const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {

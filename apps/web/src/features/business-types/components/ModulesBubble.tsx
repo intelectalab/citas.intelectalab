@@ -5,7 +5,6 @@ import { Check, Minus } from 'lucide-react';
 import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
 
 interface ModulesBubbleProps {
-  // Módulos que el rubro no usa; el resto están encendidos.
   modulesOff: string[];
 }
 
@@ -13,9 +12,6 @@ const BUBBLE_WIDTH = 460;
 const GAP = 10;
 const MARGIN = 12;
 
-// Número de módulos encendidos del rubro. Al pasar el cursor (o enfocar con el
-// teclado) abre un globo con la lista. El globo usa posición fija para que no
-// lo recorte el contenedor de la tabla, y se mide para no salirse de la pantalla.
 export default function ModulesBubble({ modulesOff }: ModulesBubbleProps) {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -38,7 +34,6 @@ export default function ModulesBubble({ modulesOff }: ModulesBubbleProps) {
     const center = rect.left + rect.width / 2;
     const left = Math.min(Math.max(MARGIN, center - BUBBLE_WIDTH / 2), window.innerWidth - BUBBLE_WIDTH - MARGIN);
 
-    // Abre hacia abajo si cabe; si no, hacia el lado con más espacio.
     const spaceBelow = window.innerHeight - rect.bottom - GAP - MARGIN;
     const spaceAbove = rect.top - GAP - MARGIN;
     const above = height > spaceBelow && spaceAbove > spaceBelow;
@@ -69,11 +64,9 @@ export default function ModulesBubble({ modulesOff }: ModulesBubbleProps) {
           ref={bubbleRef}
           role="tooltip"
           className="fixed z-[60] pointer-events-none"
-          // Primero se dibuja oculto para medirlo; luego se coloca.
           style={{ left: position?.left ?? 0, top: position?.top ?? 0, width: BUBBLE_WIDTH, visibility: position ? 'visible' : 'hidden' }}
         >
           <div className="relative bg-white border border-slate-200 rounded-2xl shadow-xl p-5 space-y-4">
-            {/* Pico del globo */}
             {position && (
               <span
                 className={`absolute w-3 h-3 bg-white border-slate-200 rotate-45 ${position.above ? '-bottom-1.5 border-r border-b' : '-top-1.5 border-l border-t'}`}

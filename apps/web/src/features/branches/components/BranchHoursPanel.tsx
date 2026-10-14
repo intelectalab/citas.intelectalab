@@ -27,8 +27,6 @@ const DEFAULT_RANGE: HourRange = { opens: '08:00', closes: '20:00' };
 
 const emptyWeek = (): Record<number, HourRange[]> => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
 
-// Horario de atención de una sucursal: qué días abre y a qué horas. Fuera de
-// ese horario la agenda no ofrece citas, aunque un profesional tenga horario.
 export default function BranchHoursPanel({ isOpen, onClose, branch, onSaved }: BranchHoursPanelProps) {
   const [week, setWeek] = useState<Record<number, HourRange[]>>(emptyWeek);
   const [loading, setLoading] = useState(false);
@@ -61,7 +59,6 @@ export default function BranchHoursPanel({ isOpen, onClose, branch, onSaved }: B
     setSaved(false);
   };
 
-  // Al encender un día toma el horario del día anterior que abre.
   const toggleDay = (weekday: number, on: boolean) => {
     if (!on) return updateDay(weekday, []);
 

@@ -1,4 +1,3 @@
-// apps/web/src/app/components/layout/Sidebar.tsx
 'use client';
 
 import { Dispatch, SetStateAction, useState } from 'react';
@@ -57,9 +56,7 @@ interface MenuItem {
   requireAdmin?: boolean; 
   requireProfessional?: boolean;
   module?: string;
-  // Permiso de su rol que hace falta para ver el ítem, por ejemplo 'sales.view'.
   perm?: string;
-  // Solo administrador SaaS; el soporte SaaS no lo ve.
   saasAdminOnly?: boolean;
 }
 
@@ -72,10 +69,6 @@ interface MenuGroup {
   items: MenuItem[];
 }
 
-// El menú se arma con el vocabulario del rubro. Cada ítem con `module` solo se
-// muestra si el tenant tiene ese módulo activo (plan, rubro y configuración).
-// Los que apuntan a /modules/<clave> aún no tienen pantalla propia.
-// Cada ítem con `perm` solo se muestra a quien su rol le permite ver esa pantalla.
 const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   {
     id: 'home',
@@ -120,7 +113,6 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     ]
   },
   {
-    // Lo que la empresa ofrece y con qué lo atiende.
     id: 'catalog',
     groupName: 'Equipo y catálogo',
     groupIcon: Layers,
@@ -196,7 +188,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   if (loading) return <div className="w-60 bg-[#0B192C] h-screen" />;
 
-  // Equipo de la plataforma: administrador SaaS o soporte SaaS.
   const isSaasAdmin = Boolean(user?.is_saas_admin);
   const isSuperAdmin = Boolean(isSaasAdmin || user?.is_saas_support);
 
@@ -216,7 +207,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         )}
       </div>
 
-      {/* Caso: Usuario registrado pero SIN PLAN activo */}
       {hasNoPlan ? (
         <div className="flex-1 p-4 flex flex-col justify-center items-center text-center">
           {!isCollapsed ? (
@@ -242,17 +232,13 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             if (isSuperAdmin) {
               if (group.id !== 'saas-admin' && group.id !== 'home') return null;
             } else {
-              // En una empresa cada ítem se muestra según el permiso de quien entra;
-              // un grupo sin ítems visibles no aparece.
               if (group.id === 'saas-admin') return null;
             }
 
-            // Validar si el grupo requiere características (features) del plan
             if (group.feature && !hasFeature(group.feature)) return null;
 
             const visibleItems = group.items.filter((item) => {
               if (item.saasAdminOnly && !isSaasAdmin) return false;
-              // Ítems de administración dentro de un grupo que ve todo el equipo.
               if (item.requireAdmin && !user?.is_tenant_admin) return false;
               if (item.perm && !isSuperAdmin && !can(item.perm)) return false;
               if (item.feature && !hasFeature(item.feature)) return false;
@@ -353,10 +339,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         </nav>
       )}
 
-      {/* Footer */}
       <div className="p-3 border-t border-white/5 space-y-0.5">
-        {/* Abajo va la configuración que le toca a cada quien: la de la plataforma
-            para el administrador SaaS y la de su empresa para su administrador. */}
         {isSaasAdmin && (
           <Link
             href="/admin/configuration"

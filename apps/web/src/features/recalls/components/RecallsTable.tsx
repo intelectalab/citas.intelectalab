@@ -21,7 +21,6 @@ const VIEWS = [
   { id: 'closed', label: 'Cerrados' },
 ];
 
-// Tarjetas que filtran los controles por agendar según su urgencia.
 const CARDS: { id: string; title: string; match: (r: Recall) => boolean; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'overdue', title: 'Vencidos', match: (r) => r.days_left < 0, icon: <AlertTriangle size={18} />, color: 'text-rose-700', active: 'border-rose-500 ring-2 ring-rose-500/20', hover: 'hover:border-rose-300' },
   { id: 'week', title: 'Hoy y próximos 7 días', match: (r) => r.days_left >= 0 && r.days_left <= 7, icon: <Hourglass size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
@@ -31,9 +30,6 @@ const CARDS: { id: string; title: string; match: (r: Recall) => boolean; icon: R
 
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-50';
 
-// Controles y seguimiento: a quién hay que volver a ver y para qué. Los deja la
-// ficha de una atención, el servicio atendido o el personal; desde aquí se
-// avisa al cliente y se convierten en cita.
 export default function RecallsTable() {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
@@ -98,14 +94,12 @@ export default function RecallsTable() {
     }
   };
 
-  // Abre "Nueva cita" con el cliente, el servicio y la fecha del control ya puestos.
   const book = async (recall: Recall) => {
     if (!recall.customer) return;
 
     try {
       setBusyId(recall.id);
       setError('');
-      // La ficha completa trae sus mascotas o dependientes, que la cita puede necesitar.
       const res = await api.get(`/customers/${recall.customer.id}`);
       const today = todayISO();
 

@@ -9,11 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/**
- * Datos generales de la propia empresa: nombre, razón social, RUC, contacto y
- * dirección fiscal. Los ve todo el personal; los cambia su administrador.
- * El rubro, el plan y el código los maneja la plataforma.
- */
 class CompanyController extends Controller
 {
     private function tenant(Request $request): Tenant
@@ -51,7 +46,6 @@ class CompanyController extends Controller
             $name = trim($validated['name']);
             $tenant->update(['name' => $name]);
 
-            // El nombre comercial es el nombre con que la empresa se ve en todo el sistema.
             $company = $tenant->company ?? new Company(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id]);
             $company->fill([
                 'trade_name' => $name,
@@ -101,7 +95,6 @@ class CompanyController extends Controller
                 'trial_ends_at' => $subscription->status === 'trialing' ? $subscription->trial_ends_at?->copy()->setTimezone($timezone)->format('Y-m-d') : null,
                 'ends_at'       => $subscription->ends_at?->copy()->setTimezone($timezone)->format('Y-m-d'),
             ] : null,
-            // Uso frente a lo que permite el plan; sin tope cuando el plan no lo define.
             'usage' => [
                 ['key' => 'branches', 'used' => $count('branches')->where('status', 'active')->count(), 'limit' => $tenant->hasModule('multi_branch') ? ($limits['branches'] ?? null) : 1],
                 ['key' => 'professionals', 'used' => $usage['professionals'], 'limit' => $limits['professionals'] ?? null],

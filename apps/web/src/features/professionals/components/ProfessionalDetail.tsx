@@ -38,7 +38,6 @@ interface ScheduleData {
   schedules: { branch_id: string; weekday: number; starts: string; ends: string }[];
 }
 
-// Lunes primero; el número es el día de la semana que guarda la API (0 = domingo).
 const WEEK: { weekday: number; label: string }[] = [
   { weekday: 1, label: 'Lunes' },
   { weekday: 2, label: 'Martes' },
@@ -49,14 +48,12 @@ const WEEK: { weekday: number; label: string }[] = [
   { weekday: 0, label: 'Domingo' },
 ];
 
-// Cuántos días hacia atrás y hacia adelante se traen las citas.
 const WINDOW_DAYS = 30;
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
-// Tarjetas de números que funcionan como filtro, y cómo se titula la lista que dejan.
 const CLICKABLE = ['today', 'upcoming', 'completed', 'missed'];
 const FOCUS_TITLES: Record<string, string> = { today: 'Citas de hoy', upcoming: 'Citas próximas', completed: 'Atenciones', missed: 'Canceladas y ausencias' };
 
@@ -68,8 +65,6 @@ const hoursLabel = (minutes: number) => {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} h`;
 };
 
-// Página de un profesional: sus datos, sus números, su horario de la semana,
-// sus ausencias y sus citas. Se llega desde su nombre en cualquier pantalla.
 export default function ProfessionalDetail() {
   const params = useParams<{ id: string }>();
   const { user, hasModule, can } = useAuth();
@@ -82,7 +77,6 @@ export default function ProfessionalDetail() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  // Tarjeta de números elegida: filtra la lista de citas.
   const [focus, setFocus] = useState('');
 
   const isAdmin = can('professionals.edit');
@@ -123,7 +117,6 @@ export default function ProfessionalDetail() {
 
   const { openDetail, panels } = useAppointmentPanels(loadAppointments);
 
-  // Las citas vienen de la más antigua a la más nueva.
   const upcoming = useMemo(
     () => appointments.filter((a) => dateOf(a.starts_at) >= today && !RELEASED.includes(a.status) && a.status !== 'completed'),
     [appointments, today],
@@ -168,7 +161,6 @@ export default function ProfessionalDetail() {
     : focus === 'missed' ? [...released].reverse()
     : [];
 
-  // Las tarjetas de números filtran la lista de citas de esta misma página.
   const pickStat = (id: string) => {
     const target = id === 'records' ? 'records' : 'appointments';
     if (id !== 'records') setFocus((current) => (current === id ? '' : id));
@@ -217,7 +209,6 @@ export default function ProfessionalDetail() {
       {backLink}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-        {/* Datos del profesional */}
         <section className={`${card} p-6 space-y-5`} data-card="professional">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -285,7 +276,6 @@ export default function ProfessionalDetail() {
           {professional.bio && <p className="pt-4 border-t border-slate-100 text-sm text-slate-600 whitespace-pre-line">{professional.bio}</p>}
         </section>
 
-        {/* Números y, pegado debajo, el horario */}
         <div className="xl:col-span-2 space-y-5">
         {usesAgenda && (
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -315,7 +305,6 @@ export default function ProfessionalDetail() {
           </div>
         )}
 
-        {/* Horario de la semana y ausencias */}
         <section className={`${card} overflow-hidden`} data-card="schedule">
           <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3">
             <div>
@@ -390,7 +379,6 @@ export default function ProfessionalDetail() {
         </section>
         </div>
 
-        {/* Citas */}
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">

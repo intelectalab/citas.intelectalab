@@ -7,11 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Plantilla de ficha de atención de una empresa: los campos que llena el
- * profesional y los servicios que se atienden con ella. Cada empresa edita
- * las suyas; nacen de la plantilla de su rubro.
- */
 class RecordTemplate extends Model
 {
     use HasUuids;

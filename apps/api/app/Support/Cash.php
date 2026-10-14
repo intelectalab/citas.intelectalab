@@ -8,24 +8,14 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/**
- * Cajas y turnos de caja. Cada sede activa tiene al menos una caja (se crea
- * sola). Un turno va de la apertura al cierre: lo que debía haber en efectivo
- * se calcula de sus movimientos, y al cerrar se compara con lo contado.
- */
 class Cash
 {
     public const DEFAULT_NAME = 'Caja principal';
 
-    // Movimientos que alguien registra a mano, y si suman o restan.
     public const MANUAL = ['income' => 'Ingreso', 'expense' => 'Gasto', 'withdrawal' => 'Retiro'];
     public const SIGNS = ['sale' => 1, 'income' => 1, 'expense' => -1, 'withdrawal' => -1, 'refund' => -1];
     public const TYPE_LABELS = ['sale' => 'Cobro', 'refund' => 'Devolución'] + self::MANUAL;
 
-    /**
-     * Toda sede activa sin caja recibe la suya, salvo que la empresa haya
-     * elegido crear sus cajas a mano. Nunca quita una caja que ya existe.
-     */
     public static function ensureRegisters(Tenant $tenant): void
     {
         if (!AppointmentFlow::rule($tenant, 'cash.auto_register')) {
@@ -46,9 +36,6 @@ class Cash
         }
     }
 
-    /**
-     * Turnos abiertos de una sede, con el nombre de su caja.
-     */
     public static function openSessions(string $tenantId, string $branchId): Collection
     {
         return DB::table('cash_sessions as s')
@@ -60,12 +47,6 @@ class Cash
             ->get(['s.id', 's.opened_by', 'r.name as register_name']);
     }
 
-    /**
-     * Un turno listo para mostrarse: sus totales, lo que debe haber en
-     * efectivo y, si se pide, cada movimiento.
-     *
-     * @return array<string, mixed>
-     */
     public static function present(object $session, bool $withMovements = false): array
     {
         $movements = DB::table('cash_movements')->where('cash_session_id', $session->id)->orderByDesc('created_at')->get();
@@ -73,7 +54,6 @@ class Cash
 
         $expected = round((float) $session->opening_amount + $movements->sum(fn ($m) => (self::SIGNS[$m->type] ?? 0) * (float) $m->amount), 2);
 
-        // Lo cobrado en la sede durante el turno por cada medio, para cuadrar también lo que no es efectivo.
         $byMethod = DB::table('payments')
             ->where('tenant_id', $session->tenant_id)
             ->where('branch_id', $session->branch_id)
@@ -109,7 +89,6 @@ class Cash
             'expense'         => $sum('expense'),
             'withdrawal'      => $sum('withdrawal'),
             'refund'          => $sum('refund'),
-            // Abierto: lo que debe haber ahora. Cerrado: lo que debía haber al cerrar.
             'expected_amount' => $session->status === 'closed' && $session->expected_amount !== null ? round((float) $session->expected_amount, 2) : $expected,
             'closing_amount'  => $session->closing_amount !== null ? round((float) $session->closing_amount, 2) : null,
             'difference'      => $session->difference !== null ? round((float) $session->difference, 2) : null,

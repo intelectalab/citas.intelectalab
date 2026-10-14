@@ -37,7 +37,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
-// Atajos para la fecha: lo que más se indica al terminar una atención.
 const SHORTCUTS: { label: string; days: number }[] = [
   { label: '1 semana', days: 7 },
   { label: '1 mes', days: 30 },
@@ -46,7 +45,6 @@ const SHORTCUTS: { label: string; days: number }[] = [
   { label: '1 año', days: 365 },
 ];
 
-// Panel para registrar un control a mano o cambiar uno que sigue abierto.
 export default function FormRecall({ isOpen, onClose, initialData, services, professionals, onSaved }: FormRecallProps) {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
@@ -64,7 +62,6 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // Lo creado sin salir del panel: un cliente, una mascota o un servicio.
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
   const [addingDependent, setAddingDependent] = useState(false);
   const [serviceFormOpen, setServiceFormOpen] = useState(false);
@@ -83,11 +80,9 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
     setServiceId(initialData?.service?.id ?? '');
     setProfessionalId(initialData?.professional?.id ?? (professionals.length === 1 ? professionals[0].id : ''));
     setNotes(initialData?.notes ?? '');
-    // Solo al abrir: las listas no cambian mientras el panel está abierto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialData]);
 
-  // Búsqueda de clientes mientras se escribe.
   useEffect(() => {
     if (!isOpen || initialData || customer || query.trim().length < 2) {
       setResults([]);
@@ -343,7 +338,6 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
       </div>
     </FormDrawer>
 
-    {/* Cliente o servicio nuevo sin salir del panel: al guardarlo queda elegido. */}
     <FormCustomer
       isOpen={isOpen && customerFormOpen}
       onClose={() => setCustomerFormOpen(false)}

@@ -18,8 +18,6 @@ const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
-// Página de una sucursal: sus datos, sus números, su horario de atención,
-// quiénes atienden ahí y sus salas y equipos.
 export default function BranchDetail() {
   const params = useParams<{ id: string }>();
   const vocab = useVocabulary();
@@ -107,7 +105,6 @@ export default function BranchDetail() {
       {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-        {/* Datos de la sucursal */}
         <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="branch">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -139,7 +136,6 @@ export default function BranchDetail() {
           </dl>
         </section>
 
-        {/* Números */}
         <div className={`xl:col-span-2 grid grid-cols-2 gap-4 ${stats.length > 3 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
           {stats.map((stat) => (
             <div key={stat.id} data-stat={stat.id} className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
@@ -155,7 +151,6 @@ export default function BranchDetail() {
           ))}
         </div>
 
-        {/* Horario de atención */}
         <section className={`${card} p-6 space-y-4`} data-card="hours">
           <div className="flex items-center justify-between gap-3">
             <h2 className={cardTitle}><Clock size={16} className="text-[#3F768C]" /> Horario de atención</h2>
@@ -186,7 +181,6 @@ export default function BranchDetail() {
           )}
         </section>
 
-        {/* Quiénes atienden aquí */}
         <section className={`${card} p-6 space-y-4`} data-card="team">
           <div className="flex items-center justify-between gap-3">
             <h2 className={cardTitle}><Users size={16} className="text-[#3F768C]" /> {vocab.pros} en esta sede</h2>
@@ -231,7 +225,6 @@ export default function BranchDetail() {
           )}
         </section>
 
-        {/* Salas y equipos */}
         {branch.uses_rooms && (
           <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="rooms">
             <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">

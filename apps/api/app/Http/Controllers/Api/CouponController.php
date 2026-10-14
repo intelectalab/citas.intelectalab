@@ -11,10 +11,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/**
- * Cupones de descuento de la empresa. Los crea y los cambia su administrador;
- * se aplican al cobrar.
- */
 class CouponController extends Controller
 {
     private function tenantId(Request $request): string
@@ -22,7 +18,6 @@ class CouponController extends Controller
         $user = $request->user();
         abort_unless($user->tenant_id, 403);
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
-        // Quién ve y cambia los cupones lo deciden los permisos coupons.* de cada ruta.
 
         return $user->tenant_id;
     }
@@ -48,7 +43,6 @@ class CouponController extends Controller
             'starts_on'      => $day($coupon->starts_at),
             'ends_on'        => $day($coupon->ends_at),
             'status'         => $coupon->status,
-            // valid, scheduled, expired, used_up o inactive.
             'state'          => Coupons::state($coupon),
             'created_at'     => Carbon::parse($coupon->created_at)->toIso8601String(),
         ];
@@ -90,7 +84,6 @@ class CouponController extends Controller
             'discount_value' => round((float) $validated['discount_value'], 2),
             'min_purchase'   => round((float) ($validated['min_purchase'] ?? 0), 2),
             'max_uses'       => $validated['max_uses'] ?? null,
-            // La vigencia va de inicio a fin de día en la hora de la empresa.
             'starts_at'      => !empty($validated['starts_on']) ? Carbon::parse($validated['starts_on'], $timezone)->startOfDay()->utc() : null,
             'ends_at'        => !empty($validated['ends_on']) ? Carbon::parse($validated['ends_on'], $timezone)->endOfDay()->utc() : null,
             'status'         => $validated['status'] ?? 'active',
@@ -129,9 +122,6 @@ class CouponController extends Controller
         return response()->json($this->present(DB::table('coupons')->where('id', $row->id)->first(), $this->timezone($request)));
     }
 
-    /**
-     * Se elimina si nadie lo usó; si ya tiene usos, se desactiva para conservar su historia.
-     */
     public function destroy(Request $request, string $coupon)
     {
         $tenantId = $this->tenantId($request);

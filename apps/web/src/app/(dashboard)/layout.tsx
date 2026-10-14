@@ -6,9 +6,8 @@ import Navbar from '../components/layout/Navbar';
 import ScreenGate from '../components/layout/ScreenGate';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PlatformProvider } from '@/hooks/usePlatform';
-import { useTheme } from '@/hooks/useTheme'; // Ajusta la ruta si useAuth está en otro directorio
+import { useTheme } from '@/hooks/useTheme';
 
-// Las cuentas de cliente no usan el panel de la empresa: van a su portal.
 function StaffOnly({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const isCustomer = user?.account_type === 'customer';
@@ -23,7 +22,6 @@ function StaffOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Aviso fijo mientras la plataforma está dentro del panel de una empresa.
 function ImpersonationBanner() {
   const { user, stopImpersonation } = useAuth();
 
@@ -58,7 +56,6 @@ export default function DashboardLayout({
     setMounted(true);
   }, []);
 
-  // Aplica el tema guardado (claro u oscuro) al entrar al panel.
   useTheme();
 
   return (

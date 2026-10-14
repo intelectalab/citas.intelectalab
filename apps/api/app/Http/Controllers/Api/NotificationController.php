@@ -7,9 +7,6 @@ use App\Models\UserNotification;
 use App\Support\Notifier;
 use Illuminate\Http\Request;
 
-/**
- * La campana: los avisos de quien tiene la sesión abierta.
- */
 class NotificationController extends Controller
 {
     public function index(Request $request)
@@ -25,7 +22,6 @@ class NotificationController extends Controller
             'limit'  => 'nullable|integer|min:1|max:300',
         ]);
 
-        // Los avisos "por venir" no los dispara ninguna acción: se generan al consultar.
         if ($user->tenant) {
             Notifier::upcomingAbsences($user->tenant);
             \App\Support\Confirmations::process($user->tenant);
@@ -48,7 +44,6 @@ class NotificationController extends Controller
                 'entity_type' => $n->entity_type,
                 'entity_id'   => $n->entity_id,
                 'read'        => $n->read_at !== null,
-                // Hora de la empresa, sin zona: 2026-10-19T09:00
                 'created_at'  => $n->created_at->copy()->setTimezone($timezone)->format('Y-m-d\TH:i'),
                 'seconds_ago' => (int) $n->created_at->diffInSeconds(now(), true),
             ]);

@@ -11,25 +11,18 @@ import { useAutoRefresh } from '@/features/appointments/components/useAutoRefres
 import NotificationItem from './NotificationItem';
 import { useNotifications, type AppNotification } from '../notifications';
 
-// Cuántos avisos muestra la campana; el resto está en la página de notificaciones.
 const BELL_LIMIT = 8;
 
-/**
- * La campana de la barra superior: cuántos avisos hay sin leer y los últimos.
- * Un aviso de una cita la abre ahí mismo; los demás llevan a su pantalla.
- */
 export default function NotificationsBell() {
   const { user, hasModule } = useAuth();
   const router = useRouter();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
 
-  // Solo el equipo de una empresa tiene avisos.
   const enabled = Boolean(user?.tenant) && user?.account_type !== 'customer';
   const { unread, total, items, loaded, load, markRead, markAllRead } = useNotifications(BELL_LIMIT, enabled);
   const { openDetail, panels, isOpen: panelOpen } = useAppointmentPanels(load);
 
-  // Se actualiza sola para que el número cambie sin recargar.
   useAutoRefresh(load, !enabled || panelOpen, 30000);
 
   if (!enabled) return null;

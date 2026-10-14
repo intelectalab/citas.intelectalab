@@ -6,9 +6,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Cobro de una suscripción. Cada pago registrado cubre un periodo de servicio.
- */
 class SubscriptionInvoice extends Model
 {
     use HasUuids;

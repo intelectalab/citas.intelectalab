@@ -5,16 +5,8 @@ namespace App\Support;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Horario de atención de una sede: por cada día de la semana (0 = domingo),
- * los tramos en que abre. Una sede sin ningún tramo no limita la agenda: vale
- * solo el horario de cada profesional.
- */
 class BranchHours
 {
-    /**
-     * La base puede ir un esquema por detrás: sin la tabla, ninguna sede tiene horario.
-     */
     public static function available(): bool
     {
         static $has = null;
@@ -22,9 +14,6 @@ class BranchHours
         return $has ??= Schema::hasTable('branch_hours');
     }
 
-    /**
-     * @return array<int, array<int, array{opens: string, closes: string}>> Solo los días en que abre.
-     */
     public static function of(string $branchId): array
     {
         if (!self::available()) {
@@ -40,9 +29,6 @@ class BranchHours
         return $hours;
     }
 
-    /**
-     * @param array<int, array{weekday: int, opens: string, closes: string}> $ranges
-     */
     public static function replace(string $tenantId, string $branchId, array $ranges): void
     {
         if (!self::available()) {
@@ -64,12 +50,6 @@ class BranchHours
         });
     }
 
-    /**
-     * ¿Ese tramo de un día cae completo dentro de lo que abre la sede? Una
-     * sede sin horario definido lo cubre todo.
-     *
-     * @param string $ends "24:00" para la medianoche.
-     */
     public static function covers(array $hours, int $weekday, string $starts, string $ends): bool
     {
         if ($hours === []) {
@@ -85,9 +65,6 @@ class BranchHours
         return false;
     }
 
-    /**
-     * "08:00–13:00 y 15:00–20:00", o "cerrada ese día".
-     */
     public static function describe(array $hours, int $weekday): string
     {
         $ranges = $hours[$weekday] ?? [];

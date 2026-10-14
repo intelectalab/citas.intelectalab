@@ -11,12 +11,6 @@ use Illuminate\Support\Facades\Hash;
 
 class RegisterCustomerController extends Controller
 {
-    /**
-     * Una persona se registra como cliente con el código de empresa. Crea su
-     * ficha, que es también su cuenta del portal: no hay fila en users.
-     * El correo se valida solo dentro del tenant del código: que exista en
-     * otra empresa no impide registrarse en esta.
-     */
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -42,8 +36,6 @@ class RegisterCustomerController extends Controller
 
         $email = trim($validated['email']);
 
-        // Quien ya fue registrado por el personal tiene acceso con su correo y su
-        // número de documento: no se crea una segunda ficha.
         $alreadyRegistered = Customer::where('tenant_id', $tenant->id)
             ->whereRaw('lower(email) = ?', [mb_strtolower($email)])
             ->exists();
@@ -63,7 +55,6 @@ class RegisterCustomerController extends Controller
                 'phone'      => $validated['phone'] ?? null,
             ]);
 
-            // Eligió su contraseña al registrarse: no tiene que cambiarla.
             $customer->forceFill([
                 'password_hash'        => Hash::make($validated['password']),
                 'must_change_password' => false,

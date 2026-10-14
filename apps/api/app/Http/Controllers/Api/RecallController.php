@@ -18,11 +18,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Controles y seguimiento: a quién hay que volver a llamar y para qué. Desde
- * aquí se listan, se registran a mano, se marcan como avisados y se cierran.
- * Convertirlos en cita lo hace la agenda (POST /appointments con recall_id).
- */
 class RecallController extends Controller
 {
     private const RELATIONS = [
@@ -43,10 +38,6 @@ class RecallController extends Controller
         return $tenant;
     }
 
-    /**
-     * Un usuario con rol de profesional (sin ser administrador) solo ve los
-     * controles de sus propios clientes atendidos.
-     */
     private function ownProfessionalId(User $user): ?string
     {
         if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
@@ -83,7 +74,6 @@ class RecallController extends Controller
 
         $recalls = Recall::where('tenant_id', $tenant->id)
             ->whereIn('status', $statuses)
-            // Un cliente eliminado ya no se sigue.
             ->whereHas('customer', fn ($q) => $q->whereNull('deleted_at'))
             ->when($own ?? ($validated['professional_id'] ?? null), fn ($q, $id) => $q->where('professional_id', $id))
             ->when($validated['customer_id'] ?? null, fn ($q, $id) => $q->where('customer_id', $id))
@@ -102,7 +92,6 @@ class RecallController extends Controller
                 });
             })
             ->with(self::RELATIONS)
-            // Lo cerrado, de lo más reciente a lo más antiguo; lo demás, lo más urgente primero.
             ->when($view === 'closed', fn ($q) => $q->orderByDesc('updated_at'), fn ($q) => $q->orderBy('due_date'))
             ->limit(500)
             ->get();
@@ -112,9 +101,6 @@ class RecallController extends Controller
         return response()->json($recalls->map(fn (Recall $recall) => $this->present($recall, $tenant, $today)));
     }
 
-    /**
-     * Control registrado a mano por el personal.
-     */
     public function store(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -138,9 +124,6 @@ class RecallController extends Controller
         return response()->json($this->present($recall->fresh(self::RELATIONS), $tenant, $this->today($tenant)), 201);
     }
 
-    /**
-     * Cambiar la fecha, el servicio o las notas de un control que sigue abierto.
-     */
     public function update(Request $request, string $recall)
     {
         $tenant = $this->tenant($request);
@@ -163,10 +146,6 @@ class RecallController extends Controller
         return response()->json($this->present($recall->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
     }
 
-    /**
-     * Avisado, por agendar, realizado o descartado. "Agendado" solo lo pone
-     * una cita, y mientras esa cita siga en pie el control no se cambia aquí.
-     */
     public function changeStatus(Request $request, string $recall)
     {
         $tenant = $this->tenant($request);
@@ -234,9 +213,6 @@ class RecallController extends Controller
         ];
     }
 
-    /**
-     * Servicio, profesional y dependiente del control, ya comprobados contra la empresa.
-     */
     private function links(Tenant $tenant, Customer $customer, array $validated, ?string $own): array
     {
         $serviceId = $validated['service_id'] ?? null;
@@ -248,7 +224,6 @@ class RecallController extends Controller
         }
 
         if ($professionalId) {
-            // Un profesional sin ficha de profesional no puede asignarse controles.
             abort_if($professionalId === 'none', 403, 'Tu usuario no está vinculado a un profesional.');
             Professional::where('tenant_id', $tenant->id)->findOrFail($professionalId);
         }
@@ -278,14 +253,12 @@ class RecallController extends Controller
             'id'            => $recall->id,
             'label'         => $recall->label,
             'due_date'      => $recall->due_date->format('Y-m-d'),
-            // Días que faltan; negativo si ya venció.
             'days_left'     => (int) round($today->diffInDays($due, false)),
             'status'        => $recall->status,
             'status_name'   => Recall::STATUSES[$recall->status] ?? $recall->status,
             'notified_at'   => $recall->notified_at?->copy()->setTimezone($today->getTimezone())->format('Y-m-d\TH:i'),
             'notes'         => $recall->notes,
             'closed_reason' => $recall->closed_reason,
-            // De dónde salió: la ficha de una atención, el servicio atendido o el personal.
             'origin'        => $recall->care_record_id ? 'record' : ($recall->source_appointment_id ? 'service' : 'manual'),
             'source_code'   => $recall->sourceAppointment?->code,
             'customer'      => $customer ? [
@@ -304,7 +277,6 @@ class RecallController extends Controller
             ] : null,
             'service'       => $recall->service ? ['id' => $recall->service->id, 'name' => $recall->service->name] : null,
             'professional'  => $recall->professional ? ['id' => $recall->professional->id, 'display_name' => $recall->professional->display_name] : null,
-            // La cita en la que se convirtió.
             'appointment'   => $appointment ? [
                 'id'          => $appointment->id,
                 'code'        => $appointment->code,

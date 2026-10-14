@@ -28,8 +28,6 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
-// Panel para anotar a alguien en la lista de espera o cambiar lo que pidió:
-// qué servicio, con quién, entre qué fechas y a qué horas le sirve.
 export default function FormWaitlist({ isOpen, onClose, initialData, context, onSaved }: FormWaitlistProps) {
   const { user, can } = useAuth();
   const vocab = useVocabulary();
@@ -48,7 +46,6 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // Lo creado sin salir del panel: una mascota o un servicio.
   const [addingDependent, setAddingDependent] = useState(false);
   const [serviceFormOpen, setServiceFormOpen] = useState(false);
   const [newServices, setNewServices] = useState<CreatedService[]>([]);
@@ -71,13 +68,11 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
     setTimeTo(initialData?.time_to ?? '');
     setPriority(initialData?.priority ?? false);
     setNotes(initialData?.notes ?? '');
-    // Solo al abrir: las listas no cambian mientras el panel está abierto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialData]);
 
   const service = services.find((s) => s.id === serviceId) ?? null;
 
-  // Profesionales que atienden en la sede elegida y, si el servicio tiene asignados, solo esos.
   const professionals = useMemo(() => {
     if (!context) return [];
     return context.professionals.filter((p) =>
@@ -294,7 +289,6 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
       </div>
     </FormDrawer>
 
-    {/* Servicio nuevo sin salir del panel: al guardarlo queda elegido. */}
     <QuickService
       isOpen={isOpen && serviceFormOpen}
       onClose={() => setServiceFormOpen(false)}
