@@ -101,11 +101,14 @@ class TenantProvisioner
                 ['tenant_id' => $tenantId, 'slug' => 'owner'],
                 [
                     'id'          => (string) Str::uuid(),
-                    'name'        => 'Dueño',
-                    'description' => 'Administrador principal del negocio',
+                    'name'        => Access::FACTORY['owner']['name'],
+                    'description' => Access::FACTORY['owner']['description'],
                     'is_system'   => true,
                 ]
             );
+
+            // Los demás roles de fábrica (gerente de sede, recepción, caja y profesional) con sus permisos.
+            Access::ensureRoles($tenant);
 
             DB::table('user_roles')->insert([
                 'tenant_id' => $tenantId,

@@ -121,7 +121,9 @@ class ProfessionalController extends Controller
             'status' => 'active',
         ]);
 
-        // Sin este rol la cuenta vería las citas de todos: se crea si la empresa aún no lo tiene.
+        // Sin este rol la cuenta vería las citas de todos: se crea si la empresa aún no lo tiene,
+        // con sus permisos de fábrica.
+        \App\Support\Access::ensureRoles($currentUser->tenant);
         $roleProfessional = \App\Models\Role::firstOrCreate(
             ['tenant_id' => $currentUser->tenant_id, 'slug' => 'professional'],
             [

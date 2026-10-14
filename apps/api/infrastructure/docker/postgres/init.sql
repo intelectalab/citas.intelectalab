@@ -818,6 +818,8 @@ CREATE TABLE roles (
     slug varchar(100) NOT NULL,
     description varchar(255),
     is_system boolean NOT NULL DEFAULT false,
+    -- Cuándo recibió sus permisos de fábrica. Vacío en un rol de fábrica: la API se los da la primera vez que hace falta.
+    permissions_seeded_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, slug)
@@ -837,6 +839,22 @@ CREATE TABLE user_roles (
     PRIMARY KEY (user_id, role_id)
 );
 CREATE INDEX idx_user_roles_tenant ON user_roles(tenant_id, user_id);
+
+-- Excepciones por persona: un permiso que su rol tiene y a ella se le quitó
+-- (granted = false), o uno que su rol no tiene y a ella se le dio (granted = true).
+CREATE TABLE user_permissions (
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    permission_id uuid NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+    granted boolean NOT NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, permission_id)
+);
+CREATE INDEX idx_user_permissions_tenant ON user_permissions(tenant_id, user_id);
+
+-- Sede a la que pertenece una cuenta del personal (la del gerente de sede, por ejemplo).
+ALTER TABLE users ADD COLUMN branch_id uuid NULL REFERENCES branches(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS personal_access_tokens (
     id bigserial PRIMARY KEY,

@@ -34,11 +34,12 @@ const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wi
 // Panel lateral de una cita: sus datos, la fase en que está, las acciones que
 // la mueven de fase, sus notas y su historial.
 export default function AppointmentDetail({ appointmentId, onClose, onChanged, onReschedule, onOpenRecord, reloadKey = 0 }: AppointmentDetailProps) {
-  const { user, hasModule } = useAuth();
+  const { user, hasModule, can } = useAuth();
   const vocab = useVocabulary();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
-  // Cobro de la cita (solo con el módulo de punto de venta): su venta y el panel para cobrar.
-  const canCharge = hasModule('pos') && !user?.is_saas_admin;
+  // Cobro de la cita (solo con el módulo de punto de venta y a quien su rol le deja
+  // cobrar o ver las ventas): su venta y el panel para cobrar.
+  const canCharge = hasModule('pos') && !user?.is_saas_admin && (can('sales.create') || can('sales.view'));
   const [charge, setCharge] = useState<ChargeContext | null>(null);
   const [chargeNote, setChargeNote] = useState('');
   const [charging, setCharging] = useState(false);
@@ -352,7 +353,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
             </section>
           )}
 
-          {appointment.record.uses && (
+          {appointment.record.uses && can('records.view') && (
             <section className="pt-5 border-t border-slate-100">
               <button
                 type="button"

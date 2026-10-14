@@ -18,7 +18,8 @@ class RoomController extends Controller
     private function assertCanManage(Request $request): void
     {
         abort_unless($request->user()->tenant_id, 403);
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa cambia las salas y equipos.');
+        $user = $request->user();
+        abort_unless($user->allows('rooms.create') || $user->allows('rooms.edit') || $user->allows('rooms.delete'), 403, 'Tu cuenta no tiene permiso para cambiar las salas y equipos.');
     }
 
     private function find(Request $request, string $id): object
@@ -75,7 +76,7 @@ class RoomController extends Controller
         $mode = Rooms::mode($user->tenant);
 
         return response()->json([
-            'can_manage' => $user->isTenantAdmin(),
+            'can_manage' => $user->allows('rooms.edit'),
             'equipment_down' => $mode,
             'links_equipment' => Rooms::hasParent(),
             // Solo en sedes activas se registra algo nuevo.

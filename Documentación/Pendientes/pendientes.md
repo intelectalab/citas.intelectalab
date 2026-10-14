@@ -20,8 +20,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Código de cliente sin restricción única.** `customers` no tiene `UNIQUE (tenant_id, code)`. Dos altas simultáneas podrían recibir el mismo código.
 - **Búsqueda en servicios y profesionales.** Siguen con `like`: distinguen mayúsculas y tildes. Clientes y citas ya usan `App\Support\Search`.
 - **Los seeds no se cargan solos.** `docker-compose.yml` monta únicamente `init.sql`; `seed.sql` y `seed_demo.sql` se cargan a mano, en ese orden.
-- **Páginas vacías.** `forgot-password`, `reset-password`, `users` y `subscription` tienen archivos de 0 bytes y rompen la verificación de tipos de Next.
-- **Permisos gruesos.** El seed tiene 19 permisos. El prototipo usa permisos `módulo.acción` sobre 22 módulos y siete roles con alcance.
+- **Páginas vacías.** `forgot-password`, `reset-password` y `subscription` tienen archivos de 0 bytes y rompen la verificación de tipos de Next.
 
 ## Detectados el 2026-10-05 (login multi-tenant y registro de clientes)
 
@@ -53,7 +52,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Resto de la configuración de la empresa.** Color, logo, permitir registro de clientes y regenerar el código de empresa no tienen pantalla.
 - **Colegiatura en otros rubros de salud.** La regla `professionals.license` solo está en `medical` y `vet`. Dental, psicología y fisioterapia también tienen colegio profesional; decidir si se activa.
 - **Colegiatura solo se oculta.** La API de profesionales sigue aceptando `license_number` en cualquier rubro.
-- **Rol `admin` del tenant.** `User::isTenantAdmin()` reconoce los roles `owner` y `admin`, pero el seed solo crea `owner`. Falta la gestión de roles y usuarios de la empresa.
 - **Módulos apagados y datos existentes.** Apagar un módulo solo lo oculta y bloquea; no hay aviso de qué deja de funcionar ni de datos que quedan sin acceso.
 
 ## Detectados el 2026-10-05 (consola de la plataforma)
@@ -104,7 +102,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Cargos por cancelar tarde y por no asistir.** La API avisa de la cancelación tardía, pero no cobra nada. Depende de la caja.
 - **Adelanto para reservar.** `requires_deposit` del servicio y las reglas de adelanto no se aplican. Depende de los pagos.
 - **Salas y equipos en la cita.** Ya se registran por sucursal, pero la cita no valida que haya una sala libre ni asigna `room_id`.
-- **Permisos por acción.** El prototipo separa confirmar, registrar llegada, atender, cancelar, reprogramar y forzar. Hoy cualquier personal con el módulo puede hacerlo todo, salvo forzar (solo el administrador) y las citas ajenas de un profesional.
+- **Permisos por acción en la agenda.** El prototipo separa confirmar, registrar llegada, atender, cancelar, reprogramar y forzar. Aquí "Editar" de Agenda y citas los reúne a todos; forzar un horario sigue siendo solo del administrador.
 - **Avisos al cliente.** Confirmación de reserva, recordatorio y aviso de reprogramación no se envían: no hay envío de mensajes.
 - **Citas recurrentes y clases grupales.** El prototipo las tiene; no se incluyeron.
 - **Reglas de agenda sin editor.** `agenda.require_confirmation`, `agenda.client_overlap`, `agenda.allow_override`, `agenda.slot_interval`, `cancel.require_reason` y `noshow.grace_minutes` usan su valor por defecto; no están en el editor de reglas de la plataforma (`src/lib/rules.ts`) ni en `/settings`.
@@ -249,7 +247,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Reportes por sede.** Tiempos de atención y la lista de citas no filtran por sede.
 - **Eliminar una sucursal.** Solo se desactiva. Una creada por error queda en "Inactivas".
 - **Sucursal en el portal.** El cliente ve el nombre de la sede al reservar, pero no su dirección ni su horario.
-- **Menú "Administración de sede".** El grupo se muestra al dueño o al rol `admin`; el resto del personal no llega a Sucursales por el menú, aunque la API le deja verlas.
 - **Pruebas en pantalla que faltan.** Cambiar de sede en la agenda, horario de un profesional con varias sedes, volver a activar una sede, vista de un profesional, empresa sin el módulo de salas, tema oscuro y el aspecto de la página de la sucursal.
 
 ## Detectados el 2026-10-09 (una empresa por rubro)
@@ -278,7 +275,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Ocupación por profesional.** El inicio da la ocupación total de hoy; el prototipo la muestra además por persona.
 - **Periodo del resumen.** Los números son de los últimos 30 días, sin poder cambiar el periodo ni filtrar por sede.
 - **Inicio de la plataforma.** El administrador SaaS ve solo el saludo y sus accesos; no hay números de la plataforma (empresas activas, pruebas por vencer, ingresos).
-- **Empresa en el menú.** "Empresa" está en el grupo que solo ve el administrador; el resto del personal no llega a la página, aunque la API le deja verla.
 - **Zona horaria de la empresa.** Se muestra, pero no se puede cambiar desde la página.
 - **Logo, color y redes de la empresa.** La página Empresa no los tiene; `tenant_settings` ya guarda color y logo.
 - **Componente anterior sin uso.** `features/companies/components/CompaniesTable.tsx` (la tabla de ejemplo) ya no se usa en ninguna página; se puede eliminar.
@@ -298,10 +294,8 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Igualar el botón de Sucursales.** "Nueva sucursal" con el tope alcanzado muestra un aviso al pulsarlo; "Nuevo profesional" ya sale bloqueado con su motivo. Conviene que Sucursales use el mismo botón bloqueado de la tabla.
 - **Botón bloqueado sin revisar a la vista.** Su aspecto y el del globo con el motivo se comprobaron por estilos, no en una captura. Falta también el tema oscuro y verlo habilitarse tras eliminar un profesional.
 - **Motivo del bloqueo en pantallas táctiles.** El globo aparece al pasar el cursor o con el teclado; en un celular no hay cursor. La tarjeta de arriba sí dice que se alcanzó el tope.
-- **Usuarios que no son profesionales.** No hay pantalla para crear recepción u otro administrador; cuando exista debe respetar el mismo tope de usuarios.
 - **Empresas que ya superan su plan.** Los topes impiden agregar, pero si a una empresa se le baja de plan no se le avisa ni se le pide reducir.
 - **Correo del profesional único en toda la plataforma.** Al registrar un profesional el correo no puede existir en ninguna otra empresa, a diferencia del resto de cuentas (único por empresa).
-- **Permisos del rol de profesional.** El rol que se crea solo para una empresa nueva nace sin permisos asignados; hoy los permisos no deciden nada (lo decide el rol), pero habrá que darlos cuando se apliquen.
 - **Pruebas en pantalla que faltan.** Entrar como un profesional de cada rubro de ejemplo y el aviso del tope de profesionales (se probó en pantalla el de usuarios).
 
 ## Detectados el 2026-10-10 (menú, ficha editable y horarios del equipo)
@@ -315,7 +309,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Editor de la plataforma.** La plantilla de ficha de cada rubro (consola de la plataforma) sigue con su editor anterior; podría usar la misma hoja editable.
 - **Horarios: semana tipo, no fechas.** La pantalla muestra el horario semanal; no marca las ausencias, vacaciones ni feriados de una semana concreta.
 - **Horarios: editar en la misma grilla.** Los tramos se cambian en el panel de la persona; no se pueden estirar ni mover sobre la línea de tiempo.
-- **Horarios para el personal.** El ítem está en "Tu empresa", que solo ve el administrador; un profesional no llega a ver el horario del equipo.
 - **Pruebas en pantalla que faltan.** Tema oscuro de las tres pantallas, Horarios con una sede sin horario definido y la hoja editable con odontograma.
 
 ## Detectados el 2026-10-10 (Select propio y "+" en formularios)
@@ -450,7 +443,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **El inicio sigue mostrando "valor de lo atendido".** Debe pasar a lo realmente cobrado.
 - **Cancelar una cita ya cobrada.** Se puede cancelar o marcar "no asistió" sin que la venta cambie ni se avise: la devolución hay que hacerla aparte, desde Ventas.
 - **Cambiar el precio de una cita con venta abierta.** La venta conserva el monto con que nació.
-- **Quién opera la caja.** Hoy solo el administrador ve Caja (un profesional cobra sus citas pero no abre ni cierra). Cuando exista el rol de recepción o caja habrá que darle acceso y decidir si cada quien ve solo su turno.
+- **Quién ve cada turno de caja.** Quien tiene el permiso de Caja ve y opera todas las cajas y todos los turnos. Falta decidir si cada quien debe ver solo el suyo.
 - **Aprobar un cierre con diferencia.** El administrador recibe el aviso, pero no hay un paso de "aprobar"; tampoco se puede reabrir un turno cerrado.
 - **Arqueo por billetes y monedas.** Se escribe el total contado; el prototipo cuenta por denominación.
 - **Medios que no son efectivo.** Se muestran por turno para cuadrarlos, pero no se concilian contra el banco o el POS.
@@ -501,3 +494,22 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Atendidas sin cobrar anteriores.** Al encender la regla, las citas atendidas que nadie cobró dejan de listarse (la pestaña desaparece), aunque sigan sin cobrar.
 - **Marca de "pagada" en la agenda.** Con la regla encendida ayudaría ver en la agenda qué citas de hoy ya pagaron.
 - **Pruebas en pantalla que faltan.** El botón "Perdonar", el aviso de pago de una cita presencial en la tarjeta del portal, "Dar por atendida" sin pagar, la opción "No pasa nada", tema oscuro y celular.
+
+## Detectados el 2026-10-13 (usuarios y roles, entrega 1)
+
+- **Entrega 2 (acordada): ocultar lo que la persona no puede usar.** En Clientes, Servicios, Cupones, Agenda, Lista de espera, Controles, Bloqueos y Profesionales los botones de crear, editar y eliminar se ven igual para todos; quien no puede recibe el mensaje al pulsar. Caja, Ventas, Sucursales, Salas, Feriados, Horarios y Plantillas de ficha ya los ocultan.
+- **Entrega 2: permisos especiales.** Forzar un horario, pedir acceso de emergencia a una ficha privada y perdonar inasistencias siguen siendo solo del administrador. Devolver dinero y anular van juntos en un solo permiso.
+- **Entrega 3 (acordada): que el gerente de sede vea solo su sede.** Hoy ve todas, y la pantalla lo avisa. Hay que filtrar por sede agenda, citas, clientes, ventas, caja y reportes. Lo mismo para recepción y caja si la empresa lo quiere.
+- **Entrar por la dirección a una pantalla sin permiso.** El menú no la muestra, pero si alguien escribe la dirección la pantalla abre y muestra el mensaje de la API en vez de una página "no tienes acceso".
+- **Listas que todo el personal puede leer.** Servicios, profesionales, horarios, sedes, salas, feriados, bloqueos y plantillas de ficha: apagar "Ver" quita la pantalla del menú, pero la API sigue entregando la lista porque otros formularios la necesitan para elegir.
+- **El profesional ya no elimina clientes ni cambia servicios.** Antes la API se lo permitía a cualquier cuenta. Si una empresa lo necesita, se le enciende al rol o a la persona.
+- **Un profesional con "Ver ventas" encendido ve todas las ventas**, no solo las de sus citas.
+- **Quien atiende citas no cambia de rol.** Un profesional que además administra necesita que se le enciendan los permisos uno por uno; no puede ser Administrador.
+- **La contraseña temporal no obliga a cambiarla.** Quien recibe su cuenta entra con ella y la conserva; el personal no tiene dónde cambiar su propia contraseña. Tampoco se envía por correo (no hay envío de mensajes).
+- **Bitácora de permisos.** Queda guardado quién le dio o quitó un permiso a una persona, pero no hay pantalla que lo muestre; los cambios a un rol no guardan quién los hizo.
+- **Avisos de la campana para los roles nuevos.** Recepción, caja y gerencia no reciben ningún aviso todavía: la campana sigue repartiendo solo a profesionales y administradores.
+- **Roles por rubro.** Todos los rubros nacen con los mismos cinco roles y los mismos permisos; el editor de rubros de la plataforma no los cambia.
+- **Catálogo de permisos en la API.** Los permisos y los roles de fábrica están en `App\Support\Access`; agregar un módulo nuevo (inventario, paquetes) exige agregarlo ahí y poner `perm:` en sus rutas.
+- **Dos cuentas de la misma persona.** El correo no se repite dentro de la empresa, pero el de un profesional no puede existir en ninguna otra empresa y el de un usuario sí.
+- **Sesión de soporte de la plataforma.** Quien entra al panel de una empresa actúa como su dueño: puede crear usuarios y cambiar permisos.
+- **Pruebas en pantalla que faltan.** Entrar como gerente de sede y como caja, reactivar una cuenta, el botón bloqueado por el tope del plan, filtros de fecha y orden de las dos tablas, la página de un rol y la rejilla en una pantalla grande, tema oscuro y celular.

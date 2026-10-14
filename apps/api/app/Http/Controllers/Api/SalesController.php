@@ -28,14 +28,14 @@ class SalesController extends Controller
         $user = $request->user();
         abort_unless($user->tenant, 403);
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
-        abort_if(!$user->isTenantAdmin() && $user->roles()->where('slug', 'professional')->exists(), 403, 'Las ventas las ve recepción o la administración de la empresa.');
+        // Quién ve las ventas lo decide el permiso sales.view de cada ruta.
 
         return $user->tenant->loadMissing(['settings', 'activeSubscription.plan']);
     }
 
     private function assertAdmin(User $user, string $what): void
     {
-        abort_unless($user->isTenantAdmin(), 403, "Solo el administrador de la empresa puede {$what}.");
+        abort_unless($user->allows('sales.delete'), 403, "Tu cuenta no tiene permiso para {$what}.");
     }
 
     private function find(Tenant $tenant, string $id): object
@@ -66,7 +66,7 @@ class SalesController extends Controller
         $refunds = DB::table('sale_refunds')->whereIn('sale_id', $ids)->groupBy('sale_id')->selectRaw('sale_id, sum(amount) as total')->pluck('total', 'sale_id');
 
         return response()->json([
-            'can_manage' => $request->user()->isTenantAdmin(),
+            'can_manage' => $request->user()->allows('sales.delete'),
             // Si la empresa no cobra antes de atender, puede haber citas atendidas que nadie cobró.
             'unbilled'   => Sales::mustPayFirst($tenant) ? null : $this->unbilled($tenant),
             'sales'      => $sales->map(fn ($s) => [
@@ -153,7 +153,7 @@ class SalesController extends Controller
                 'at'           => $iso($r->created_at),
                 'credit_note'  => $r->invoice_id && isset($notes[$r->invoice_id]) ? Invoicing::present($notes[$r->invoice_id]) : null,
             ])->values(),
-            'can_manage'       => $user->isTenantAdmin(),
+            'can_manage'       => $user->allows('sales.delete'),
             'void_blocked'     => Refunds::voidBlocked($sale),
             'refund_available' => $refund['available'],
             'refund_blocked'   => $refund['blocked'],

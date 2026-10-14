@@ -21,6 +21,7 @@ class User extends Authenticatable
     protected $fillable = [
         'id',
         'tenant_id',
+        'branch_id',
         'first_name',
         'last_name',
         'email',
@@ -40,6 +41,18 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'is_owner'          => 'boolean',
     ];
+
+    // Lo que esta persona puede hacer, calculado una vez por petición (App\Support\Access).
+    public ?array $accessCache = null;
+
+    /**
+     * Si su rol (con lo que se le quitó o agregó a ella) le permite algo, por
+     * ejemplo "customers.delete". El administrador de la empresa puede todo.
+     */
+    public function allows(string $permission): bool
+    {
+        return \App\Support\Access::allows($this, $permission);
+    }
 
     public function getAuthPassword()
     {

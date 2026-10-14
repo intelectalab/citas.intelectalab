@@ -26,13 +26,13 @@ class CompanyController extends Controller
 
     public function show(Request $request)
     {
-        return response()->json($this->payload($this->tenant($request), $request->user()->isTenantAdmin()));
+        return response()->json($this->payload($this->tenant($request), $request->user()->allows('company.edit')));
     }
 
     public function update(Request $request)
     {
         $tenant = $this->tenant($request);
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede cambiar estos datos.');
+        abort_unless($request->user()->allows('company.edit'), 403, 'Tu cuenta no tiene permiso para cambiar los datos de la empresa.');
 
         $validated = $request->validate([
             'name'       => 'required|string|max:150',

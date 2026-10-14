@@ -234,7 +234,8 @@ class Tenant extends Model
         $monthStart = now()->startOfMonth();
 
         return [
-            'users'              => DB::table('users')->where('tenant_id', $this->id)->where('is_owner', false)->count(),
+            // Una cuenta desactivada no entra al sistema y deja libre su lugar.
+            'users'              => DB::table('users')->where('tenant_id', $this->id)->where('is_owner', false)->where('status', 'active')->count(),
             'branches'           => DB::table('branches')->where('tenant_id', $this->id)->count(),
             'professionals'      => DB::table('professionals')->where('tenant_id', $this->id)->count(),
             // Las canceladas no cuentan contra el límite del plan.

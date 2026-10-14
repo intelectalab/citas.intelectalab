@@ -24,7 +24,11 @@ class RecordTemplateController extends Controller
     {
         $user = $request->user();
         abort_unless($user->tenant, 403);
-        abort_if($mustAdmin && !$user->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede cambiar las fichas.');
+        abort_if(
+            $mustAdmin && !$user->allows('record_templates.create') && !$user->allows('record_templates.edit') && !$user->allows('record_templates.delete'),
+            403,
+            'Tu cuenta no tiene permiso para cambiar las plantillas de ficha.',
+        );
 
         return $user->tenant;
     }
@@ -44,7 +48,7 @@ class RecordTemplateController extends Controller
         $owner = $templates->flatMap(fn (RecordTemplate $t) => $t->services->mapWithKeys(fn ($s) => [$s->id => $t->id]));
 
         return response()->json([
-            'can_edit'  => $request->user()->isTenantAdmin(),
+            'can_edit'  => $request->user()->allows('record_templates.edit'),
             'templates' => $templates->map(fn (RecordTemplate $t) => $this->present($t)),
             'services'  => Service::where('tenant_id', $tenant->id)
                 ->where('kind', Service::KIND_INDIVIDUAL)

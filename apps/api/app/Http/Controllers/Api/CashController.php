@@ -26,7 +26,7 @@ class CashController extends Controller
         $user = $request->user();
         abort_unless($user->tenant, 403);
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
-        abort_if($this->isOnlyProfessional($user), 403, 'La caja la opera recepción o la administración de la empresa.');
+        // Quién ve y opera la caja lo deciden los permisos cash.* de cada ruta.
 
         return $user->tenant->loadMissing(['settings', 'activeSubscription.plan']);
     }
@@ -72,7 +72,8 @@ class CashController extends Controller
         ];
 
         return response()->json([
-            'can_manage' => $request->user()->isTenantAdmin(),
+            'can_manage' => $request->user()->allows('cash.create'),
+            'can_operate' => $request->user()->allows('cash.edit'),
             'tolerance'  => Sales::rules($tenant)['cash_tolerance'],
             'branches'   => $branches->where('status', 'active')->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values(),
             'registers'  => $registers->map(fn ($r) => [
@@ -103,7 +104,7 @@ class CashController extends Controller
     public function storeRegister(Request $request)
     {
         $tenant = $this->tenant($request);
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa agrega cajas.');
+        abort_unless($request->user()->allows('cash.create'), 403, 'Tu cuenta no tiene permiso para agregar cajas.');
 
         $validated = $request->validate([
             'branch_id' => ['required', 'uuid', Rule::exists('branches', 'id')->where('tenant_id', $tenant->id)],
@@ -126,7 +127,7 @@ class CashController extends Controller
     public function updateRegister(Request $request, string $register)
     {
         $tenant = $this->tenant($request);
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa cambia las cajas.');
+        abort_unless($request->user()->allows('cash.create'), 403, 'Tu cuenta no tiene permiso para cambiar las cajas.');
 
         $row = DB::table('cash_registers')->where('tenant_id', $tenant->id)->where('id', $register)->first();
         abort_unless($row, 404);

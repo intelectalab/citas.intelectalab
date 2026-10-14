@@ -8,6 +8,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\TypeDocumentController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\AccessController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ServiceCategoryController;
 use App\Http\Controllers\Api\TenantController;
@@ -145,109 +146,135 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
 
     Route::apiResource('statuses', StatusController::class);
 
-    // Sucursales: las ve todo el personal; las cambia el administrador de la empresa.
+    // Además del módulo, cada ruta exige el permiso de quien la usa:
+    // ->middleware('perm:<pantalla>.<view|create|edit|delete>'). Los permisos y lo
+    // que deja hacer cada uno están en App\Support\Access::CATALOG.
+    // $guarded registra un recurso con su permiso por acción. Las listas que otros
+    // formularios necesitan para elegir (servicios, profesionales, sedes...) quedan
+    // abiertas a todo el personal: ahí "ver" solo decide si la pantalla sale en el menú.
+    $guarded = function (string $name, string $controller, string $key, bool $guardView = false, array $except = []) {
+        foreach (['view' => ['index', 'show'], 'create' => ['store'], 'edit' => ['update'], 'delete' => ['destroy']] as $action => $methods) {
+            $methods = array_values(array_diff($methods, $except));
+
+            if (!$methods) {
+                continue;
+            }
+
+            $routes = Route::apiResource($name, $controller)->only($methods);
+
+            if ($action !== 'view' || $guardView) {
+                $routes->middleware("perm:{$key}.{$action}");
+            }
+        }
+    };
+
+    // Sucursales: las ve todo el personal; las cambia quien tenga el permiso.
     Route::get('/branches', [BranchController::class, 'index']);
-    Route::post('/branches', [BranchController::class, 'store']);
+    Route::post('/branches', [BranchController::class, 'store'])->middleware('perm:branches.create');
     Route::get('/branches/{branch}', [BranchController::class, 'show']);
-    Route::put('/branches/{branch}', [BranchController::class, 'update']);
-    Route::post('/branches/{branch}/status', [BranchController::class, 'changeStatus']);
-    Route::put('/branches/{branch}/hours', [BranchController::class, 'updateHours']);
+    Route::put('/branches/{branch}', [BranchController::class, 'update'])->middleware('perm:branches.edit');
+    Route::post('/branches/{branch}/status', [BranchController::class, 'changeStatus'])->middleware('perm:branches.edit');
+    Route::put('/branches/{branch}/hours', [BranchController::class, 'updateHours'])->middleware('perm:branches.edit');
 
     Route::middleware('module:resources')->group(function () {
         Route::get('/rooms', [RoomController::class, 'index']);
-        Route::post('/branches/{branch}/rooms', [RoomController::class, 'store']);
-        Route::put('/rooms/{room}', [RoomController::class, 'update']);
-        Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);
+        Route::post('/branches/{branch}/rooms', [RoomController::class, 'store'])->middleware('perm:rooms.create');
+        Route::put('/rooms/{room}', [RoomController::class, 'update'])->middleware('perm:rooms.edit');
+        Route::delete('/rooms/{room}', [RoomController::class, 'destroy'])->middleware('perm:rooms.delete');
     });
 
     // Cada grupo exige que el tenant tenga activo el módulo (plan, rubro y
     // configuración propia). Las rutas de módulos nuevos (inventory, quotes,
     // memberships...) deben declararse igual: ->middleware('module:<clave>').
-    Route::middleware('module:agenda')->group(function () {
-        Route::apiResource('specialties', SpecialtyController::class);
-        Route::apiResource('services', ServiceController::class);
-        Route::apiResource('service-categories', ServiceCategoryController::class);
-        Route::apiResource('professionals', ProfessionalController::class);
+    Route::middleware('module:agenda')->group(function () use ($guarded) {
+        $guarded('specialties', SpecialtyController::class, 'professionals');
+        $guarded('services', ServiceController::class, 'services');
+        $guarded('service-categories', ServiceCategoryController::class, 'services');
+        $guarded('professionals', ProfessionalController::class, 'professionals');
         Route::get('/schedules', [ProfessionalScheduleController::class, 'index']);
         Route::get('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'show']);
-        Route::put('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'update']);
+        Route::put('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'update'])->middleware('perm:professionals.edit');
         Route::get('/availability-blocks/options', [AvailabilityBlockController::class, 'options']);
         Route::get('/availability-blocks/affected', [AvailabilityBlockController::class, 'affected']);
-        Route::apiResource('availability-blocks', AvailabilityBlockController::class)->except(['create', 'edit']);
+        $guarded('availability-blocks', AvailabilityBlockController::class, 'blocks');
 
-        // Feriados: los ve todo el personal, los cambia el administrador de la empresa.
-        Route::post('/holidays/national', [HolidayController::class, 'loadNational']);
-        Route::apiResource('holidays', HolidayController::class)->except(['create', 'edit']);
+        // Feriados: los ve todo el personal; los cambia quien tenga el permiso.
+        Route::post('/holidays/national', [HolidayController::class, 'loadNational'])->middleware('perm:holidays.create');
+        $guarded('holidays', HolidayController::class, 'holidays');
 
-        Route::get('/appointments/availability', [AppointmentController::class, 'availability']);
-        Route::get('/appointments/context', [AppointmentController::class, 'context']);
-        Route::get('/appointments/day', [AppointmentController::class, 'day']);
-        Route::get('/appointments/metrics', [AppointmentController::class, 'metrics']);
+        Route::middleware('perm:agenda.view')->group(function () {
+            Route::get('/appointments/availability', [AppointmentController::class, 'availability']);
+            Route::get('/appointments/context', [AppointmentController::class, 'context']);
+            Route::get('/appointments/day', [AppointmentController::class, 'day']);
+        });
+        Route::get('/appointments/metrics', [AppointmentController::class, 'metrics'])->middleware('perm:attention.view');
         Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'show']);
-        Route::apiResource('appointments', AppointmentController::class)->except(['destroy']);
-        Route::post('/appointments/{appointment}/status', [AppointmentController::class, 'changeStatus']);
-        Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule']);
+        $guarded('appointments', AppointmentController::class, 'agenda', true, ['destroy']);
+        Route::post('/appointments/{appointment}/status', [AppointmentController::class, 'changeStatus'])->middleware('perm:agenda.edit');
+        Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])->middleware('perm:agenda.edit');
 
         // Lista de espera: quién quiere una cita y no encontró horario.
-        Route::get('/waitlist', [WaitlistController::class, 'index']);
-        Route::post('/waitlist', [WaitlistController::class, 'store']);
-        Route::put('/waitlist/{entry}', [WaitlistController::class, 'update']);
-        Route::post('/waitlist/{entry}/status', [WaitlistController::class, 'changeStatus']);
-        Route::get('/waitlist/{entry}/slots', [WaitlistController::class, 'slots']);
+        Route::get('/waitlist', [WaitlistController::class, 'index'])->middleware('perm:waitlist.view');
+        Route::post('/waitlist', [WaitlistController::class, 'store'])->middleware('perm:waitlist.create');
+        Route::put('/waitlist/{entry}', [WaitlistController::class, 'update'])->middleware('perm:waitlist.edit');
+        Route::post('/waitlist/{entry}/status', [WaitlistController::class, 'changeStatus'])->middleware('perm:waitlist.edit');
+        Route::get('/waitlist/{entry}/slots', [WaitlistController::class, 'slots'])->middleware('perm:waitlist.view');
 
         // Controles y seguimiento: a quién hay que volver a llamar y para qué. Va con la
         // agenda (no con las fichas): también nacen del servicio atendido o a mano.
-        Route::get('/recalls', [RecallController::class, 'index']);
-        Route::post('/recalls', [RecallController::class, 'store']);
-        Route::put('/recalls/{recall}', [RecallController::class, 'update']);
-        Route::post('/recalls/{recall}/status', [RecallController::class, 'changeStatus']);
+        Route::get('/recalls', [RecallController::class, 'index'])->middleware('perm:recalls.view');
+        Route::post('/recalls', [RecallController::class, 'store'])->middleware('perm:recalls.create');
+        Route::put('/recalls/{recall}', [RecallController::class, 'update'])->middleware('perm:recalls.edit');
+        Route::post('/recalls/{recall}/status', [RecallController::class, 'changeStatus'])->middleware('perm:recalls.edit');
     });
 
     // Fichas de atención: plantillas de la empresa y fichas llenadas en cada cita.
-    Route::middleware('module:records')->group(function () {
-        Route::apiResource('record-templates', RecordTemplateController::class)->except(['show']);
-        Route::get('/appointments/{appointment}/record', [CareRecordController::class, 'forAppointment']);
-        Route::put('/appointments/{appointment}/record', [CareRecordController::class, 'save']);
-        Route::post('/appointments/{appointment}/record/refresh-template', [CareRecordController::class, 'refreshTemplate']);
-        Route::get('/care-records', [CareRecordController::class, 'index']);
-        Route::get('/care-records/{careRecord}', [CareRecordController::class, 'show']);
-        Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum']);
+    Route::middleware('module:records')->group(function () use ($guarded) {
+        $guarded('record-templates', RecordTemplateController::class, 'record_templates', false, ['show']);
+        Route::get('/appointments/{appointment}/record', [CareRecordController::class, 'forAppointment'])->middleware('perm:records.view');
+        Route::put('/appointments/{appointment}/record', [CareRecordController::class, 'save'])->middleware('perm:records.edit');
+        Route::post('/appointments/{appointment}/record/refresh-template', [CareRecordController::class, 'refreshTemplate'])->middleware('perm:records.edit');
+        Route::get('/care-records', [CareRecordController::class, 'index'])->middleware('perm:records.view');
+        Route::get('/care-records/{careRecord}', [CareRecordController::class, 'show'])->middleware('perm:records.view');
+        Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum'])->middleware('perm:records.edit');
         Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess']);
-        Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf']);
+        Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf'])->middleware('perm:records.view');
     });
 
     // Ventas y caja: cobrar una cita y llevar el efectivo de cada turno.
-    Route::middleware('module:pos')->group(function () {
-        Route::get('/cash', [CashController::class, 'index']);
-        Route::post('/cash/registers', [CashController::class, 'storeRegister']);
-        Route::put('/cash/registers/{register}', [CashController::class, 'updateRegister']);
-        Route::post('/cash/registers/{register}/open', [CashController::class, 'open']);
-        Route::get('/cash/sessions/{session}', [CashController::class, 'show']);
-        Route::post('/cash/sessions/{session}/movements', [CashController::class, 'move']);
-        Route::post('/cash/sessions/{session}/close', [CashController::class, 'close']);
+    Route::middleware('module:pos')->group(function () use ($guarded) {
+        Route::get('/cash', [CashController::class, 'index'])->middleware('perm:cash.view');
+        Route::post('/cash/registers', [CashController::class, 'storeRegister'])->middleware('perm:cash.create');
+        Route::put('/cash/registers/{register}', [CashController::class, 'updateRegister'])->middleware('perm:cash.create');
+        Route::post('/cash/registers/{register}/open', [CashController::class, 'open'])->middleware('perm:cash.edit');
+        Route::get('/cash/sessions/{session}', [CashController::class, 'show'])->middleware('perm:cash.view');
+        Route::post('/cash/sessions/{session}/movements', [CashController::class, 'move'])->middleware('perm:cash.edit');
+        Route::post('/cash/sessions/{session}/close', [CashController::class, 'close'])->middleware('perm:cash.edit');
 
-        Route::get('/appointments/{appointment}/sale', [SaleController::class, 'forAppointment']);
-        Route::post('/appointments/{appointment}/charge', [SaleController::class, 'charge']);
-        Route::post('/appointments/{appointment}/invoice', [SaleController::class, 'issueInvoice']);
+        Route::get('/appointments/{appointment}/sale', [SaleController::class, 'forAppointment'])->middleware('perm:sales.create|sales.view');
+        Route::post('/appointments/{appointment}/charge', [SaleController::class, 'charge'])->middleware('perm:sales.create');
+        Route::post('/appointments/{appointment}/invoice', [SaleController::class, 'issueInvoice'])->middleware('perm:sales.create');
 
         // Ventas y pagos de la empresa: consultar, anular lo que no tiene pagos y devolver lo cobrado.
-        Route::get('/sales', [SalesController::class, 'index']);
-        Route::get('/sales/{sale}', [SalesController::class, 'show']);
-        Route::post('/sales/{sale}/void', [SalesController::class, 'void']);
-        Route::post('/sales/{sale}/refunds', [SalesController::class, 'refund']);
-        Route::get('/payments', [SalesController::class, 'payments']);
+        Route::get('/sales', [SalesController::class, 'index'])->middleware('perm:sales.view');
+        Route::get('/sales/{sale}', [SalesController::class, 'show'])->middleware('perm:sales.view');
+        Route::post('/sales/{sale}/void', [SalesController::class, 'void'])->middleware('perm:sales.delete');
+        Route::post('/sales/{sale}/refunds', [SalesController::class, 'refund'])->middleware('perm:sales.delete');
+        Route::get('/payments', [SalesController::class, 'payments'])->middleware('perm:sales.view');
 
         // Cupones de descuento que se aplican al cobrar.
-        Route::apiResource('coupons', CouponController::class)->except(['show']);
+        $guarded('coupons', CouponController::class, 'coupons', true, ['show']);
     });
 
-    Route::middleware('module:crm')->group(function () {
+    Route::middleware('module:crm')->group(function () use ($guarded) {
         Route::get('/pipeline-stages', [PipelineStageController::class, 'index']);
-        Route::apiResource('customers', CustomerController::class);
-        Route::put('/customers/{customer}/portal-access', [CustomerController::class, 'portalAccess']);
-        Route::post('/customers/{customer}/portal-access/reset', [CustomerController::class, 'resetPortalPassword']);
-        Route::post('/customers/{customer}/booking-strikes/forgive', [CustomerController::class, 'forgiveBooking']);
-        Route::apiResource('customers.dependents', CustomerDependentController::class)->except(['show']);
+        $guarded('customers', CustomerController::class, 'customers', true);
+        Route::put('/customers/{customer}/portal-access', [CustomerController::class, 'portalAccess'])->middleware('perm:customers.edit');
+        Route::post('/customers/{customer}/portal-access/reset', [CustomerController::class, 'resetPortalPassword'])->middleware('perm:customers.edit');
+        Route::post('/customers/{customer}/booking-strikes/forgive', [CustomerController::class, 'forgiveBooking'])->middleware('perm:customers.edit');
+        // Agregar una mascota o un hijo también se hace al registrar al cliente.
+        Route::apiResource('customers.dependents', CustomerDependentController::class)->only(['index'])->middleware('perm:customers.view');
+        Route::apiResource('customers.dependents', CustomerDependentController::class)->only(['store', 'update', 'destroy'])->middleware('perm:customers.edit|customers.create');
         Route::apiResource('pipelines', PipelineController::class);
 
         Route::prefix('contacts')->group(function () {
@@ -261,11 +288,38 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     // Configuración de la empresa: solo su administrador (el controlador lo valida).
     // Datos generales de la empresa: los ve su personal; los cambia su administrador.
     Route::get('/company', [\App\Http\Controllers\Api\CompanyController::class, 'show']);
-    Route::put('/company', [\App\Http\Controllers\Api\CompanyController::class, 'update']);
+    Route::put('/company', [\App\Http\Controllers\Api\CompanyController::class, 'update'])->middleware('perm:company.edit');
 
-    Route::get('/tenant-settings', [TenantSettingController::class, 'show']);
-    Route::put('/tenant-settings', [TenantSettingController::class, 'update']);
-    
+    Route::get('/tenant-settings', [TenantSettingController::class, 'show'])->middleware('perm:settings.view');
+    Route::put('/tenant-settings', [TenantSettingController::class, 'update'])->middleware('perm:settings.edit');
+
+    // Usuarios y roles: quién entra al sistema, con qué rol y qué puede hacer cada quien.
+    Route::prefix('access')->group(function () {
+        Route::middleware('perm:users.view')->group(function () {
+            Route::get('/users', [AccessController::class, 'users']);
+            Route::get('/users/{user}', [AccessController::class, 'showUser']);
+            Route::get('/roles', [AccessController::class, 'roles']);
+            Route::get('/roles/{role}', [AccessController::class, 'showRole']);
+        });
+
+        Route::middleware('perm:users.create')->group(function () {
+            Route::post('/users', [AccessController::class, 'storeUser']);
+            Route::post('/roles', [AccessController::class, 'storeRole']);
+        });
+
+        Route::middleware('perm:users.edit')->group(function () {
+            Route::put('/users/{user}', [AccessController::class, 'updateUser']);
+            Route::post('/users/{user}/password', [AccessController::class, 'resetPassword']);
+            Route::put('/users/{user}/permissions', [AccessController::class, 'setUserPermission']);
+            Route::delete('/users/{user}/permissions', [AccessController::class, 'resetUserPermissions']);
+            Route::put('/roles/{role}', [AccessController::class, 'updateRole']);
+            Route::put('/roles/{role}/permissions', [AccessController::class, 'setRolePermission']);
+            Route::post('/roles/{role}/restore', [AccessController::class, 'restoreRole']);
+        });
+
+        Route::delete('/roles/{role}', [AccessController::class, 'destroyRole'])->middleware('perm:users.delete');
+    });
+
 
 
 });

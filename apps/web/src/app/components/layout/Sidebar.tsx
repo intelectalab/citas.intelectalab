@@ -45,6 +45,7 @@ import {
   TicketPercent,
   Receipt,
   Coins,
+  UserCog,
   LucideIcon
 } from 'lucide-react';
 
@@ -56,6 +57,8 @@ interface MenuItem {
   requireAdmin?: boolean; 
   requireProfessional?: boolean;
   module?: string;
+  // Permiso de su rol que hace falta para ver el ítem, por ejemplo 'sales.view'.
+  perm?: string;
   // Solo administrador SaaS; el soporte SaaS no lo ve.
   saasAdminOnly?: boolean;
 }
@@ -72,6 +75,7 @@ interface MenuGroup {
 // El menú se arma con el vocabulario del rubro. Cada ítem con `module` solo se
 // muestra si el tenant tiene ese módulo activo (plan, rubro y configuración).
 // Los que apuntan a /modules/<clave> aún no tienen pantalla propia.
+// Cada ítem con `perm` solo se muestra a quien su rol le permite ver esa pantalla.
 const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
   {
     id: 'home',
@@ -96,14 +100,14 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Agenda',
     groupIcon: CalendarDays,
     items: [
-      { name: 'Agenda', href: '/agenda', icon: CalendarDays, module: 'agenda' },
-      { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda' },
+      { name: 'Agenda', href: '/agenda', icon: CalendarDays, module: 'agenda', perm: 'agenda.view' },
+      { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda', perm: 'agenda.view' },
       { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
-      { name: 'Lista de espera', href: '/waitlist', icon: Hourglass, module: 'agenda' },
-      { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'agenda' },
+      { name: 'Lista de espera', href: '/waitlist', icon: Hourglass, module: 'agenda', perm: 'waitlist.view' },
+      { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'agenda', perm: 'recalls.view' },
       { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes' },
-      { name: 'Bloqueos y ausencias', href: '/blocks', icon: CalendarOff, module: 'agenda' },
-      { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda' },
+      { name: 'Bloqueos y ausencias', href: '/blocks', icon: CalendarOff, module: 'agenda', perm: 'blocks.view' },
+      { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda', perm: 'attention.view' },
     ]
   },
   {
@@ -111,8 +115,8 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Atención',
     groupIcon: Layers,
     items: [
-      { name: vocab.clients, href: '/customers', icon: Users, module: 'crm' },
-      { name: 'Fichas de atención', href: '/records', icon: ClipboardList, module: 'records' },
+      { name: vocab.clients, href: '/customers', icon: Users, module: 'crm', perm: 'customers.view' },
+      { name: 'Fichas de atención', href: '/records', icon: ClipboardList, module: 'records', perm: 'records.view' },
     ]
   },
   {
@@ -121,10 +125,10 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Equipo y catálogo',
     groupIcon: Layers,
     items: [
-      { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda' },
-      { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda', requireAdmin: true },
-      { name: 'Horarios del equipo', href: '/schedules', icon: Clock, module: 'agenda', requireAdmin: true },
-      { name: 'Salas y equipos', href: '/rooms', icon: DoorOpen, module: 'resources' },
+      { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda', perm: 'services.view' },
+      { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda', perm: 'professionals.view' },
+      { name: 'Horarios del equipo', href: '/schedules', icon: Clock, module: 'agenda', perm: 'professionals.view' },
+      { name: 'Salas y equipos', href: '/rooms', icon: DoorOpen, module: 'resources', perm: 'rooms.view' },
     ]
   },
   {
@@ -132,14 +136,14 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Ventas',
     groupIcon: Briefcase,
     items: [
-      { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm' },
-      { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes' },
-      { name: 'Punto de venta', href: '/modules/pos', icon: ShoppingCart, module: 'pos' },
-      { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', requireAdmin: true },
-      { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', requireAdmin: true },
-      { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', requireAdmin: true },
-      { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', requireAdmin: true },
-      { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory' },
+      { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm', requireAdmin: true },
+      { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes', requireAdmin: true },
+      { name: 'Punto de venta', href: '/modules/pos', icon: ShoppingCart, module: 'pos', requireAdmin: true },
+      { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', perm: 'sales.view' },
+      { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', perm: 'sales.view' },
+      { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', perm: 'cash.view' },
+      { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
+      { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory', requireAdmin: true },
     ]
   },
   {
@@ -147,20 +151,20 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Fidelización',
     groupIcon: Gift,
     items: [
-      { name: 'Paquetes', href: '/modules/packages', icon: Boxes, module: 'packages' },
-      { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships' },
-      { name: 'Puntos y gift cards', href: '/modules/loyalty', icon: Gift, module: 'loyalty' },
-      { name: 'Marketing', href: '/modules/marketing', icon: Megaphone, module: 'marketing' },
+      { name: 'Paquetes', href: '/modules/packages', icon: Boxes, module: 'packages', requireAdmin: true },
+      { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships', requireAdmin: true },
+      { name: 'Puntos y gift cards', href: '/modules/loyalty', icon: Gift, module: 'loyalty', requireAdmin: true },
+      { name: 'Marketing', href: '/modules/marketing', icon: Megaphone, module: 'marketing', requireAdmin: true },
     ]
   },
   {
     id: 'clinic-admin',
     groupName: 'Tu empresa',
     groupIcon: Building2,
-    requireAdmin: true,
     items: [
-      { name: 'Sucursales', href: '/branches', icon: Store },
-      { name: 'Empresa', href: '/companies', icon: Building2 },
+      { name: 'Sucursales', href: '/branches', icon: Store, perm: 'branches.view' },
+      { name: 'Empresa', href: '/companies', icon: Building2, perm: 'company.view' },
+      { name: 'Usuarios y roles', href: '/users', icon: UserCog, perm: 'users.view' },
     ]
   }
 ];
@@ -172,7 +176,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
-  const { user, hasFeature, hasModule, loading } = useAuth();
+  const { user, hasFeature, hasModule, can, loading } = useAuth();
   const vocab = useVocabulary();
   const { platform } = usePlatform();
   const menuGroups = buildMenuGroups(vocab);
@@ -195,10 +199,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   // Equipo de la plataforma: administrador SaaS o soporte SaaS.
   const isSaasAdmin = Boolean(user?.is_saas_admin);
   const isSuperAdmin = Boolean(isSaasAdmin || user?.is_saas_support);
-
-  const isProfessional = Boolean(
-    user?.roles?.some((r: any) => r.slug === 'professional')
-  );
 
   const hasNoPlan = !isSuperAdmin && !user?.plan_slug;
 
@@ -242,15 +242,9 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             if (isSuperAdmin) {
               if (group.id !== 'saas-admin' && group.id !== 'home') return null;
             } else {
+              // En una empresa cada ítem se muestra según el permiso de quien entra;
+              // un grupo sin ítems visibles no aparece.
               if (group.id === 'saas-admin') return null;
-
-              if (isProfessional) {
-                if (group.id === 'clinic-admin' || group.id === 'crm' || group.id === 'loyalty') return null;
-              } else {
-                if (group.requireAdmin && !user?.is_owner && !user?.roles?.some((r: any) => r.slug === 'admin')) {
-                  if (group.id === 'clinic-admin') return null;
-                }
-              }
             }
 
             // Validar si el grupo requiere características (features) del plan
@@ -260,6 +254,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
               if (item.saasAdminOnly && !isSaasAdmin) return false;
               // Ítems de administración dentro de un grupo que ve todo el equipo.
               if (item.requireAdmin && !user?.is_tenant_admin) return false;
+              if (item.perm && !isSuperAdmin && !can(item.perm)) return false;
               if (item.feature && !hasFeature(item.feature)) return false;
               if (item.module && !hasModule(item.module)) return false;
               return true;
@@ -376,7 +371,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             {!isCollapsed && <span className="truncate">Configuración</span>}
           </Link>
         )}
-        {user?.is_tenant_admin && (
+        {!isSuperAdmin && can('settings.view') && (
           <Link
             href="/settings"
             title={isCollapsed ? 'Configuración' : undefined}

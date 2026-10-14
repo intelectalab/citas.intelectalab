@@ -43,7 +43,8 @@ class HolidayController extends Controller
 
     private function assertCanManage(Request $request): void
     {
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa cambia los feriados.');
+        $user = $request->user();
+        abort_unless($user->allows('holidays.create') || $user->allows('holidays.edit') || $user->allows('holidays.delete'), 403, 'Tu cuenta no tiene permiso para cambiar los feriados.');
     }
 
     public function index(Request $request)
@@ -66,7 +67,7 @@ class HolidayController extends Controller
             ->orderBy('name')
             ->get();
 
-        $canManage = $request->user()->isTenantAdmin();
+        $canManage = $request->user()->allows('holidays.edit');
 
         return response()->json([
             'holidays'   => $holidays->map(fn (Holiday $holiday) => $this->present($holiday, $tenant, $today, $canManage)),
@@ -109,7 +110,7 @@ class HolidayController extends Controller
                 ];
             });
 
-        return response()->json($this->present($holiday, $tenant, $today, $request->user()->isTenantAdmin()) + ['affected' => $affected]);
+        return response()->json($this->present($holiday, $tenant, $today, $request->user()->allows('holidays.edit')) + ['affected' => $affected]);
     }
 
     public function store(Request $request)

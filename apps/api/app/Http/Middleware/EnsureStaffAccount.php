@@ -21,6 +21,11 @@ class EnsureStaffAccount
             ], 403);
         }
 
+        // Una cuenta desactivada deja de entrar aunque tuviera la sesión abierta.
+        if ($request->user()->tenant_id && $request->user()->status === 'inactive') {
+            return response()->json(['message' => 'Tu cuenta está desactivada. Comunícate con quien administra tu empresa.'], 401);
+        }
+
         return $next($request);
     }
 }

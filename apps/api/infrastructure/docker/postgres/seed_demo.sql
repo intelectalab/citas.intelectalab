@@ -177,30 +177,9 @@ INSERT INTO roles (id, tenant_id, name, slug, description, is_system) VALUES
   ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a45', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33', 'Psicólogo / Profesional', 'professional', 'Personal Mente Sana', true)
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33'::uuid, id FROM permissions
-UNION ALL
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22'::uuid, id FROM permissions
-UNION ALL
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44'::uuid, id FROM permissions
-UNION ALL
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55'::uuid, id FROM permissions
-UNION ALL
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66'::uuid, id FROM permissions
-UNION ALL
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77'::uuid, id FROM permissions
-ON CONFLICT DO NOTHING;
-
--- Los dueños de las empresas de los demás rubros, igual que los anteriores.
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
-WHERE r.slug = 'owner' AND r.tenant_id IN ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a88', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aaa', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380abb')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a81'::uuid, id FROM permissions 
-WHERE name IN ('catalog.manage', 'appointments.manage', 'appointments.attend', 'reports.view')
-ON CONFLICT DO NOTHING;
+-- Los permisos de cada rol no se escriben aquí: la API le da a cada rol de fábrica
+-- sus permisos iniciales (y su nombre: Administrador, Profesional...) la primera vez
+-- que hace falta. Ver App\Support\Access::ensureRoles.
 
 INSERT INTO users (id, tenant_id, first_name, last_name, email, password_hash, is_owner, status) VALUES
   ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Carlos', 'Mendoza', 'admin@luxuryspa.pe', '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', true, 'active'),
@@ -850,14 +829,6 @@ SELECT t.id, 'Profesional', 'professional', 'Atiende sus propias citas', true
 FROM tenants t
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r
-CROSS JOIN permissions p
-WHERE r.slug = 'professional' AND r.tenant_id IS NOT NULL
-  AND p.name IN ('catalog.manage', 'appointments.manage', 'appointments.attend', 'reports.view')
-ON CONFLICT DO NOTHING;
-
 -- Nombre sin el título (Dr., Dra., Ps., Lic., Tec.) y correo con el dominio de su empresa.
 CREATE TEMP TABLE demo_accounts ON COMMIT DROP AS
 SELECT p.id AS professional_id, p.tenant_id, gen_random_uuid() AS user_id,
@@ -881,6 +852,41 @@ JOIN roles r ON r.tenant_id = a.tenant_id AND r.slug = 'professional';
 UPDATE professionals AS p SET user_id = a.user_id
 FROM demo_accounts a
 WHERE a.professional_id = p.id;
+
+-- Personal que no atiende citas: recepción, caja y gerencia de sede. Los roles nacen
+-- aquí sin permisos; la API se los da la primera vez (App\Support\Access::ensureRoles).
+-- Solo en empresas con lugar en su plan: Don Filo y Huellitas quedan como estaban.
+INSERT INTO roles (tenant_id, name, slug, description, is_system)
+SELECT t.id, v.name, v.slug, v.description, true
+FROM tenants t
+CROSS JOIN (VALUES
+  ('Gerente de sede', 'manager', 'Lleva el día a día de una sede: agenda, equipo, ventas y caja.'),
+  ('Recepción', 'reception', 'Agenda, recibe y cobra a quien llega. No elimina ni devuelve dinero.'),
+  ('Caja', 'cashier', 'Cobra y lleva la caja. Ve la agenda y los clientes sin cambiarlos.')
+) AS v(name, slug, description)
+ON CONFLICT (tenant_id, slug) DO NOTHING;
+
+-- branch_n: la sede de la persona, contando desde 0 por orden alfabético.
+CREATE TEMP TABLE demo_office ON COMMIT DROP AS
+SELECT gen_random_uuid() AS user_id, v.tenant_id::uuid AS tenant_id, v.slug, v.first_name, v.last_name, v.email, v.phone,
+       (SELECT b.id FROM branches b WHERE b.tenant_id = v.tenant_id::uuid ORDER BY b.name LIMIT 1 OFFSET v.branch_n) AS branch_id
+FROM (VALUES
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'reception', 'Rosa', 'Medina Paz', 'rosa.medina@luxuryspa.pe', '+51 957 300 101', 0),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'cashier', 'Karina', 'Lozano Vera', 'karina.lozano@luxuryspa.pe', '+51 957 300 102', 0),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'manager', 'Gustavo', 'Paredes Ruiz', 'gustavo.paredes@luxuryspa.pe', '+51 957 300 103', 1),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'reception', 'Milagros', 'Chávez Soto', 'milagros.chavez@dentalplus.pe', '+51 957 300 201', 0),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'manager', 'Enrique', 'Tapia León', 'enrique.tapia@dentalplus.pe', '+51 957 300 202', 1),
+  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a77', 'reception', 'Fiorella', 'Campos Díaz', 'fiorella.campos@bellaaura.pe', '+51 957 300 301', 0)
+) AS v(tenant_id, slug, first_name, last_name, email, phone, branch_n);
+
+INSERT INTO users (id, tenant_id, branch_id, first_name, last_name, email, phone, password_hash, is_owner, status)
+SELECT o.user_id, o.tenant_id, o.branch_id, o.first_name, o.last_name, o.email, o.phone, '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', false, 'active'
+FROM demo_office o;
+
+INSERT INTO user_roles (tenant_id, user_id, role_id)
+SELECT o.tenant_id, o.user_id, r.id
+FROM demo_office o
+JOIN roles r ON r.tenant_id = o.tenant_id AND r.slug = o.slug;
 
 INSERT INTO customers (tenant_id, code, first_name, last_name, document_number, email, phone)
 SELECT v.tenant_id::uuid,

@@ -22,7 +22,7 @@ class CouponController extends Controller
         $user = $request->user();
         abort_unless($user->tenant_id, 403);
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
-        abort_unless($user->isTenantAdmin(), 403, 'Solo el administrador de la empresa maneja los cupones.');
+        // Quién ve y cambia los cupones lo deciden los permisos coupons.* de cada ruta.
 
         return $user->tenant_id;
     }

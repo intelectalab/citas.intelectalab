@@ -65,6 +65,9 @@ class AuthController extends Controller
             ] : null,
             'account_type' => 'staff',
             'roles' => $user->roles ? $user->roles->pluck('slug') : [],
+            // Lo que su rol le permite ("customers.delete"...), ya con lo quitado y lo agregado a ella.
+            'permissions' => \App\Support\Access::of($user),
+            'role_name' => $user->tenant_id ? $user->roles->first()?->name : null,
             'plan_slug' => $planSlug,
             'features' => $subscriptionFeatures,
             'tenant' => $tenant ? [
@@ -105,6 +108,7 @@ class AuthController extends Controller
             'account_type' => 'customer',
             'must_change_password' => (bool) $customer->must_change_password,
             'roles' => [],
+            'permissions' => [],
             'plan_slug' => null,
             'features' => [],
             'tenant' => $tenant ? [

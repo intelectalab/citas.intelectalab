@@ -64,6 +64,9 @@ export interface User {
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
   roles?: string[];
+  // Lo que su rol le permite ("customers.delete"...), ya con lo quitado y lo agregado a ella.
+  permissions?: string[];
+  role_name?: string | null;
   plan_slug?: string | null;
   features?: UserFeatures;
 }
@@ -77,6 +80,8 @@ interface AuthContextType {
   hasFeature: (featureKey: string) => boolean;
   hasModule: (moduleKey: string) => boolean;
   hasRole: (roleSlug: string) => boolean;
+  // Si su rol le permite una acción, por ejemplo can('customers.delete').
+  can: (permission: string) => boolean;
   // Entrar al panel de una empresa desde la consola de la plataforma, y volver.
   startImpersonation: (tenantId: string) => Promise<void>;
   stopImpersonation: () => Promise<void>;
@@ -106,6 +111,7 @@ const AuthContext = createContext<AuthContextType>({
   hasFeature: () => false,
   hasModule: () => false,
   hasRole: () => false,
+  can: () => false,
   startImpersonation: async () => { },
   stopImpersonation: async () => { },
 });
@@ -233,6 +239,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return user?.roles?.includes(roleSlug) ?? false;
   };
 
+  // Permisos de su rol. Solo decide qué se muestra; la API valida lo mismo con el
+  // middleware `perm`. Una sesión guardada antes de que existieran los permisos no
+  // los trae: mientras llegan, el administrador conserva todo.
+  const can = (permission: string): boolean => {
+    if (user?.permissions) return user.permissions.includes(permission);
+    return Boolean(user?.is_tenant_admin);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -244,6 +258,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         hasFeature,
         hasModule,
         hasRole,
+        can,
         startImpersonation,
         stopImpersonation
       }}

@@ -20,10 +20,12 @@ class Role extends Model
         'slug',
         'description',
         'is_system',
+        'permissions_seeded_at',
     ];
 
     protected $casts = [
         'is_system' => 'boolean',
+        'permissions_seeded_at' => 'datetime',
     ];
 
     public function users(): BelongsToMany

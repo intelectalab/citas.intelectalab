@@ -25,7 +25,7 @@ class TenantSettingController extends Controller
     {
         $user = $request->user();
 
-        abort_unless($user->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede ver o cambiar esta configuración.');
+        abort_unless($user->allows('settings.view'), 403, 'Tu cuenta no tiene permiso para ver la configuración de la empresa.');
 
         return $user->tenant->load(['businessType', 'settings', 'activeSubscription.plan']);
     }

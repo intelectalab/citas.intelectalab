@@ -17,26 +17,13 @@ INSERT INTO type_documents (id, name, length, minimum, value, status) VALUES
 ('b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a05', 'OTROS', 15, 1, NULL, 1)
 ON CONFLICT DO NOTHING;
 
+-- Permisos de la plataforma. Los de las empresas ("agenda.view", "customers.delete"...)
+-- no se escriben aquí: salen del catálogo de la API (App\Support\Access::CATALOG), que
+-- los registra sola junto con los roles de fábrica de cada empresa.
 INSERT INTO permissions (id, name, module, description) VALUES
-  ('10000000-0000-0000-0000-000000000001', 'company.setup', 'company', 'Registrar datos de su empresa y sucursales'),
-  ('10000000-0000-0000-0000-000000000002', 'catalog.manage', 'services', 'Crear/Editar sus servicios, categorías y precios'),
-  ('10000000-0000-0000-0000-000000000003', 'staff.manage', 'professionals', 'Dar de alta a sus profesionales y definir sus horarios'),
-  ('10000000-0000-0000-0000-000000000004', 'users.manage', 'security', 'Crear cuentas para su personal operativo'),
-  ('10000000-0000-0000-0000-000000000005', 'appointments.manage', 'appointments', 'Crear, mover y cancelar citas'),
-  ('10000000-0000-0000-0000-000000000006', 'appointments.attend', 'appointments', 'Marcar atención del servicio'),
-  ('10000000-0000-0000-0000-000000000007', 'pos.transact', 'pos', 'Cobrar y aperturar/cerrar caja'),
-  ('10000000-0000-0000-0000-000000000008', 'reports.view', 'analytics', 'Visualizar reportes operativos y métricas'),
-  ('10000000-0000-0000-0000-000000000009', 'audit.view', 'audit', 'Visualizar logs y eventos de auditoría del tenant'),
   ('10000000-0000-0000-0000-000000000010', 'saas.tenants.manage', 'saas_admin', 'Crear, suspender y administrar inquilinos'),
   ('10000000-0000-0000-0000-000000000011', 'saas.plans.manage', 'saas_admin', 'Gestionar catálogo de planes y precios'),
-  ('10000000-0000-0000-0000-000000000012', 'saas.metrics.view', 'saas_admin', 'Ver métricas globales de ingresos y uso de la plataforma'),
-  ('10000000-0000-0000-0000-000000000013', 'customers.manage', 'customers', 'Crear, editar y eliminar clientes y sus dependientes'),
-  ('10000000-0000-0000-0000-000000000014', 'inventory.manage', 'inventory', 'Gestionar productos, almacenes, stock, transferencias y compras'),
-  ('10000000-0000-0000-0000-000000000015', 'loyalty.manage', 'loyalty', 'Gestionar membresías, paquetes, puntos y gift cards'),
-  ('10000000-0000-0000-0000-000000000016', 'marketing.manage', 'marketing', 'Gestionar campañas, plantillas, cupones y automatizaciones'),
-  ('10000000-0000-0000-0000-000000000017', 'quotes.manage', 'quotes', 'Crear, enviar y aprobar presupuestos'),
-  ('10000000-0000-0000-0000-000000000018', 'records.manage', 'records', 'Configurar plantillas de ficha y registrar fichas de atención'),
-  ('10000000-0000-0000-0000-000000000019', 'waitlist.manage', 'waitlist', 'Gestionar la lista de espera')
+  ('10000000-0000-0000-0000-000000000012', 'saas.metrics.view', 'saas_admin', 'Ver métricas globales de ingresos y uso de la plataforma')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO status_modules (id, name, description) VALUES

@@ -43,7 +43,8 @@ class BranchController extends Controller
 
     private function assertCanManage(Request $request): void
     {
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa cambia las sucursales.');
+        $user = $request->user();
+        abort_unless($user->allows('branches.edit') || $user->allows('branches.create'), 403, 'Tu cuenta no tiene permiso para cambiar las sucursales.');
     }
 
     /**
@@ -75,7 +76,7 @@ class BranchController extends Controller
             'limit'        => $limit,
             'multi_branch' => $tenant->hasModule('multi_branch'),
             'can_add'      => $limit === null || $active < $limit,
-            'can_manage'   => $request->user()->isTenantAdmin(),
+            'can_manage'   => $request->user()->allows('branches.edit'),
             'uses_rooms'   => $tenant->hasModule('resources'),
         ]);
     }
@@ -113,7 +114,7 @@ class BranchController extends Controller
             'rooms'         => $tenant->hasModule('resources') ? \App\Support\Rooms::listing($tenant, $branch->id) : [],
             'links_equipment' => \App\Support\Rooms::hasParent(),
             'uses_rooms'    => $tenant->hasModule('resources'),
-            'can_manage'    => $request->user()->isTenantAdmin(),
+            'can_manage'    => $request->user()->allows('branches.edit'),
         ]);
     }
 

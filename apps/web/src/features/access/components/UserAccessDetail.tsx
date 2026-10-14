@@ -1,0 +1,354 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { ArrowLeft, Ban, Check, Contact, KeyRound, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Store } from 'lucide-react';
+import { api } from '@/lib/axios';
+import { AppModal } from '@/app/components/ui/modals/AppModal';
+import { apiError, formatDate } from '@/features/appointments/appointments';
+import FormUser from './FormUser';
+import PermissionGrid from './PermissionGrid';
+import CredentialsNote from './CredentialsNote';
+import { MANAGER_NOTE, countAll, countOn, countOverride, initialsOf, type BranchOption, type GridAction, type GridModule, type RoleOption, type StaffUser } from '../access';
+
+interface Detail {
+  user: StaffUser;
+  // Administrador: puede todo.
+  everything: boolean;
+  // Motivo por el que sus permisos no se cambian aquí.
+  locked: string | null;
+  can_edit: boolean;
+  grid: GridModule[];
+  roles: RoleOption[];
+  branches: BranchOption[];
+}
+
+const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
+const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340]';
+const smallLabel = 'text-[11px] font-bold text-slate-400';
+
+const FOCUS_TITLES: Record<string, string> = {
+  on: 'Lo que puede hacer',
+  off: 'Lo que no puede hacer',
+  granted: 'Lo que se le agregó a esta persona',
+  revoked: 'Lo que se le quitó a esta persona',
+};
+
+// Página de una persona del equipo: a qué puede acceder, pantalla por pantalla.
+// Cada interruptor enciende o apaga un permiso solo para ella; lo que difiere de
+// su rol queda marcado como "Agregado" o "Quitado".
+export default function UserAccessDetail() {
+  const params = useParams<{ id: string }>();
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState('');
+  const [focus, setFocus] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [confirm, setConfirm] = useState<'reset' | 'password' | null>(null);
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
+
+  const load = useCallback(() => {
+    api.get(`/access/users/${params.id}`)
+      .then((res) => { setDetail(res.data); setError(''); })
+      .catch((err) => setError(err?.response?.status === 404 ? 'Este usuario no existe.' : apiError(err, 'No se pudo cargar la información.')))
+      .finally(() => setLoading(false));
+  }, [params.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggle = async (action: GridAction) => {
+    if (!detail) return;
+
+    try {
+      setBusy(action.name);
+      setError('');
+      setNotice('');
+      const res = await api.put(`/access/users/${detail.user.id}/permissions`, { permission: action.name, on: !action.on });
+      setDetail(res.data);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo cambiar el permiso.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runConfirm = async () => {
+    if (!detail || !confirm) return;
+
+    try {
+      setBusy(confirm);
+      setError('');
+
+      if (confirm === 'reset') {
+        const res = await api.delete(`/access/users/${detail.user.id}/permissions`);
+        setDetail(res.data);
+        setFocus('');
+        setNotice(`${detail.user.name} volvió a tener exactamente lo que trae su rol.`);
+      } else {
+        const res = await api.post(`/access/users/${detail.user.id}/password`);
+        setCredentials({ email: res.data.email, password: res.data.temporary_password });
+      }
+    } catch (err) {
+      setError(apiError(err, 'No se pudo completar.'));
+    } finally {
+      setBusy('');
+      setConfirm(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+      </div>
+    );
+  }
+
+  const backLink = (
+    <Link href="/users" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+      <ArrowLeft size={18} /> Usuarios y roles
+    </Link>
+  );
+
+  if (!detail) {
+    return (
+      <div className="space-y-5 font-sans">
+        {backLink}
+        <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+      </div>
+    );
+  }
+
+  const { user, grid } = detail;
+  const total = countAll(grid);
+  const on = countOn(grid);
+  const granted = countOverride(grid, true);
+  const revoked = countOverride(grid, false);
+  const canChange = detail.can_edit && !detail.locked;
+  const inactive = user.status !== 'active';
+
+  const matches = (action: GridAction) =>
+    focus === 'on' ? action.on
+      : focus === 'off' ? !action.on
+        : focus === 'granted' ? action.override === true
+          : focus === 'revoked' ? action.override === false
+            : true;
+  const shown = focus ? grid.filter((module) => module.actions.some(matches)) : grid;
+
+  // "Entra" a una pantalla si puede verla o, donde no hay "ver", si puede hacer algo en ella.
+  const enters = (module: GridModule) => {
+    const view = module.actions.find((a) => a.action === 'view');
+    return view ? view.on : module.actions.some((a) => a.on);
+  };
+
+  const facts: [React.ReactNode, string, React.ReactNode][] = [
+    [<Mail key="i" size={14} />, 'Correo de acceso', user.email],
+    [<Phone key="i" size={14} />, 'Celular', user.phone],
+    [<Store key="i" size={14} />, 'Sede', user.branch?.name],
+  ];
+
+  const stats = [
+    { id: 'on', title: 'Puede', value: detail.everything ? 'Todo' : `${on} de ${total}`, note: 'acciones encendidas', icon: <Check size={18} />, color: 'text-emerald-600' },
+    { id: 'off', title: 'No puede', value: String(total - on), note: 'acciones apagadas', icon: <Ban size={18} />, color: 'text-slate-500' },
+    { id: 'granted', title: 'Agregado a esta persona', value: String(granted), note: 'su rol no lo trae', icon: <PlusCircle size={18} />, color: 'text-emerald-600' },
+    { id: 'revoked', title: 'Quitado a esta persona', value: String(revoked), note: 'su rol sí lo trae', icon: <MinusCircle size={18} />, color: 'text-rose-600' },
+  ];
+
+  return (
+    <div className="space-y-5 pb-8 font-sans">
+      {backLink}
+
+      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
+        {/* La persona */}
+        <section className={`${card} p-6 space-y-5`} data-card="user">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-12 h-12 rounded-2xl bg-[#022340] text-[#84D0D9] flex items-center justify-center text-base font-black shrink-0">{initialsOf(user.name)}</span>
+              <div className="min-w-0">
+                <h1 className="text-xl font-black text-[#022340] tracking-tight truncate">{user.name}</h1>
+                <p className="text-xs text-slate-500">
+                  {user.role?.name ?? 'Sin rol'}{user.created_at ? ` · desde ${formatDate(user.created_at.slice(0, 10), { month: 'long', year: 'numeric' })}` : ''}
+                </p>
+              </div>
+            </div>
+            {detail.can_edit && (
+              <button type="button" data-action="edit-user" title={`Editar a ${user.name}`} onClick={() => setEditing(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shrink-0">
+                <Pencil size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            <span data-status={user.status} className={`inline-flex px-2.5 py-1 text-xs rounded-full font-medium ${inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+              {inactive ? 'Desactivado' : 'Activo'}
+            </span>
+            {user.is_owner && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-[#84D0D9]/25 text-[#022340]">Dueño de la empresa</span>}
+            {user.is_self && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-slate-100 text-slate-600">Tu cuenta</span>}
+          </div>
+
+          <dl className="space-y-3">
+            {facts.filter(([, , value]) => value).map(([icon, label, value]) => (
+              <div key={label} className="flex items-start gap-3">
+                <span className="mt-0.5 text-slate-400 shrink-0">{icon}</span>
+                <div className="min-w-0">
+                  <dt className={smallLabel}>{label}</dt>
+                  <dd className="text-sm font-semibold text-slate-800 break-words">{value}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
+
+          {user.role?.slug === 'manager' && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5" data-manager-note>{MANAGER_NOTE}</p>}
+
+          {inactive && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">Con la cuenta desactivada no entra al sistema, aunque tenga permisos encendidos.</p>}
+
+          <div className="pt-4 border-t border-slate-100 space-y-2">
+            {user.role && (
+              <Link href={`/users/roles/${user.role.id}`} data-action="open-role" className="flex items-center gap-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <ShieldCheck size={15} /> Ver el rol {user.role.name}
+              </Link>
+            )}
+            {user.professional_id && (
+              <Link href={`/professionals/${user.professional_id}`} className="flex items-center gap-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <Contact size={15} /> Atiende citas: ver su horario y sus citas
+              </Link>
+            )}
+            {detail.can_edit && !user.is_owner && !user.is_self && (
+              <button type="button" data-action="new-password" onClick={() => { setError(''); setNotice(''); setConfirm('password'); }} className="flex items-center gap-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <KeyRound size={15} /> Darle una contraseña nueva
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* Números que filtran la rejilla y, debajo, a qué entra */}
+        <div className="xl:col-span-2 space-y-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((stat) => (
+              <button
+                key={stat.id}
+                type="button"
+                data-stat={stat.id}
+                aria-pressed={focus === stat.id}
+                title="Ver cuáles son"
+                onClick={() => setFocus((current) => (current === stat.id ? '' : stat.id))}
+                className={`bg-white px-4 py-3 rounded-2xl border text-left shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
+                  focus === stat.id ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'border-slate-100 hover:border-slate-200'
+                }`}
+              >
+                <span className="flex items-start justify-between gap-2">
+                  <span className="block min-w-0">
+                    <span className="block text-[11px] font-semibold text-slate-400">{stat.title}</span>
+                    <span className="block mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900" data-stat-value>{stat.value}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{stat.note}</span>
+                  </span>
+                  <span className={`p-2 rounded-xl bg-slate-50 border border-slate-100 shrink-0 ${stat.color}`}>{stat.icon}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <section className={`${card} p-6 space-y-4`} data-card="enters">
+            <div>
+              <h2 className={cardTitle}><Check className="w-4 h-4 text-emerald-600" /> A qué pantallas entra</h2>
+              <div className="flex flex-wrap gap-1.5 mt-3" data-list="enters">
+                {grid.filter(enters).length === 0 && <span className="text-sm text-slate-400">A ninguna.</span>}
+                {grid.filter(enters).map((module) => (
+                  <span key={module.key} className="px-2.5 py-1 text-xs font-semibold bg-[#84D0D9]/20 text-[#022340] rounded-lg">{module.label}</span>
+                ))}
+              </div>
+            </div>
+            {grid.some((module) => !enters(module)) && (
+              <div className="pt-4 border-t border-slate-100">
+                <h2 className={cardTitle}><Ban className="w-4 h-4 text-slate-400" /> A cuáles no</h2>
+                <div className="flex flex-wrap gap-1.5 mt-3" data-list="not-enters">
+                  {grid.filter((module) => !enters(module)).map((module) => (
+                    <span key={module.key} className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-500 rounded-lg">{module.label}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* La rejilla */}
+        <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="permissions">
+          <div className="px-6 pt-5 pb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-[#3F768C]" /> {focus ? FOCUS_TITLES[focus] : 'Qué puede hacer, pantalla por pantalla'}</h2>
+              <p className="text-xs text-slate-500 font-medium mt-1 max-w-3xl">
+                {detail.locked
+                  ? detail.locked
+                  : `Cada interruptor vale solo para ${user.first_name}: enciende algo que su rol no trae o apaga algo que sí. Quien comparte su rol no cambia. Toca el nombre de una pantalla para leer qué permite cada uno.`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {focus && (
+                <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                  Ver todas las pantallas
+                </button>
+              )}
+              {canChange && granted + revoked > 0 && (
+                <button type="button" data-action="reset-permissions" onClick={() => { setError(''); setNotice(''); setConfirm('reset'); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors">
+                  <RotateCcw size={13} /> Volver a lo de su rol
+                </button>
+              )}
+              {detail.locked && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-600 rounded-lg"><Lock size={12} /> No se cambia aquí</span>}
+            </div>
+          </div>
+
+          <PermissionGrid
+            key={focus}
+            grid={shown}
+            mode="user"
+            canEdit={canChange}
+            busy={busy}
+            onToggle={toggle}
+            empty={focus === 'granted' ? 'No se le agregó nada: tiene lo que trae su rol.' : focus === 'revoked' ? 'No se le quitó nada: tiene lo que trae su rol.' : 'Nada que mostrar.'}
+          />
+        </section>
+      </div>
+
+      <FormUser
+        isOpen={editing}
+        onClose={() => setEditing(false)}
+        initialData={user}
+        roles={detail.roles}
+        branches={detail.branches}
+        onSaved={() => { setNotice('Los cambios se guardaron.'); load(); }}
+        onRolesChanged={load}
+      />
+
+      <AppModal
+        isOpen={confirm !== null}
+        type="confirm"
+        title={confirm === 'reset' ? `¿Volver a ${user.first_name} a lo de su rol?` : `¿Darle una contraseña nueva a ${user.name}?`}
+        message={confirm === 'reset'
+          ? `Se borra lo que se le agregó y lo que se le quitó. Quedará con lo mismo que cualquier persona con el rol ${user.role?.name ?? ''}.`
+          : 'Su contraseña actual deja de servir y se cierra su sesión. Verás la contraseña nueva una sola vez, para entregársela.'}
+        confirmText={confirm === 'reset' ? 'Sí, volver a su rol' : 'Sí, cambiarla'}
+        cancelText="Cancelar"
+        isLoading={busy === confirm}
+        onConfirm={runConfirm}
+        onClose={() => setConfirm(null)}
+      />
+
+      <AppModal
+        isOpen={credentials !== null}
+        type="alert"
+        title={`Contraseña nueva para ${user.name}`}
+        message={credentials ? <CredentialsNote email={credentials.email} password={credentials.password} /> : ''}
+        confirmText="Entendido"
+        maxWidth="max-w-xl"
+        onConfirm={() => setCredentials(null)}
+        onClose={() => setCredentials(null)}
+      />
+    </div>
+  );
+}
