@@ -11,6 +11,7 @@ import { CustomerLink } from '@/app/components/common/PersonLink';
 import { apiError } from '@/features/appointments/appointments';
 import ChargePanel from './ChargePanel';
 import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type SaleDetail, type SalePayment, type SaleRefund } from '../sales';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SaleDetailPanelProps {
   saleId: string | null;
@@ -42,6 +43,7 @@ const chip = (active: boolean) =>
 // Panel de una venta: qué se vendió, cómo se pagó, su comprobante y sus
 // devoluciones. Desde aquí se cobra el saldo, se anula o se devuelve.
 export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDetailPanelProps) {
+  const { can } = useAuth();
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -101,7 +103,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
   };
 
   const refunded = sale?.refunded ?? 0;
-  const canCharge = Boolean(sale?.appointment && (sale.status === 'pending' || sale.status === 'partial'));
+  const canCharge = can('sales.create') && Boolean(sale?.appointment && (sale.status === 'pending' || sale.status === 'partial'));
   const cashClosed = Boolean(sale && action === 'refund' && method === 'cash' && sale.cash_sessions.length === 0);
 
   return (

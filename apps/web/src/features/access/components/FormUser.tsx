@@ -8,7 +8,7 @@ import Select from '@/app/components/common/Select';
 import Switch from '@/app/components/common/Switch';
 import { apiError } from '@/features/appointments/appointments';
 import FormRole from './FormRole';
-import { MANAGER_NOTE, type BranchOption, type RoleOption, type StaffUser } from '../access';
+import { type BranchOption, type RoleOption, type StaffUser } from '../access';
 
 export interface NewCredentials {
   email: string;
@@ -53,8 +53,8 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
       roleId: initialData.role?.id ?? '',
       branchId: initialData.branch?.id ?? '',
       active: initialData.status === 'active',
-    } : empty);
-  }, [isOpen, initialData]);
+    } : { ...empty, branchId: branches.length === 1 ? branches[0].id : '' });
+  }, [isOpen, initialData, branches]);
 
   const set = (changes: Partial<typeof empty>) => setForm((current) => ({ ...current, ...changes }));
 
@@ -71,7 +71,8 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
   // El rol Profesional solo lo tiene quien está registrado como profesional.
   const roleOptions = roles.filter((role) => role.slug !== 'professional' || isProfessional);
   const chosenRole = roles.find((role) => role.id === form.roleId);
-  const isManager = chosenRole?.slug === 'manager';
+  // Quien trabaja solo con su sede necesita una.
+  const isManager = chosenRole?.scope === 'branch';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +83,7 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
     }
 
     if (isManager && !form.branchId) {
-      setError('Elige la sede que tiene a su cargo.');
+      setError(`Quien tiene el rol ${chosenRole?.name ?? ''} trabaja solo con su sede: elige cuál es.`);
       return;
     }
 
@@ -185,7 +186,9 @@ export default function FormUser({ isOpen, onClose, initialData, roles, branches
                 options={branches.map((branch) => ({ label: branch.name, value: branch.id }))}
               />
               <p className="text-xs text-slate-500 mt-1.5">
-                {isManager ? MANAGER_NOTE : 'Dónde trabaja normalmente. Sirve para ubicarla; no le limita lo que ve.'}
+                {isManager
+                  ? 'Verá solo lo de esta sede: su agenda, sus citas, su caja, sus ventas y su equipo.'
+                  : 'Dónde trabaja normalmente. Con este rol ve toda la empresa: la sede sirve para ubicarla.'}
               </p>
             </div>
 

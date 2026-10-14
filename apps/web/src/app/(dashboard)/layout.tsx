@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Navbar from '../components/layout/Navbar';
+import ScreenGate from '../components/layout/ScreenGate';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PlatformProvider } from '@/hooks/usePlatform';
 import { useTheme } from '@/hooks/useTheme'; // Ajusta la ruta si useAuth está en otro directorio
@@ -71,7 +72,7 @@ export default function DashboardLayout({
           <ImpersonationBanner />
           <Navbar />
           <main className="flex-1 overflow-y-auto p-6">
-            {children}
+            <ScreenGate>{children}</ScreenGate>
           </main>
         </div>
       </div>

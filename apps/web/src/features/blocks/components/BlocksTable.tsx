@@ -14,6 +14,7 @@ import FormBlock from './FormBlock';
 import HolidaysTable from './HolidaysTable';
 import { KIND_STYLES, STATE_LABELS, durationLabel, rangeLabel, type Block, type BlockOptions } from '../blocks';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
+import { useAuth } from '@/hooks/useAuth';
 
 const PERIODS = [
   { id: 'current', label: 'Vigentes y próximos' },
@@ -37,6 +38,7 @@ const normalize = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, 
 // feriados y cierres de sede. Desde aquí se registran, se editan y se ve qué
 // citas quedaron dentro de cada uno.
 export default function BlocksTable() {
+  const { can } = useAuth();
   const vocab = useVocabulary();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [options, setOptions] = useState<BlockOptions | null>(null);
@@ -235,21 +237,21 @@ export default function BlocksTable() {
       header: 'Acciones',
       cell: (b) => b.can_manage ? (
         <div key={`actions-${b.id}`} className="flex items-center gap-1">
-          <button
+          {can('blocks.edit') && (<button
             onClick={() => { setEditing(b); setFormOpen(true); }}
             title="Editar"
             className="p-1.5 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors"
           >
             <Edit2 size={16} />
-          </button>
-          <button
+          </button>)}
+          {can('blocks.delete') && (<button
             data-delete={b.id}
             onClick={() => { setDeleteError(''); setDeleting(b); }}
             title="Eliminar"
             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
             <Trash2 size={16} />
-          </button>
+          </button>)}
         </div>
       ) : (
         <span key={`actions-${b.id}`} className="text-sm text-slate-300">—</span>
@@ -271,7 +273,7 @@ export default function BlocksTable() {
         <DataTable<Block>
           title="Bloqueos y ausencias"
           primaryActionLabel="Nuevo bloqueo"
-          onPrimaryAction={() => { setEditing(null); setFormOpen(true); }}
+          onPrimaryAction={can('blocks.create') ? () => { setEditing(null); setFormOpen(true); } : undefined}
           tabs={tabs}
           activeTab={period}
           onTabChange={changeTab}

@@ -10,6 +10,7 @@ import { apiError } from '@/features/appointments/appointments';
 import { formatDay } from '@/app/components/ui/table/dateFilters';
 import { money, type Coupon } from '@/features/sales/sales';
 import FormCoupon from './FormCoupon';
+import { useAuth } from '@/hooks/useAuth';
 
 const STATES: Record<Coupon['state'], { label: string; badge: string }> = {
   valid: { label: 'Vigente', badge: 'bg-emerald-50 text-emerald-600' },
@@ -31,6 +32,7 @@ const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors';
 
 // Cupones de descuento de la empresa: códigos que se aplican al cobrar.
 export default function CouponsTable() {
+  const { can } = useAuth();
   const [coupons, setCoupons] = useState<Coupon[] | null>(null);
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -163,12 +165,12 @@ export default function CouponsTable() {
       header: 'Acciones',
       cell: (coupon) => (
         <div key={`actions-${coupon.id}`} className="flex items-center gap-1">
-          <button title={`Editar ${coupon.code}`} onClick={() => open(coupon)} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+          {can('coupons.edit') && (<button title={`Editar ${coupon.code}`} onClick={() => open(coupon)} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
             <Edit2 size={16} />
-          </button>
-          <button data-delete={coupon.code} title={`Eliminar ${coupon.code}`} onClick={() => { setError(''); setNotice(''); setDeleting(coupon); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
+          </button>)}
+          {can('coupons.delete') && (<button data-delete={coupon.code} title={`Eliminar ${coupon.code}`} onClick={() => { setError(''); setNotice(''); setDeleting(coupon); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
             <Trash2 size={16} />
-          </button>
+          </button>)}
         </div>
       ),
     },
@@ -182,7 +184,7 @@ export default function CouponsTable() {
       <DataTable<Coupon>
         title="Cupones"
         primaryActionLabel="Nuevo cupón"
-        onPrimaryAction={() => open(null)}
+        onPrimaryAction={can('coupons.create') ? () => open(null) : undefined}
         tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: v.id === 'all' ? all.length : all.filter((c) => (v.id === 'valid' ? c.state === 'valid' : isClosed(c))).length }))}
         activeTab={view}
         onTabChange={setView}

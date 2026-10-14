@@ -35,7 +35,7 @@ const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:o
 // ficha de una atención, el servicio atendido o el personal; desde aquí se
 // avisa al cliente y se convierten en cita.
 export default function RecallsTable() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
 
@@ -238,7 +238,7 @@ export default function RecallsTable() {
 
         if (view === 'closed') {
           return (
-            <button key={`actions-${r.id}`} data-reopen={r.id} title="Volver a dejarlo por agendar" disabled={busy} onClick={() => changeStatus(r, 'pending')} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            <button key={`actions-${r.id}`} data-reopen={r.id} title="Volver a dejarlo por agendar" disabled={busy || !can('recalls.edit')} onClick={() => changeStatus(r, 'pending')} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
               <RotateCcw size={16} />
             </button>
           );
@@ -246,7 +246,7 @@ export default function RecallsTable() {
 
         return (
           <div key={`actions-${r.id}`} className="flex items-center gap-1">
-            <button
+            {can('agenda.create') && (<button
               type="button"
               data-book={r.id}
               disabled={busy}
@@ -254,8 +254,8 @@ export default function RecallsTable() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50"
             >
               <CalendarPlus size={14} /> Agendar
-            </button>
-            <button
+            </button>)}
+            {can('recalls.edit') && (<button
               data-notify={r.id}
               aria-pressed={r.status === 'notified'}
               title={r.status === 'notified' ? 'Ya se le avisó. Clic para quitar la marca' : 'Marcar que ya se le avisó'}
@@ -264,16 +264,16 @@ export default function RecallsTable() {
               className={`${iconButton} ${r.status === 'notified' ? 'text-sky-600 bg-sky-50' : 'hover:text-sky-600 hover:bg-sky-50'}`}
             >
               <PhoneCall size={16} />
-            </button>
-            <button data-done={r.id} title="Ya se atendió sin pasar por aquí" disabled={busy} onClick={() => changeStatus(r, 'done', 'Se dio por realizado sin cita')} className={`${iconButton} hover:text-emerald-600 hover:bg-emerald-50`}>
+            </button>)}
+            {can('recalls.edit') && (<button data-done={r.id} title="Ya se atendió sin pasar por aquí" disabled={busy} onClick={() => changeStatus(r, 'done', 'Se dio por realizado sin cita')} className={`${iconButton} hover:text-emerald-600 hover:bg-emerald-50`}>
               <CheckCircle size={16} />
-            </button>
-            <button title="Editar" onClick={() => { setEditing(r); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            </button>)}
+            {can('recalls.edit') && (<button title="Editar" onClick={() => { setEditing(r); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
               <Edit2 size={16} />
-            </button>
-            <button data-discard={r.id} title="Descartar" onClick={() => { setDiscardReason(''); setDiscarding(r); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
+            </button>)}
+            {can('recalls.edit') && (<button data-discard={r.id} title="Descartar" onClick={() => { setDiscardReason(''); setDiscarding(r); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
               <XCircle size={16} />
-            </button>
+            </button>)}
           </div>
         );
       },
@@ -288,7 +288,7 @@ export default function RecallsTable() {
         <DataTable<Recall>
           title="Controles y seguimiento"
           primaryActionLabel="Nuevo control"
-          onPrimaryAction={() => { setEditing(null); setFormOpen(true); }}
+          onPrimaryAction={can('recalls.create') ? () => { setEditing(null); setFormOpen(true); } : undefined}
           tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: v.id === view ? recalls.length : undefined }))}
           activeTab={view}
           onTabChange={(id) => { setView(id); setActiveCard(''); }}

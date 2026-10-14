@@ -21,6 +21,7 @@ class Role extends Model
         'description',
         'is_system',
         'permissions_seeded_at',
+        'scope',
     ];
 
     protected $casts = [

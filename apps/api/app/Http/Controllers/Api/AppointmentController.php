@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Citas de la empresa: alta, consulta, cambio de fase y reprogramación.
@@ -67,6 +68,8 @@ class AppointmentController extends Controller
         $appointment = Appointment::where('tenant_id', $tenant->id)->with(self::RELATIONS)->findOrFail($id);
 
         abort_if($own && $appointment->professional_id !== $own, 403, 'Solo puedes gestionar tus propias citas.');
+        // Quien trabaja solo con su sede no abre citas de otra.
+        Access::assertBranch($request->user(), $appointment->branch_id);
 
         return $appointment;
     }
@@ -103,6 +106,7 @@ class AppointmentController extends Controller
             ->when($from, fn ($q) => $q->where('starts_at', '>=', Carbon::parse($from, $timezone)->startOfDay()->toIso8601String()))
             ->when($to, fn ($q) => $q->where('starts_at', '<', Carbon::parse($to, $timezone)->addDay()->startOfDay()->toIso8601String()))
             ->when($validated['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('branch_id', $id))
             ->when($validated['customer_id'] ?? null, fn ($q, $id) => $q->where('customer_id', $id))
             ->when($own ?? ($validated['professional_id'] ?? null), fn ($q, $id) => $q->where('professional_id', $id))
             ->when($statuses, fn ($q) => $q->whereIn('status', $statuses))
@@ -132,14 +136,17 @@ class AppointmentController extends Controller
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+        // Quien trabaja solo con su sede agenda solo ahí y con quienes atienden ahí.
+        $limit = Access::branchLimit($request->user());
 
         $assigned = DB::table('service_professionals')->where('tenant_id', $tenant->id)->get()->groupBy('service_id');
         $worksAt = ProfessionalSchedule::where('tenant_id', $tenant->id)->get()->groupBy('professional_id');
 
         return response()->json([
-            'branches' => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name']),
+            'branches' => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->when($limit, fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name']),
             'professionals' => Professional::where('tenant_id', $tenant->id)
                 ->when($own, fn ($q) => $q->where('id', $own))
+                ->when($limit, fn ($q, $id) => $q->whereIn('id', ProfessionalSchedule::where('branch_id', $id)->select('professional_id')))
                 ->with('status')
                 ->orderBy('display_name')
                 ->get()
@@ -165,7 +172,7 @@ class AppointmentController extends Controller
                     // Vacío = lo atiende cualquier profesional.
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
                 ])->values(),
-            'can_override' => (bool) AppointmentFlow::rule($tenant, 'agenda.allow_override') && $request->user()->isTenantAdmin(),
+            'can_override' => (bool) AppointmentFlow::rule($tenant, 'agenda.allow_override') && $request->user()->allows('agenda.override'),
             'slot_interval' => (int) AppointmentFlow::rule($tenant, 'agenda.slot_interval'),
         ]);
     }
@@ -184,6 +191,7 @@ class AppointmentController extends Controller
         ]);
 
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        Access::assertBranch($request->user(), $branch->id);
         $timezone = AppointmentScheduler::timezone($branch, $tenant);
         $dayStart = Carbon::createFromFormat('Y-m-d', $validated['date'], $timezone)->startOfDay();
         $dayEnd = $dayStart->copy()->addDay();
@@ -289,6 +297,7 @@ class AppointmentController extends Controller
             ->where('starts_at', '>=', Carbon::parse($from, $timezone)->startOfDay()->toIso8601String())
             ->where('starts_at', '<', Carbon::parse($to, $timezone)->addDay()->startOfDay()->toIso8601String())
             ->when($validated['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('branch_id', $id))
             ->when($own, fn ($q) => $q->where('professional_id', $own))
             ->with(['customer', 'service', 'professional'])
             ->get();
@@ -327,6 +336,7 @@ class AppointmentController extends Controller
 
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        Access::assertBranch($request->user(), $branch->id);
         $professional = empty($validated['professional_id'])
             ? null
             : Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
@@ -367,6 +377,7 @@ class AppointmentController extends Controller
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $professional = Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        Access::assertBranch($user, $branch->id, true);
 
         $own = $this->ownProfessionalId($user);
         abort_if($own && $professional->id !== $own, 403, 'Solo puedes agendar citas para ti.');
@@ -588,6 +599,7 @@ class AppointmentController extends Controller
             $professional = Professional::where('tenant_id', $tenant->id)->with('status')
                 ->findOrFail($validated['professional_id'] ?? $appointment->professional_id);
             $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id'] ?? $appointment->branch_id);
+            Access::assertBranch($user, $branch->id, true);
             $service = Service::with('status')->findOrFail($appointment->service_id);
 
             $own = $this->ownProfessionalId($user);
@@ -753,7 +765,7 @@ class AppointmentController extends Controller
             return null;
         }
 
-        if (!AppointmentFlow::rule($tenant, 'agenda.allow_override') || !$user->isTenantAdmin()) {
+        if (!AppointmentFlow::rule($tenant, 'agenda.allow_override') || !$user->allows('agenda.override')) {
             return null;
         }
 
@@ -856,14 +868,18 @@ class AppointmentController extends Controller
         $local = fn (?Carbon $date) => $date?->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT);
         $customer = $appointment->customer;
         $dependent = $appointment->dependent;
+        // Quien no puede cambiar citas las ve sin botones de paso ni de reprogramar.
+        // (El cliente en su portal tiene sus propias reglas.)
+        $viewer = request()->user();
+        $canEdit = !$viewer instanceof User || $viewer->allows('agenda.edit');
 
         $data = [
             'id'               => $appointment->id,
             'code'             => $appointment->code,
             'status'           => $appointment->status,
             'status_name'      => AppointmentFlow::name($tenant, $appointment->status),
-            'next_statuses'    => AppointmentFlow::next($tenant, $appointment->status),
-            'can_reschedule'   => in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true),
+            'next_statuses'    => $canEdit ? AppointmentFlow::next($tenant, $appointment->status) : [],
+            'can_reschedule'   => $canEdit && in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true),
             'starts_at'        => $local($appointment->starts_at),
             'ends_at'          => $local($appointment->ends_at),
             'duration_minutes' => (int) $appointment->starts_at->diffInMinutes($appointment->ends_at),

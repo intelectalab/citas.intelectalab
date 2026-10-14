@@ -13,7 +13,7 @@ import { apiError } from '@/features/appointments/appointments';
 import FormUser, { type NewCredentials } from './FormUser';
 import FormRole from './FormRole';
 import CredentialsNote from './CredentialsNote';
-import { initialsOf, type BranchOption, type PlanUsage, type RoleOption, type RoleRow, type StaffUser } from '../access';
+import { initialsOf, scopeTitle, type BranchOption, type PlanUsage, type RoleOption, type RoleRow, type StaffUser } from '../access';
 
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors';
 
@@ -28,6 +28,8 @@ export default function UsersRolesBoard() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [usage, setUsage] = useState<PlanUsage | null>(null);
   const [blocked, setBlocked] = useState('');
+  // La sede de quien consulta si trabaja solo con ella (un gerente de sede).
+  const [myBranch, setMyBranch] = useState<BranchOption | null>(null);
   const [can, setCan] = useState({ create: false, edit: false, delete: false });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -53,6 +55,7 @@ export default function UsersRolesBoard() {
         setBranches(res.data.branches);
         setUsage(res.data.usage);
         setBlocked(res.data.blocked ?? '');
+        setMyBranch(res.data.my_branch ?? null);
         setCan((current) => ({ ...current, create: res.data.can.create, edit: res.data.can.edit }));
         setError('');
       })
@@ -268,6 +271,10 @@ export default function UsersRolesBoard() {
       ),
     },
     {
+      header: 'Qué ve',
+      cell: (role) => <span key={`scope-${role.id}`} data-role-scope={role.scope} className="text-sm text-slate-700 whitespace-nowrap">{scopeTitle(role.scope)}</span>,
+    },
+    {
       header: 'Tipo',
       cell: (role) => (
         <span key={`kind-${role.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${role.is_system ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'}`}>
@@ -379,6 +386,7 @@ export default function UsersRolesBoard() {
       )}
 
       <p className="text-sm text-slate-500 px-1">
+        {tab === 'users' && myBranch && <span className="block mb-1 font-semibold text-slate-600" data-my-branch>Ves al personal de tu sede, {myBranch.name}. Lo que registres queda en esa sede.</span>}
         {tab === 'users'
           ? 'Cada persona tiene un rol, y el rol decide qué puede hacer. Toca su nombre para ver, pantalla por pantalla, a qué puede acceder, y para apagarle o encenderle algo solo a ella. Quienes atienden citas se registran desde la pantalla de profesionales.'
           : 'Toca un rol para ver y cambiar lo que permite: el cambio rige al instante para todas las personas que lo tienen. Con "Nuevo rol" creas uno propio, por ejemplo copiando Recepción y apagándole lo que no deba hacer.'}

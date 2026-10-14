@@ -10,6 +10,7 @@ use App\Support\BranchHours;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Horario semanal de un profesional, por sede. Se guarda completo por sede:
@@ -42,7 +43,8 @@ class ProfessionalScheduleController extends Controller
         $schedules = ProfessionalSchedule::where('tenant_id', $tenantId)->orderBy('weekday')->orderBy('starts_local')->get();
         $minutes = fn (ProfessionalSchedule $s) => (strtotime($s->ends_local) - strtotime($s->starts_local)) / 60;
 
-        $branches = Branch::where('tenant_id', $tenantId)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+        // Quien trabaja solo con su sede ve el horario de su sede.
+        $branches = Branch::where('tenant_id', $tenantId)->where('status', 'active')->when(Access::branchLimit($user), fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name'])
             ->map(function (Branch $branch) use ($professionals, $schedules, $minutes) {
                 $here = $schedules->where('branch_id', $branch->id);
 
@@ -100,6 +102,7 @@ class ProfessionalScheduleController extends Controller
         ]);
 
         $branch = Branch::where('tenant_id', $professional->tenant_id)->findOrFail($validated['branch_id']);
+        Access::assertBranch($request->user(), $branch->id, true);
 
         // Tramos de las otras sedes: no puede atender en dos sedes a la vez.
         $taken = ProfessionalSchedule::where('professional_id', $professional->id)

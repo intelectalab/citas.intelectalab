@@ -12,6 +12,7 @@ import Stopwatch from './Stopwatch';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
+import { useAuth } from '@/hooks/useAuth';
 import {
   RELEASED, addDays, apiError, formatDate, fromMinutes, statusStyle, timeOf, toMinutes, todayISO,
   type Appointment,
@@ -88,6 +89,7 @@ function withLanes(appointments: Appointment[]) {
 // Agenda de un día en una sede: una columna por profesional, con su horario,
 // sus bloqueos y sus citas. Un clic en un espacio libre abre una cita nueva a esa hora.
 export default function AgendaDay() {
+  const { can } = useAuth();
   const vocab = useVocabulary();
   const [date, setDate] = useState(todayISO());
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -174,6 +176,9 @@ export default function AgendaDay() {
   const nowMinutes = day ? toMinutes(timeOf(day.now)) : 0;
 
   const newAt = (professionalId: string, event: React.MouseEvent<HTMLDivElement>) => {
+    // Sin permiso para agendar, el clic en un espacio libre no abre nada.
+    if (!can('agenda.create')) return;
+
     const offset = event.clientY - event.currentTarget.getBoundingClientRect().top;
     const minutes = range.start + Math.floor(offset / PX / slotInterval) * slotInterval;
     openNew({ date, time: fromMinutes(minutes), professional_id: professionalId, branch_id: branchId });
@@ -280,13 +285,13 @@ export default function AgendaDay() {
             onChange={(value) => value && setDate(value)}
           />
 
-          <button
+          {can('agenda.create') && (<button
             type="button"
             onClick={() => openNew({ date, branch_id: branchId })}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
           >
             <Plus size={16} className="text-[#84D0D9] stroke-[2.5]" /> Nueva cita
-          </button>
+          </button>)}
         </div>
       </div>
 
@@ -386,8 +391,8 @@ export default function AgendaDay() {
                         current?.professionalId === professional.id && current.minutes === minutes ? current : { professionalId: professional.id, minutes });
                     }}
                     onDrop={(event) => handleDrop(professional, event)}
-                    title="Clic en un espacio libre para agendar"
-                    className="flex-1 min-w-[200px] relative border-l border-slate-200 bg-slate-100 cursor-pointer"
+                    title={can('agenda.create') ? 'Clic en un espacio libre para agendar' : undefined}
+                    className={`flex-1 min-w-[200px] relative border-l border-slate-200 bg-slate-100 ${can('agenda.create') ? 'cursor-pointer' : ''}`}
                     style={{ height }}
                   >
                     {/* Horas en que atiende */}

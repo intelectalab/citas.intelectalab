@@ -473,7 +473,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
               value={notes}
               onChange={(e) => { setNotes(e.target.value); setNotice(''); }}
             />
-            {notes.trim() !== (appointment.notes ?? '').trim() && (
+            {can('agenda.edit') && notes.trim() !== (appointment.notes ?? '').trim() && (
               <div className="flex justify-end">
                 <button
                   type="button"

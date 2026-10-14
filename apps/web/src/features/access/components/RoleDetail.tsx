@@ -11,7 +11,7 @@ import { UserLink } from '@/app/components/common/PersonLink';
 import { apiError } from '@/features/appointments/appointments';
 import FormRole from './FormRole';
 import PermissionGrid from './PermissionGrid';
-import { MANAGER_NOTE, countAll, countOn, initialsOf, type GridAction, type GridModule, type RoleRow } from '../access';
+import { SCOPE_OPTIONS, countAll, countOn, initialsOf, type Scope, type GridAction, type GridModule, type RoleRow } from '../access';
 
 interface RolePerson {
   id: string;
@@ -28,6 +28,7 @@ interface Detail {
   can_restore: boolean;
   grid: GridModule[];
   users: RolePerson[];
+  scope_ready?: boolean;
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -67,6 +68,27 @@ export default function RoleDetail() {
       setDetail(res.data);
     } catch (err) {
       setError(apiError(err, 'No se pudo cambiar el permiso.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // Qué tanto ve quien tiene el rol: rige al instante para todas esas personas.
+  const changeScope = async (scope: Scope) => {
+    if (!detail || detail.role.scope === scope) return;
+
+    try {
+      setBusy('scope');
+      setError('');
+      setNotice('');
+      const res = await api.put(`/access/roles/${detail.role.id}/scope`, { scope });
+      setDetail(res.data);
+      const option = SCOPE_OPTIONS.find((o) => o.id === scope);
+      setNotice(res.data.without_branch > 0
+        ? `Listo: ahora ve ${option?.title.toLowerCase()}. ${res.data.without_branch === 1 ? 'Una persona con este rol no tiene' : `${res.data.without_branch} personas con este rol no tienen`} sede asignada: no verán agenda, caja ni ventas hasta que se la asignes.`
+        : `Listo: quien tiene este rol ahora ve ${option?.title.toLowerCase()}.`);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo cambiar.'));
     } finally {
       setBusy('');
     }
@@ -170,12 +192,33 @@ export default function RoleDetail() {
 
             {role.description && <p className="text-sm text-slate-600">{role.description}</p>}
 
-            {role.slug === 'manager' && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5" data-manager-note>{MANAGER_NOTE}</p>}
-            {role.slug === 'professional' && (
-              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
-                Quien tiene este rol ve y trabaja solo sus propias citas, fichas y controles, no los de sus colegas.
-              </p>
-            )}
+            <div className="space-y-2 pt-1" data-card="scope">
+              <span className="block text-[11px] font-bold text-slate-400">Qué ve quien tiene este rol</span>
+              <div className="grid gap-2" role="radiogroup" aria-label="Qué ve">
+                {SCOPE_OPTIONS
+                  .filter((option) => (role.slug === 'professional' ? option.id === 'own' : role.locked ? option.id === 'tenant' : option.id !== 'own'))
+                  .map((option) => {
+                    const chosen = role.scope === option.id;
+                    const editable = detail.can_edit && detail.scope_ready !== false && role.slug !== 'professional';
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={chosen}
+                        data-scope={option.id}
+                        disabled={!editable || busy === 'scope'}
+                        onClick={() => changeScope(option.id)}
+                        className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors disabled:cursor-default ${chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 enabled:hover:bg-slate-50'}`}
+                      >
+                        <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                        <span className="block text-xs text-slate-500 mt-0.5">{option.hint}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
 
             {(detail.can_restore || detail.can_delete) && (
               <div className="flex flex-wrap gap-2 pt-1">

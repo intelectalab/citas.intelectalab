@@ -48,7 +48,7 @@ const SHORTCUTS: { label: string; days: number }[] = [
 
 // Panel para registrar un control a mano o cambiar uno que sigue abierto.
 export default function FormRecall({ isOpen, onClose, initialData, services, professionals, onSaved }: FormRecallProps) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
 
@@ -293,7 +293,7 @@ export default function FormRecall({ isOpen, onClose, initialData, services, pro
             value={serviceId}
             onChange={(e) => setServiceId(String(e.target.value))}
             options={[...services, ...newServices].map((s) => ({ value: s.id, label: s.name }))}
-            onAdd={user?.is_tenant_admin ? () => setServiceFormOpen(true) : undefined}
+            onAdd={can('services.create') ? () => setServiceFormOpen(true) : undefined}
             addLabel="Nuevo servicio"
           />
 

@@ -72,7 +72,7 @@ const hoursLabel = (minutes: number) => {
 // sus ausencias y sus citas. Se llega desde su nombre en cualquier pantalla.
 export default function ProfessionalDetail() {
   const params = useParams<{ id: string }>();
-  const { user, hasModule } = useAuth();
+  const { user, hasModule, can } = useAuth();
   const vocab = useVocabulary();
   const [professional, setProfessional] = useState<ProfessionalData | null>(null);
   const [schedule, setSchedule] = useState<ScheduleData | null>(null);
@@ -85,7 +85,7 @@ export default function ProfessionalDetail() {
   // Tarjeta de números elegida: filtra la lista de citas.
   const [focus, setFocus] = useState('');
 
-  const isAdmin = Boolean(user?.is_tenant_admin);
+  const isAdmin = can('professionals.edit');
   const usesAgenda = hasModule('agenda');
   const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
   const today = todayISO();

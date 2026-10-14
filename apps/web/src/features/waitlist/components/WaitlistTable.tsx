@@ -35,7 +35,7 @@ const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:o
 // Lista de espera: quién quiere una cita y no encontró horario. Desde aquí se
 // anota, se le busca un horario libre que le sirva y se le agenda.
 export default function WaitlistTable() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
 
@@ -261,7 +261,7 @@ export default function WaitlistTable() {
         }
 
         if (view === 'closed') {
-          return e.status === 'cancelled' ? (
+          return e.status === 'cancelled' && can('waitlist.edit') ? (
             <button key={`actions-${e.id}`} data-reopen={e.id} title="Volver a ponerlo en espera" disabled={busy} onClick={() => changeStatus(e, 'waiting')} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
               <RotateCcw size={16} />
             </button>
@@ -270,7 +270,7 @@ export default function WaitlistTable() {
 
         return (
           <div key={`actions-${e.id}`} className="flex items-center gap-1">
-            <button
+            {can('agenda.create') && (<button
               type="button"
               data-find={e.id}
               disabled={busy}
@@ -278,8 +278,8 @@ export default function WaitlistTable() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               <CalendarSearch size={14} /> Buscar horario
-            </button>
-            <button
+            </button>)}
+            {can('waitlist.edit') && (<button
               data-notify={e.id}
               aria-pressed={e.status === 'notified'}
               title={e.status === 'notified' ? 'Ya se le avisó. Clic para quitar la marca' : 'Marcar que ya se le avisó'}
@@ -288,13 +288,13 @@ export default function WaitlistTable() {
               className={`${iconButton} ${e.status === 'notified' ? 'text-sky-600 bg-sky-50' : 'hover:text-sky-600 hover:bg-sky-50'}`}
             >
               <PhoneCall size={16} />
-            </button>
-            <button title="Editar" onClick={() => { setEditing(e); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            </button>)}
+            {can('waitlist.edit') && (<button title="Editar" onClick={() => { setEditing(e); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
               <Edit2 size={16} />
-            </button>
-            <button data-remove={e.id} title="Retirar de la lista" onClick={() => setRemoving(e)} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
+            </button>)}
+            {can('waitlist.edit') && (<button data-remove={e.id} title="Retirar de la lista" onClick={() => setRemoving(e)} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
               <XCircle size={16} />
-            </button>
+            </button>)}
           </div>
         );
       },
@@ -309,7 +309,7 @@ export default function WaitlistTable() {
         <DataTable<WaitlistEntry>
           title="Lista de espera"
           primaryActionLabel="Anotar en la lista"
-          onPrimaryAction={() => { setEditing(null); setFormOpen(true); }}
+          onPrimaryAction={can('waitlist.create') ? () => { setEditing(null); setFormOpen(true); } : undefined}
           tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: v.id === view ? entries.length : undefined }))}
           activeTab={view}
           onTabChange={(id) => { setView(id); setActiveCard(''); }}

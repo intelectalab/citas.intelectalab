@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Support\Access;
 
 /**
  * Inicio de la empresa: lo que pasa hoy en su agenda, lo que hay que resolver
@@ -38,12 +39,15 @@ class DashboardController extends Controller
 
         $timezone = $tenant->timezone ?: 'America/Lima';
         $own = $this->ownProfessionalId($user);
+        $limit = Access::branchLimit($user);
         $now = now($timezone);
         $dayStart = $now->copy()->startOfDay();
         $dayEnd = $dayStart->copy()->addDay();
         $local = fn (?Carbon $date) => $date?->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT);
 
-        $appointments = fn (): Builder => Appointment::where('appointments.tenant_id', $tenant->id)->when($own, fn ($q) => $q->where('appointments.professional_id', $own));
+        $appointments = fn (): Builder => Appointment::where('appointments.tenant_id', $tenant->id)
+            ->when($own, fn ($q) => $q->where('appointments.professional_id', $own))
+            ->when($limit, fn ($q, $id) => $q->where('appointments.branch_id', $id));
         $between = fn (Builder $q, Carbon $from, Carbon $to): Builder => $q->where('appointments.starts_at', '>=', $from->toIso8601String())->where('appointments.starts_at', '<', $to->toIso8601String());
         $who = fn (?Appointment $a) => $a ? ($a->dependent?->name ?? ($a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : null)) : null;
 
@@ -59,6 +63,7 @@ class DashboardController extends Controller
             ->when($own, fn ($q) => $q->where('professional_id', $own))
             ->join('branches', 'branches.id', '=', 'professional_schedules.branch_id')
             ->where('branches.status', 'active')
+            ->when($limit, fn ($q, $id) => $q->where('professional_schedules.branch_id', $id))
             ->get(['starts_local', 'ends_local'])
             ->sum(fn ($s) => Carbon::parse($s->starts_local)->diffInMinutes(Carbon::parse($s->ends_local)));
         $booked = $active->sum(fn (Appointment $a) => $a->starts_at->diffInMinutes($a->ends_at));

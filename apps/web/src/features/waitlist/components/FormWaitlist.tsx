@@ -31,7 +31,7 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-sl
 // Panel para anotar a alguien en la lista de espera o cambiar lo que pidió:
 // qué servicio, con quién, entre qué fechas y a qué horas le sirve.
 export default function FormWaitlist({ isOpen, onClose, initialData, context, onSaved }: FormWaitlistProps) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const dependents = user?.tenant?.dependents;
 
@@ -179,7 +179,7 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
             value={serviceId}
             onChange={(e) => setServiceId(String(e.target.value))}
             options={services.map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min` }))}
-            onAdd={user?.is_tenant_admin ? () => setServiceFormOpen(true) : undefined}
+            onAdd={can('services.create') ? () => setServiceFormOpen(true) : undefined}
             addLabel="Nuevo servicio"
           />
 

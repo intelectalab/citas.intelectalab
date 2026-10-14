@@ -41,6 +41,8 @@ export default function CashBoard() {
   const registers = data?.registers ?? [];
   const sessions = data?.sessions ?? [];
   const canManage = Boolean(data?.can_manage);
+  // Abrir, anotar movimientos y cerrar: quien opera la caja.
+  const canOperate = Boolean((data as { can_operate?: boolean } | null)?.can_operate);
   const term = searchTerm.trim().toLowerCase();
 
   const rows = sessions.filter((session) =>
@@ -224,15 +226,15 @@ export default function CashBoard() {
                   </dl>
 
                   <div className="flex flex-wrap gap-2 mt-auto">
-                    <button type="button" data-action="move" onClick={() => setMoving(register)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+                    {canOperate && (<button type="button" data-action="move" onClick={() => setMoving(register)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
                       <ArrowLeftRight size={15} /> Movimiento
-                    </button>
+                    </button>)}
                     <button type="button" data-action="view" onClick={() => setViewing(session.id)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
                       <Eye size={15} /> Ver turno
                     </button>
-                    <button type="button" data-action="close" onClick={() => setClosing(register)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold rounded-lg bg-[#84D0D9] text-[#022340] hover:bg-white transition-colors ml-auto">
+                    {canOperate && (<button type="button" data-action="close" onClick={() => setClosing(register)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold rounded-lg bg-[#84D0D9] text-[#022340] hover:bg-white transition-colors ml-auto">
                       <Lock size={15} /> Cerrar caja
-                    </button>
+                    </button>)}
                   </div>
                 </>
               ) : (
@@ -240,7 +242,7 @@ export default function CashBoard() {
                   <p className="text-sm text-slate-500">
                     {inactive ? 'Esta caja está fuera de uso.' : 'Sin turno abierto. Ábrela para cobrar en efectivo en esta sede.'}
                   </p>
-                  {!inactive && (
+                  {!inactive && canOperate && (
                     <button type="button" data-action="open" onClick={() => setOpening(register)} className={`${ghostButton} self-start mt-auto`}>
                       <Unlock size={15} /> Abrir caja
                     </button>

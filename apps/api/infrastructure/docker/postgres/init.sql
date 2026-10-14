@@ -820,6 +820,8 @@ CREATE TABLE roles (
     is_system boolean NOT NULL DEFAULT false,
     -- Cuándo recibió sus permisos de fábrica. Vacío en un rol de fábrica: la API se los da la primera vez que hace falta.
     permissions_seeded_at timestamptz,
+    -- Qué tanto ve quien tiene el rol: toda la empresa (tenant), solo su sede (branch) o solo lo suyo (own).
+    scope varchar(20) NOT NULL DEFAULT 'tenant' CHECK (scope IN ('tenant', 'branch', 'own')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, slug)

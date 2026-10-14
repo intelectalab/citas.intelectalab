@@ -44,6 +44,8 @@ class User extends Authenticatable
 
     // Lo que esta persona puede hacer, calculado una vez por petición (App\Support\Access).
     public ?array $accessCache = null;
+    // Qué tanto ve: 'tenant', 'branch' u 'own' (App\Support\Access::scopeOf).
+    public ?string $scopeCache = null;
 
     /**
      * Si su rol (con lo que se le quitó o agregó a ella) le permite algo, por

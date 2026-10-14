@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Fichas de atención llenadas. Una por cita: se guarda como borrador, se
@@ -65,6 +66,7 @@ class CareRecordController extends Controller
 
         $own = $this->ownProfessionalId($request->user());
         abort_if($own && $appointment->professional_id !== $own, 403, 'Solo puedes ver las fichas de tus propias citas.');
+        Access::assertBranch($request->user(), $appointment->branch_id);
 
         return $appointment;
     }
@@ -115,7 +117,7 @@ class CareRecordController extends Controller
         $tenant = $this->tenant($request);
         $user = $request->user();
 
-        abort_unless($user->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede pedir acceso de emergencia.');
+        abort_unless($user->allows('records.emergency'), 403, 'Tu cuenta no tiene permiso para pedir acceso de emergencia a una ficha privada.');
 
         $record = CareRecord::where('tenant_id', $tenant->id)->with(self::RELATIONS)->findOrFail($careRecord);
 
@@ -497,6 +499,7 @@ class CareRecordController extends Controller
         $records = CareRecord::where('tenant_id', $tenant->id)
             ->with(self::RELATIONS)
             ->when($own, fn ($q) => $q->where('professional_id', $own))
+            ->when(Access::branchLimit($user), fn ($q, $id) => $q->where('branch_id', $id))
             ->when($validated['customer_id'] ?? null, fn ($q, $id) => $q->where('customer_id', $id))
             ->when($validated['from'] ?? null, fn ($q, $from) => $q->where('created_at', '>=', Carbon::parse($from, $timezone)->startOfDay()->toIso8601String()))
             ->when($validated['to'] ?? null, fn ($q, $to) => $q->where('created_at', '<', Carbon::parse($to, $timezone)->addDay()->startOfDay()->toIso8601String()))
@@ -531,6 +534,7 @@ class CareRecordController extends Controller
 
         $own = $this->ownProfessionalId($request->user());
         abort_if($own && $record->professional_id !== $own, 403, 'Solo puedes ver las fichas de tus propias citas.');
+        Access::assertBranch($request->user(), $record->branch_id);
 
         return $record;
     }
@@ -622,7 +626,7 @@ class CareRecordController extends Controller
             // Se está leyendo una ficha privada ajena gracias a un acceso de emergencia vigente.
             'reading_by_emergency' => $readable && !$this->isOwn($record, $user),
             // El administrador puede abrirla con un motivo que queda registrado.
-            'can_request_access' => !$readable && $user->isTenantAdmin(),
+            'can_request_access' => !$readable && $user->allows('records.emergency'),
             // Quién abrió esta ficha privada por emergencia. Lo ven su autor y quien la abrió.
             'emergency_accesses' => $record->is_private && $readable ? $this->emergencyAccesses($record, $local) : [],
             // Con acceso de emergencia se lee, no se edita.

@@ -91,7 +91,7 @@ const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6
 // administrador y solo dentro de lo que le dan su plan y su rubro: apaga y
 // vuelve a encender módulos que ya tiene; no puede activar otros.
 export default function TenantSettings() {
-  const { user, loading: authLoading, refetchUser } = useAuth();
+  const { user, loading: authLoading, refetchUser, can } = useAuth();
   const [data, setData] = useState<SettingsPayload | null>(null);
   const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [vocabulary, setVocabulary] = useState<Record<string, string>>({});
@@ -106,7 +106,9 @@ export default function TenantSettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
-  const isAdmin = Boolean(user?.is_tenant_admin);
+  // Quien puede ver la configuración; guardarla pide además el permiso de cambiarla.
+  const isAdmin = can('settings.view');
+  const canSave = can('settings.edit');
 
   const apply = (payload: SettingsPayload) => {
     setData(payload);
@@ -655,7 +657,8 @@ export default function TenantSettings() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !canSave}
+          title={canSave ? undefined : 'Tu cuenta puede ver la configuración, pero no cambiarla.'}
           className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
         >
           {saving ? 'Guardando...' : 'Guardar cambios'}

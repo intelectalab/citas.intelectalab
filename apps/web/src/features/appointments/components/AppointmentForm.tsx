@@ -54,7 +54,7 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-sl
 // Panel lateral para agendar una cita o reprogramar una existente. Los
 // horarios libres salen de la API; también se puede escribir otra hora.
 export default function AppointmentForm({ isOpen, onClose, onSaved, initial, reschedule }: AppointmentFormProps) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const dependents = user?.tenant?.dependents;
   const isReschedule = Boolean(reschedule);
@@ -392,7 +392,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
               value={serviceId}
               onChange={(e) => { setServiceId(String(e.target.value)); setTime(initial?.time ?? ''); setCanForce(false); }}
               options={(context?.services ?? []).map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min` }))}
-              onAdd={user?.is_tenant_admin ? () => setServiceFormOpen(true) : undefined}
+              onAdd={can('services.create') ? () => setServiceFormOpen(true) : undefined}
               addLabel="Nuevo servicio"
             />
           )}

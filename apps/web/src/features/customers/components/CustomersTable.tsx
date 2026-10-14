@@ -36,7 +36,7 @@ interface Customer {
 export default function CustomersTable() {
   const vocab = useVocabulary();
   const clientLower = vocab.client.toLowerCase();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -270,20 +270,20 @@ export default function CustomersTable() {
           >
             <Eye size={16} />
           </Link>
-          <button 
+          {can('customers.edit') && (<button 
             onClick={() => { setEditingCustomer(pat); setShowFormModal(true); }}
             title={`Editar ${clientLower}`}
             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           >
             <Pencil size={16} />
-          </button>
-          <button 
+          </button>)}
+          {can('customers.delete') && (<button 
             onClick={() => handleDelete(pat.id)}
             title={`Eliminar ${clientLower}`}
             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
             <Trash2 size={16} />
-          </button>
+          </button>)}
         </div>
       ),
     },
@@ -297,7 +297,7 @@ export default function CustomersTable() {
         <DataTable<Customer>
           title={`Gestión de ${vocab.clients}`}
           primaryActionLabel={`Nuevo ${vocab.client}`}
-          onPrimaryAction={() => { setEditingCustomer(null); setShowFormModal(true); }}
+          onPrimaryAction={can('customers.create') ? () => { setEditingCustomer(null); setShowFormModal(true); } : undefined}
           tabs={[{ id: 'all', label: `Todos los ${vocab.clients.toLowerCase()}`, count: safeCustomers.length }]}
           activeTab={activeTab}
           onTabChange={setActiveTab}

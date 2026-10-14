@@ -237,7 +237,7 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::get('/care-records', [CareRecordController::class, 'index'])->middleware('perm:records.view');
         Route::get('/care-records/{careRecord}', [CareRecordController::class, 'show'])->middleware('perm:records.view');
         Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum'])->middleware('perm:records.edit');
-        Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess']);
+        Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess'])->middleware('perm:records.emergency');
         Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf'])->middleware('perm:records.view');
     });
 
@@ -271,7 +271,7 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         $guarded('customers', CustomerController::class, 'customers', true);
         Route::put('/customers/{customer}/portal-access', [CustomerController::class, 'portalAccess'])->middleware('perm:customers.edit');
         Route::post('/customers/{customer}/portal-access/reset', [CustomerController::class, 'resetPortalPassword'])->middleware('perm:customers.edit');
-        Route::post('/customers/{customer}/booking-strikes/forgive', [CustomerController::class, 'forgiveBooking'])->middleware('perm:customers.edit');
+        Route::post('/customers/{customer}/booking-strikes/forgive', [CustomerController::class, 'forgiveBooking'])->middleware('perm:customers.forgive');
         // Agregar una mascota o un hijo también se hace al registrar al cliente.
         Route::apiResource('customers.dependents', CustomerDependentController::class)->only(['index'])->middleware('perm:customers.view');
         Route::apiResource('customers.dependents', CustomerDependentController::class)->only(['store', 'update', 'destroy'])->middleware('perm:customers.edit|customers.create');
@@ -315,6 +315,7 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
             Route::put('/roles/{role}', [AccessController::class, 'updateRole']);
             Route::put('/roles/{role}/permissions', [AccessController::class, 'setRolePermission']);
             Route::post('/roles/{role}/restore', [AccessController::class, 'restoreRole']);
+            Route::put('/roles/{role}/scope', [AccessController::class, 'setRoleScope']);
         });
 
         Route::delete('/roles/{role}', [AccessController::class, 'destroyRole'])->middleware('perm:users.delete');

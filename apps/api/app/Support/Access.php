@@ -23,6 +23,16 @@ class Access
     public const ACTIONS = ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Editar', 'delete' => 'Eliminar'];
 
     /**
+     * Permisos especiales: cosas delicadas que no son ver, crear, editar ni
+     * eliminar. Cada pantalla tiene a lo más uno; en la rejilla van en su columna.
+     */
+    public const SPECIAL = [
+        'override'  => 'Forzar horario',
+        'emergency' => 'Acceso de emergencia',
+        'forgive'   => 'Perdonar faltas',
+    ];
+
+    /**
      * Lo que se puede permitir, pantalla por pantalla. `module` es el módulo del
      * plan que la empresa debe tener activo; cada acción explica qué deja hacer.
      * {clients} y {pros} se cambian por las palabras del rubro (pacientes, médicos).
@@ -32,6 +42,7 @@ class Access
             'view'   => 'Ver la agenda y las citas',
             'create' => 'Agendar citas',
             'edit'   => 'Confirmar, registrar la llegada, atender, reprogramar y cancelar citas',
+            'override' => 'Agendar aunque el horario no esté disponible: fuera del horario de atención, en una pausa o sobre un bloqueo. Nunca permite dos citas a la misma hora',
         ]],
         'waitlist' => ['label' => 'Lista de espera', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver la lista de espera',
@@ -63,10 +74,12 @@ class Access
             'create' => 'Registrar {clients}',
             'edit'   => 'Cambiar los datos de {clients}',
             'delete' => 'Eliminar {clients}',
+            'forgive' => 'Perdonar las inasistencias de quien reservó en línea, para que pueda volver a reservar',
         ]],
         'records' => ['label' => 'Fichas de atención', 'module' => 'records', 'actions' => [
             'view' => 'Ver fichas de atención',
             'edit' => 'Llenar, firmar y corregir fichas de atención',
+            'emergency' => 'Abrir por una emergencia una ficha privada que escribió otra persona. Queda registrado quién la abrió y por qué',
         ]],
         'record_templates' => ['label' => 'Plantillas de ficha', 'module' => 'records', 'actions' => [
             'create' => 'Crear plantillas de ficha',
@@ -138,23 +151,28 @@ class Access
         'owner' => [
             'name' => 'Administrador',
             'description' => 'Puede todo. No se le pueden quitar permisos.',
+            'scope' => 'tenant',
             'permissions' => [],
         ],
         'manager' => [
             'name' => 'Gerente de sede',
-            'description' => 'Lleva el día a día de una sede: agenda, equipo, ventas y caja.',
+            'description' => 'Lleva el día a día de una sede: agenda, equipo, ventas, caja y su personal.',
+            'scope' => 'branch',
             'permissions' => [
-                'agenda' => self::EVERYTHING, 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
+                'agenda' => ['view', 'create', 'edit', 'override'], 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
-                'customers' => self::EVERYTHING, 'records' => ['view'], 'record_templates' => self::EVERYTHING,
+                'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'rooms' => self::EVERYTHING,
                 'sales' => self::EVERYTHING, 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
                 'branches' => ['view'],
+                // Su personal: crea, desactiva y ajusta a la gente de su sede.
+                'users' => ['view', 'create', 'edit'],
             ],
         ],
         'reception' => [
             'name' => 'Recepción',
             'description' => 'Agenda, recibe y cobra a quien llega. No elimina ni devuelve dinero.',
+            'scope' => 'branch',
             'permissions' => [
                 'agenda' => ['view', 'create', 'edit'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => ['view'], 'holidays' => ['view'],
@@ -166,6 +184,7 @@ class Access
         'cashier' => [
             'name' => 'Caja',
             'description' => 'Cobra y lleva la caja. Ve la agenda y los clientes sin cambiarlos.',
+            'scope' => 'branch',
             'permissions' => [
                 'agenda' => ['view'], 'customers' => ['view'],
                 'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
@@ -174,6 +193,7 @@ class Access
         'professional' => [
             'name' => 'Profesional',
             'description' => 'Atiende sus propias citas y llena sus fichas. Solo ve lo suyo.',
+            'scope' => 'own',
             'permissions' => [
                 'agenda' => ['view', 'create', 'edit'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => self::EVERYTHING, 'holidays' => ['view'], 'attention' => ['view'],
@@ -184,7 +204,114 @@ class Access
         ],
     ];
 
+    /** Qué tanto ve quien tiene un rol. */
+    public const SCOPES = [
+        'tenant' => 'Toda la empresa',
+        'branch' => 'Solo su sede',
+        'own'    => 'Solo lo suyo',
+    ];
+
+    /** Sede que no existe: quien debe ver solo su sede y no tiene una asignada no ve nada. */
+    public const NO_BRANCH = '00000000-0000-0000-0000-000000000000';
+
     private static ?bool $ready = null;
+    private static ?bool $scoped = null;
+
+    /** La base ya guarda qué tanto ve cada rol (roles.scope). */
+    public static function scopeReady(): bool
+    {
+        return self::$scoped ??= Schema::hasColumn('roles', 'scope');
+    }
+
+    /**
+     * Qué tanto ve una persona: toda la empresa, solo su sede o solo lo suyo.
+     * El administrador siempre ve toda la empresa.
+     */
+    public static function scopeOf(User $user): string
+    {
+        if (!$user->tenant_id) {
+            return 'tenant';
+        }
+
+        if ($user->scopeCache !== null) {
+            return $user->scopeCache;
+        }
+
+        if ($user->isTenantAdmin()) {
+            return $user->scopeCache = 'tenant';
+        }
+
+        $role = self::roleOf($user);
+        $scope = $role && self::scopeReady() && $role->permissions_seeded_at ? $role->scope : (self::FACTORY[$role?->slug]['scope'] ?? 'tenant');
+
+        return $user->scopeCache = isset(self::SCOPES[$scope]) ? $scope : 'tenant';
+    }
+
+    /**
+     * La sede a la que se limita lo que ve una persona, o null si no se limita.
+     * Sin sede asignada devuelve NO_BRANCH: así no ve nada en vez de verlo todo.
+     */
+    public static function branchLimit(mixed $user): ?string
+    {
+        // El cliente del portal y el equipo de la plataforma no tienen sede de trabajo.
+        if (!$user instanceof User || self::scopeOf($user) !== 'branch') {
+            return null;
+        }
+
+        return $user->branch_id ?: self::NO_BRANCH;
+    }
+
+    /**
+     * Rechaza lo que pertenece a otra sede. $branchId null es algo de toda la
+     * empresa (un feriado nacional): se deja ver, pero no cambiar.
+     */
+    public static function assertBranch(mixed $user, ?string $branchId, bool $changing = false): void
+    {
+        $limit = self::branchLimit($user);
+
+        if ($limit === null || $branchId === $limit) {
+            return;
+        }
+
+        if ($branchId === null && !$changing) {
+            return;
+        }
+
+        abort(403, self::otherBranch($user, $branchId === null));
+    }
+
+    /** Ids de quienes tienen horario en una sede, para usar dentro de una consulta. */
+    public static function professionalsAt(string $branchId)
+    {
+        return DB::table('professional_schedules')->where('branch_id', $branchId)->select('professional_id');
+    }
+
+    /** Si un profesional atiende en esa sede. */
+    public static function worksAt(string $professionalId, string $branchId): bool
+    {
+        return DB::table('professional_schedules')->where('branch_id', $branchId)->where('professional_id', $professionalId)->exists();
+    }
+
+    /** "Tu cuenta trabaja solo con Sede San Borja." */
+    public static function onlyBranch(User $user): string
+    {
+        $name = $user->branch_id ? DB::table('branches')->where('id', $user->branch_id)->value('name') : null;
+
+        return $name ? "Tu cuenta trabaja solo con {$name}." : self::otherBranch($user);
+    }
+
+    public static function otherBranch(User $user, bool $wholeCompany = false): string
+    {
+        if (!$user->branch_id) {
+            return 'Tu cuenta trabaja solo con su sede, pero aún no tiene una asignada. Pídele a quien administra tu empresa que te asigne tu sede.';
+        }
+
+        $name = DB::table('branches')->where('id', $user->branch_id)->value('name');
+
+        return $wholeCompany
+            ? "Esto vale para todas las sedes y tu cuenta trabaja solo con {$name}. Pídeselo a quien administra tu empresa."
+            : "Esto es de otra sede. Tu cuenta trabaja solo con {$name}.";
+    }
 
     /** La base ya tiene lo que este módulo necesita (si no, rige lo de fábrica y no se guarda nada). */
     public static function ready(): bool
@@ -364,7 +491,7 @@ class Access
                     'description'           => $definition['description'],
                     'is_system'             => true,
                     'permissions_seeded_at' => now(),
-                ])->save();
+                ] + (self::scopeReady() ? ['scope' => $definition['scope']] : []))->save();
 
                 // El administrador puede todo sin necesidad de lista.
                 self::setRolePermissions($role->id, $slug === 'owner' ? [] : self::factoryPermissions($slug));
@@ -402,7 +529,8 @@ class Access
                 $actions[] = [
                     'action'   => $action,
                     'name'     => $name,
-                    'label'    => self::ACTIONS[$action],
+                    'label'    => self::ACTIONS[$action] ?? self::SPECIAL[$action],
+                    'special'  => isset(self::SPECIAL[$action]),
                     'hint'     => $text($hint),
                     'role'     => $fromRole,
                     'override' => $override === $fromRole ? null : $override,

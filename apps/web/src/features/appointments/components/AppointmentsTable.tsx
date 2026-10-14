@@ -32,7 +32,7 @@ const CARDS: { id: string; title: string; statuses: string[]; icon: React.ReactN
 // Lista de citas de la empresa por periodo, con búsqueda y filtros. El ojo y
 // el código abren el panel de la cita.
 export default function AppointmentsTable() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<{ id: string; display_name: string }[]>([]);
@@ -207,7 +207,7 @@ export default function AppointmentsTable() {
         <DataTable<Appointment>
           title="Citas"
           primaryActionLabel="Nueva cita"
-          onPrimaryAction={() => openNew()}
+          onPrimaryAction={can('agenda.create') ? () => openNew() : undefined}
           tabs={PERIODS.map((p) => ({ id: p.id, label: p.label, count: p.id === period ? appointments.length : undefined }))}
           activeTab={period}
           onTabChange={(id) => { setPeriod(id); setActiveCard(''); }}

@@ -45,7 +45,7 @@ function ReadOnlyFields({ fields, data }: { fields: RecordField[]; data: RecordD
 // borrador y se firma. Firmada, se puede corregir hasta que vence el plazo de
 // la empresa; después solo admite notas.
 export default function RecordPanel({ appointmentId, onClose, onChanged }: RecordPanelProps) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const vocab = useVocabulary();
   const [context, setContext] = useState<AppointmentRecord | null>(null);
   const [data, setData] = useState<RecordData>({});
@@ -86,7 +86,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   const fields: RecordField[] = record?.fields ?? context?.template?.fields ?? [];
   const consentText = record ? record.consent_text : context?.template?.consent_text;
   const requireConsent = Boolean(record ? record.require_consent : context?.template?.require_consent);
-  const editable = Boolean(context?.uses_record) && (record ? record.can_edit : true) && !record?.hidden;
+  const editable = Boolean(context?.uses_record) && (record ? record.can_edit : true) && !record?.hidden && can('records.edit');
   const isSigned = record?.status === 'signed';
 
   const setValue = (key: string, value: RecordValue) => {
@@ -232,7 +232,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
         <div className="space-y-2">
           <p className="text-sm font-semibold text-slate-700">Este servicio no se atiende con ficha.</p>
           <p className="text-sm text-slate-500">
-            {user?.is_tenant_admin ? (
+            {can('record_templates.edit') ? (
               <>Puedes asignarle una en <Link href="/records/templates" className="font-semibold text-[#3F768C] hover:text-[#022340]">Plantillas de ficha</Link>.</>
             ) : 'El administrador de tu empresa decide qué servicios llevan ficha.'}
           </p>

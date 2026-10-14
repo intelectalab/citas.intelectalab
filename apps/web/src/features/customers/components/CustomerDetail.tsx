@@ -67,7 +67,7 @@ const ageFrom = (birthDate?: string | null): string | null => {
 // atención y citas). Se llega desde el ojo o el nombre en la tabla de clientes.
 export default function CustomerDetail() {
   const params = useParams<{ id: string }>();
-  const { user, hasModule } = useAuth();
+  const { user, hasModule, can } = useAuth();
   const vocab = useVocabulary();
   const [customer, setCustomer] = useState<CustomerData | null>(null);
   const [canForgive, setCanForgive] = useState(false);
@@ -221,7 +221,7 @@ export default function CustomerDetail() {
                 </p>
               </div>
             </div>
-            <button
+            {can('customers.edit') && (<button
               type="button"
               data-action="edit-customer"
               title={`Editar ${vocab.client.toLowerCase()}`}
@@ -229,7 +229,7 @@ export default function CustomerDetail() {
               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shrink-0"
             >
               <Pencil size={16} />
-            </button>
+            </button>)}
           </div>
 
           <dl className="space-y-3">

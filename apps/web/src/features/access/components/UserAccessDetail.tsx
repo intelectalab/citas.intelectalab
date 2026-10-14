@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Ban, Check, Contact, KeyRound, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Store } from 'lucide-react';
+import { ArrowLeft, Ban, Check, Contact, Eye, KeyRound, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Store } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import FormUser from './FormUser';
 import PermissionGrid from './PermissionGrid';
 import CredentialsNote from './CredentialsNote';
-import { MANAGER_NOTE, countAll, countOn, countOverride, initialsOf, type BranchOption, type GridAction, type GridModule, type RoleOption, type StaffUser } from '../access';
+import { NO_BRANCH_NOTE, countAll, countOn, countOverride, initialsOf, type BranchOption, type GridAction, type GridModule, type RoleOption, type StaffUser } from '../access';
 
 interface Detail {
   user: StaffUser;
@@ -22,6 +22,9 @@ interface Detail {
   grid: GridModule[];
   roles: RoleOption[];
   branches: BranchOption[];
+  // Qué tanto ve: toda la empresa, solo su sede o solo lo suyo.
+  scope?: 'tenant' | 'branch' | 'own';
+  scope_label?: string;
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -148,6 +151,7 @@ export default function UserAccessDetail() {
     [<Mail key="i" size={14} />, 'Correo de acceso', user.email],
     [<Phone key="i" size={14} />, 'Celular', user.phone],
     [<Store key="i" size={14} />, 'Sede', user.branch?.name],
+    [<Eye key="i" size={14} />, 'Qué ve', detail.scope === 'branch' && user.branch ? `${detail.scope_label}: ${user.branch.name}` : detail.scope_label],
   ];
 
   const stats = [
@@ -204,7 +208,7 @@ export default function UserAccessDetail() {
             ))}
           </dl>
 
-          {user.role?.slug === 'manager' && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5" data-manager-note>{MANAGER_NOTE}</p>}
+          {detail.scope === 'branch' && !user.branch && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5" data-no-branch>{NO_BRANCH_NOTE}</p>}
 
           {inactive && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">Con la cuenta desactivada no entra al sistema, aunque tenga permisos encendidos.</p>}
 

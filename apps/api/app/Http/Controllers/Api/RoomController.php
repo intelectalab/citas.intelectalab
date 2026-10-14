@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Support\Rooms;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Support\Access;
 
 /**
  * Salas y equipos de una sucursal (consultorios, cabinas, sillones, equipos).
@@ -26,6 +27,7 @@ class RoomController extends Controller
     {
         $room = DB::table('rooms')->where('tenant_id', $request->user()->tenant_id)->where('id', $id)->first();
         abort_unless($room, 404);
+        Access::assertBranch($request->user(), $room->branch_id, true);
 
         return $room;
     }
@@ -69,10 +71,12 @@ class RoomController extends Controller
         $user = $request->user();
         abort_unless($user->tenant_id, 403);
 
-        $branches = Branch::where('tenant_id', $user->tenant_id)->orderBy('name')->get(['id', 'name', 'status']);
+        // Quien trabaja solo con su sede ve y registra las salas de su sede.
+        $limit = Access::branchLimit($user);
+        $branches = Branch::where('tenant_id', $user->tenant_id)->when($limit, fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name', 'status']);
         $names = $branches->pluck('name', 'id');
 
-        $rooms = $user->tenant ? Rooms::listing($user->tenant) : collect();
+        $rooms = $user->tenant ? Rooms::listing($user->tenant, $limit) : collect();
         $mode = Rooms::mode($user->tenant);
 
         return response()->json([
@@ -102,6 +106,7 @@ class RoomController extends Controller
     {
         $this->assertCanManage($request);
         $branch = Branch::where('tenant_id', $request->user()->tenant_id)->findOrFail($branch);
+        Access::assertBranch($request->user(), $branch->id, true);
 
         $id = (string) \Illuminate\Support\Str::uuid();
         DB::table('rooms')->insert($this->validated($request, $branch->id) + [

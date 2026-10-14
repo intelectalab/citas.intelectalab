@@ -44,7 +44,7 @@ interface PlanUsage {
 
 export default function ProfessionalsTable() {
   const vocab = useVocabulary();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const proLower = vocab.pro.toLowerCase();
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(true);
@@ -326,27 +326,27 @@ export default function ProfessionalsTable() {
           >
             <Eye size={16} />
           </Link>
-          <button
+          {can('professionals.edit') && (<button
             onClick={() => setScheduleProfessional(prof)}
             title="Horario y ausencias"
             className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
           >
             <CalendarClock size={16} />
-          </button>
-          <button 
+          </button>)}
+          {can('professionals.edit') && (<button 
             onClick={() => { setEditingProfessional(prof); setShowFormModal(true); }}
             title={`Editar ${proLower}`}
             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           >
             <Pencil size={16} />
-          </button>
-          <button 
+          </button>)}
+          {can('professionals.delete') && (<button 
             onClick={() => handleDelete(prof.id)}
             title={`Eliminar ${proLower}`}
             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
             <Trash2 size={16} />
-          </button>
+          </button>)}
         </div>
       ),
     },
@@ -360,7 +360,7 @@ export default function ProfessionalsTable() {
         <DataTable<Professional>
           title={`Gestión de ${vocab.pros}`}
           primaryActionLabel={`Nuevo ${vocab.pro}`}
-          onPrimaryAction={() => { if (planBlocked) return; setEditingProfessional(null); setShowFormModal(true); }}
+          onPrimaryAction={!can('professionals.create') ? undefined : () => { if (planBlocked) return; setEditingProfessional(null); setShowFormModal(true); }}
           primaryActionBlocked={planBlocked || undefined}
           tabs={[{ id: 'all', label: 'Todos', count: safeProfessionals.length }]}
           activeTab={activeTab}

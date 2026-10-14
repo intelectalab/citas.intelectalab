@@ -1,11 +1,15 @@
 // Tipos y textos de Usuarios y roles.
 
+export type Scope = 'tenant' | 'branch' | 'own';
+
 export interface RoleOption {
   id: string;
   slug: string;
   name: string;
   description: string | null;
   is_system: boolean;
+  // Qué tanto ve quien tiene el rol.
+  scope: Scope;
 }
 
 export interface RoleRow extends RoleOption {
@@ -43,7 +47,10 @@ export interface StaffUser {
 }
 
 export interface GridAction {
-  action: 'view' | 'create' | 'edit' | 'delete';
+  // view, create, edit, delete o uno especial (forzar horario, acceso de emergencia...).
+  action: string;
+  // Permiso especial: va en su propia columna de la rejilla.
+  special?: boolean;
   name: string;
   label: string;
   hint: string;
@@ -65,11 +72,20 @@ export interface PlanUsage {
   limit: number | null;
 }
 
-export const ACTION_ORDER: GridAction['action'][] = ['view', 'create', 'edit', 'delete'];
-export const ACTION_LABELS: Record<GridAction['action'], string> = { view: 'Ver', create: 'Crear', edit: 'Editar', delete: 'Eliminar' };
+export const ACTION_ORDER = ['view', 'create', 'edit', 'delete'];
+export const ACTION_LABELS: Record<string, string> = { view: 'Ver', create: 'Crear', edit: 'Editar', delete: 'Eliminar' };
 
-// El gerente de sede existe ya, pero el límite a su sede llega en una próxima entrega.
-export const MANAGER_NOTE = 'Por ahora quien tiene este rol ve todas las sedes de la empresa. Que vea solo la suya llegará en una próxima entrega.';
+// Qué tanto ve quien tiene un rol, con palabras.
+export const SCOPE_OPTIONS: { id: Scope; title: string; hint: string }[] = [
+  { id: 'tenant', title: 'Toda la empresa', hint: 'Ve y trabaja con todas las sedes.' },
+  { id: 'branch', title: 'Solo su sede', hint: 'La agenda, las citas, la caja, las ventas, las salas y el equipo de la sede de cada persona. Clientes, servicios y cupones siguen siendo de toda la empresa.' },
+  { id: 'own', title: 'Solo lo suyo', hint: 'Sus propias citas, fichas y controles. Es para quien atiende.' },
+];
+
+export const scopeTitle = (scope?: Scope) => SCOPE_OPTIONS.find((o) => o.id === scope)?.title ?? 'Toda la empresa';
+
+// Para quien trabaja solo con su sede y aún no tiene una asignada.
+export const NO_BRANCH_NOTE = 'Trabaja solo con su sede, pero no tiene una asignada: no verá agenda, caja ni ventas hasta que se la asignes.';
 
 export const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();

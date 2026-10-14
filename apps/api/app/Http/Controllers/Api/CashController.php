@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Caja: abrir un turno, registrar ingresos, gastos y retiros, y cerrarlo con
@@ -53,14 +54,17 @@ class CashController extends Controller
         $tenant = $this->tenant($request);
         Cash::ensureRegisters($tenant);
 
-        $branches = DB::table('branches')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name', 'status']);
+        // Quien trabaja solo con su sede ve las cajas y los turnos de su sede.
+        $limit = Access::branchLimit($request->user());
+        $branches = DB::table('branches')->where('tenant_id', $tenant->id)->when($limit, fn ($q, $id) => $q->where('id', $id))->orderBy('name')->get(['id', 'name', 'status']);
         $branchNames = $branches->pluck('name', 'id');
-        $registers = DB::table('cash_registers')->where('tenant_id', $tenant->id)->orderBy('name')->get();
+        $registers = DB::table('cash_registers')->where('tenant_id', $tenant->id)->when($limit, fn ($q, $id) => $q->where('branch_id', $id))->orderBy('name')->get();
         $registerNames = $registers->pluck('name', 'id');
         $open = DB::table('cash_sessions')->where('tenant_id', $tenant->id)->where('status', 'open')->get()->keyBy('cash_register_id');
 
         $closed = DB::table('cash_sessions')
             ->where('tenant_id', $tenant->id)
+            ->when($limit, fn ($q, $id) => $q->where('branch_id', $id))
             ->where('status', 'closed')
             ->orderByDesc('closed_at')
             ->limit(300)
@@ -92,6 +96,7 @@ class CashController extends Controller
     {
         $tenant = $this->tenant($request);
         $session = $this->session($tenant, $session);
+        Access::assertBranch($request->user(), $session->branch_id);
         $register = DB::table('cash_registers')->where('id', $session->cash_register_id)->first();
 
         return response()->json(Cash::present($session, true) + [
@@ -114,6 +119,8 @@ class CashController extends Controller
             'name.required'      => 'Escribe el nombre de la caja.',
             'name.unique'        => 'Esa sede ya tiene una caja con ese nombre.',
         ]);
+        // Quien trabaja solo con su sede no agrega cajas en otra.
+        Access::assertBranch($request->user(), $validated['branch_id'], true);
 
         $id = (string) Str::uuid();
         DB::table('cash_registers')->insert([
@@ -131,6 +138,7 @@ class CashController extends Controller
 
         $row = DB::table('cash_registers')->where('tenant_id', $tenant->id)->where('id', $register)->first();
         abort_unless($row, 404);
+        Access::assertBranch($request->user(), $row->branch_id, true);
 
         $validated = $request->validate([
             'name'   => ['required', 'string', 'max:100', Rule::unique('cash_registers', 'name')->where('branch_id', $row->branch_id)->ignore($row->id)],
@@ -161,6 +169,7 @@ class CashController extends Controller
         return DB::transaction(function () use ($tenant, $register, $validated, $request) {
             $row = DB::table('cash_registers')->where('tenant_id', $tenant->id)->where('id', $register)->lockForUpdate()->first();
             abort_unless($row, 404);
+            Access::assertBranch($request->user(), $row->branch_id, true);
             abort_if($row->status !== 'active', 422, 'Esta caja está desactivada.');
             abort_if(DB::table('cash_sessions')->where('cash_register_id', $row->id)->where('status', 'open')->exists(), 409, 'Esta caja ya está abierta.');
 
@@ -192,6 +201,7 @@ class CashController extends Controller
 
         return DB::transaction(function () use ($tenant, $session, $validated, $request) {
             $row = $this->session($tenant, $session, true);
+            Access::assertBranch($request->user(), $row->branch_id, true);
             abort_if($row->status !== 'open', 409, 'Este turno de caja ya está cerrado.');
 
             $amount = round((float) $validated['amount'], 2);
@@ -230,6 +240,7 @@ class CashController extends Controller
 
         return DB::transaction(function () use ($tenant, $session, $validated, $request) {
             $row = $this->session($tenant, $session, true);
+            Access::assertBranch($request->user(), $row->branch_id, true);
             abort_if($row->status !== 'open', 409, 'Este turno de caja ya está cerrado.');
 
             $expected = Cash::present($row)['expected_amount'];

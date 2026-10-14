@@ -102,7 +102,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Cargos por cancelar tarde y por no asistir.** La API avisa de la cancelación tardía, pero no cobra nada. Depende de la caja.
 - **Adelanto para reservar.** `requires_deposit` del servicio y las reglas de adelanto no se aplican. Depende de los pagos.
 - **Salas y equipos en la cita.** Ya se registran por sucursal, pero la cita no valida que haya una sala libre ni asigna `room_id`.
-- **Permisos por acción en la agenda.** El prototipo separa confirmar, registrar llegada, atender, cancelar, reprogramar y forzar. Aquí "Editar" de Agenda y citas los reúne a todos; forzar un horario sigue siendo solo del administrador.
+- **Permisos por acción en la agenda.** El prototipo separa confirmar, registrar llegada, atender, cancelar y reprogramar. Aquí "Editar" de Agenda y citas los reúne a todos. Forzar un horario ya es un permiso aparte.
 - **Avisos al cliente.** Confirmación de reserva, recordatorio y aviso de reprogramación no se envían: no hay envío de mensajes.
 - **Citas recurrentes y clases grupales.** El prototipo las tiene; no se incluyeron.
 - **Reglas de agenda sin editor.** `agenda.require_confirmation`, `agenda.client_overlap`, `agenda.allow_override`, `agenda.slot_interval`, `cancel.require_reason` y `noshow.grace_minutes` usan su valor por defecto; no están en el editor de reglas de la plataforma (`src/lib/rules.ts`) ni en `/settings`.
@@ -242,7 +242,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Agenda de todas las sedes a la vez.** Solo se ve una sede por vez.
 - **Sede principal.** No hay forma de marcar cuál es la principal.
 - **Servicios por sede.** Todos los servicios se ofrecen en todas las sedes; el prototipo permite limitarlos.
-- **Personal por sede.** La recepción ve y agenda en todas las sedes; no hay usuarios limitados a una.
 - **Zona horaria.** La lista ofrece siete zonas; las ausencias y los feriados usan la zona de la empresa, no la de cada sede.
 - **Reportes por sede.** Tiempos de atención y la lista de citas no filtran por sede.
 - **Eliminar una sucursal.** Solo se desactiva. Una creada por error queda en "Inactivas".
@@ -443,7 +442,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **El inicio sigue mostrando "valor de lo atendido".** Debe pasar a lo realmente cobrado.
 - **Cancelar una cita ya cobrada.** Se puede cancelar o marcar "no asistió" sin que la venta cambie ni se avise: la devolución hay que hacerla aparte, desde Ventas.
 - **Cambiar el precio de una cita con venta abierta.** La venta conserva el monto con que nació.
-- **Quién ve cada turno de caja.** Quien tiene el permiso de Caja ve y opera todas las cajas y todos los turnos. Falta decidir si cada quien debe ver solo el suyo.
+- **Quién ve cada turno de caja.** Quien opera la caja ve todas las cajas y turnos de su sede (o de la empresa, según su rol). Falta decidir si cada quien debe ver solo su propio turno.
 - **Aprobar un cierre con diferencia.** El administrador recibe el aviso, pero no hay un paso de "aprobar"; tampoco se puede reabrir un turno cerrado.
 - **Arqueo por billetes y monedas.** Se escribe el total contado; el prototipo cuenta por denominación.
 - **Medios que no son efectivo.** Se muestran por turno para cuadrarlos, pero no se concilian contra el banco o el POS.
@@ -497,10 +496,6 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-13 (usuarios y roles, entrega 1)
 
-- **Entrega 2 (acordada): ocultar lo que la persona no puede usar.** En Clientes, Servicios, Cupones, Agenda, Lista de espera, Controles, Bloqueos y Profesionales los botones de crear, editar y eliminar se ven igual para todos; quien no puede recibe el mensaje al pulsar. Caja, Ventas, Sucursales, Salas, Feriados, Horarios y Plantillas de ficha ya los ocultan.
-- **Entrega 2: permisos especiales.** Forzar un horario, pedir acceso de emergencia a una ficha privada y perdonar inasistencias siguen siendo solo del administrador. Devolver dinero y anular van juntos en un solo permiso.
-- **Entrega 3 (acordada): que el gerente de sede vea solo su sede.** Hoy ve todas, y la pantalla lo avisa. Hay que filtrar por sede agenda, citas, clientes, ventas, caja y reportes. Lo mismo para recepción y caja si la empresa lo quiere.
-- **Entrar por la dirección a una pantalla sin permiso.** El menú no la muestra, pero si alguien escribe la dirección la pantalla abre y muestra el mensaje de la API en vez de una página "no tienes acceso".
 - **Listas que todo el personal puede leer.** Servicios, profesionales, horarios, sedes, salas, feriados, bloqueos y plantillas de ficha: apagar "Ver" quita la pantalla del menú, pero la API sigue entregando la lista porque otros formularios la necesitan para elegir.
 - **El profesional ya no elimina clientes ni cambia servicios.** Antes la API se lo permitía a cualquier cuenta. Si una empresa lo necesita, se le enciende al rol o a la persona.
 - **Un profesional con "Ver ventas" encendido ve todas las ventas**, no solo las de sus citas.
@@ -513,3 +508,26 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Dos cuentas de la misma persona.** El correo no se repite dentro de la empresa, pero el de un profesional no puede existir en ninguna otra empresa y el de un usuario sí.
 - **Sesión de soporte de la plataforma.** Quien entra al panel de una empresa actúa como su dueño: puede crear usuarios y cambiar permisos.
 - **Pruebas en pantalla que faltan.** Entrar como gerente de sede y como caja, reactivar una cuenta, el botón bloqueado por el tope del plan, filtros de fecha y orden de las dos tablas, la página de un rol y la rejilla en una pantalla grande, tema oscuro y celular.
+
+## Detectados el 2026-10-13 (usuarios y roles, entrega 2)
+
+- **Anular y devolver, en un solo permiso.** "Eliminar" de Ventas y pagos cubre las dos cosas; no se puede dar una sin la otra.
+- **Roles que ya existían no reciben los permisos nuevos.** Al agregar un permiso al catálogo (como los tres especiales), los roles de fábrica ya creados en una empresa no lo reciben solos: hay que encenderlo o usar "Volver a como nació".
+- **Botones que aún no siguen al permiso.** Dependientes y mascotas dentro del formulario del cliente, las categorías de servicio, el acceso al portal del cliente, y el nombre de un cupón (abre su panel aunque no se pueda guardar).
+- **Mapa de pantallas escrito dos veces.** Qué permiso pide cada pantalla está en el menú (`Sidebar`) y en el aviso de acceso (`ScreenGate`); al agregar una pantalla hay que tocar los dos.
+- **La página de un profesional la abre todo el personal.** Desde su nombre, aunque la persona no tenga permiso sobre Profesionales; ve sus datos y su horario.
+- **Ficha en solo lectura sin aviso.** Quien puede ver fichas pero no llenarlas la ve sin campos editables, sin un texto que le diga por qué.
+- **Pruebas en pantalla que faltan.** Entrar como recepción, gerente y profesional; Lista de espera, Controles, Bloqueos, Servicios y Profesionales sin permiso; la ficha en solo lectura; Configuración con "ver" y sin "cambiar"; los botones de perdonar faltas y de acceso de emergencia; forzar un horario como gerente; tema oscuro y celular.
+
+## Detectados el 2026-10-13 (usuarios y roles, entrega 3: por sede)
+
+- **Una persona en dos sedes.** Cada cuenta tiene una sola sede. Un gerente que lleva Miraflores y Surco necesita hoy el rol con "toda la empresa".
+- **Avisos de la campana por sede.** Gerencia, recepción y caja no reciben avisos; los de la administración llegan de todas las sedes.
+- **Servicios, precios, cupones y plantillas los cambia el gerente** (decisión del 2026-10-13: "por ahora sí"). Un cambio suyo rige en todas las sedes. Revisar cuando haya varias sedes con gerentes distintos.
+- **Controles y seguimiento son de toda la empresa.** Quien ve solo su sede ve los controles de todos los clientes, también los atendidos en otra sede.
+- **Página del cliente.** Sus citas se ven solo de la propia sede; sus datos y su historia de fichas, según el permiso de fichas (las de otra sede no se abren).
+- **Un profesional que atiende en dos sedes** aparece para los dos gerentes, y cualquiera de ellos puede cambiar sus datos; su horario, solo el de su sede.
+- **Profesionales sin horario los ven todos los gerentes**, para poder darles horario en su sede.
+- **Reportes comparando sedes.** No existen; el inicio y los tiempos de atención muestran una sede o toda la empresa.
+- **Mensajes de otra sede en pantalla.** Si alguien llega a algo de otra sede (por un enlace de un aviso, por ejemplo), la pantalla muestra el mensaje de la API como error, no una página propia.
+- **Pruebas en pantalla que faltan.** Entrar como Rosa y Karina; Ventas, Fichas, Inicio, Lista de espera y Bloqueos como gerente; cambiar la sede de alguien; un rol propio copiado; "Volver a como nació"; tema oscuro y celular.

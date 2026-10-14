@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Sucursales de la empresa: sus datos, su horario de atención, quiénes
@@ -65,17 +66,18 @@ class BranchController extends Controller
     {
         $tenant = $this->tenant($request);
 
-        $branches = Branch::where('tenant_id', $tenant->id)->orderByRaw("status = 'active' desc")->orderBy('created_at')->get();
-        $active = $branches->where('status', 'active')->count();
-        $limit = $this->limit($tenant);
+        $all = Branch::where('tenant_id', $tenant->id)->orderByRaw("status = 'active' desc")->orderBy('created_at')->get();
+        $active = $all->where('status', 'active')->count();
+        $branches = ($limit = Access::branchLimit($request->user())) ? $all->where('id', $limit)->values() : $all;
+        $planLimit = $this->limit($tenant);
 
         return response()->json([
             'branches'     => $branches->map(fn (Branch $branch) => $this->present($branch, $tenant)),
             'active'       => $active,
             // null = sin tope.
-            'limit'        => $limit,
+            'limit'        => $planLimit,
             'multi_branch' => $tenant->hasModule('multi_branch'),
-            'can_add'      => $limit === null || $active < $limit,
+            'can_add'      => $planLimit === null || $active < $planLimit,
             'can_manage'   => $request->user()->allows('branches.edit'),
             'uses_rooms'   => $tenant->hasModule('resources'),
         ]);
@@ -85,6 +87,7 @@ class BranchController extends Controller
     {
         $tenant = $this->tenant($request);
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($branch);
+        Access::assertBranch($request->user(), $branch->id);
 
         $schedules = ProfessionalSchedule::where('tenant_id', $tenant->id)->where('branch_id', $branch->id)->orderBy('weekday')->orderBy('starts_local')->get()->groupBy('professional_id');
         $hours = BranchHours::of($branch->id);

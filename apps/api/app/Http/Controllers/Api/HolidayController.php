@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Feriados de la empresa: los nacionales que se le cargan y los propios. Todo
@@ -63,6 +64,7 @@ class HolidayController extends Controller
             ->with('branch:id,name')
             ->when($validated['year'] ?? null, fn ($q, $year) => $q->whereYear('date', $year), fn ($q) => $q->where('date', '>=', $today->format('Y-m-d')))
             ->when($validated['branch_id'] ?? null, fn ($q, $id) => $q->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $id)))
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $id)))
             ->orderBy('date')
             ->orderBy('name')
             ->get();
@@ -131,6 +133,7 @@ class HolidayController extends Controller
         $tenant = $this->tenant($request);
         $this->assertCanManage($request);
         $holiday = Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday);
+        Access::assertBranch($request->user(), $holiday->branch_id, true);
 
         $holiday->update($this->validated($request, $tenant, $holiday->id));
 
@@ -141,7 +144,9 @@ class HolidayController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->assertCanManage($request);
-        Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday)->delete();
+        $holiday = Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday);
+        Access::assertBranch($request->user(), $holiday->branch_id, true);
+        $holiday->delete();
 
         return response()->json(['message' => 'Feriado eliminado correctamente']);
     }
@@ -155,6 +160,8 @@ class HolidayController extends Controller
         $this->assertCanManage($request);
 
         $validated = $request->validate(['year' => 'required|integer|min:2000|max:2100']);
+        // Los nacionales valen para todas las sedes.
+        Access::assertBranch($request->user(), null, true);
         $added = Holidays::loadNational($tenant, (int) $validated['year'], $request->user()->id);
 
         return response()->json([
@@ -183,6 +190,8 @@ class HolidayController extends Controller
         if ($branchId) {
             Branch::where('tenant_id', $tenant->id)->findOrFail($branchId);
         }
+
+        Access::assertBranch($request->user(), $branchId, true);
 
         // Dos feriados el mismo día para las mismas sedes solo confunden.
         $duplicate = Holiday::where('tenant_id', $tenant->id)

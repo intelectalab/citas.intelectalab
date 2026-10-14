@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Lista de espera: quién quiere una cita y no encontró horario. Desde aquí se
@@ -92,6 +93,7 @@ class WaitlistController extends Controller
             ->when($own, fn ($q) => $q->where(fn ($q) => $q->whereNull('professional_id')->orWhere('professional_id', $own)))
             ->when($validated['professional_id'] ?? null, fn ($q, $id) => $q->where('professional_id', $id))
             ->when($validated['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('branch_id', $id))
             ->when($validated['service_id'] ?? null, fn ($q, $id) => $q->where('service_id', $id))
             ->when($validated['customer_id'] ?? null, fn ($q, $id) => $q->where('customer_id', $id))
             ->when($validated['search'] ?? null, function ($q, $search) {
@@ -123,6 +125,7 @@ class WaitlistController extends Controller
         $validated = $request->validate(['customer_id' => 'required|uuid'] + $this->rules(), $this->messages());
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
         $values = $this->values($tenant, $customer, $validated, $own);
+        Access::assertBranch($request->user(), $values['branch_id'], true);
 
         if ($values['date_to'] && $values['date_to'] < $this->today($tenant)->format('Y-m-d')) {
             throw ValidationException::withMessages(['date_to' => 'La última fecha ya pasó.']);
@@ -161,13 +164,16 @@ class WaitlistController extends Controller
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
         $entry = $this->find($tenant, $entry, $own);
+        Access::assertBranch($request->user(), $entry->branch_id);
 
         if (!$entry->isOpen()) {
             return response()->json(['message' => 'Este registro ya no se puede cambiar.', 'code' => 'CLOSED'], 422);
         }
 
         $validated = $request->validate($this->rules(), $this->messages());
-        $entry->update($this->values($tenant, $entry->customer, $validated, $own));
+        $values = $this->values($tenant, $entry->customer, $validated, $own);
+        Access::assertBranch($request->user(), $values['branch_id'], true);
+        $entry->update($values);
 
         return response()->json($this->present($entry->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
     }
@@ -179,6 +185,7 @@ class WaitlistController extends Controller
     {
         $tenant = $this->tenant($request);
         $entry = $this->find($tenant, $entry, $this->ownProfessionalId($request->user()));
+        Access::assertBranch($request->user(), $entry->branch_id);
 
         $validated = $request->validate([
             'status' => ['required', Rule::in([WaitlistEntry::WAITING, WaitlistEntry::NOTIFIED, WaitlistEntry::CANCELLED])],
@@ -216,6 +223,7 @@ class WaitlistController extends Controller
     {
         $tenant = $this->tenant($request);
         $entry = $this->find($tenant, $entry, $this->ownProfessionalId($request->user()));
+        Access::assertBranch($request->user(), $entry->branch_id);
 
         if (!$entry->isOpen()) {
             return response()->json(['message' => 'Este registro ya no está en espera.', 'code' => 'CLOSED'], 422);

@@ -177,7 +177,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'customer' => $customer->load($this->relations($request)),
-            'can_forgive_booking' => $request->user()->isTenantAdmin() && \App\Support\OnlineBooking::canForgive(),
+            'can_forgive_booking' => $request->user()->allows('customers.forgive') && \App\Support\OnlineBooking::canForgive(),
         ]);
     }
 
@@ -187,7 +187,7 @@ class CustomerController extends Controller
      */
     public function forgiveBooking(Request $request, string $customer)
     {
-        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede hacerlo.');
+        abort_unless($request->user()->allows('customers.forgive'), 403, 'Tu cuenta no tiene permiso para perdonar inasistencias.');
         abort_unless(\App\Support\OnlineBooking::canForgive(), 503, 'Falta actualizar la base de datos: carga init.sql, seed.sql y seed_demo.sql.');
 
         $customer = $this->findForTenant($request, $customer);

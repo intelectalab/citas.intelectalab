@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Support\Access;
 
 /**
  * Bloqueos de agenda: ausencias de un profesional o cierres de una sede.
@@ -113,6 +114,8 @@ class AvailabilityBlockController extends Controller
             ->when($own, fn ($q) => $q->where(fn ($q) => $q->where('professional_id', $own)->orWhereNull('professional_id')))
             ->when($request->filled('professional_id'), fn ($q) => $q->where('professional_id', $request->input('professional_id')))
             ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->input('branch_id')))
+            // Quien trabaja solo con su sede ve los cierres de su sede y las ausencias de quienes atienden ahí.
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where(fn ($q) => $q->where('branch_id', $id)->orWhereIn('professional_id', Access::professionalsAt($id))))
             ->when($past, fn ($q) => $q->where('ends_at', '<=', now()->toIso8601String())->orderByDesc('starts_at')->limit(200))
             ->when(!$past, fn ($q) => $q->where('ends_at', '>', $from->toIso8601String())->orderBy('starts_at'))
             ->when($request->filled('to'), fn ($q) => $q->where('starts_at', '<', Carbon::parse($request->input('to'), $timezone)->toIso8601String()))
@@ -129,6 +132,7 @@ class AvailabilityBlockController extends Controller
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
         $block = $this->find($tenant, $id, $own, false);
+        $this->assertBranch($request, $block->professional_id, $block->branch_id);
 
         return response()->json($this->present($block, $tenant, $own) + [
             'affected' => $this->affectedList($tenant, $block->professional_id, $block->branch_id, Carbon::parse($block->starts_at), Carbon::parse($block->ends_at)),
@@ -165,6 +169,7 @@ class AvailabilityBlockController extends Controller
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
         $block = $this->find($tenant, $id, $own);
+        $this->assertBranch($request, $block->professional_id, $block->branch_id);
         [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own);
 
         $block->update($this->columns($data, $startsAt, $endsAt));
@@ -175,9 +180,27 @@ class AvailabilityBlockController extends Controller
     public function destroy(Request $request, string $id)
     {
         $tenant = $this->tenant($request);
-        $this->find($tenant, $id, $this->ownProfessionalId($request->user()))->delete();
+        $block = $this->find($tenant, $id, $this->ownProfessionalId($request->user()));
+        $this->assertBranch($request, $block->professional_id, $block->branch_id);
+        $block->delete();
 
         return response()->json(['message' => 'Bloqueo eliminado correctamente']);
+    }
+
+    /**
+     * Quien trabaja solo con su sede maneja los cierres de su sede y las
+     * ausencias de quienes atienden ahí.
+     */
+    private function assertBranch(Request $request, ?string $professionalId, ?string $branchId): void
+    {
+        $limit = Access::branchLimit($request->user());
+
+        if ($limit === null) {
+            return;
+        }
+
+        $mine = $professionalId ? Access::worksAt($professionalId, $limit) : $branchId === $limit;
+        abort_unless($mine, 403, Access::otherBranch($request->user()));
     }
 
     /**
@@ -227,6 +250,8 @@ class AvailabilityBlockController extends Controller
             Branch::where('tenant_id', $tenant->id)->findOrFail($branchId);
             abort_if($own !== null, 403, 'Solo el personal administrativo puede cerrar una sede.');
         }
+
+        $this->assertBranch($request, $professionalId, $branchId);
 
         $timezone = $this->timezone($tenant);
         $startsAt = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], $timezone)->startOfMinute();

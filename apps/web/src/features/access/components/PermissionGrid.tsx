@@ -25,6 +25,23 @@ export default function PermissionGrid({ grid, mode, canEdit, busy, onToggle, em
 
   if (grid.length === 0) return <p className="px-6 py-5 text-sm text-slate-400">{empty}</p>;
 
+  // Permisos especiales (forzar horario, acceso de emergencia...): van en su propia columna.
+  const hasSpecial = grid.some((module) => module.actions.some((a) => a.special));
+
+  // Un interruptor con su marca; el especial lleva su nombre debajo.
+  const cell = (action: GridAction, caption?: string) => (
+    <span className="inline-flex flex-col items-center gap-1" data-perm={action.name} data-on={action.on ? '1' : '0'} title={action.hint}>
+      <Switch checked={action.on} disabled={!canEdit || busy === action.name} label={action.hint} onChange={() => onToggle(action)} />
+      {caption && <span className="text-[11px] font-semibold text-slate-600 leading-tight max-w-28">{caption}</span>}
+      {mode === 'user' && action.override === true && (
+        <span data-mark="granted" className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700 whitespace-nowrap">Agregado</span>
+      )}
+      {mode === 'user' && action.override === false && (
+        <span data-mark="revoked" className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 text-rose-700 whitespace-nowrap">Quitado</span>
+      )}
+    </span>
+  );
+
   return (
     <div data-permission-grid>
       <div className="overflow-x-auto">
@@ -35,11 +52,13 @@ export default function PermissionGrid({ grid, mode, canEdit, busy, onToggle, em
               {ACTION_ORDER.map((action) => (
                 <th key={action} className="font-semibold px-3 py-2.5 text-center">{ACTION_LABELS[action]}</th>
               ))}
+              {hasSpecial && <th className="font-semibold px-3 py-2.5 text-center">Especial</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((module) => {
               const expanded = open === module.key;
+              const special = module.actions.find((a) => a.special);
 
               return (
                 <Fragment key={module.key}>
@@ -68,29 +87,17 @@ export default function PermissionGrid({ grid, mode, canEdit, busy, onToggle, em
                         );
                       }
 
-                      return (
-                        <td key={key} className="px-3 py-3 text-center align-middle">
-                          <span className="inline-flex flex-col items-center gap-1" data-perm={action.name} data-on={action.on ? '1' : '0'} title={action.hint}>
-                            <Switch
-                              checked={action.on}
-                              disabled={!canEdit || busy === action.name}
-                              label={`${action.hint}`}
-                              onChange={() => onToggle(action)}
-                            />
-                            {mode === 'user' && action.override === true && (
-                              <span data-mark="granted" className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700 whitespace-nowrap">Agregado</span>
-                            )}
-                            {mode === 'user' && action.override === false && (
-                              <span data-mark="revoked" className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 text-rose-700 whitespace-nowrap">Quitado</span>
-                            )}
-                          </span>
-                        </td>
-                      );
+                      return <td key={key} className="px-3 py-3 text-center align-middle">{cell(action)}</td>;
                     })}
+                    {hasSpecial && (
+                      <td className="px-3 py-3 text-center align-middle">
+                        {special ? cell(special, special.label) : <span className="text-slate-300" title="Esta pantalla no tiene un permiso especial"><Minus size={14} className="inline" /></span>}
+                      </td>
+                    )}
                   </tr>
                   {expanded && (
                     <tr data-explained={module.key} className="bg-slate-50/60">
-                      <td colSpan={5} className="px-6 py-3">
+                      <td colSpan={hasSpecial ? 6 : 5} className="px-6 py-3">
                         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
                           {module.actions.map((action) => (
                             <li key={action.name} className="flex items-start gap-2 text-xs text-slate-600">

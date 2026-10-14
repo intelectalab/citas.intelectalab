@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Professional;
 use App\Models\Status;
+use App\Support\Access;
 
 class ProfessionalController extends Controller
 {
@@ -19,6 +20,12 @@ class ProfessionalController extends Controller
 
         $query = Professional::where('tenant_id', $currentUser->tenant_id)
             ->with(['status', 'specialties', 'user', 'typeDocument']);
+
+        // Quien trabaja solo con su sede ve a quienes atienden ahí y a quienes aún no tienen horario.
+        if ($limit = Access::branchLimit($currentUser)) {
+            $query->where(fn ($q) => $q->whereIn('id', Access::professionalsAt($limit))
+                ->orWhereNotIn('id', \Illuminate\Support\Facades\DB::table('professional_schedules')->select('professional_id')));
+        }
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -72,6 +79,22 @@ class ProfessionalController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Quien trabaja solo con su sede cambia a quienes atienden en ella, o a
+     * quienes aún no tienen horario en ninguna.
+     */
+    private function assertOwnBranch(\App\Models\User $user, string $professionalId): void
+    {
+        $limit = Access::branchLimit($user);
+
+        if ($limit === null || Access::worksAt($professionalId, $limit)
+            || !\Illuminate\Support\Facades\DB::table('professional_schedules')->where('professional_id', $professionalId)->exists()) {
+            return;
+        }
+
+        abort(403, 'Este profesional atiende en otra sede. ' . Access::onlyBranch($user));
     }
 
     public function store(Request $request)
@@ -190,6 +213,7 @@ class ProfessionalController extends Controller
         $professional = Professional::where('tenant_id', $currentUser->tenant_id)
             ->with('user')
             ->findOrFail($id);
+        $this->assertOwnBranch($currentUser, $professional->id);
 
         $request->merge([
             'type_document_id' => $request->type_document_id ?: null,
@@ -253,6 +277,7 @@ class ProfessionalController extends Controller
 
         $professional = Professional::where('tenant_id', $currentUser->tenant_id)
             ->findOrFail($id);
+        $this->assertOwnBranch($currentUser, $professional->id);
 
         $professional->delete();
 

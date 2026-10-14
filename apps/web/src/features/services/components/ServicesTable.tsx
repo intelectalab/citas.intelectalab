@@ -7,6 +7,7 @@ import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormService from './FormService';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ServiceCategory {
   id: string;
@@ -38,6 +39,7 @@ interface Service {
 }
 
 export default function ServicesTable() {
+  const { can } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -288,20 +290,20 @@ export default function ServicesTable() {
       header: 'Acciones',
       cell: (service) => (
         <div key={`actions-${service.id}`} className="flex items-center gap-2">
-          <button 
+          {can('services.edit') && (<button 
             onClick={() => openEditModal(service)}
             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             title="Editar"
           >
             <Pencil size={16} />
-          </button>
-          <button 
+          </button>)}
+          {can('services.delete') && (<button 
             onClick={() => handleDelete(service.id)}
             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Eliminar"
           >
             <Trash2 size={16} />
-          </button>
+          </button>)}
         </div>
       ),
     },
@@ -312,7 +314,7 @@ export default function ServicesTable() {
       <DataTable<Service>
         title="Catálogo de Servicios"
         primaryActionLabel="Nuevo Servicio"
-        onPrimaryAction={openCreateModal}
+        onPrimaryAction={can('services.create') ? openCreateModal : undefined}
         tabs={[
           { id: 'all', label: 'Todos', count: services.length },
           { id: 'active', label: 'Activos' },

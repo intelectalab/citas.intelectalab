@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Support\Access;
 
 /**
  * Ventas y pagos de la empresa: consultarlos, anular una venta sin dinero
@@ -42,6 +43,8 @@ class SalesController extends Controller
     {
         $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $id)->first();
         abort_unless($sale, 404);
+        // Quien trabaja solo con su sede no abre ventas de otra.
+        Access::assertBranch(request()->user(), $sale->branch_id);
 
         return $sale;
     }
@@ -56,6 +59,7 @@ class SalesController extends Controller
             ->leftJoin('branches as b', 'b.id', '=', 's.branch_id')
             ->leftJoin('appointments as a', 'a.id', '=', 's.appointment_id')
             ->where('s.tenant_id', $tenant->id)
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('s.branch_id', $id))
             ->orderByDesc('s.created_at')
             ->limit(self::MAX_ROWS)
             ->get(['s.*', 'c.first_name', 'c.last_name', 'b.name as branch_name', 'a.code as appointment_code']);
@@ -100,6 +104,7 @@ class SalesController extends Controller
             ->leftJoin('services as sv', 'sv.id', '=', 'a.service_id')
             ->leftJoin('branches as b', 'b.id', '=', 'a.branch_id')
             ->where('a.tenant_id', $tenant->id)
+            ->when(Access::branchLimit(request()->user()), fn ($q, $id) => $q->where('a.branch_id', $id))
             ->where('a.status', \App\Support\AppointmentFlow::COMPLETED)
             ->where('a.price', '>', 0)
             ->whereNotExists(fn ($q) => $q->from('sales as s')->whereColumn('s.appointment_id', 'a.id')->where('s.status', '!=', 'void'))
@@ -179,6 +184,7 @@ class SalesController extends Controller
         DB::transaction(function () use ($tenant, $sale, $validated) {
             $row = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $sale)->lockForUpdate()->first();
             abort_unless($row, 404);
+            Access::assertBranch(request()->user(), $row->branch_id, true);
             Refunds::void($row, trim($validated['reason']));
         });
 
@@ -204,6 +210,7 @@ class SalesController extends Controller
         ]);
 
         $validated['reason'] = trim($validated['reason']);
+        $this->find($tenant, $sale);
 
         DB::transaction(fn () => Refunds::refund($tenant, $sale, $validated, $request->user()));
 
@@ -223,6 +230,7 @@ class SalesController extends Controller
             ->leftJoin('customers as c', 'c.id', '=', 'p.customer_id')
             ->leftJoin('branches as b', 'b.id', '=', 'p.branch_id')
             ->leftJoin('users as u', 'u.id', '=', 'p.created_by')
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('p.branch_id', $id))
             ->leftJoin('cash_sessions as cs', 'cs.id', '=', 'p.cash_session_id')
             ->leftJoin('cash_registers as r', 'r.id', '=', 'cs.cash_register_id')
             ->where('p.tenant_id', $tenant->id)
