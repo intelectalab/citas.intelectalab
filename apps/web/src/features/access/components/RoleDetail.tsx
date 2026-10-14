@@ -8,6 +8,7 @@ import { api } from '@/lib/axios';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { PagedList } from '@/app/components/common/Pager';
 import { UserLink } from '@/app/components/common/PersonLink';
+import Select from '@/app/components/common/Select';
 import { apiError } from '@/features/appointments/appointments';
 import FormRole from './FormRole';
 import PermissionGrid from './PermissionGrid';
@@ -44,6 +45,9 @@ export default function RoleDetail() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
+  // Al pasar a "solo su sede": quienes tienen el rol y no tienen sede, para asignársela en el mismo paso.
+  const [needsBranch, setNeedsBranch] = useState<{ message: string; people: { id: string; name: string; email: string }[]; branches: { id: string; name: string }[] } | null>(null);
+  const [assign, setAssign] = useState<Record<string, string>>({});
   const [focus, setFocus] = useState('');
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState<'restore' | 'delete' | null>(null);
@@ -74,21 +78,30 @@ export default function RoleDetail() {
   };
 
   // Qué tanto ve quien tiene el rol: rige al instante para todas esas personas.
-  const changeScope = async (scope: Scope) => {
-    if (!detail || detail.role.scope === scope) return;
+  const changeScope = async (scope: Scope, branches?: Record<string, string>) => {
+    if (!detail || (detail.role.scope === scope && !branches)) return;
 
     try {
       setBusy('scope');
       setError('');
       setNotice('');
-      const res = await api.put(`/access/roles/${detail.role.id}/scope`, { scope });
+      const res = await api.put(`/access/roles/${detail.role.id}/scope`, { scope, ...(branches ? { branches } : {}) });
       setDetail(res.data);
+      setNeedsBranch(null);
+      setAssign({});
       const option = SCOPE_OPTIONS.find((o) => o.id === scope);
-      setNotice(res.data.without_branch > 0
-        ? `Listo: ahora ve ${option?.title.toLowerCase()}. ${res.data.without_branch === 1 ? 'Una persona con este rol no tiene' : `${res.data.without_branch} personas con este rol no tienen`} sede asignada: no verán agenda, caja ni ventas hasta que se la asignes.`
+      setNotice(res.data.assigned > 0
+        ? `Listo: quien tiene este rol ahora ve ${option?.title.toLowerCase()}. Se le asignó su sede a ${res.data.assigned === 1 ? 'una persona' : `${res.data.assigned} personas`}.`
         : `Listo: quien tiene este rol ahora ve ${option?.title.toLowerCase()}.`);
-    } catch (err) {
-      setError(apiError(err, 'No se pudo cambiar.'));
+    } catch (err: any) {
+      // Hay gente sin sede: se le pide elegirla antes de aplicar el cambio.
+      if (err?.response?.data?.code === 'NEEDS_BRANCH') {
+        setNeedsBranch(err.response.data);
+        const only = err.response.data.branches.length === 1 ? err.response.data.branches[0].id : '';
+        setAssign(Object.fromEntries(err.response.data.people.map((p: { id: string }) => [p.id, only])));
+      } else {
+        setError(apiError(err, 'No se pudo cambiar.'));
+      }
     } finally {
       setBusy('');
     }
@@ -209,7 +222,7 @@ export default function RoleDetail() {
                         aria-checked={chosen}
                         data-scope={option.id}
                         disabled={!editable || busy === 'scope'}
-                        onClick={() => changeScope(option.id)}
+                        onClick={() => { setNeedsBranch(null); changeScope(option.id); }}
                         className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors disabled:cursor-default ${chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 enabled:hover:bg-slate-50'}`}
                       >
                         <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
@@ -218,6 +231,40 @@ export default function RoleDetail() {
                     );
                   })}
               </div>
+
+              {needsBranch && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 space-y-3" data-needs-branch>
+                  <p className="text-xs text-amber-900 font-medium">{needsBranch.message}</p>
+                  <ul className="space-y-2">
+                    {needsBranch.people.map((person) => (
+                      <li key={person.id} className="space-y-1">
+                        <span className="block text-xs font-semibold text-slate-700">{person.name}</span>
+                        <Select
+                          ariaLabel={`Sede de ${person.name}`}
+                          placeholder="Elige su sede"
+                          value={assign[person.id] ?? ''}
+                          onChange={(e) => setAssign((current) => ({ ...current, [person.id]: String(e.target.value) }))}
+                          options={needsBranch.branches.map((branch) => ({ label: branch.name, value: branch.id }))}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center justify-end gap-2">
+                    <button type="button" onClick={() => setNeedsBranch(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-lg hover:bg-slate-50 transition-colors">
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      data-action="assign-and-apply"
+                      disabled={busy === 'scope' || needsBranch.people.some((p) => !assign[p.id])}
+                      onClick={() => changeScope('branch', assign)}
+                      className="px-3 py-1.5 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                    >
+                      Asignar y aplicar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {(detail.can_restore || detail.can_delete) && (

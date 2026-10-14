@@ -531,3 +531,9 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Reportes comparando sedes.** No existen; el inicio y los tiempos de atención muestran una sede o toda la empresa.
 - **Mensajes de otra sede en pantalla.** Si alguien llega a algo de otra sede (por un enlace de un aviso, por ejemplo), la pantalla muestra el mensaje de la API como error, no una página propia.
 - **Pruebas en pantalla que faltan.** Entrar como Rosa y Karina; Ventas, Fichas, Inicio, Lista de espera y Bloqueos como gerente; cambiar la sede de alguien; un rol propio copiado; "Volver a como nació"; tema oscuro y celular.
+
+## Detectados el 2026-10-13 (sede obligatoria)
+
+- **Desactivar una sede con turnos de caja abiertos.** Se impide si tiene personal o citas próximas, pero no si queda una caja abierta en ella.
+- **Quien ya estaba sin sede.** Se marca con "Falta su sede" en Usuarios y roles; nadie recibe un aviso en la campana.
+- **Mover a varias personas de sede a la vez.** Se hace una por una, desde el lápiz de cada una.

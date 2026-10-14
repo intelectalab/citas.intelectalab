@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, KeyRound, Pencil, ShieldCheck, SlidersHorizontal, Trash2, UserCheck, UserX, Users } from 'lucide-react';
+import { AlertTriangle, Eye, KeyRound, Pencil, ShieldCheck, SlidersHorizontal, Trash2, UserCheck, UserX, Users } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -35,7 +35,7 @@ export default function UsersRolesBoard() {
   const [notice, setNotice] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, string>>({ role: '', status: '', changed: '' });
+  const [filters, setFilters] = useState<Record<string, string>>({ role: '', status: '', changed: '', nobranch: '' });
   const [roleSearch, setRoleSearch] = useState('');
   const [roleFilters, setRoleFilters] = useState<Record<string, string>>({ kind: '' });
 
@@ -72,11 +72,14 @@ export default function UsersRolesBoard() {
   const all = users ?? [];
   const term = searchTerm.trim().toLowerCase();
   const changedOf = (user: StaffUser) => (user.granted ?? 0) + (user.revoked ?? 0);
+  // Su rol trabaja solo con su sede y no tiene una asignada.
+  const lacksBranch = (user: StaffUser) => user.role?.scope === 'branch' && !user.branch;
 
   const userRows = all.filter((user) =>
     (!filters.role || user.role?.id === filters.role) &&
     (!filters.status || (filters.status === 'active' ? user.status === 'active' : user.status !== 'active')) &&
     (!filters.changed || changedOf(user) > 0) &&
+    (!filters.nobranch || lacksBranch(user)) &&
     (!term || `${user.name} ${user.email}`.toLowerCase().includes(term)),
   );
 
@@ -161,6 +164,14 @@ export default function UsersRolesBoard() {
       borderColorClass: filters.changed ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
       onClick: () => toggleFilter('changed', '1'),
     },
+    ...(all.some(lacksBranch) ? [{
+      title: 'Falta su sede',
+      value: all.filter(lacksBranch).length,
+      icon: <AlertTriangle size={18} />,
+      iconColorClass: 'text-amber-500',
+      borderColorClass: filters.nobranch ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-amber-300',
+      onClick: () => toggleFilter('nobranch', '1'),
+    }] : []),
     {
       title: 'Desactivados',
       value: all.filter((u) => u.status !== 'active').length,
@@ -210,7 +221,9 @@ export default function UsersRolesBoard() {
     },
     {
       header: 'Sede',
-      cell: (user) => <span key={`branch-${user.id}`} className="text-sm text-slate-700">{user.branch?.name ?? <span className="text-slate-400">Sin sede fija</span>}</span>,
+      cell: (user) => lacksBranch(user)
+        ? <span key={`branch-${user.id}`} data-lacks-branch={user.email} title="Su rol trabaja solo con su sede: asígnasela con el lápiz para que vea su agenda, su caja y sus ventas." className="px-2.5 py-1 text-xs rounded-full font-semibold bg-amber-50 text-amber-700 whitespace-nowrap">Falta su sede</span>
+        : <span key={`branch-${user.id}`} className="text-sm text-slate-700">{user.branch?.name ?? <span className="text-slate-400">Sin sede fija</span>}</span>,
     },
     {
       header: 'Estado',

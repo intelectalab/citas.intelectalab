@@ -200,6 +200,22 @@ class BranchController extends Controller
                 return response()->json(['message' => 'Es tu única sucursal activa: no se puede desactivar.', 'code' => 'LAST_BRANCH'], 422);
             }
 
+            // Quien trabaja en esta sede quedaría asignado a una sede cerrada.
+            $staff = \App\Models\User::where('tenant_id', $tenant->id)->where('branch_id', $branch->id)->where('status', 'active')
+                ->orderBy('first_name')->get(['first_name', 'last_name']);
+
+            if ($staff->isNotEmpty()) {
+                $names = $staff->take(3)->map(fn ($u) => trim("{$u->first_name} {$u->last_name}"))->implode(', ') . ($staff->count() > 3 ? ' y ' . ($staff->count() - 3) . ' más' : '');
+
+                return response()->json([
+                    'message' => ($staff->count() === 1 ? "En esta sucursal trabaja {$names}" : "En esta sucursal trabajan {$staff->count()} personas: {$names}")
+                        . ($staff->count() === 1 ? '. Pásala a otra sede (o desactiva su cuenta)' : '. Pásalas a otra sede (o desactiva sus cuentas)')
+                        . ' en Usuarios y roles antes de desactivarla.',
+                    'code'    => 'HAS_STAFF',
+                    'staff'   => $staff->count(),
+                ], 422);
+            }
+
             $pending = $this->upcomingQuery($tenant, $branch)->count();
 
             if ($pending > 0) {

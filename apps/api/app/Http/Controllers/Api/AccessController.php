@@ -104,6 +104,21 @@ class AccessController extends Controller
         abort_if(Access::branchLimit($actor) !== null, 403, 'Los roles valen para todas las sedes: los crea y los cambia quien administra la empresa.');
     }
 
+    private function scopeOfRole(Role $role): string
+    {
+        return Access::scopeReady() ? $role->scope : (Access::FACTORY[$role->slug]['scope'] ?? 'tenant');
+    }
+
+    /** Turno de caja que esta persona abrió y sigue abierto; null si no tiene. */
+    private function openCashOf(User $user): ?object
+    {
+        return DB::table('cash_sessions as s')
+            ->join('cash_registers as r', 'r.id', '=', 's.cash_register_id')
+            ->join('branches as b', 'b.id', '=', 's.branch_id')
+            ->where('s.opened_by', $user->id)->where('s.status', 'open')
+            ->first(['s.id', 's.branch_id', 'r.name as register_name', 'b.name as branch_name']);
+    }
+
     private function isAdminRole(?Role $role): bool
     {
         return in_array($role?->slug, ['owner', 'admin'], true);
@@ -111,7 +126,7 @@ class AccessController extends Controller
 
     private function presentRole(?Role $role): ?array
     {
-        return $role ? ['id' => $role->id, 'slug' => $role->slug, 'name' => $role->name] : null;
+        return $role ? ['id' => $role->id, 'slug' => $role->slug, 'name' => $role->name, 'scope' => $this->scopeOfRole($role)] : null;
     }
 
     private function roleOptions(Tenant $tenant, ?User $actor = null): array
@@ -338,8 +353,18 @@ class AccessController extends Controller
             $isProfessional = DB::table('professionals')->where('tenant_id', $tenant->id)->where('user_id', $target->id)->exists();
             $this->assertRoleAllowed($role, $actor, $isProfessional, $validated['branch_id'] ?? null);
         } else {
-            abort_if($role->slug === 'manager' && empty($validated['branch_id']), 422, 'Elige la sede que tiene a su cargo.');
+            abort_if($this->scopeOfRole($role) === 'branch' && empty($validated['branch_id']), 422, "Quien tiene el rol {$role->name} trabaja solo con su sede: elige cuál es.");
             abort_if(($validated['branch_id'] ?? null) !== $target->branch_id && Access::branchLimit($actor) !== null && ($validated['branch_id'] ?? null) !== Access::branchLimit($actor), 403, Access::otherBranch($actor));
+        }
+
+        $branchChanges = ($validated['branch_id'] ?? null) !== $target->branch_id;
+
+        if (($branchChanges || ($statusChanges && $status !== 'active')) && ($cash = $this->openCashOf($target))) {
+            return response()->json([
+                'message' => "{$target->first_name} tiene abierta la {$cash->register_name} de {$cash->branch_name}. Que cierre su turno en Caja antes de "
+                    . ($branchChanges ? 'cambiarle la sede' : 'desactivar su cuenta') . '.',
+                'code'    => 'OPEN_CASH',
+            ], 422);
         }
 
         // Volver a activar una cuenta ocupa otra vez un lugar del plan.
@@ -623,14 +648,37 @@ class AccessController extends Controller
         abort_if($role->slug === 'professional' && $validated['scope'] !== 'own', 422, 'El rol Profesional ve solo lo suyo: sus citas, sus fichas y sus controles.');
         abort_if($role->slug !== 'professional' && $validated['scope'] === 'own', 422, '"Solo lo suyo" es para quien atiende citas: el rol Profesional.');
 
+        // Nadie con este rol puede quedar sin sede: se le asigna en el mismo paso.
+        if ($validated['scope'] === 'branch') {
+            $missing = User::whereIn('id', DB::table('user_roles')->where('role_id', $role->id)->pluck('user_id'))
+                ->whereNull('branch_id')->orderBy('first_name')->get();
+            $assign = (array) $request->input('branches', []);
+            $active = DB::table('branches')->where('tenant_id', $tenant->id)->where('status', 'active')->pluck('id')->all();
+            $pending = $missing->reject(fn (User $u) => in_array($assign[$u->id] ?? null, $active, true));
+
+            if ($pending->isNotEmpty()) {
+                return response()->json([
+                    'message'  => ($missing->count() === 1 ? 'Una persona con este rol no tiene' : "{$missing->count()} personas con este rol no tienen")
+                        . ' sede asignada. Elige la sede de cada una para que siga viendo su agenda, su caja y sus ventas.',
+                    'code'     => 'NEEDS_BRANCH',
+                    'people'   => $missing->map(fn (User $u) => ['id' => $u->id, 'name' => trim("{$u->first_name} {$u->last_name}"), 'email' => $u->email])->values(),
+                    'branches' => $this->branchOptions($tenant),
+                ], 422);
+            }
+
+            DB::transaction(function () use ($missing, $assign, $role) {
+                foreach ($missing as $user) {
+                    $user->update(['branch_id' => $assign[$user->id]]);
+                }
+                $role->update(['scope' => 'branch']);
+            });
+
+            return response()->json($this->showRole($request, $role->id)->getData(true) + ['assigned' => $missing->count()]);
+        }
+
         $role->update(['scope' => $validated['scope']]);
 
-        // Quien tiene el rol y no tiene sede, desde ahora no ve nada de sedes: se avisa.
-        $withoutBranch = $validated['scope'] === 'branch'
-            ? User::whereIn('id', DB::table('user_roles')->where('role_id', $role->id)->pluck('user_id'))->whereNull('branch_id')->count()
-            : 0;
-
-        return response()->json($this->showRole($request, $role->id)->getData(true) + ['without_branch' => $withoutBranch]);
+        return response()->json($this->showRole($request, $role->id)->getData(true) + ['assigned' => 0]);
     }
 
     /** Devuelve un rol de fábrica a los permisos con que nació. */

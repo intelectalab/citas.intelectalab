@@ -36,7 +36,7 @@ export interface StaffUser {
   status: string;
   is_owner: boolean;
   is_self: boolean;
-  role: { id: string; slug: string; name: string } | null;
+  role: { id: string; slug: string; name: string; scope?: Scope } | null;
   branch: BranchOption | null;
   // Si además atiende citas, su página de profesional.
   professional_id: string | null;
