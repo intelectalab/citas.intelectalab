@@ -155,6 +155,11 @@ class BranchController extends Controller
             )->all());
         }
 
+        // Con punto de venta, la sede nace con su caja (si la empresa no eligió crearlas a mano).
+        if ($tenant->hasModule('pos') && \App\Support\Sales::ready()) {
+            \App\Support\Cash::ensureRegisters($tenant);
+        }
+
         return response()->json($this->present($branch->fresh(), $tenant), 201);
     }
 

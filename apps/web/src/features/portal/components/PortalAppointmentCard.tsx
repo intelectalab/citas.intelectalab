@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, Check, Clock, MapPin, PawPrint, UserRound, X } from 'lucide-react';
+import { CalendarClock, Check, Clock, MapPin, PawPrint, UserRound, Wallet, X } from 'lucide-react';
 import { dateOf, formatDate, statusStyle, timeOf } from '@/features/appointments/appointments';
 import type { PortalAppointment } from '../portal';
 
@@ -14,10 +14,12 @@ interface PortalAppointmentCardProps {
   onCancel?: (appointment: PortalAppointment) => void;
   // Qué hace la empresa con una cita que no se confirma a tiempo.
   onMiss?: 'notify' | 'notify_release' | 'release';
+  // Minutos antes de la hora en que conviene llegar para pagar.
+  arriveMinutes?: number;
 }
 
 // Una cita del cliente, con lo que puede hacer con ella desde el portal.
-export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel, onMiss = 'notify' }: PortalAppointmentCardProps) {
+export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel, onMiss = 'notify', arriveMinutes = 0 }: PortalAppointmentCardProps) {
   const date = dateOf(appointment.starts_at);
   const hasActions = appointment.can_confirm || appointment.can_reschedule || appointment.can_cancel;
 
@@ -53,6 +55,17 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
               {appointment.confirmation_overdue
                 ? `Aún no confirmas tu asistencia${onMiss === 'notify' ? '. Hazlo cuanto antes.' : ': tu cita puede cancelarse. Confírmala ahora.'}`
                 : `Confirma tu asistencia antes del ${formatDate(dateOf(appointment.confirm_by), { weekday: 'long', day: 'numeric', month: 'long' })}, ${timeOf(appointment.confirm_by)}${onMiss === 'notify' ? '.' : ', o tu cita se cancelará.'}`}
+            </p>
+          )}
+
+          {appointment.pay_on_arrival && (
+            <p data-pay-on-arrival className="flex items-start gap-1.5 text-xs font-medium text-[#3F768C]">
+              <Wallet size={14} className="shrink-0 mt-0.5" />
+              {appointment.is_virtual
+                ? 'Esta atención es por videollamada y se paga antes de empezar: comunícate con la sede para coordinar el pago.'
+                : arriveMinutes > 0
+                  ? `Llega ${arriveMinutes} minutos antes de tu hora para pagar en recepción: la atención empieza con la cita pagada.`
+                  : 'Esta cita se paga en recepción antes de la atención.'}
             </p>
           )}
 

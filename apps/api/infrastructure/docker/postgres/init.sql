@@ -215,6 +215,8 @@ CREATE TABLE customers (
     password_hash varchar(255) NULL,
     must_change_password boolean NOT NULL DEFAULT false,
     portal_enabled boolean NOT NULL DEFAULT true,
+    -- Inasistencias a citas reservadas en línea: las anteriores a esta fecha ya no cuentan (la empresa las perdonó).
+    booking_strikes_reset_at timestamptz NULL,
     password_changed_at timestamptz NULL,
     last_login_at timestamptz NULL,
     pipeline_stage_id uuid NULL REFERENCES pipeline_stages(id) ON DELETE SET NULL,
@@ -484,71 +486,218 @@ CREATE TABLE medical_records (
 );
 CREATE INDEX idx_medical_records_customer ON medical_records(tenant_id, customer_id);
 
+-- ---------------------------------------------------------------------
+-- Ventas, pagos, caja y comprobantes
+-- ---------------------------------------------------------------------
+
+-- Correlativos por empresa (código de venta, etc.): se piden con una sola
+-- sentencia, así dos cajas cobrando a la vez nunca reciben el mismo número.
+CREATE TABLE tenant_sequences (
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    key varchar(60) NOT NULL,
+    next_value bigint NOT NULL DEFAULT 1,
+    PRIMARY KEY (tenant_id, key)
+);
+
+-- Proveedores externos de la empresa (pasarela de pago, facturación electrónica,
+-- mensajería). Sin fila, o en modo 'simulated', el sistema simula la respuesta.
+CREATE TABLE tenant_integrations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    kind varchar(30) NOT NULL CHECK (kind IN ('payments', 'invoicing', 'messaging')),
+    provider varchar(40) NOT NULL DEFAULT 'simulated', -- ej: culqi, niubiz, izipay, mercadopago, nubefact
+    mode varchar(20) NOT NULL DEFAULT 'simulated' CHECK (mode IN ('simulated', 'sandbox', 'production')),
+    credentials text NULL, -- llaves del proveedor, cifradas por la aplicación
+    settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+    status varchar(20) NOT NULL DEFAULT 'active',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, kind)
+);
+
+-- Cajas de cada sede. Cada sede nace con una; la empresa puede agregar más.
+CREATE TABLE cash_registers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    name varchar(100) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'active',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (branch_id, name)
+);
+
+-- Un turno de caja: desde que se abre hasta que se cierra con su arqueo.
+CREATE TABLE cash_sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_id uuid NOT NULL REFERENCES branches(id),
+    cash_register_id uuid NOT NULL REFERENCES cash_registers(id),
+    status varchar(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+    opened_by uuid NOT NULL REFERENCES users(id),
+    closed_by uuid REFERENCES users(id),
+    opening_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (opening_amount >= 0),
+    expected_amount numeric(14,2) NULL, -- efectivo que debía haber al cerrar
+    closing_amount numeric(14,2) NULL CHECK (closing_amount >= 0), -- efectivo contado
+    difference numeric(14,2) NULL, -- contado menos esperado
+    closing_notes varchar(500) NULL,
+    opened_at timestamptz NOT NULL DEFAULT now(),
+    closed_at timestamptz
+);
+-- Una caja no puede tener dos turnos abiertos a la vez.
+CREATE UNIQUE INDEX uq_cash_sessions_open ON cash_sessions(cash_register_id) WHERE status = 'open';
+CREATE INDEX idx_cash_sessions_tenant ON cash_sessions(tenant_id, opened_at);
+
 CREATE TABLE sales (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
     branch_id uuid NOT NULL REFERENCES branches(id),
     customer_id uuid REFERENCES customers(id),
     appointment_id uuid REFERENCES appointments(id),
-    status_id uuid NULL REFERENCES statuses(id), -- Vinculado a módulo 'sales' (ej: abierto, pagado, anulado)
-    subtotal numeric(14,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
-    tax numeric(14,2) NOT NULL DEFAULT 0 CHECK (tax >= 0),
+    code varchar(30) NOT NULL, -- V-000001, correlativo por empresa
+    status varchar(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'partial', 'paid', 'void', 'partially_refunded', 'refunded')),
+    subtotal numeric(14,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0), -- suma de los ítems antes de descuentos
     discount numeric(14,2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    tax numeric(14,2) NOT NULL DEFAULT 0 CHECK (tax >= 0),
+    tip numeric(14,2) NOT NULL DEFAULT 0 CHECK (tip >= 0),
     total numeric(14,2) NOT NULL DEFAULT 0 CHECK (total >= 0),
+    paid numeric(14,2) NOT NULL DEFAULT 0,
+    balance numeric(14,2) NOT NULL DEFAULT 0,
+    -- Cómo se calculó el impuesto al crear la venta: no cambia si la empresa cambia su regla después.
+    tax_rate numeric(5,2) NOT NULL DEFAULT 18,
+    prices_include_tax boolean NOT NULL DEFAULT true,
+    notes varchar(500) NULL,
+    void_reason varchar(255) NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    paid_at timestamptz NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, code)
 );
+CREATE INDEX idx_sales_tenant_created ON sales(tenant_id, created_at);
+CREATE INDEX idx_sales_appointment ON sales(tenant_id, appointment_id);
 
 CREATE TABLE sale_items (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
-    sale_id uuid NOT NULL REFERENCES sales(id),
-    item_type varchar(30) NOT NULL,
+    sale_id uuid NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    item_type varchar(30) NOT NULL, -- service, product, package...
     reference_id uuid,
     description varchar(255) NOT NULL,
     quantity numeric(14,4) NOT NULL CHECK (quantity > 0),
     unit_price numeric(14,2) NOT NULL CHECK (unit_price >= 0),
-    total numeric(14,2) NOT NULL CHECK (total >= 0)
+    discount numeric(14,2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    total numeric(14,2) NOT NULL CHECK (total >= 0),
+    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL
 );
 CREATE INDEX idx_sale_items_sale ON sale_items(tenant_id, sale_id);
 
+-- Un pago puede ser de una venta o, sin venta todavía, el adelanto de una cita.
+-- Los pagos en línea nacen 'pending' y los confirma el aviso de la pasarela.
 CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
-    sale_id uuid NOT NULL REFERENCES sales(id),
-    method varchar(30) NOT NULL,
-    status_id uuid NULL REFERENCES statuses(id), -- Vinculado a módulo 'payments' (ej: pendiente, aprobado, rechazado)
-    amount numeric(14,2) NOT NULL CHECK (amount > 0),
-    external_reference varchar(190),
+    branch_id uuid NULL REFERENCES branches(id),
+    sale_id uuid NULL REFERENCES sales(id),
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
+    customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
+    method varchar(30) NOT NULL, -- cash, card, transfer, yape, plin, link, deposit
+    status varchar(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('pending', 'confirmed', 'failed', 'expired', 'refunded')),
+    amount numeric(14,2) NOT NULL CHECK (amount <> 0), -- negativo: devolución
+    change_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (change_amount >= 0), -- vuelto entregado (efectivo)
+    external_reference varchar(190), -- número de operación, voucher o referencia de la pasarela
+    provider varchar(40) NULL, -- pasarela que lo procesa, si es en línea
+    payment_url varchar(500) NULL, -- enlace de pago
+    expires_at timestamptz NULL,
+    confirmed_at timestamptz NULL,
+    cash_session_id uuid NULL REFERENCES cash_sessions(id) ON DELETE SET NULL,
     idempotency_key varchar(190),
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, idempotency_key)
 );
+CREATE INDEX idx_payments_sale ON payments(tenant_id, sale_id);
+CREATE INDEX idx_payments_tenant_created ON payments(tenant_id, created_at);
 
-CREATE TABLE cash_sessions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id),
-    branch_id uuid NOT NULL REFERENCES branches(id),
-    opened_by uuid NOT NULL REFERENCES users(id),
-    closed_by uuid REFERENCES users(id),
-    opening_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (opening_amount >= 0),
-    closing_amount numeric(14,2),
-    status_id uuid NULL REFERENCES statuses(id), -- Vinculado a módulo 'cash_sessions' (ej: abierto, cerrado, arqueado)
-    opened_at timestamptz NOT NULL DEFAULT now(),
-    closed_at timestamptz
-);
-
+-- Lo que entra y sale del efectivo de un turno. El monto siempre es positivo:
+-- el tipo dice si suma (sale, income) o resta (expense, withdrawal, refund).
 CREATE TABLE cash_movements (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id),
-    cash_session_id uuid NOT NULL REFERENCES cash_sessions(id),
-    type varchar(30) NOT NULL,
+    cash_session_id uuid NOT NULL REFERENCES cash_sessions(id) ON DELETE CASCADE,
+    type varchar(30) NOT NULL CHECK (type IN ('sale', 'income', 'expense', 'withdrawal', 'refund')),
     amount numeric(14,2) NOT NULL CHECK (amount > 0),
     reference_type varchar(50),
     reference_id uuid,
     description varchar(255),
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_cash_movements_session ON cash_movements(tenant_id, cash_session_id);
+
+-- Series de comprobantes de la empresa (B001, F001, T001) y su siguiente número.
+CREATE TABLE invoice_series (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    doc_type varchar(20) NOT NULL CHECK (doc_type IN ('ticket', 'boleta', 'factura', 'nota_credito')),
+    serie varchar(4) NOT NULL,
+    next_number integer NOT NULL DEFAULT 1 CHECK (next_number > 0),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, doc_type, serie)
+);
+
+-- Comprobantes emitidos. 'ticket' es el comprobante interno (no va a SUNAT);
+-- boleta y factura pasan por el proveedor de facturación de la empresa, que
+-- mientras no se configure uno real es una simulación.
+CREATE TABLE invoices (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_id uuid NULL REFERENCES branches(id),
+    sale_id uuid NOT NULL REFERENCES sales(id),
+    customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
+    doc_type varchar(20) NOT NULL CHECK (doc_type IN ('ticket', 'boleta', 'factura', 'nota_credito')),
+    serie varchar(4) NOT NULL,
+    number integer NOT NULL,
+    -- Datos del cliente tal como salieron en el comprobante.
+    customer_doc_type varchar(20) NULL,
+    customer_doc_number varchar(30) NULL,
+    customer_name varchar(255) NULL,
+    customer_address varchar(255) NULL,
+    taxable numeric(14,2) NOT NULL DEFAULT 0, -- base imponible
+    tax numeric(14,2) NOT NULL DEFAULT 0,
+    total numeric(14,2) NOT NULL DEFAULT 0,
+    status varchar(20) NOT NULL DEFAULT 'issued' CHECK (status IN ('issued', 'voided')),
+    provider varchar(40) NOT NULL DEFAULT 'simulated',
+    simulated boolean NOT NULL DEFAULT true, -- no se envió a SUNAT de verdad
+    sunat_status varchar(20) NOT NULL DEFAULT 'pending' CHECK (sunat_status IN ('pending', 'accepted', 'rejected', 'not_applicable')),
+    sunat_message varchar(255) NULL,
+    external_id varchar(190) NULL, -- identificador que devuelve el proveedor
+    -- Solo en una nota de crédito: el comprobante que corrige y por qué.
+    reference_invoice_id uuid NULL REFERENCES invoices(id) ON DELETE SET NULL,
+    reason varchar(255) NULL,
+    issued_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    issued_at timestamptz NOT NULL DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, doc_type, serie, number)
+);
+CREATE INDEX idx_invoices_sale ON invoices(tenant_id, sale_id);
+
+-- Devoluciones de una venta: cuánto se devolvió, por qué medio y por qué. Cada
+-- una tiene su pago en negativo y, si la venta tenía comprobante, su nota de crédito.
+CREATE TABLE sale_refunds (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    sale_id uuid NOT NULL REFERENCES sales(id),
+    amount numeric(14,2) NOT NULL CHECK (amount > 0),
+    method varchar(30) NOT NULL,
+    reason varchar(255) NOT NULL,
+    payment_id uuid NULL REFERENCES payments(id) ON DELETE SET NULL,
+    invoice_id uuid NULL REFERENCES invoices(id) ON DELETE SET NULL, -- nota de crédito
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_sale_refunds_sale ON sale_refunds(tenant_id, sale_id);
 
 CREATE TABLE audit_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

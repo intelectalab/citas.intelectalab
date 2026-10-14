@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarCheck, Check, ClipboardCheck, DoorOpen, Eye, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock } from 'lucide-react';
+import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
@@ -26,6 +26,10 @@ interface SettingsPayload {
   booking_rules?: BookingRules & { uses_confirmation: boolean };
   // Solo llega si la empresa tiene el módulo de salas y equipos.
   resources?: { equipment_down: EquipmentDown } | null;
+  // Solo llega si la empresa tiene punto de venta y caja.
+  sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
+  // Solo llega si la empresa tiene reserva en línea.
+  booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
@@ -38,6 +42,15 @@ const EQUIPMENT_DOWN_OPTIONS: { id: EquipmentDown; title: string; hint: string; 
 ];
 
 type OnMiss = 'notify' | 'notify_release' | 'release';
+
+type MissAction = 'none' | 'note' | 'block';
+
+// Qué pasa con un cliente que reserva en línea y no asiste.
+const MISS_OPTIONS: { id: MissAction; title: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'none', title: 'No pasa nada', hint: 'La cita queda como "No asistió" y nada más.', icon: <Minus size={18} /> },
+  { id: 'note', title: 'Dejar una nota', hint: 'Su ficha y la lista de clientes muestran cuántas veces faltó a una cita reservada en línea.', icon: <NotebookPen size={18} /> },
+  { id: 'block', title: 'Nota y dejar de reservar en línea', hint: 'Además, al llegar a cierto número de faltas ya no puede reservar por el portal. El personal sí puede agendarle.', icon: <ShieldBan size={18} /> },
+];
 
 interface BookingRules {
   // Horas antes de la cita en que debe estar confirmada; 0 = sin plazo.
@@ -86,6 +99,9 @@ export default function TenantSettings() {
   // Las horas se editan como texto para poder dejar el campo vacío mientras se escribe.
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
+  // Los números se editan como texto para poder dejar el campo vacío mientras se escribe.
+  const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
+  const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -107,6 +123,18 @@ export default function TenantSettings() {
       cancel: String(payload.booking_rules.cancel_window_hours),
     } : null);
     setEquipmentDown(payload.resources ? payload.resources.equipment_down : null);
+    setSalesRules(payload.sales_rules ? {
+      includeTax: payload.sales_rules.prices_include_tax,
+      taxRate: String(payload.sales_rules.tax_rate),
+      requireCash: payload.sales_rules.require_open_cash,
+      partial: payload.sales_rules.partial_payments,
+      tolerance: String(payload.sales_rules.cash_tolerance),
+      autoRegister: payload.sales_rules.auto_register ?? true,
+      refundDays: String(payload.sales_rules.refund_days ?? 30),
+      payFirst: payload.sales_rules.pay_before_service ?? true,
+      arriveMinutes: String(payload.sales_rules.arrive_minutes ?? 15),
+    } : null);
+    setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days) } : null);
   };
 
   useEffect(() => {
@@ -143,6 +171,20 @@ export default function TenantSettings() {
         vocabulary,
         appointment_statuses: statusNames,
         ...(equipmentDown ? { equipment_down: equipmentDown } : {}),
+        ...(salesRules ? {
+          sales_rules: {
+            prices_include_tax: salesRules.includeTax,
+            tax_rate: Number(salesRules.taxRate || 0),
+            require_open_cash: salesRules.requireCash,
+            partial_payments: salesRules.partial,
+            cash_tolerance: Number(salesRules.tolerance || 0),
+            auto_register: salesRules.autoRegister,
+            refund_days: Number(salesRules.refundDays || 0),
+            pay_before_service: salesRules.payFirst,
+            arrive_minutes: Number(salesRules.arriveMinutes || 0),
+          },
+        } : {}),
+        ...(misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : {}),
         ...(bookingRules ? {
           booking_rules: {
             confirm_deadline_hours: Number(bookingRules.deadline || 0),
@@ -461,6 +503,148 @@ export default function TenantSettings() {
               );
             })}
           </div>
+        </section>
+      )}
+
+      {salesRules && (
+        <section className={cardClass} data-card="sales-rules">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+              <Wallet className="w-4 h-4 text-[#3F768C]" /> Ventas y caja
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cómo se calcula el impuesto al cobrar y cómo se maneja el efectivo. Lo que cambies rige para las ventas nuevas; las ya creadas conservan su cálculo.
+            </p>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {([
+              ['payFirst', 'Cobrar antes de atender', 'La cita no pasa a "En atención" ni se da por atendida si no está pagada. Si lo apagas, se puede atender primero y cobrar después; Ventas mostrará las citas atendidas sin cobrar.'],
+              ['includeTax', 'Los precios ya incluyen el IGV', 'El precio del servicio es lo que paga el cliente; el impuesto se desglosa en el comprobante. Si lo apagas, el IGV se suma encima del precio.'],
+              ['requireCash', 'Exigir caja abierta para cobrar en efectivo', 'Sin un turno de caja abierto en la sede no se puede cobrar en efectivo. Si lo apagas, el cobro se registra igual, sin caja.'],
+              ['partial', 'Aceptar pagos por partes', 'Una cita se puede cobrar en varios pagos o con dos medios. Si lo apagas, se cobra el total de una vez.'],
+              ['autoRegister', 'Crear una caja en cada sucursal nueva', 'Cada sucursal nace con su "Caja principal". Si lo apagas, las cajas de las sucursales nuevas las creas tú desde Caja; las que ya existen no se tocan.'],
+            ] as const).map(([key, title, hint]) => (
+              <div key={key} className="flex items-center justify-between gap-4 py-3 first:pt-0">
+                <div>
+                  <span className="block text-sm font-semibold text-slate-800">{title}</span>
+                  <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{hint}</span>
+                </div>
+                <Switch checked={salesRules[key]} onChange={(on) => { setMessage(null); setSalesRules({ ...salesRules, [key]: on }); }} label={title} />
+              </div>
+            ))}
+          </div>
+
+          {salesRules.payFirst && (
+            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100" data-row="arrive-minutes">
+              <label htmlFor="arrive-minutes" className="text-sm font-semibold text-slate-800">Pedir al cliente que llegue</label>
+              <input
+                id="arrive-minutes"
+                inputMode="numeric"
+                data-rule="arrive_minutes"
+                value={salesRules.arriveMinutes}
+                onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, arriveMinutes: e.target.value.replace(/\D/g, '').slice(0, 3) }); }}
+                className={hoursInput}
+              />
+              <span className="text-sm text-slate-600">minutos antes de su hora, para pagar.</span>
+              <span className="w-full text-xs text-slate-500">Se le dice en el portal al reservar y en cada cita que aún no ha pagado. Con 0 solo se le avisa que se paga antes de la atención.</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+            <label htmlFor="tax-rate" className="text-sm font-semibold text-slate-800">El IGV es de</label>
+            <input
+              id="tax-rate"
+              inputMode="decimal"
+              data-rule="tax_rate"
+              value={salesRules.taxRate}
+              onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, taxRate: e.target.value.replace(/[^\d.]/g, '').slice(0, 5) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">%.</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="refund-days" className="text-sm font-semibold text-slate-800">Una venta se puede devolver hasta</label>
+            <input
+              id="refund-days"
+              inputMode="numeric"
+              data-rule="refund_days"
+              value={salesRules.refundDays}
+              onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, refundDays: e.target.value.replace(/\D/g, '').slice(0, 3) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">días después.</span>
+            <span className="w-full text-xs text-slate-500">Pasado ese plazo ya no se registra la devolución. Con 0 no hay plazo.</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="cash-tolerance" className="text-sm font-semibold text-slate-800">Al cerrar caja se tolera una diferencia de hasta S/</label>
+            <input
+              id="cash-tolerance"
+              inputMode="decimal"
+              data-rule="cash_tolerance"
+              value={salesRules.tolerance}
+              onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, tolerance: e.target.value.replace(/[^\d.]/g, '').slice(0, 7) }); }}
+              className={hoursInput}
+            />
+            <span className="w-full text-xs text-slate-500">
+              Si lo contado difiere en más que eso, quien cierra debe explicarlo y la administración recibe un aviso. Con 0, cualquier diferencia se explica.
+            </span>
+          </div>
+        </section>
+      )}
+
+      {misses && (
+        <section className={cardClass} data-card="booking-misses">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+              <CalendarX2 className="w-4 h-4 text-[#3F768C]" /> Si reserva en línea y no asiste
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Qué pasa con un cliente que reservó desde el portal y su cita terminó en "No asistió". Las citas que agenda tu equipo no cuentan aquí.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Si reserva en línea y no asiste">
+            {MISS_OPTIONS.map((option) => {
+              const chosen = misses.action === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={chosen}
+                  data-miss-action={option.id}
+                  onClick={() => { setMessage(null); setMisses({ ...misses, action: option.id }); }}
+                  className={`flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
+                    chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                  <span>
+                    <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {misses.action === 'block' && (
+            <div className="flex flex-wrap items-center gap-3" data-row="miss-block">
+              <label htmlFor="miss-limit" className="text-sm font-semibold text-slate-800">Deja de reservar en línea al faltar</label>
+              <input id="miss-limit" inputMode="numeric" data-rule="miss_limit" value={misses.limit} onChange={(e) => { setMessage(null); setMisses({ ...misses, limit: e.target.value.replace(/\D/g, '').slice(0, 2) }); }} className={hoursInput} />
+              <span className="text-sm text-slate-600">{Number(misses.limit || 1) === 1 ? 'vez' : 'veces'}, durante</span>
+              <input id="miss-days" inputMode="numeric" aria-label="Días sin reservar en línea" data-rule="miss_days" value={misses.days} onChange={(e) => { setMessage(null); setMisses({ ...misses, days: e.target.value.replace(/\D/g, '').slice(0, 4) }); }} className={hoursInput} />
+              <span className="text-sm text-slate-600">días.</span>
+              <span className="w-full text-xs text-slate-500">
+                {Number(misses.days || 0) === 0
+                  ? 'Con 0 días no vuelve a reservar en línea hasta que tú se lo permitas desde su ficha.'
+                  : 'Los días se cuentan desde su última falta. Puedes perdonarle antes desde su ficha.'}
+              </span>
+            </div>
+          )}
         </section>
       )}
 

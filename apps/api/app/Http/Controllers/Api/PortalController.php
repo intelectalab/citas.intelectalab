@@ -55,6 +55,11 @@ class PortalController extends AppointmentController
             'confirm_deadline_hours' => \App\Support\Confirmations::deadlineHours($tenant),
             'confirm_on_miss'    => \App\Support\Confirmations::mode($tenant),
             'confirm_release_hours' => \App\Support\Confirmations::releaseHours($tenant),
+            // La cita se paga en la sede antes de atenderse: cuántos minutos antes conviene llegar.
+            'pay_before_service' => \App\Support\Sales::mustPayFirst($tenant),
+            'arrive_minutes'     => \App\Support\Sales::rules($tenant)['arrive_minutes'],
+            // Qué pasa si reserva en línea y no asiste.
+            'miss'               => \App\Support\OnlineBooking::policy($tenant),
         ];
     }
 
@@ -113,6 +118,10 @@ class PortalController extends AppointmentController
                 'must_change_password' => (bool) $customer->must_change_password,
             ],
             'policies'     => $this->policies($tenant),
+            // Inasistencias a citas reservadas en línea y si por eso ya no puede reservar por aquí.
+            'booking_block' => ($state = \App\Support\OnlineBooking::state($tenant, $customer->id))
+                ? $state + ['message' => $state['blocked'] ? \App\Support\OnlineBooking::blockedMessage($tenant, $state) : null]
+                : null,
             'dependents'   => [
                 'enabled'  => $dependents['enabled'],
                 'required' => $dependents['required'],
@@ -227,6 +236,13 @@ class PortalController extends AppointmentController
             // Reserva hecha desde su lista de espera: al guardarse deja de esperar.
             'waitlist_id'           => 'nullable|uuid',
         ]);
+
+        // Con varias inasistencias a citas reservadas en línea, la empresa puede cerrarle esta vía.
+        $strikes = \App\Support\OnlineBooking::state($tenant, $customer->id);
+
+        if ($strikes && $strikes['blocked']) {
+            return response()->json(['message' => \App\Support\OnlineBooking::blockedMessage($tenant, $strikes), 'code' => 'BOOKING_BLOCKED'], 403);
+        }
 
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->where('status', 'active')->findOrFail($validated['branch_id']);
@@ -745,6 +761,7 @@ class PortalController extends AppointmentController
     {
         $full = $this->present($appointment, $tenant);
         $policies = $this->policies($tenant);
+        $upcoming = $appointment->starts_at->isFuture() && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true);
         $open = in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true)
             && $appointment->starts_at->isFuture()
             && !$this->insideWindow($tenant, $appointment);
@@ -767,6 +784,11 @@ class PortalController extends AppointmentController
             'confirm_by'       => $appointment->status === AppointmentFlow::PENDING ? $full['confirm_by'] : null,
             'confirmation_overdue' => $full['confirmation_overdue'],
             'is_upcoming'      => $appointment->starts_at->isFuture() && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true),
+            // Por videollamada: no hay recepción donde pagar al llegar.
+            'is_virtual'       => (bool) $appointment->service?->is_virtual,
+            // Aún no está pagada y la empresa cobra antes de atender: debe llegar antes para pagar.
+            'pay_on_arrival'   => $upcoming && (float) $appointment->price > 0 && $policies['pay_before_service']
+                && !\App\Support\Sales::appointmentPaid($tenant->id, $appointment->id),
             'can_confirm'      => $policies['booking_enabled'] && $appointment->status === AppointmentFlow::PENDING && $appointment->starts_at->isFuture(),
             'can_cancel'       => $policies['booking_enabled'] && $open && $policies['cancel_allowed'],
             'can_reschedule'   => $policies['booking_enabled'] && $open && $appointment->reschedule_count < $policies['reschedule_max'],

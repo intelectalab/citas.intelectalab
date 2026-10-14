@@ -18,6 +18,10 @@ use App\Http\Controllers\Api\ProfessionalScheduleController;
 use App\Http\Controllers\Api\AvailabilityBlockController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\CashController;
+use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\SaleController;
+use App\Http\Controllers\Api\SalesController;
 use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\RecordTemplateController;
@@ -212,11 +216,37 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf']);
     });
 
+    // Ventas y caja: cobrar una cita y llevar el efectivo de cada turno.
+    Route::middleware('module:pos')->group(function () {
+        Route::get('/cash', [CashController::class, 'index']);
+        Route::post('/cash/registers', [CashController::class, 'storeRegister']);
+        Route::put('/cash/registers/{register}', [CashController::class, 'updateRegister']);
+        Route::post('/cash/registers/{register}/open', [CashController::class, 'open']);
+        Route::get('/cash/sessions/{session}', [CashController::class, 'show']);
+        Route::post('/cash/sessions/{session}/movements', [CashController::class, 'move']);
+        Route::post('/cash/sessions/{session}/close', [CashController::class, 'close']);
+
+        Route::get('/appointments/{appointment}/sale', [SaleController::class, 'forAppointment']);
+        Route::post('/appointments/{appointment}/charge', [SaleController::class, 'charge']);
+        Route::post('/appointments/{appointment}/invoice', [SaleController::class, 'issueInvoice']);
+
+        // Ventas y pagos de la empresa: consultar, anular lo que no tiene pagos y devolver lo cobrado.
+        Route::get('/sales', [SalesController::class, 'index']);
+        Route::get('/sales/{sale}', [SalesController::class, 'show']);
+        Route::post('/sales/{sale}/void', [SalesController::class, 'void']);
+        Route::post('/sales/{sale}/refunds', [SalesController::class, 'refund']);
+        Route::get('/payments', [SalesController::class, 'payments']);
+
+        // Cupones de descuento que se aplican al cobrar.
+        Route::apiResource('coupons', CouponController::class)->except(['show']);
+    });
+
     Route::middleware('module:crm')->group(function () {
         Route::get('/pipeline-stages', [PipelineStageController::class, 'index']);
         Route::apiResource('customers', CustomerController::class);
         Route::put('/customers/{customer}/portal-access', [CustomerController::class, 'portalAccess']);
         Route::post('/customers/{customer}/portal-access/reset', [CustomerController::class, 'resetPortalPassword']);
+        Route::post('/customers/{customer}/booking-strikes/forgive', [CustomerController::class, 'forgiveBooking']);
         Route::apiResource('customers.dependents', CustomerDependentController::class)->except(['show']);
         Route::apiResource('pipelines', PipelineController::class);
 

@@ -436,3 +436,68 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Calendario escrito dos veces.** El filtro de fecha de las tablas (`DateFilter`) y el campo de los formularios (`DateField`) dibujan el mes con código separado; conviene que compartan la grilla.
 - **Registro público de empresa.** `RegisterModal` conserva sus dos listas genéricas del navegador (no tiene fechas).
 - **Pruebas en pantalla que faltan.** Lista de espera, nuevo control, fichas de atención, dependientes y mascotas, horario de la sede, vencimiento en la consola, días futuros bloqueados en la fecha de nacimiento, tema oscuro y celular.
+
+## Detectados el 2026-10-12 (ventas, entrega 1: caja y cobrar la cita)
+
+- **Entregas que siguen (acordadas).** 3: punto de venta con carrito (vender sin cita, varios ítems, descuentos con tope, propina). 4: pasarela de pago simulada (link de pago, página de pago de prueba, aviso de confirmación, vencimiento del link, adelanto al reservar en el portal) y pantalla Integraciones con las pasarelas conocidas (Culqi, Niubiz, Izipay, Mercado Pago) y el proveedor de facturación. 5: Paquetes. 6: Marketing.
+- **Enviar el comprobante al cliente.** Se imprime desde la venta (y se guarda como PDF desde el diálogo del navegador), pero no se envía por correo ni se ve en el portal.
+- **Comprobante real.** El envío a SUNAT es una simulación. Falta el proveedor real, la pantalla para elegirlo y guardar sus llaves, reintentar un comprobante pendiente o rechazado, y la baja.
+- **Datos del emisor.** El comprobante toma razón social, RUC y dirección de la página Empresa; si el RUC está vacío dice "RUC sin registrar" y se emite igual.
+- **Series por sede.** Hay una serie por tipo para toda la empresa (B001, F001, T001); SUNAT suele pedir una por punto de emisión. No hay pantalla para cambiarlas.
+- **Boletas de monto alto sin documento.** No se exige el DNI del cliente a partir de cierto monto (S/ 700 en el prototipo).
+- **Descuento global, propina y canje de puntos.** El prototipo los trae en el carrito; por decisión del 2026-10-13 no se agregan por ahora. El cupón ya se aplica al cobrar.
+- **Cita cobrada, en la agenda y en la tabla de Citas.** El estado del cobro solo se ve al abrir la cita; no hay marca ni filtro "por cobrar".
+- **El inicio sigue mostrando "valor de lo atendido".** Debe pasar a lo realmente cobrado.
+- **Cancelar una cita ya cobrada.** Se puede cancelar o marcar "no asistió" sin que la venta cambie ni se avise: la devolución hay que hacerla aparte, desde Ventas.
+- **Cambiar el precio de una cita con venta abierta.** La venta conserva el monto con que nació.
+- **Quién opera la caja.** Hoy solo el administrador ve Caja (un profesional cobra sus citas pero no abre ni cierra). Cuando exista el rol de recepción o caja habrá que darle acceso y decidir si cada quien ve solo su turno.
+- **Aprobar un cierre con diferencia.** El administrador recibe el aviso, pero no hay un paso de "aprobar"; tampoco se puede reabrir un turno cerrado.
+- **Arqueo por billetes y monedas.** Se escribe el total contado; el prototipo cuenta por denominación.
+- **Medios que no son efectivo.** Se muestran por turno para cuadrarlos, pero no se concilian contra el banco o el POS.
+- **Ventas, pagos y turnos de ejemplo.** `seed_demo.sql` no trae ninguno: Caja nace vacía en las empresas de ejemplo.
+- **Reglas de ventas en el editor de rubros.** Las nuevas (`pos.prices_include_tax`, `pos.tax_rate`, `pos.require_open_cash`, `pos.partial_payments`, `cash.tolerance`) las cambia cada empresa, pero no están en el editor de reglas del rubro de la plataforma.
+- **Moneda.** Todo está en soles, con "S/" fijo.
+- **Pruebas en pantalla que faltan.** Aviso de cierre con diferencia en la campana, editar o poner fuera de uso una caja, comprobante interno de una empresa sin facturación, "Emitir comprobante" de una venta pagada sin él, filtro de fecha y orden de los turnos, cobrar desde la agenda, vista de un profesional, tema oscuro y celular.
+
+## Detectados el 2026-10-13 (cupones y caja por sucursal)
+
+- **Cupón por cliente.** Los usos se cuentan en total; no hay "una vez por cliente" ni cupones solo para clientes nuevos o para un servicio o una sede.
+- **Cupón que deja el total en cero.** No se acepta: una venta gratuita necesita otro tratamiento en el comprobante.
+- **El cupón se fija con el primer pago.** Después no se puede agregar ni cambiar. Al anular la venta el cupón recupera su uso; al devolverla, no.
+- **Cupones dentro de Marketing.** La pantalla está en el grupo Ventas, bajo el módulo de punto de venta. Al hacer Marketing habrá que enlazarla desde Campañas y decidir si se mueve.
+- **Reparto del cupón.** No hay forma de enviar un cupón al cliente ni de ver quién lo usó (los usos quedan guardados, sin pantalla).
+- **Yape con QR o código de aprobación.** Hoy es un cobro manual con número de operación. Con la pasarela (entrega 4): QR por cobro con el monto, o celular y código de aprobación, con confirmación automática.
+- **QR fijo del negocio.** No hay dónde subir la imagen del QR de Yape o Plin de la empresa para mostrarla al cobrar.
+- **Sucursal creada con la caja automática apagada.** No se avisa al crear la sucursal que quedó sin caja; se nota al intentar cobrar en efectivo.
+- **Pruebas en pantalla que faltan.** Crear una sucursal y ver su caja, editar un cupón, un cupón de monto fijo desde el formulario, filtro de fecha y orden de Cupones, tema oscuro y celular.
+
+## Detectados el 2026-10-13 (ventas, entrega 2: ventas, pagos, anular y devolver)
+
+- **Devolución que alguien solicita y otro aprueba.** El prototipo lo tiene; aquí la hace directamente el administrador. Volver a verlo cuando existan recepción o caja como roles.
+- **Devolver por el mismo medio del pago.** Se elige cualquier medio; no se sugiere el del pago original ni se impide devolver en efectivo algo cobrado con tarjeta.
+- **Devolución de un pago en línea.** Cuando haya pasarela (entrega 4), devolver un pago hecho por link o QR debe pedirse a la pasarela.
+- **Cita con venta devuelta por completo.** No se puede volver a cobrar: su tarjeta queda en "Devuelta". Si el servicio se va a prestar otro día, hay que agendar otra cita.
+- **Imprimir la nota de crédito.** Solo se imprime el comprobante de la venta; la nota de crédito se ve en la lista de devoluciones.
+- **Anular una boleta o factura sin devolver.** No existe la "comunicación de baja" (anular el comprobante dentro del plazo de SUNAT); toda corrección pasa por nota de crédito.
+- **Exportar ventas y pagos.** No hay descarga a Excel.
+- **Ventas y pagos traen los últimos 500.** Los filtros trabajan sobre esos; con más volumen haría falta paginar en la API.
+- **Ventas y pagos en la página del cliente y en el portal.** No se muestran.
+- **Reporte del día.** No hay un cierre diario que junte ventas, medios de pago y devoluciones de todas las cajas.
+- **Detalle de la venta en un panel.** Si la venta crece (varios ítems, comisiones, puntos), convendría pasarla a su propia página.
+- **Pruebas en pantalla que faltan.** El botón "Imprimir" y la pestaña nueva del comprobante, devolver con la caja cerrada o con varias cajas, una factura con su nota FC01, filtros y orden de Ventas y Pagos, una venta con cupón en su panel, tema oscuro y celular.
+
+## Detectados el 2026-10-13 (cobrar antes de atender; inasistencias en línea)
+
+- **Rubros que cobran al final.** "Cobrar antes de atender" nace encendido para todos. Un salón o una barbería suele cobrar al terminar: hoy lo apaga cada empresa; se podría dejar apagado desde el rubro.
+- **Atender sin pago por excepción.** Con la regla encendida no hay forma de saltarla para un caso puntual (una urgencia, un convenio); ni siquiera el administrador.
+- **Pago de una teleconsulta.** Se le dice al cliente que coordine el pago con la sede; no puede pagar en línea hasta que exista la pasarela (entrega 4).
+- **Pagar en línea al reservar.** Con la pasarela, quien reserva desde el portal debería poder pagar ahí mismo y no tener que llegar antes.
+- **La falta solo es "No asistió".** No cuenta llegar tarde, cancelar a última hora ni llegar sin tiempo para pagar. Tampoco las citas que la sede liberó por no confirmarse.
+- **Faltas a citas agendadas por el personal.** No generan nota ni veto: la regla es solo para la reserva en línea. Evaluar una nota general de inasistencias.
+- **Aviso al cliente de su falta.** Se entera al entrar al portal; no recibe un mensaje (no hay envío de mensajes).
+- **Aviso a la administración.** Cuando un cliente llega al límite y queda sin reserva en línea, nadie recibe un aviso en la campana.
+- **Quién perdonó y cuándo.** Perdonar no deja registro en la bitácora, y no se puede deshacer.
+- **Veto que también impida anotarse en la lista de espera.** Hoy solo impide reservar.
+- **Atendidas sin cobrar anteriores.** Al encender la regla, las citas atendidas que nadie cobró dejan de listarse (la pestaña desaparece), aunque sigan sin cobrar.
+- **Marca de "pagada" en la agenda.** Con la regla encendida ayudaría ver en la agenda qué citas de hoy ya pagaron.
+- **Pruebas en pantalla que faltan.** El botón "Perdonar", el aviso de pago de una cita presencial en la tarjeta del portal, "Dar por atendida" sin pagar, la opción "No pasa nada", tema oscuro y celular.

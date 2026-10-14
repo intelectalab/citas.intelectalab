@@ -1,7 +1,9 @@
+import SalesTable from '@/features/sales/components/SalesTable';
+
 export default function SalesPage() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-[#022340]">Módulo de Ventas</h1>
+    <div className="h-[calc(100vh-7rem)]">
+      <SalesTable />
     </div>
   );
 }

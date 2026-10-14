@@ -20,6 +20,10 @@ export interface PortalAppointment {
   confirmation_overdue?: boolean;
   // Aún no ocurre y sigue en pie (pendiente o confirmada).
   is_upcoming: boolean;
+  // Aún no está pagada y la empresa cobra antes de atender: debe llegar antes para pagar.
+  pay_on_arrival?: boolean;
+  // La atención es por videollamada.
+  is_virtual?: boolean;
   can_confirm: boolean;
   can_cancel: boolean;
   can_reschedule: boolean;
@@ -39,6 +43,11 @@ export interface PortalPolicies {
   confirm_deadline_hours?: number;
   confirm_on_miss?: 'notify' | 'notify_release' | 'release';
   confirm_release_hours?: number;
+  // La cita se paga en la sede antes de atenderse, y cuántos minutos antes conviene llegar.
+  pay_before_service?: boolean;
+  arrive_minutes?: number;
+  // Qué pasa si reserva en línea y no asiste: nada, una nota, o nota y veto tras `limit` veces por `block_days` días (0 = sin fecha).
+  miss?: { action: 'none' | 'note' | 'block'; limit: number; block_days: number };
 }
 
 export interface PortalDependent {
@@ -55,6 +64,8 @@ export interface PortalOverview {
     must_change_password?: boolean;
   };
   policies: PortalPolicies;
+  // Sus inasistencias a citas reservadas en línea; con `blocked` ya no puede reservar por aquí.
+  booking_block?: { misses: number; blocked: boolean; blocked_until: string | null; limit: number | null; message: string | null } | null;
   dependents: { enabled: boolean; required: boolean; items: PortalDependent[] };
   appointments: PortalAppointment[];
 }

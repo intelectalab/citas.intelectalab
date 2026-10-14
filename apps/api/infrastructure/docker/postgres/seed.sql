@@ -152,8 +152,8 @@ ON CONFLICT (slug) DO NOTHING;
 -- Diferencias por rubro (prototipo): módulos que no usa, reglas por defecto y dependientes.
 UPDATE business_types AS b SET modules_off = v.modules_off::jsonb, default_rules = v.default_rules::jsonb, dependents = v.dependents::jsonb
 FROM (VALUES
-  ('salon', '["quotes", "walkin", "classes"]', '{"noshow.fee_percent": 50, "pos.tips_enabled": true, "records.require_on_complete": false}', '{}'),
-  ('barber', '["quotes", "classes"]', '{"booking.require_deposit": false, "agenda.checkin_step": true, "walkin.self_checkin": true, "pos.tips_enabled": true}', '{}'),
+  ('salon', '["quotes", "walkin", "classes"]', '{"pos.pay_before_service": false, "noshow.fee_percent": 50, "pos.tips_enabled": true, "records.require_on_complete": false}', '{}'),
+  ('barber', '["quotes", "classes"]', '{"pos.pay_before_service": false, "booking.require_deposit": false, "agenda.checkin_step": true, "walkin.self_checkin": true, "pos.tips_enabled": true}', '{}'),
   ('aesthetics', '["walkin", "classes"]', '{"customers.clinical_fields": true, "records.require_on_complete": true, "booking.deposit_percent": 30, "noshow.fee_percent": 30, "cancel.window_hours": 24}', '{}'),
   ('dental', '["walkin", "classes", "memberships", "loyalty"]', '{"customers.clinical_fields": true, "pos.tips_enabled": false, "loyalty.enabled": false, "cancel.window_hours": 24, "records.require_on_complete": true, "records.lock_hours": 24, "booking.deposit_percent": 50, "reminders.hours_before": 48, "inventory.consume_on_service": false}', '{}'),
   ('medical', '["walkin", "classes", "memberships", "loyalty", "inventory"]', '{"customers.clinical_fields": true, "professionals.license": true, "pos.tips_enabled": false, "loyalty.enabled": false, "records.require_on_complete": true, "records.lock_hours": 24, "cancel.window_hours": 12}', '{}'),

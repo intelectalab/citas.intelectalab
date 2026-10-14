@@ -589,6 +589,29 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
               />
             )}
 
+            {policies.pay_before_service && (
+              <p data-pay-notice className="text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3">
+                {service?.is_virtual ? (
+                  <><span className="font-bold">Esta atención es por videollamada y se paga antes de empezar.</span> Comunícate con la sede para coordinar el pago.</>
+                ) : (
+                  <>
+                    <span className="font-bold">El pago se hace en la sede, antes de la atención.</span>{' '}
+                    {(policies.arrive_minutes ?? 0) > 0 ? `Llega ${policies.arrive_minutes} minutos antes de tu hora para pagar en recepción.` : 'Acércate a recepción al llegar.'}
+                  </>
+                )}
+              </p>
+            )}
+
+            {!isReschedule && policies.miss && policies.miss.action !== 'none' && (
+              <p data-miss-notice className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                {policies.miss.action === 'note'
+                  ? 'Si no asistes y no cancelas a tiempo, quedará registrado en tu ficha.'
+                  : `Si no asistes a ${policies.miss.limit === 1 ? 'una cita reservada' : `${policies.miss.limit} citas reservadas`} por aquí, no podrás volver a reservar en línea ${
+                      policies.miss.block_days > 0 ? `durante ${policies.miss.block_days} días` : 'hasta que la sede lo permita'
+                    }.`}
+              </p>
+            )}
+
             {policies.cancel_allowed && (
               <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
                 Podrás cambiar o cancelar tu cita desde aquí hasta {policies.cancel_window_hours} horas antes.

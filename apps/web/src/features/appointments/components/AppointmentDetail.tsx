@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarCheck, CalendarClock, Check, ChevronRight, ClipboardList, Timer } from 'lucide-react';
+import { CalendarCheck, CalendarClock, Check, ChevronRight, ClipboardList, Timer, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -9,6 +9,8 @@ import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Stopwatch from './Stopwatch';
 import { actionLabel, apiError, dateOf, formatDate, formatDateTime, formatMinutes, statusStyle, timeOf, type Appointment } from '../appointments';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
+import ChargePanel from '@/features/sales/components/ChargePanel';
+import { money, SALE_BADGES, type ChargeContext } from '@/features/sales/sales';
 
 interface AppointmentDetailProps {
   appointmentId: string | null;
@@ -32,9 +34,14 @@ const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wi
 // Panel lateral de una cita: sus datos, la fase en que está, las acciones que
 // la mueven de fase, sus notas y su historial.
 export default function AppointmentDetail({ appointmentId, onClose, onChanged, onReschedule, onOpenRecord, reloadKey = 0 }: AppointmentDetailProps) {
-  const { user } = useAuth();
+  const { user, hasModule } = useAuth();
   const vocab = useVocabulary();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
+  // Cobro de la cita (solo con el módulo de punto de venta): su venta y el panel para cobrar.
+  const canCharge = hasModule('pos') && !user?.is_saas_admin;
+  const [charge, setCharge] = useState<ChargeContext | null>(null);
+  const [chargeNote, setChargeNote] = useState('');
+  const [charging, setCharging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -66,6 +73,17 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       .catch((err) => setError(apiError(err, 'No se pudo cargar la cita.')))
       .finally(() => setLoading(false));
   }, [appointmentId, reloadKey]);
+
+  useEffect(() => {
+    setCharge(null);
+    setChargeNote('');
+    if (!appointmentId || !canCharge) return;
+
+    api.get(`/appointments/${appointmentId}/sale`)
+      .then((res) => setCharge(res.data))
+      // Si la base aún no tiene las tablas de ventas, se dice en vez de ocultar el cobro.
+      .catch((err) => setChargeNote(apiError(err, 'No se pudo cargar el cobro de esta cita.')));
+  }, [appointmentId, reloadKey, canCharge]);
 
   const changeStatus = async (status: string, reason?: string) => {
     if (!appointment) return;
@@ -293,6 +311,47 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
             {notice && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
           </section>
 
+          {canCharge && (charge || chargeNote) && (
+            <section className="pt-5 border-t border-slate-100" data-charge-card>
+              {charge ? (
+                <button
+                  type="button"
+                  data-action="charge"
+                  disabled={Boolean(charge.blocked) && !charge.sale}
+                  onClick={() => setCharging(true)}
+                  className="w-full flex items-center gap-3 p-3 border border-slate-200 rounded-xl text-left hover:border-[#3F768C] hover:bg-slate-50 transition-colors disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                >
+                  <span className="p-2 bg-[#84D0D9]/20 text-[#022340] rounded-lg shrink-0"><Wallet size={18} /></span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-bold text-slate-800">
+                      {charge.sale?.status === 'paid' ? `Cobrada · ${charge.sale.code}` : charge.sale ? `Cobro ${charge.sale.code}` : 'Cobrar'}
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      {charge.sale?.status === 'paid'
+                        ? `${money(charge.sale.total)}${charge.sale.invoice ? ` · ${charge.sale.invoice.doc_type_label} ${charge.sale.invoice.number}` : ' · sin comprobante'}`
+                        : charge.sale && (charge.sale.refunded ?? 0) > 0
+                          ? `${money(charge.sale.total)} · se devolvieron ${money(charge.sale.refunded)}.`
+                        : charge.sale
+                          ? `Pagado ${money(charge.sale.paid)} de ${money(charge.sale.total)}. Falta ${money(charge.sale.balance)}.`
+                          : charge.blocked ?? `${money(charge.preview.total)} por cobrar.`}
+                    </span>
+                  </span>
+                  <span
+                    data-charge-status={charge.sale?.status ?? 'none'}
+                    className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${
+                      charge.sale ? SALE_BADGES[charge.sale.status] : charge.blocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'
+                    }`}
+                  >
+                    {charge.sale?.status_label ?? (charge.blocked ? 'No se cobra' : 'Por cobrar')}
+                  </span>
+                  <ChevronRight size={16} className="text-slate-400 shrink-0" />
+                </button>
+              ) : (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{chargeNote}</p>
+              )}
+            </section>
+          )}
+
           {appointment.record.uses && (
             <section className="pt-5 border-t border-slate-100">
               <button
@@ -450,6 +509,13 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
           )}
         </div>
       )}
+
+      <ChargePanel
+        appointmentId={charging && appointment ? appointment.id : null}
+        appointmentCode={appointment?.code}
+        onClose={() => setCharging(false)}
+        onChanged={setCharge}
+      />
     </FormDrawer>
   );
 }

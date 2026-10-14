@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormCustomer from './FormCustomer';
 import CustomerPortalAccess, { type PortalAccess } from './CustomerPortalAccess';
+import { blockLabel, missesLabel, type OnlineBookingState } from '../onlineBooking';
 import RecordPanel from '@/features/records/components/RecordPanel';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import { PagedList } from '@/app/components/common/Pager';
@@ -40,6 +41,8 @@ interface CustomerData {
   created_at?: string;
   // Acceso al portal: el cliente entra con el correo de su ficha.
   portal_access?: PortalAccess;
+  // Inasistencias a citas reservadas en línea (nota y veto), si tiene.
+  online_booking?: OnlineBookingState | null;
   dependents?: { id: string; name: string; species?: string | null; breed?: string | null }[];
 }
 
@@ -67,6 +70,8 @@ export default function CustomerDetail() {
   const { user, hasModule } = useAuth();
   const vocab = useVocabulary();
   const [customer, setCustomer] = useState<CustomerData | null>(null);
+  const [canForgive, setCanForgive] = useState(false);
+  const [forgiving, setForgiving] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [records, setRecords] = useState<CareRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +100,7 @@ export default function CustomerDetail() {
 
   const loadCustomer = useCallback(() => {
     api.get(`/customers/${params.id}`)
-      .then((res) => { setCustomer(res.data.customer); setError(''); })
+      .then((res) => { setCustomer(res.data.customer); setCanForgive(Boolean(res.data.can_forgive_booking)); setError(''); })
       .catch((err) => setError(err?.response?.status === 404 ? `Este ${vocab.client.toLowerCase()} no existe.` : 'No se pudo cargar la información.'))
       .finally(() => setLoading(false));
   }, [params.id, vocab.client]);
@@ -266,6 +271,35 @@ export default function CustomerDetail() {
           )}
 
           <CustomerPortalAccess customer={customer} clientWord={vocab.client} onChanged={loadCustomer} />
+
+          {customer.online_booking && (
+            <div data-online-booking={customer.online_booking.blocked ? 'blocked' : 'note'} className={`rounded-xl border px-4 py-3 space-y-2 ${customer.online_booking.blocked ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
+              <div>
+                <span className={`block text-sm font-bold ${customer.online_booking.blocked ? 'text-rose-800' : 'text-amber-800'}`}>{missesLabel(customer.online_booking)}</span>
+                <span className={`block text-xs ${customer.online_booking.blocked ? 'text-rose-700' : 'text-amber-700'}`}>
+                  {[blockLabel(customer.online_booking), `Última: ${formatDate(customer.online_booking.last_miss_at.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}`].filter(Boolean).join('. ')}.
+                  {customer.online_booking.blocked ? ' El personal sí puede agendarle.' : ''}
+                </span>
+              </div>
+              {canForgive && (
+                <button
+                  type="button"
+                  data-action="forgive-booking"
+                  disabled={forgiving}
+                  onClick={() => {
+                    setForgiving(true);
+                    api.post(`/customers/${customer.id}/booking-strikes/forgive`)
+                      .then(loadCustomer)
+                      .catch(() => setError('No se pudieron perdonar las inasistencias.'))
+                      .finally(() => setForgiving(false));
+                  }}
+                  className="text-xs font-bold text-[#022340] bg-white border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  {forgiving ? 'Guardando...' : customer.online_booking.blocked ? 'Perdonar y permitirle reservar' : 'Perdonar inasistencias'}
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Números y, pegada debajo, la historia */}

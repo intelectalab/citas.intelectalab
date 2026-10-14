@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\TenantSetting;
 use App\Support\AppointmentFlow;
 use App\Support\Confirmations;
+use App\Support\Sales;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -53,6 +54,22 @@ class TenantSettingController extends Controller
             'booking_rules.cancel_window_hours'    => 'required_with:booking_rules|integer|min:0|max:168',
             // Qué pasa con una sala cuando un equipo suyo queda fuera de uso.
             'equipment_down' => ['sometimes', Rule::in(['none', 'observe', 'disable'])],
+            // Ventas y caja: impuesto, caja abierta, pagos por partes y tolerancia del cierre.
+            'sales_rules' => 'sometimes|array',
+            'sales_rules.prices_include_tax' => 'required_with:sales_rules|boolean',
+            'sales_rules.tax_rate'           => 'required_with:sales_rules|numeric|min:0|max:100',
+            'sales_rules.require_open_cash'  => 'required_with:sales_rules|boolean',
+            'sales_rules.partial_payments'   => 'required_with:sales_rules|boolean',
+            'sales_rules.cash_tolerance'     => 'required_with:sales_rules|numeric|min:0|max:9999',
+            'sales_rules.auto_register'      => 'sometimes|boolean',
+            'sales_rules.refund_days'        => 'sometimes|integer|min:0|max:365',
+            'sales_rules.pay_before_service' => 'sometimes|boolean',
+            'sales_rules.arrive_minutes'     => 'sometimes|integer|min:0|max:240',
+            // Qué pasa con quien reserva en línea y no asiste.
+            'booking_misses' => 'sometimes|array',
+            'booking_misses.action'     => ['required_with:booking_misses', Rule::in(['none', 'note', 'block'])],
+            'booking_misses.limit'      => 'required_with:booking_misses|integer|min:1|max:20',
+            'booking_misses.block_days' => 'required_with:booking_misses|integer|min:0|max:3650',
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
             ->all()
@@ -63,6 +80,8 @@ class TenantSettingController extends Controller
             'booking_rules.*.integer' => 'Escribe las horas como un número entero.',
             'booking_rules.*.min'     => 'Las horas no pueden ser negativas.',
             'booking_rules.*.max'     => 'El plazo máximo es de 168 horas (una semana).',
+            'sales_rules.tax_rate.*'       => 'Escribe el impuesto como un porcentaje entre 0 y 100.',
+            'sales_rules.cash_tolerance.*' => 'Escribe la tolerancia como un monto entre 0 y 9999.',
         ]);
 
         if (isset($validated['booking_rules'])) {
@@ -114,6 +133,27 @@ class TenantSettingController extends Controller
 
         if (isset($validated['equipment_down'])) {
             $settings->rules = array_merge($settings->rules ?? [], ['resources.equipment_down' => $validated['equipment_down']]);
+        }
+
+        if (isset($validated['sales_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'pos.prices_include_tax' => (bool) $validated['sales_rules']['prices_include_tax'],
+                'pos.tax_rate'           => round((float) $validated['sales_rules']['tax_rate'], 2),
+                'pos.require_open_cash'  => (bool) $validated['sales_rules']['require_open_cash'],
+                'pos.partial_payments'   => (bool) $validated['sales_rules']['partial_payments'],
+                'cash.tolerance'         => round((float) $validated['sales_rules']['cash_tolerance'], 2),
+            ] + (array_key_exists('auto_register', $validated['sales_rules']) ? ['cash.auto_register' => (bool) $validated['sales_rules']['auto_register']] : [])
+              + (array_key_exists('refund_days', $validated['sales_rules']) ? ['pos.refund_days' => (int) $validated['sales_rules']['refund_days']] : [])
+              + (array_key_exists('pay_before_service', $validated['sales_rules']) ? ['pos.pay_before_service' => (bool) $validated['sales_rules']['pay_before_service']] : [])
+              + (array_key_exists('arrive_minutes', $validated['sales_rules']) ? ['pos.arrive_minutes' => (int) $validated['sales_rules']['arrive_minutes']] : []));
+        }
+
+        if (isset($validated['booking_misses'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'booking.miss_action' => $validated['booking_misses']['action'],
+                'booking.miss_limit'  => (int) $validated['booking_misses']['limit'],
+                'booking.block_days'  => (int) $validated['booking_misses']['block_days'],
+            ]);
         }
 
         $settings->save();
@@ -181,6 +221,10 @@ class TenantSettingController extends Controller
             'resources' => $tenant->hasModule('resources')
                 ? ['equipment_down' => in_array(AppointmentFlow::rule($tenant, 'resources.equipment_down'), ['observe', 'disable'], true) ? AppointmentFlow::rule($tenant, 'resources.equipment_down') : 'none']
                 : null,
+            // Solo para empresas con punto de venta y caja.
+            'sales_rules' => $tenant->hasModule('pos') ? Sales::rules($tenant) : null,
+            // Solo para empresas con reserva en línea.
+            'booking_misses' => $tenant->hasModule('booking') ? \App\Support\OnlineBooking::policy($tenant) : null,
         ];
     }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarDays, CalendarPlus, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
+import { BellRing, Building2, CalendarDays, CalendarPlus, CalendarX2, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -86,7 +86,9 @@ export default function Portal() {
   const upcoming = appointments.filter((a) => a.is_upcoming).reverse();
   const past = appointments.filter((a) => !a.is_upcoming);
   const next = upcoming[0] ?? null;
-  const canBook = Boolean(policies?.booking_enabled);
+  // Con varias inasistencias a citas reservadas en línea, la empresa puede cerrarle esta vía.
+  const block = overview?.booking_block ?? null;
+  const canBook = Boolean(policies?.booking_enabled) && !block?.blocked;
 
   const act = async (run: () => Promise<unknown>, done: string) => {
     try {
@@ -129,7 +131,7 @@ export default function Portal() {
 
   const savePhone = () => act(() => api.put('/portal/profile', { phone }), 'Actualizamos tu celular.').then(() => setEditingPhone(false));
 
-  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling, onMiss: policies?.confirm_on_miss };
+  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling, onMiss: policies?.confirm_on_miss, arriveMinutes: policies?.arrive_minutes };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
@@ -205,6 +207,22 @@ export default function Portal() {
                       : `Para agendar una cita, comunícate con ${tenant?.name}. Aquí verás las que tengas.`}
                   </p>
                 </div>
+              </section>
+            )}
+
+            {block && policies?.booking_enabled && (block.blocked || (block.limit !== null && block.misses > 0)) && (
+              <section data-booking-block={block.blocked ? 'blocked' : 'warning'} className={`flex items-start gap-3 px-5 py-4 rounded-2xl border ${block.blocked ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
+                <span className={`p-2 bg-white rounded-xl shrink-0 ${block.blocked ? 'text-rose-600' : 'text-amber-600'}`}><CalendarX2 size={18} /></span>
+                <span>
+                  <span className={`block text-sm font-bold ${block.blocked ? 'text-rose-800' : 'text-amber-800'}`}>
+                    {block.blocked ? 'Por ahora no puedes reservar en línea' : `Tienes ${block.misses} ${block.misses === 1 ? 'inasistencia' : 'inasistencias'} a citas reservadas en línea`}
+                  </span>
+                  <span className={`block text-xs ${block.blocked ? 'text-rose-700' : 'text-amber-700'}`}>
+                    {block.blocked
+                      ? block.message
+                      : `Al llegar a ${block.limit} ya no podrás reservar por aquí. Si no vas a poder asistir, cancela o cambia tu cita a tiempo.`}
+                  </span>
+                </span>
               </section>
             )}
 

@@ -41,6 +41,10 @@ import {
   Timer,
   Clock,
   DoorOpen,
+  Wallet,
+  TicketPercent,
+  Receipt,
+  Coins,
   LucideIcon
 } from 'lucide-react';
 
@@ -131,6 +135,10 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
       { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm' },
       { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes' },
       { name: 'Punto de venta', href: '/modules/pos', icon: ShoppingCart, module: 'pos' },
+      { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', requireAdmin: true },
+      { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', requireAdmin: true },
+      { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', requireAdmin: true },
+      { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', requireAdmin: true },
       { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory' },
     ]
   },

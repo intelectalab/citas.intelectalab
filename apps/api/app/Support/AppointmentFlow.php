@@ -77,6 +77,26 @@ class AppointmentFlow
         // Si un equipo instalado en una sala queda fuera de uso: none (no pasa nada),
         // observe (la sala lo muestra como observación) o disable (la sala queda fuera de uso).
         'resources.equipment_down'    => 'none',
+        // Ventas y caja: los precios ya incluyen el impuesto (18 %), el efectivo exige una
+        // caja abierta, la venta se cobra completa (sin pagos por partes) y el cierre no tolera diferencias sin nota.
+        'pos.prices_include_tax'      => true,
+        'pos.tax_rate'                => 18,
+        'pos.require_open_cash'       => true,
+        'pos.partial_payments'        => false,
+        'cash.tolerance'              => 0,
+        // Días desde la venta en que aún se puede devolver (0 = sin plazo).
+        'pos.refund_days'             => 30,
+        // Cada sede nueva recibe sola su caja. Apagarlo no quita las cajas que ya existen.
+        'cash.auto_register'          => true,
+        'invoice.default_type'        => 'boleta',
+        // La cita se paga antes de atenderla, y al cliente se le pide llegar unos minutos antes para pagar.
+        'pos.pay_before_service'      => true,
+        'pos.arrive_minutes'          => 15,
+        // Quien reserva en línea y no asiste: none (nada), note (una nota en su ficha) o block
+        // (además, tras tantas inasistencias no reserva en línea por tantos días; 0 = sin fecha de fin).
+        'booking.miss_action'         => 'note',
+        'booking.miss_limit'          => 2,
+        'booking.block_days'          => 30,
     ];
 
     public static function keys(): array

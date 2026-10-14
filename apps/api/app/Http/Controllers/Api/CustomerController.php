@@ -90,6 +90,12 @@ class CustomerController extends Controller
 
         $customers = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
+        // Inasistencias a citas reservadas en línea (nota y veto), según lo que eligió la empresa.
+        if ($tenant = $request->user()->tenant) {
+            $states = \App\Support\OnlineBooking::states($tenant, $customers->getCollection()->pluck('id')->all());
+            $customers->getCollection()->each(fn (Customer $c) => $c->setAttribute('online_booking', $states[$c->id] ?? null));
+        }
+
         return response()->json($customers);
     }
 
@@ -165,10 +171,29 @@ class CustomerController extends Controller
     public function show(Request $request, string $customer)
     {
         $customer = $this->findForTenant($request, $customer);
+        $tenant = $request->user()->tenant;
+
+        $customer->setAttribute('online_booking', $tenant ? \App\Support\OnlineBooking::state($tenant, $customer->id) : null);
 
         return response()->json([
-            'customer' => $customer->load($this->relations($request))
+            'customer' => $customer->load($this->relations($request)),
+            'can_forgive_booking' => $request->user()->isTenantAdmin() && \App\Support\OnlineBooking::canForgive(),
         ]);
+    }
+
+    /**
+     * La empresa perdona las inasistencias del cliente a citas reservadas en
+     * línea: dejan de contar y puede volver a reservar por el portal.
+     */
+    public function forgiveBooking(Request $request, string $customer)
+    {
+        abort_unless($request->user()->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede hacerlo.');
+        abort_unless(\App\Support\OnlineBooking::canForgive(), 503, 'Falta actualizar la base de datos: carga init.sql, seed.sql y seed_demo.sql.');
+
+        $customer = $this->findForTenant($request, $customer);
+        \Illuminate\Support\Facades\DB::table('customers')->where('id', $customer->id)->update(['booking_strikes_reset_at' => now()]);
+
+        return response()->json(['online_booking' => null]);
     }
 
     public function update(Request $request, string $customer)

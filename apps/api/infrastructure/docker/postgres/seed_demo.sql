@@ -1224,4 +1224,21 @@ FROM (
 JOIN users u ON u.tenant_id = x.tenant_id AND u.is_owner
 WHERE x.n <= 2;
 
+-- Algunas inasistencias pasan a ser de citas reservadas en línea, para que la ficha
+-- de esos clientes muestre la nota (y el veto, si la empresa lo activa).
+UPDATE appointments SET source = 'online'
+WHERE status = 'no_show' AND abs(hashtext(customer_id::text)) % 3 = 0;
+
+-- Cupones de ejemplo en cada empresa: uno vigente en porcentaje, uno vigente en
+-- monto con compra mínima y usos limitados, y uno ya vencido.
+INSERT INTO coupons (tenant_id, code, description, discount_type, discount_value, min_purchase, max_uses, starts_at, ends_at, status)
+SELECT t.id, c.code, c.description, c.discount_type, c.discount_value, c.min_purchase, c.max_uses,
+       now() + make_interval(days => c.from_days), now() + make_interval(days => c.to_days), 'active'
+FROM tenants t
+CROSS JOIN (VALUES
+  ('BIENVENIDA10', 'Bienvenida: 10 % en la primera visita', 'percent', 10, 0, NULL::int, -20, 60),
+  ('VUELVE20', 'Reactivación: S/ 20 para quien no viene hace tiempo', 'amount', 20, 80, 50, -10, 30),
+  ('ANIVERSARIO', 'Campaña de aniversario: 15 %', 'percent', 15, 0, 100, -60, -5)
+) AS c(code, description, discount_type, discount_value, min_purchase, max_uses, from_days, to_days);
+
 COMMIT;

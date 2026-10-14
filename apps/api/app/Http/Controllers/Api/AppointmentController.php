@@ -481,8 +481,19 @@ class AppointmentController extends Controller
                 && $this->usesRecord($tenant, $appointment)
                 && (!$appointment->record || $appointment->record->status === CareRecord::DRAFT)) {
                 return response()->json([
-                    'message' => "Este servicio exige la ficha de atención firmada antes de darla por atendida ({$appointment->service?->name}).",
+                    'message' => 'Este servicio exige la ficha de atención firmada antes de darla por atendida.',
                     'code'    => 'RECORD_REQUIRED',
+                ], 422);
+            }
+
+            // Si la empresa cobra antes de atender, la cita no pasa a atención sin estar pagada.
+            if (in_array($to, [AppointmentFlow::IN_PROGRESS, AppointmentFlow::COMPLETED], true)
+                && (float) $appointment->price > 0
+                && \App\Support\Sales::mustPayFirst($tenant)
+                && !\App\Support\Sales::appointmentPaid($tenant->id, $appointment->id)) {
+                return response()->json([
+                    'message' => 'Esta cita aún no está pagada. Cóbrala antes de ' . ($to === AppointmentFlow::IN_PROGRESS ? 'iniciar la atención.' : 'darla por atendida.'),
+                    'code'    => 'PAYMENT_REQUIRED',
                 ], 422);
             }
 

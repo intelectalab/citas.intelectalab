@@ -10,6 +10,7 @@ import FormCustomer from './FormCustomer';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
+import { blockLabel, missesLabel, type OnlineBookingState } from '../onlineBooking';
 
 interface Customer {
   id: string;
@@ -23,6 +24,8 @@ interface Customer {
   document_number?: string;
   district?: string;
   dependents?: { id: string; name: string; species?: string | null }[];
+  // Inasistencias a citas reservadas en línea, si tiene.
+  online_booking?: OnlineBookingState | null;
   status?: {
     id: string;
     name: string;
@@ -191,6 +194,15 @@ export default function CustomersTable() {
             <span className="block text-xs text-slate-400 font-mono">
               {pat.email ? pat.email : 'Sin correo electrónico'}
             </span>
+            {pat.online_booking && (
+              <span
+                data-online-booking={pat.online_booking.blocked ? 'blocked' : 'note'}
+                title={[missesLabel(pat.online_booking), blockLabel(pat.online_booking)].filter(Boolean).join('. ')}
+                className={`inline-block mt-1 px-2 py-0.5 text-[11px] font-semibold rounded-md ${pat.online_booking.blocked ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}
+              >
+                {pat.online_booking.blocked ? 'Sin reserva en línea' : `${pat.online_booking.misses} ${pat.online_booking.misses === 1 ? 'inasistencia' : 'inasistencias'} en línea`}
+              </span>
+            )}
           </div>
         </div>
       ),
