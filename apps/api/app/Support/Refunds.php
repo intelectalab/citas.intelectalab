@@ -74,7 +74,7 @@ class Refunds
         $amount = round((float) $data['amount'], 2);
 
         if ($amount <= 0 || $amount > $state['available']) {
-            throw ValidationException::withMessages(['amount' => 'El monto debe estar entre S/ 0.01 y S/ ' . number_format($state['available'], 2) . ', que es lo que queda por devolver.']);
+            throw ValidationException::withMessages(['amount' => 'El monto debe ser mayor que cero y no pasar de ' . Currency::format($state['available'], $sale->currency ?? null) . ', que es lo que queda por devolver.']);
         }
 
         $session = null;

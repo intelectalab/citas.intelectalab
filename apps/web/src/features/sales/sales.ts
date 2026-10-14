@@ -220,6 +220,8 @@ export interface SaleDetail extends Sale {
   branch: { id: string; name: string | null };
   customer: { id: string; name: string } | null;
   appointment: { id: string; code: string | null } | null;
+  appointments?: { id: string; code: string }[];
+  can_edit?: boolean;
   void_reason: string | null;
   issuer: { name: string; tax_id: string | null; address: string | null };
   refunds: SaleRefund[];

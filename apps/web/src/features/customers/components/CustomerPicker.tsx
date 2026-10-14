@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
 import FormCustomer from './FormCustomer';
 
 export interface PickedCustomer {
@@ -20,13 +21,17 @@ interface CustomerPickerProps {
   value: PickedCustomer | null;
   onChange: (customer: PickedCustomer | null) => void;
   active?: boolean;
+  required?: boolean;
+  locked?: boolean;
+  lockedHint?: string;
 }
 
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 
-export default function CustomerPicker({ value, onChange, active = true }: CustomerPickerProps) {
+export default function CustomerPicker({ value, onChange, active = true, required = true, locked = false, lockedHint }: CustomerPickerProps) {
   const vocab = useVocabulary();
+  const { can } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PickedCustomer[]>([]);
   const [searching, setSearching] = useState(false);
@@ -55,21 +60,25 @@ export default function CustomerPicker({ value, onChange, active = true }: Custo
 
   return (
     <div>
-      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{vocab.client} *</label>
+      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{vocab.client}{required ? ' *' : ''}</label>
       {value ? (
         <div className="flex items-center justify-between gap-3 border border-slate-200 rounded-lg px-3.5 py-2.5 bg-slate-50" data-chosen-customer>
           <div>
             <span className="block text-sm font-semibold text-slate-800">{value.first_name} {value.last_name}</span>
             <span className="block text-xs text-slate-500 font-mono">{value.code}{value.phone ? ` · ${value.phone}` : ''}</span>
           </div>
-          <button
-            type="button"
-            title={`Cambiar ${vocab.client.toLowerCase()}`}
-            onClick={() => { onChange(null); setQuery(''); }}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <X size={16} />
-          </button>
+          {locked ? (
+            lockedHint && <span className="text-xs text-slate-400 text-right max-w-[50%]">{lockedHint}</span>
+          ) : (
+            <button
+              type="button"
+              title={`Cambiar ${vocab.client.toLowerCase()}`}
+              onClick={() => { onChange(null); setQuery(''); }}
+              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -85,7 +94,7 @@ export default function CustomerPicker({ value, onChange, active = true }: Custo
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <button
+            {can('customers.create') && <button
               type="button"
               data-new-customer
               title={`Nuevo ${vocab.client.toLowerCase()}`}
@@ -94,7 +103,7 @@ export default function CustomerPicker({ value, onChange, active = true }: Custo
               className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
             >
               <Plus size={18} className="stroke-[2.5]" />
-            </button>
+            </button>}
           </div>
           {query.trim().length >= 2 && (
             <div className="mt-1.5 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto bg-white">

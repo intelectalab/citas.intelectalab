@@ -431,7 +431,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-12 (ventas, entrega 1: caja y cobrar la cita)
 
-- **Entregas que siguen (acordadas).** 3: punto de venta con carrito (vender sin cita, varios ítems, descuentos con tope, propina). 4: pasarela de pago simulada (link de pago, página de pago de prueba, aviso de confirmación, vencimiento del link, adelanto al reservar en el portal) y pantalla Integraciones con las pasarelas conocidas (Culqi, Niubiz, Izipay, Mercado Pago) y el proveedor de facturación. 5: Paquetes. 6: Marketing.
+- **Entregas que siguen (acordadas).** La 3 (carrito) se hizo el 2026-10-14. 4: pasarela de pago simulada (link de pago, página de pago de prueba, aviso de confirmación, vencimiento del link, adelanto al reservar en el portal) y pantalla Integraciones con las pasarelas conocidas (Culqi, Niubiz, Izipay, Mercado Pago) y el proveedor de facturación. 5: Paquetes. 6: Marketing.
 - **Enviar el comprobante al cliente.** Se imprime desde la venta (y se guarda como PDF desde el diálogo del navegador), pero no se envía por correo ni se ve en el portal.
 - **Comprobante real.** El envío a SUNAT es una simulación. Falta el proveedor real, la pantalla para elegirlo y guardar sus llaves, reintentar un comprobante pendiente o rechazado, y la baja.
 - **Datos del emisor.** El comprobante toma razón social, RUC y dirección de la página Empresa; si el RUC está vacío dice "RUC sin registrar" y se emite igual.
@@ -548,3 +548,19 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Tipo de cambio del día.** Se escribe a mano; no se consulta a ninguna fuente.
 - **Página de inicio (landing).** El ejemplo "S/ 48,250" es un texto de muestra fijo.
 - **Pruebas en pantalla que faltan.** Elegir fechas en el calendario del panel, una venta convertida en su panel y en el comprobante, el aviso de caja abierta, guardar un plan en dólares, tema oscuro y celular.
+
+## Detectados el 2026-10-14 (ventas, entrega 3: carrito y agendar para ahora)
+
+- **Stock de los productos.** Se venden sin descontar unidades: el stock, las compras y el aviso de stock mínimo llegan con Inventario. Los insumos que usa cada servicio (`service_supplies`) tampoco se descuentan.
+- **Devolver una línea.** La devolución sigue siendo por monto; no se elige qué línea se devuelve ni vuelve un producto al stock.
+- **Profesional de cada venta.** Las líneas guardan quién atendió (para las comisiones futuras), pero ningún reporte lo usa todavía; los productos no guardan quién los vendió.
+- **Precio a mano.** No se puede cambiar el precio de una línea en el carrito ni vender algo que no esté en el catálogo.
+- **Paquetes, membresías y gift cards en el carrito.** Esperan a sus módulos.
+- **Código de barras.** La tabla lo tiene, pero no se puede escanear ni buscar con lector.
+- **Ventas por cobrar antiguas.** Una venta dejada por cobrar sigue en "Por cobrar" sin límite de días ni aviso.
+- **Cita agendada desde el carrito y no cobrada.** Si se vacía el carrito, la cita queda en la agenda y en "Por cobrar"; nadie recibe un aviso.
+- **Forzar un horario al agendar para ahora.** Si la persona está fuera de su horario o en una pausa, el panel solo muestra el motivo; para forzarlo hay que usar la agenda.
+- **Venta de un servicio sin cita en los tiempos de atención.** No cuenta, por diseño; el aviso de la pestaña Servicios lo explica.
+- **Roles ya creados.** En una empresa que ya tenía sus roles, Recepción, Caja y Gerente no reciben solos los permisos de Punto de venta y Productos: hay que encenderlos o usar "Volver a como nació".
+- **Código de un producto eliminado.** Un producto vendido y luego eliminado conserva su código: no se puede volver a usar.
+- **Pruebas en pantalla que faltan.** "Ahora" con alguien libre, cobrar en efectivo con la caja abierta, factura, cambiar de sede con el carrito, que el carrito se conserve al cambiar de pantalla, entrar como Recepción y Gerente, tema oscuro y celular.

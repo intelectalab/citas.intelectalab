@@ -12,6 +12,7 @@ import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type ChargeCon
 
 interface ChargePanelProps {
   appointmentId: string | null;
+  saleId?: string | null;
   appointmentCode?: string;
   onClose: () => void;
   onChanged?: (context: ChargeContext) => void;
@@ -43,7 +44,10 @@ const chip = (active: boolean) =>
 
 const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
-export default function ChargePanel({ appointmentId, appointmentCode, onClose, onChanged }: ChargePanelProps) {
+export default function ChargePanel({ appointmentId, saleId = null, appointmentCode, onClose, onChanged }: ChargePanelProps) {
+  const base = appointmentId ? `/appointments/${appointmentId}` : saleId ? `/sales/${saleId}` : null;
+  const contextUrl = appointmentId ? `${base}/sale` : `${base}/charge`;
+  const payUrl = appointmentId ? `${base}/charge` : `${base}/pay`;
   const [context, setContext] = useState<ChargeContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -78,7 +82,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
   };
 
   useEffect(() => {
-    if (!appointmentId) return;
+    if (!base) return;
 
     setContext(null);
     setError('');
@@ -93,11 +97,11 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
     setCouponError('');
     setLoading(true);
 
-    api.get(`/appointments/${appointmentId}/sale`)
+    api.get(contextUrl)
       .then((res) => apply(res.data))
-      .catch((err) => setError(apiError(err, 'No se pudo cargar el cobro de la cita.')))
+      .catch((err) => setError(apiError(err, appointmentId ? 'No se pudo cargar el cobro de la cita.' : 'No se pudo cargar el cobro de la venta.')))
       .finally(() => setLoading(false));
-  }, [appointmentId]);
+  }, [base, contextUrl, appointmentId]);
 
   const sale = context?.sale ?? null;
   const totals = sale ?? context?.preview;
@@ -138,13 +142,13 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!appointmentId || !context) return;
+    if (!base || !context) return;
 
     try {
       setSaving(true);
       setError('');
       setNotice('');
-      const res = await api.post(`/appointments/${appointmentId}/charge`, {
+      const res = await api.post(payUrl, {
         method,
         amount: amountNumber,
         received: isCash && received ? Number(received) : null,
@@ -170,12 +174,12 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
   };
 
   const issueInvoice = async () => {
-    if (!appointmentId) return;
+    if (!base) return;
 
     try {
       setSaving(true);
       setError('');
-      const res = await api.post(`/appointments/${appointmentId}/invoice`, docPayload());
+      const res = await api.post(`${base}/invoice`, docPayload());
       apply(res.data);
       onChanged?.(res.data);
     } catch (err) {
@@ -223,7 +227,7 @@ export default function ChargePanel({ appointmentId, appointmentCode, onClose, o
 
   return (
     <FormDrawer
-      isOpen={appointmentId !== null}
+      isOpen={base !== null}
       onClose={onClose}
       title={sale ? `Cobro ${sale.code}` : `Cobrar cita${appointmentCode ? ` ${appointmentCode}` : ''}`}
       subtitle={context ? [context.customer?.name, context.item].filter(Boolean).join(' · ') : undefined}

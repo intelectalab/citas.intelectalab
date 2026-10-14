@@ -25,7 +25,7 @@ class Coupons
         };
     }
 
-    public static function check(string $tenantId, string $code, float $gross): array
+    public static function check(string $tenantId, string $code, float $gross, ?string $currency = null): array
     {
         $fail = fn (string $message) => throw ValidationException::withMessages(['coupon_code' => $message]);
 
@@ -44,7 +44,7 @@ class Coupons
         };
 
         if ($gross < (float) $coupon->min_purchase) {
-            $fail('Ese cupón pide una compra mínima de S/ ' . number_format((float) $coupon->min_purchase, 2) . '.');
+            $fail('Ese cupón pide una compra mínima de ' . Currency::format((float) $coupon->min_purchase, $currency) . '.');
         }
 
         $discount = $coupon->discount_type === self::PERCENT
@@ -68,22 +68,22 @@ class Coupons
         DB::table('coupons')->where('id', $coupon->id)->increment('used_count');
     }
 
-    public static function ofSale(string $saleId): ?array
+    public static function ofSale(string $saleId, ?string $currency = null): ?array
     {
         $row = DB::table('coupon_redemptions as r')
             ->join('coupons as c', 'c.id', '=', 'r.coupon_id')
             ->where('r.sale_id', $saleId)
             ->first(['c.code', 'c.description', 'c.discount_type', 'c.discount_value', 'r.discount_amount']);
 
-        return $row ? self::summary($row, (float) $row->discount_amount) : null;
+        return $row ? self::summary($row, (float) $row->discount_amount, $currency) : null;
     }
 
-    public static function summary(object $coupon, float $discount): array
+    public static function summary(object $coupon, float $discount, ?string $currency = null): array
     {
         return [
             'code'        => $coupon->code,
             'description' => $coupon->description,
-            'benefit'     => $coupon->discount_type === self::PERCENT ? rtrim(rtrim(number_format((float) $coupon->discount_value, 2), '0'), '.') . ' %' : 'S/ ' . number_format((float) $coupon->discount_value, 2),
+            'benefit'     => $coupon->discount_type === self::PERCENT ? rtrim(rtrim(number_format((float) $coupon->discount_value, 2), '0'), '.') . ' %' : Currency::format((float) $coupon->discount_value, $currency),
             'discount'    => round($discount, 2),
         ];
     }

@@ -23,6 +23,8 @@ use App\Http\Controllers\Api\CashController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\SalesController;
+use App\Http\Controllers\Api\PosController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\RecordTemplateController;
@@ -236,6 +238,19 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::get('/payments', [SalesController::class, 'payments'])->middleware('perm:sales.view');
 
         $guarded('coupons', CouponController::class, 'coupons', true, ['show']);
+        Route::get('/pos', [PosController::class, 'board'])->middleware('perm:pos.view');
+        Route::post('/pos/preview', [PosController::class, 'preview'])->middleware('perm:pos.view');
+        Route::post('/pos/sales', [PosController::class, 'createSale'])->middleware('perm:pos.create');
+        Route::get('/pos/sales/{sale}', [PosController::class, 'showSale'])->middleware('perm:pos.view');
+        Route::put('/pos/sales/{sale}', [PosController::class, 'updateSale'])->middleware('perm:pos.edit');
+        Route::get('/pos/walk-in', [PosController::class, 'walkInOptions'])->middleware('perm:agenda.create');
+        Route::post('/pos/walk-in', [PosController::class, 'walkIn'])->middleware(['perm:agenda.create', 'module:agenda']);
+        Route::get('/sales/{sale}/charge', [PosController::class, 'chargeShow'])->middleware('perm:sales.create|sales.view');
+        Route::post('/sales/{sale}/pay', [PosController::class, 'pay'])->middleware('perm:sales.create');
+        Route::post('/sales/{sale}/invoice', [PosController::class, 'invoice'])->middleware('perm:sales.create');
+
+        $guarded('products', ProductController::class, 'products', true, ['show']);
+        Route::post('/product-categories', [ProductController::class, 'storeCategory'])->middleware('perm:products.create');
     });
 
     Route::middleware('module:crm')->group(function () use ($guarded) {

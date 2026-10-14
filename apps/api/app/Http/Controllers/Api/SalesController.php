@@ -59,7 +59,7 @@ class SalesController extends Controller
             ->get(['s.*', 'c.first_name', 'c.last_name', 'b.name as branch_name', 'a.code as appointment_code']);
 
         $ids = $sales->pluck('id');
-        $items = DB::table('sale_items')->whereIn('sale_id', $ids)->get(['sale_id', 'description'])->groupBy('sale_id');
+        $items = DB::table('sale_items as i')->leftJoin('appointments as a', 'a.id', '=', 'i.appointment_id')->whereIn('i.sale_id', $ids)->get(['i.sale_id', 'i.description', 'i.quantity', 'a.code as appointment_code'])->groupBy('sale_id');
         $invoices = DB::table('invoices')->whereIn('sale_id', $ids)->where('status', 'issued')->where('doc_type', '!=', Invoicing::CREDIT_NOTE)->get()->keyBy('sale_id');
         $refunds = DB::table('sale_refunds')->whereIn('sale_id', $ids)->groupBy('sale_id')->selectRaw('sale_id, sum(amount) as total')->pluck('total', 'sale_id');
 
@@ -75,8 +75,8 @@ class SalesController extends Controller
                 'branch_id'        => $s->branch_id,
                 'branch_name'      => $s->branch_name,
                 'customer'         => $s->customer_id ? ['id' => $s->customer_id, 'name' => trim("{$s->first_name} {$s->last_name}")] : null,
-                'appointment_code' => $s->appointment_code,
-                'detail'           => ($items[$s->id] ?? collect())->pluck('description')->implode(', '),
+                'appointment_code' => ($items[$s->id] ?? collect())->pluck('appointment_code')->filter()->implode(', ') ?: $s->appointment_code,
+                'detail'           => ($items[$s->id] ?? collect())->map(fn ($i) => ((float) $i->quantity > 1 ? (int) $i->quantity . ' × ' : '') . $i->description)->implode(', '),
                 'total'            => round((float) $s->total, 2),
                 'currency'         => $s->currency ?? Currency::DEFAULT,
                 'paid'             => round((float) $s->paid, 2),
@@ -98,7 +98,7 @@ class SalesController extends Controller
             ->when(Access::branchLimit(request()->user()), fn ($q, $id) => $q->where('a.branch_id', $id))
             ->where('a.status', \App\Support\AppointmentFlow::COMPLETED)
             ->where('a.price', '>', 0)
-            ->whereNotExists(fn ($q) => $q->from('sales as s')->whereColumn('s.appointment_id', 'a.id')->where('s.status', '!=', 'void'))
+            ->whereNotExists(fn ($q) => $q->from('sale_items as i')->join('sales as s', 's.id', '=', 'i.sale_id')->whereColumn('i.appointment_id', 'a.id')->where('s.status', '!=', 'void'))
             ->orderByDesc('a.starts_at')
             ->limit(self::MAX_ROWS)
             ->get(['a.*', 'c.first_name', 'c.last_name', 'sv.name as service_name', 'b.name as branch_name'])
@@ -135,6 +135,8 @@ class SalesController extends Controller
             'branch'           => ['id' => $sale->branch_id, 'name' => DB::table('branches')->where('id', $sale->branch_id)->value('name')],
             'customer'         => $customer ? ['id' => $customer->id, 'name' => trim("{$customer->first_name} {$customer->last_name}")] : null,
             'appointment'      => $sale->appointment_id ? ['id' => $sale->appointment_id, 'code' => DB::table('appointments')->where('id', $sale->appointment_id)->value('code')] : null,
+            'appointments'     => DB::table('sale_items as i')->join('appointments as a', 'a.id', '=', 'i.appointment_id')->where('i.sale_id', $sale->id)->get(['a.id', 'a.code'])->map(fn ($a) => ['id' => $a->id, 'code' => $a->code])->values(),
+            'can_edit'         => $user->allows('pos.edit') && !\App\Support\Cart::editBlocked($sale),
             'void_reason'      => $sale->void_reason,
             'issuer'           => [
                 'name'    => $company->legal_name ?? $company->trade_name ?? $tenant->name,

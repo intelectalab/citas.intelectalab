@@ -84,11 +84,16 @@ class Sales
         return $tenant->hasModule('pos') && self::ready() && (bool) AppointmentFlow::rule($tenant, 'pos.pay_before_service');
     }
 
+    public static function holding(string $appointmentId)
+    {
+        return DB::table('sale_items')->where('appointment_id', $appointmentId)->select('sale_id');
+    }
+
     public static function appointmentPaid(string $tenantId, string $appointmentId): bool
     {
         return DB::table('sales')
             ->where('tenant_id', $tenantId)
-            ->where('appointment_id', $appointmentId)
+            ->whereIn('id', self::holding($appointmentId))
             ->whereIn('status', ['paid', 'partially_refunded'])
             ->exists();
     }
@@ -97,7 +102,7 @@ class Sales
     {
         return DB::table('sales')
             ->where('tenant_id', $tenantId)
-            ->where('appointment_id', $appointmentId)
+            ->whereIn('id', self::holding($appointmentId))
             ->where('status', '!=', 'void')
             ->orderByDesc('created_at')
             ->first();
@@ -106,7 +111,7 @@ class Sales
     public static function createForAppointment(Tenant $tenant, Appointment $appointment, User $user, ?string $couponCode = null): object
     {
         $rules = self::rules($tenant);
-        $applied = $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price) : null;
+        $applied = $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price, Currency::of($tenant)) : null;
         $totals = self::totals($rules, (float) $appointment->price, $applied['discount'] ?? 0);
         $id = (string) Str::uuid();
 
@@ -174,11 +179,11 @@ class Sales
         $balance = round((float) $sale->balance, 2);
 
         if ($amount <= 0 || $amount > $balance) {
-            throw ValidationException::withMessages(['amount' => 'El monto debe estar entre S/ 0.01 y el saldo de S/ ' . number_format($balance, 2) . '.']);
+            throw ValidationException::withMessages(['amount' => 'El monto debe ser mayor que cero y no pasar el saldo de ' . Currency::format($balance, $sale->currency ?? null) . '.']);
         }
 
         if (!$rules['partial_payments'] && $amount < $balance) {
-            throw ValidationException::withMessages(['amount' => 'Tu empresa no admite pagos parciales: cobra el total de S/ ' . number_format($balance, 2) . '.']);
+            throw ValidationException::withMessages(['amount' => 'Tu empresa no admite pagos parciales: cobra el total de ' . Currency::format($balance, $sale->currency ?? null) . '.']);
         }
 
         $reference = trim((string) ($data['reference'] ?? '')) ?: null;
@@ -291,7 +296,7 @@ class Sales
             'currency'           => $sale->currency ?? Currency::DEFAULT,
             'created_at'         => $iso($sale->created_at),
             'paid_at'            => $iso($sale->paid_at),
-            'items'              => DB::table('sale_items')->where('sale_id', $sale->id)->get(['id', 'description', 'quantity', 'unit_price', 'discount', 'total'])
+            'items'              => DB::table('sale_items')->where('sale_id', $sale->id)->when(Schema::hasColumn('sale_items', 'position'), fn ($q) => $q->orderBy('position'))->get(['id', 'description', 'quantity', 'unit_price', 'discount', 'total'])
                 ->map(fn ($i) => ['id' => $i->id, 'description' => $i->description, 'quantity' => (float) $i->quantity, 'unit_price' => round((float) $i->unit_price, 2), 'discount' => round((float) $i->discount, 2), 'total' => round((float) $i->total, 2)])
                 ->values(),
             'payments'           => $payments->map(fn ($p) => [
@@ -306,7 +311,7 @@ class Sales
                 'by'           => trim("{$p->first_name} {$p->last_name}") ?: null,
                 'at'           => $iso($p->created_at),
             ])->values(),
-            'coupon'             => Coupons::ofSale($sale->id),
+            'coupon'             => Coupons::ofSale($sale->id, $sale->currency ?? null),
             'invoice'            => Invoicing::present(Invoicing::ofSale($sale->id)),
             'refunded'           => Refunds::total($sale->id),
         ];

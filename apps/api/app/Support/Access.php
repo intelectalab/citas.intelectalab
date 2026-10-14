@@ -88,6 +88,11 @@ class Access
             'edit'   => 'Cambiar salas y equipos, o ponerlos fuera de uso',
             'delete' => 'Eliminar salas y equipos',
         ]],
+        'pos' => ['label' => 'Punto de venta', 'module' => 'pos', 'actions' => [
+            'view'   => 'Abrir el punto de venta y ver lo que falta cobrar',
+            'create' => 'Armar ventas en el carrito con citas, servicios y productos, y dejarlas por cobrar',
+            'edit'   => 'Cambiar una venta que se dejó por cobrar, mientras no tenga pagos',
+        ]],
         'sales' => ['label' => 'Ventas y pagos', 'module' => 'pos', 'actions' => [
             'view'   => 'Ver las ventas y los pagos',
             'create' => 'Cobrar y emitir el comprobante',
@@ -103,6 +108,12 @@ class Access
             'create' => 'Crear cupones',
             'edit'   => 'Cambiar cupones',
             'delete' => 'Eliminar cupones',
+        ]],
+        'products' => ['label' => 'Productos', 'module' => 'pos', 'actions' => [
+            'view'   => 'Ver los productos',
+            'create' => 'Registrar productos y sus categorías',
+            'edit'   => 'Cambiar productos y sus precios',
+            'delete' => 'Eliminar productos',
         ]],
         'branches' => ['label' => 'Sucursales', 'module' => null, 'actions' => [
             'view'   => 'Ver las sucursales',
@@ -143,6 +154,7 @@ class Access
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'rooms' => self::EVERYTHING,
+                'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING,
                 'sales' => self::EVERYTHING, 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
                 'branches' => ['view'],
                 'users' => ['view', 'create', 'edit'],
@@ -157,6 +169,7 @@ class Access
                 'blocks' => ['view'], 'holidays' => ['view'],
                 'customers' => ['view', 'create', 'edit'],
                 'services' => ['view'], 'professionals' => ['view'], 'rooms' => ['view'],
+                'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
                 'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
             ],
         ],
@@ -166,6 +179,7 @@ class Access
             'scope' => 'branch',
             'permissions' => [
                 'agenda' => ['view'], 'customers' => ['view'],
+                'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
                 'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
             ],
         ],

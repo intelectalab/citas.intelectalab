@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Ban, Banknote, CreditCard, Landmark, Printer, Receipt, RotateCcw, Smartphone, TicketPercent, Wallet } from 'lucide-react';
+import { Ban, Banknote, CreditCard, Landmark, Printer, Receipt, RotateCcw, Smartphone, TicketPercent, Wallet, ShoppingCart } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -99,7 +99,9 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
   };
 
   const refunded = sale?.refunded ?? 0;
-  const canCharge = can('sales.create') && Boolean(sale?.appointment && (sale.status === 'pending' || sale.status === 'partial'));
+  const canCharge = can('sales.create') && Boolean(sale && (sale.status === 'pending' || sale.status === 'partial'));
+  const canEdit = can('pos.view') && Boolean(sale?.can_edit);
+  const codes = (sale?.appointments?.length ? sale.appointments : sale?.appointment ? [sale.appointment] : []).map((a) => a.code).filter(Boolean);
   const cashClosed = Boolean(sale && action === 'refund' && method === 'cash' && sale.cash_sessions.length === 0);
 
   return (
@@ -119,7 +121,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
               <span className="block text-3xl font-black text-[#022340] tabular-nums">{money(sale.total, sale?.currency)}</span>
               <span className="block text-sm text-slate-600 mt-1">
                 {sale.customer ? <CustomerLink id={sale.customer.id} className="font-semibold text-slate-800">{sale.customer.name}</CustomerLink> : 'Sin cliente'}
-                {sale.appointment?.code ? ` · cita ${sale.appointment.code}` : ''}
+                {codes.length ? ` · ${codes.length === 1 ? 'cita' : 'citas'} ${codes.join(', ')}` : ''}
               </span>
             </div>
             <span data-sale-status={sale.status} className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${SALE_BADGES[sale.status]}`}>{sale.status_label}</span>
@@ -132,12 +134,17 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
           {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
           {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
 
-          {(canCharge || sale.can_manage) && (
+          {(canCharge || canEdit || sale.can_manage) && (
             <section className="flex flex-wrap gap-2" data-actions>
               {canCharge && (
                 <button type="button" data-action="charge" onClick={() => setCharging(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors">
                   <Wallet size={15} /> Cobrar {money(sale.balance, sale?.currency)}
                 </button>
+              )}
+              {canEdit && (
+                <Link href={`/pos?venta=${sale.id}`} data-action="edit-in-pos" className={ghostButton}>
+                  <ShoppingCart size={15} /> Cambiar en el punto de venta
+                </Link>
               )}
               {sale.invoice && (
                 <Link href={`/print/sales/${sale.id}`} target="_blank" data-action="print" className={ghostButton}>
@@ -160,7 +167,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
           {action === 'void' && (
             <form onSubmit={submit} className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-3" data-form="void">
               <p className="text-sm text-rose-800">
-                La venta queda sin efecto{sale.appointment ? ' y la cita vuelve a estar por cobrar' : ''}{sale.coupon ? `. El cupón ${sale.coupon.code} recupera su uso` : ''}. No se borra: queda en la lista como anulada.
+                La venta queda sin efecto{codes.length ? (codes.length === 1 ? ' y la cita vuelve a estar por cobrar' : ' y sus citas vuelven a estar por cobrar') : ''}{sale.coupon ? `. El cupón ${sale.coupon.code} recupera su uso` : ''}. No se borra: queda en la lista como anulada.
               </p>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-rose-700 mb-1.5" htmlFor="void-reason">Motivo *</label>
@@ -323,8 +330,8 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
       )}
 
       <ChargePanel
-        appointmentId={charging && sale?.appointment ? sale.appointment.id : null}
-        appointmentCode={sale?.appointment?.code ?? undefined}
+        appointmentId={null}
+        saleId={charging && sale ? sale.id : null}
         onClose={() => { setCharging(false); if (saleId) load(saleId); }}
         onChanged={() => onChanged?.()}
       />

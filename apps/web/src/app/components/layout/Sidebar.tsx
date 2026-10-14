@@ -29,6 +29,7 @@ import {
   ClipboardList,
   ShoppingCart,
   Package,
+  PackageOpen,
   Gift,
   Boxes,
   BadgeCheck,
@@ -130,11 +131,12 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     items: [
       { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm', requireAdmin: true },
       { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes', requireAdmin: true },
-      { name: 'Punto de venta', href: '/modules/pos', icon: ShoppingCart, module: 'pos', requireAdmin: true },
+      { name: 'Punto de venta', href: '/pos', icon: ShoppingCart, module: 'pos', perm: 'pos.view' },
       { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', perm: 'sales.view' },
       { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', perm: 'sales.view' },
       { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', perm: 'cash.view' },
       { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
+      { name: 'Productos', href: '/products', icon: PackageOpen, module: 'pos', perm: 'products.view' },
       { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory', requireAdmin: true },
     ]
   },

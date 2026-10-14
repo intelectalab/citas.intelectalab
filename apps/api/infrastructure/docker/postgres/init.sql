@@ -545,9 +545,11 @@ CREATE TABLE sale_items (
     discount numeric(14,2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
     total numeric(14,2) NOT NULL CHECK (total >= 0),
     professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
-    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
+    position integer NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_sale_items_sale ON sale_items(tenant_id, sale_id);
+CREATE INDEX idx_sale_items_appointment ON sale_items(appointment_id) WHERE appointment_id IS NOT NULL;
 
 CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

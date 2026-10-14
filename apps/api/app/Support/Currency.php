@@ -172,7 +172,7 @@ class Currency
         $excluded = array_values(array_intersect($inRange, $withInvoice));
         $sales = array_values(array_diff($inRange, $withInvoice));
 
-        $lockedAppointments = DB::table('sales')->whereIn('id', $withInvoice)->whereNotNull('appointment_id')->pluck('appointment_id')->all();
+        $lockedAppointments = DB::table('sale_items')->whereIn('sale_id', $withInvoice)->whereNotNull('appointment_id')->pluck('appointment_id')->all();
         $appointments = $between(DB::table('appointments')->where('tenant_id', $tenant->id)->where('currency', $from), 'starts_at')
             ->whereNotIn('id', $lockedAppointments)->pluck('id')->all();
 

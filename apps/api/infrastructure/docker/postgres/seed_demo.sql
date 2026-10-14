@@ -1130,4 +1130,52 @@ CROSS JOIN (VALUES
   ('ANIVERSARIO', 'Campaña de aniversario: 15 %', 'percent', 15, 0, 100, -60, -5)
 ) AS c(code, description, discount_type, discount_value, min_purchase, max_uses, from_days, to_days);
 
+INSERT INTO product_categories (tenant_id, name)
+SELECT id, 'Venta al público' FROM tenants WHERE slug IN ('barberia-don-filo', 'bella-aura', 'bioanalisis', 'centro-medico-integral', 'clinica-dentalplus', 'estetica-lumina', 'estudio-prana', 'fisioterapia-vital', 'mente-sana', 'policlinico-sanjudas', 'veterinaria-huellitas')
+ON CONFLICT (tenant_id, name) DO NOTHING;
+
+INSERT INTO products (tenant_id, category_id, unit_id, sku, name, kind, cost, price, track_stock)
+SELECT t.id, pc.id, '60eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', p.sku, p.name, 'retail', p.cost, p.price, false
+FROM (VALUES
+  ('centro-medico-integral', 'VTA-0002', 'Termómetro digital', 25.00, 14.00),
+  ('centro-medico-integral', 'VTA-0003', 'Alcohol en gel 250 ml', 8.50, 4.20),
+  ('centro-medico-integral', 'VTA-0004', 'Mascarillas KN95 (caja de 10)', 18.00, 9.00),
+  ('clinica-dentalplus', 'VTA-0001', 'Cepillo dental suave', 9.90, 4.50),
+  ('clinica-dentalplus', 'VTA-0002', 'Pasta dental para sensibilidad', 16.50, 9.00),
+  ('clinica-dentalplus', 'VTA-0003', 'Hilo dental 50 m', 12.00, 5.50),
+  ('clinica-dentalplus', 'VTA-0004', 'Enjuague bucal 500 ml', 22.00, 11.00),
+  ('mente-sana', 'VTA-0001', 'Cuaderno de registro emocional', 18.00, 8.00),
+  ('mente-sana', 'VTA-0002', 'Libro: Ansiedad, guía práctica', 45.00, 28.00),
+  ('fisioterapia-vital', 'VTA-0001', 'Gel frío analgésico', 32.00, 16.00),
+  ('fisioterapia-vital', 'VTA-0002', 'Banda elástica de resistencia', 25.00, 11.00),
+  ('fisioterapia-vital', 'VTA-0003', 'Rodillera ortopédica', 59.00, 30.00),
+  ('fisioterapia-vital', 'VTA-0004', 'Cinta kinesiológica', 35.00, 17.00),
+  ('bioanalisis', 'VTA-0001', 'Frasco recolector de orina', 2.50, 0.80),
+  ('bioanalisis', 'VTA-0002', 'Kit para muestra de heces', 4.00, 1.50),
+  ('policlinico-sanjudas', 'VTA-0001', 'Alcohol en gel 250 ml', 8.50, 4.20),
+  ('policlinico-sanjudas', 'VTA-0002', 'Termómetro digital', 25.00, 14.00),
+  ('bella-aura', 'VTA-0001', 'Shampoo reparador 400 ml', 45.00, 22.00),
+  ('bella-aura', 'VTA-0002', 'Acondicionador hidratante 400 ml', 42.00, 20.00),
+  ('bella-aura', 'VTA-0003', 'Tratamiento capilar con keratina', 69.00, 35.00),
+  ('bella-aura', 'VTA-0004', 'Esmalte de uñas', 15.00, 6.00),
+  ('barberia-don-filo', 'VTA-0001', 'Cera para peinar', 35.00, 15.00),
+  ('barberia-don-filo', 'VTA-0002', 'Aceite para barba', 39.00, 17.00),
+  ('barberia-don-filo', 'VTA-0003', 'Shampoo para barba', 32.00, 14.00),
+  ('barberia-don-filo', 'VTA-0004', 'Peine de madera', 18.00, 6.00),
+  ('estetica-lumina', 'VTA-0001', 'Crema hidratante facial', 89.00, 42.00),
+  ('estetica-lumina', 'VTA-0002', 'Sérum de vitamina C', 120.00, 58.00),
+  ('estetica-lumina', 'VTA-0003', 'Protector solar FPS 50', 65.00, 33.00),
+  ('estudio-prana', 'VTA-0001', 'Mat de yoga', 120.00, 60.00),
+  ('estudio-prana', 'VTA-0002', 'Botella de agua', 35.00, 14.00),
+  ('estudio-prana', 'VTA-0003', 'Bloque de yoga', 40.00, 18.00),
+  ('estudio-prana', 'VTA-0004', 'Medias antideslizantes', 25.00, 10.00),
+  ('veterinaria-huellitas', 'VTA-0001', 'Alimento para perro adulto 3 kg', 75.00, 52.00),
+  ('veterinaria-huellitas', 'VTA-0002', 'Antipulgas en pipeta', 45.00, 24.00),
+  ('veterinaria-huellitas', 'VTA-0003', 'Collar ajustable', 25.00, 10.00),
+  ('veterinaria-huellitas', 'VTA-0004', 'Snacks dentales', 19.00, 9.00)
+) AS p(slug, sku, name, price, cost)
+JOIN tenants t ON t.slug = p.slug
+JOIN product_categories pc ON pc.tenant_id = t.id AND pc.name = 'Venta al público'
+ON CONFLICT (tenant_id, sku) DO NOTHING;
+
 COMMIT;

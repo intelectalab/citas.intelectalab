@@ -16,7 +16,7 @@ use App\Support\Currency;
 
 class SaleController extends AppointmentController
 {
-    private function assertReady(): void
+    protected function assertReady(): void
     {
         abort_unless(Sales::ready(), 503, Sales::NOT_READY);
     }
@@ -45,23 +45,29 @@ class SaleController extends AppointmentController
 
     private function payload(Tenant $tenant, Appointment $appointment, ?string $couponCode = null): array
     {
-        $rules = Sales::rules($tenant);
         $sale = Sales::ofAppointment($tenant->id, $appointment->id);
-        $applied = !$sale && $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price) : null;
-        $customer = $appointment->customer;
+        $applied = !$sale && $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price, Currency::of($tenant)) : null;
+
+        return $this->chargeContext($tenant, $sale, $appointment->branch_id, $appointment->customer, $appointment->service?->name, (float) $appointment->price, $applied, $sale ? null : $this->blocked($tenant, $appointment));
+    }
+
+    protected function chargeContext(Tenant $tenant, ?object $sale, string $branchId, ?object $customer, ?string $item, float $gross, ?array $applied, ?string $blocked): array
+    {
+        $rules = Sales::rules($tenant);
         $company = DB::table('companies')->where('tenant_id', $tenant->id)->orderBy('created_at')->first();
+        $currency = $sale->currency ?? Currency::of($tenant);
 
         return [
             'sale'             => $sale ? Sales::present($sale) : null,
-            'preview'          => Sales::totals($rules, (float) $appointment->price, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax'], 'currency' => $sale->currency ?? Currency::of($tenant)],
-            'coupon'           => $applied ? Coupons::summary($applied['coupon'], $applied['discount']) : null,
-            'blocked'          => $sale ? null : $this->blocked($tenant, $appointment),
-            'item'             => $appointment->service?->name,
+            'preview'          => Sales::totals($rules, $gross, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax'], 'currency' => $currency],
+            'coupon'           => $applied ? Coupons::summary($applied['coupon'], $applied['discount'], $currency) : null,
+            'blocked'          => $blocked,
+            'item'             => $item,
             'methods'          => collect(Sales::METHODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label, 'needs_reference' => in_array($key, Sales::NEEDS_REFERENCE, true)])->values(),
             'partial_payments' => $rules['partial_payments'],
             'cash'             => [
                 'required' => $rules['require_open_cash'],
-                'sessions' => Cash::openSessions($tenant->id, $appointment->branch_id)->map(fn ($s) => ['id' => $s->id, 'register_name' => $s->register_name])->values(),
+                'sessions' => Cash::openSessions($tenant->id, $branchId)->map(fn ($s) => ['id' => $s->id, 'register_name' => $s->register_name])->values(),
             ],
             'doc_types'        => collect(Invoicing::types($tenant))->map(fn ($type) => ['value' => $type, 'label' => Invoicing::LABELS[$type]])->values(),
             'default_doc_type' => Invoicing::defaultType($tenant),
