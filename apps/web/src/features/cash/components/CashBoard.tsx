@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, Edit2, Eye, Lock, Plus, Unlock, Wallet } from 'lucide-react';
@@ -130,14 +132,13 @@ export default function CashBoard() {
     {
       header: 'Resultado',
       cell: (session) => (
-        <span
+        <Badge
           key={`result-${session.id}`}
           data-result={squared(session) ? 'squared' : 'difference'}
-          title={session.closing_notes ?? undefined}
-          className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${squared(session) ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}
+          title={session.closing_notes ?? undefined} tone={squared(session) ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} nowrap
         >
           {squared(session) ? 'Cuadró' : `${(session.difference ?? 0) < 0 ? 'Faltaron' : 'Sobraron'} ${money(Math.abs(session.difference ?? 0), session?.currency)}`}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -170,7 +171,7 @@ export default function CashBoard() {
         )}
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" data-registers>
         {registers.map((register) => {
@@ -195,9 +196,9 @@ export default function CashBoard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className={`px-2.5 py-1 text-xs rounded-full font-semibold ${session ? 'bg-emerald-400/20 text-emerald-200' : inactive ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-600'}`}>
+                  <Badge tone={session ? 'bg-emerald-400/20 text-emerald-200' : inactive ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-600'} bold>
                     {session ? 'Abierta' : inactive ? 'Fuera de uso' : 'Cerrada'}
-                  </span>
+                  </Badge>
                   {canManage && !session && (
                     <button type="button" title={`Editar ${register.name}`} data-edit-register={register.id} onClick={() => { setEditing(register); setRegisterOpen(true); }} className={iconButton}>
                       <Edit2 size={15} />

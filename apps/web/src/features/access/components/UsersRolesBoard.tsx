@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -223,9 +225,9 @@ export default function UsersRolesBoard() {
     {
       header: 'Estado',
       cell: (user) => (
-        <span key={`status-${user.id}`} data-status={user.status} className={`px-2.5 py-1 text-xs rounded-full font-medium ${user.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+        <Badge key={`status-${user.id}`} data-status={user.status} tone={user.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}>
           {user.status === 'active' ? 'Activo' : 'Desactivado'}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -285,9 +287,9 @@ export default function UsersRolesBoard() {
     {
       header: 'Tipo',
       cell: (role) => (
-        <span key={`kind-${role.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${role.is_system ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'}`}>
+        <Badge key={`kind-${role.id}`} tone={role.is_system ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'} nowrap>
           {role.is_system ? 'De fábrica' : 'Propio'}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -336,8 +338,8 @@ export default function UsersRolesBoard() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       {tab === 'users' ? (
         <DataTable<StaffUser>

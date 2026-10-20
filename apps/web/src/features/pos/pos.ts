@@ -1,7 +1,9 @@
+import { MONTHS_SHORT as MONTHS } from '@/lib/dates';
 import type { AppliedCoupon } from '@/features/sales/sales';
 import type { PickedCustomer } from '@/features/customers/components/CustomerPicker';
+import type { PackagePlan, ScheduleDetails } from '@/features/packages/packages';
 
-export type CartItemType = 'appointment' | 'service' | 'product';
+export type CartItemType = 'appointment' | 'service' | 'product' | 'package';
 
 export interface CartItem {
   type: CartItemType;
@@ -10,6 +12,7 @@ export interface CartItem {
   professional_id?: string | null;
   label: string;
   unit_price: number;
+  details?: ScheduleDetails | null;
 }
 
 export interface Cart {
@@ -73,10 +76,12 @@ export interface PosBoard {
   currency: string;
   tax: { rate: number; included: boolean };
   products_ready: boolean;
-  can: { create: boolean; edit: boolean; charge: boolean; walk_in: boolean; products: boolean };
+  can: { create: boolean; edit: boolean; charge: boolean; walk_in: boolean; products: boolean; packages?: boolean };
+  packages_enabled?: boolean;
   pending: { appointments: PendingAppointment[]; sales: PendingSale[] };
   services: PosService[];
   products: PosProduct[];
+  packages?: PackagePlan[];
   professionals: { id: string; display_name: string }[];
 }
 
@@ -89,6 +94,8 @@ export interface PreviewLine {
   total: number;
   professional: { id: string; name: string } | null;
   appointment: { code: string; starts_at: string; status: string } | null;
+  details?: ScheduleDetails | null;
+  package?: { sessions: number; booking_mode: 'free' | 'scheduled'; schedule_label: string; scheduled: number } | null;
 }
 
 export interface CartPreview {
@@ -107,7 +114,7 @@ export interface LoadedCart {
   customer: PickedCustomer | null;
   coupon_code: string | null;
   edit_blocked: string | null;
-  items: { type: CartItemType; id: string; quantity: number; professional_id: string | null }[];
+  items: { type: CartItemType; id: string; quantity: number; professional_id: string | null; details?: ScheduleDetails | null }[];
 }
 
 export interface WalkInOptions {
@@ -121,7 +128,6 @@ export interface WalkInOptions {
 export const emptyCart = (): Cart => ({ saleId: null, code: null, editBlocked: null, customer: null, coupon: '', items: [] });
 
 const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
 
 export const whenOf = (local: string, today: boolean): string => {
   const [date, time] = local.split('T');

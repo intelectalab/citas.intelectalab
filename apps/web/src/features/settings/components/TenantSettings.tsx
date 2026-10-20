@@ -1,5 +1,8 @@
 'use client';
 
+import OptionCard from '@/app/components/common/OptionCard';
+import Button from '@/app/components/common/Button';
+import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useState } from 'react';
 import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -7,6 +10,7 @@ import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
 import CurrencySettings from './CurrencySettings';
 import IntegrationsSettings from './IntegrationsSettings';
+import MessagingSettings from './MessagingSettings';
 import { currencySymbol } from '@/lib/currency';
 
 interface SettingsModule {
@@ -247,9 +251,9 @@ export default function TenantSettings() {
       </div>
 
       <section className={cardClass}>
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+        <SectionTitle>
           <Building2 className="w-4 h-4 text-[#3F768C]" /> Empresa
-        </h2>
+        </SectionTitle>
         <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {[
             ['Nombre', data.tenant.name],
@@ -270,9 +274,9 @@ export default function TenantSettings() {
 
       <section className={cardClass}>
         <div>
-          <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+          <SectionTitle>
             <Puzzle className="w-4 h-4 text-[#3F768C]" /> Módulos
-          </h2>
+          </SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Puedes apagar los módulos que no uses y volver a encenderlos cuando quieras. Al apagar uno deja de verse en el menú de todo tu equipo.
           </p>
@@ -318,9 +322,9 @@ export default function TenantSettings() {
 
       <section className={cardClass}>
         <div>
-          <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+          <SectionTitle>
             <Type className="w-4 h-4 text-[#3F768C]" /> Vocabulario
-          </h2>
+          </SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Cómo se nombra a tus clientes y a tu equipo en el menú y en las pantallas. Deja un campo vacío para usar el término de tu rubro.
           </p>
@@ -345,9 +349,9 @@ export default function TenantSettings() {
       {(data.appointment_statuses?.length ?? 0) > 0 && (
         <section className={cardClass}>
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+            <SectionTitle>
               <CalendarCheck className="w-4 h-4 text-[#3F768C]" /> Fases de la cita
-            </h2>
+            </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Las fases por las que pasa una cita son fijas. Puedes cambiar el nombre con que las ve tu equipo; deja un campo vacío para usar el nombre de siempre.
             </p>
@@ -376,9 +380,9 @@ export default function TenantSettings() {
       {bookingRules && (
         <section className={cardClass} data-card="booking-rules">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+            <SectionTitle>
               <ClipboardCheck className="w-4 h-4 text-[#3F768C]" /> Reglas de reserva
-            </h2>
+            </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Cuánto tiempo tienen tus clientes para confirmar y para cancelar, y qué hace el sistema con una cita que nadie confirmó.
             </p>
@@ -413,23 +417,20 @@ export default function TenantSettings() {
                     {ON_MISS_OPTIONS.map((option) => {
                       const chosen = bookingRules.onMiss === option.id;
                       return (
-                        <button
+                        <OptionCard
                           key={option.id}
                           type="button"
                           role="radio"
                           aria-checked={chosen}
                           data-on-miss={option.id}
-                          onClick={() => { setMessage(null); setBookingRules({ ...bookingRules, onMiss: option.id }); }}
-                          className={`flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
-                            chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'
-                          }`}
+                          onClick={() => { setMessage(null); setBookingRules({ ...bookingRules, onMiss: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                         >
                           <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                           <span>
                             <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
                             <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
                           </span>
-                        </button>
+                        </OptionCard>
                       );
                     })}
                   </div>
@@ -473,9 +474,9 @@ export default function TenantSettings() {
       {equipmentDown && (
         <section className={cardClass} data-card="resources-rules">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+            <SectionTitle>
               <DoorOpen className="w-4 h-4 text-[#3F768C]" /> Salas y equipos
-            </h2>
+            </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Qué pasa con una sala cuando un equipo instalado en ella queda fuera de uso. La sala de cada equipo se indica al registrarlo.
             </p>
@@ -484,23 +485,20 @@ export default function TenantSettings() {
             {EQUIPMENT_DOWN_OPTIONS.map((option) => {
               const chosen = equipmentDown === option.id;
               return (
-                <button
+                <OptionCard
                   key={option.id}
                   type="button"
                   role="radio"
                   aria-checked={chosen}
                   data-equipment-down={option.id}
-                  onClick={() => { setMessage(null); setEquipmentDown(option.id); }}
-                  className={`flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
-                    chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'
-                  }`}
+                  onClick={() => { setMessage(null); setEquipmentDown(option.id); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                 >
                   <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
                     <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
                   </span>
-                </button>
+                </OptionCard>
               );
             })}
           </div>
@@ -512,9 +510,9 @@ export default function TenantSettings() {
       {salesRules && (
         <section className={cardClass} data-card="sales-rules">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+            <SectionTitle>
               <Wallet className="w-4 h-4 text-[#3F768C]" /> Ventas y caja
-            </h2>
+            </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Cómo se calcula el impuesto al cobrar y cómo se maneja el efectivo. Lo que cambies rige para las ventas nuevas; las ya creadas conservan su cálculo.
             </p>
@@ -601,9 +599,9 @@ export default function TenantSettings() {
       {paymentRules && (
         <section className={cardClass} data-card="payment-rules">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+            <SectionTitle>
               <Link2 className="w-4 h-4 text-[#3F768C]" /> Adelantos y links de pago
-            </h2>
+            </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Cuánto dura un link de pago y qué pasa con el adelanto de quien reserva en línea. Cuánto es el adelanto se elige en cada servicio.
             </p>
@@ -654,12 +652,14 @@ export default function TenantSettings() {
 
       {paymentRules && <IntegrationsSettings canSave={canSave} />}
 
+      <MessagingSettings canSave={canSave} company={user?.tenant?.name ?? ''} />
+
       {misses && (
         <section className={cardClass} data-card="booking-misses">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+            <SectionTitle>
               <CalendarX2 className="w-4 h-4 text-[#3F768C]" /> Si reserva en línea y no asiste
-            </h2>
+            </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Qué pasa con un cliente que reservó desde el portal y su cita terminó en "No asistió". Las citas que agenda tu equipo no cuentan aquí.
             </p>
@@ -669,23 +669,20 @@ export default function TenantSettings() {
             {MISS_OPTIONS.map((option) => {
               const chosen = misses.action === option.id;
               return (
-                <button
+                <OptionCard
                   key={option.id}
                   type="button"
                   role="radio"
                   aria-checked={chosen}
                   data-miss-action={option.id}
-                  onClick={() => { setMessage(null); setMisses({ ...misses, action: option.id }); }}
-                  className={`flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
-                    chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'
-                  }`}
+                  onClick={() => { setMessage(null); setMisses({ ...misses, action: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                 >
                   <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
                     <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
                   </span>
-                </button>
+                </OptionCard>
               );
             })}
           </div>
@@ -711,15 +708,14 @@ export default function TenantSettings() {
         {message && (
           <span className={`text-sm font-medium ${message.type === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{message.text}</span>
         )}
-        <button
+        <Button
           type="button"
           onClick={handleSave}
           disabled={saving || !canSave}
-          title={canSave ? undefined : 'Tu cuenta puede ver la configuración, pero no cambiarla.'}
-          className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+          title={canSave ? undefined : 'Tu cuenta puede ver la configuración, pero no cambiarla.'} variant="primary"
         >
           {saving ? 'Guardando...' : 'Guardar cambios'}
-        </button>
+        </Button>
       </div>
     </div>
   );

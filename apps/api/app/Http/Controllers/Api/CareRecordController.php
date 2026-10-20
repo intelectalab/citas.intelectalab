@@ -144,7 +144,7 @@ class CareRecordController extends Controller
             'pro'     => $tenant->vocabulary()['pro'],
             'dependentLabel' => $tenant->vocabulary()['dependent'],
             'printedAt' => now($this->timezone($tenant))->format('d/m/Y H:i'),
-            'printedBy' => trim("{$user->first_name} {$user->last_name}"),
+            'printedBy' => \App\Support\Person::name($user),
         ])->render();
 
         $options = new Options();
@@ -273,7 +273,7 @@ class CareRecordController extends Controller
                 'code'         => $appointment->code,
                 'status'       => $appointment->status,
                 'starts_at'    => $appointment->starts_at->copy()->setTimezone($this->timezone($tenant))->format(self::LOCAL_FORMAT),
-                'customer'     => $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : null,
+                'customer'     => $appointment->customer ? \App\Support\Person::name($appointment->customer) : null,
                 'dependent'    => $appointment->dependent?->name,
                 'service'      => $appointment->service?->name,
                 'professional' => $appointment->professional?->display_name,
@@ -525,7 +525,7 @@ class CareRecordController extends Controller
             ->orderBy('created_at')
             ->get()
             ->map(fn (AuditEvent $event) => [
-                'by'     => $event->actor ? trim("{$event->actor->first_name} {$event->actor->last_name}") : null,
+                'by'     => $event->actor ? \App\Support\Person::name($event->actor) : null,
                 'at'     => $local($event->created_at),
                 'reason' => $event->after_data['reason'] ?? null,
             ])
@@ -534,7 +534,7 @@ class CareRecordController extends Controller
 
     private function timezone(Tenant $tenant): string
     {
-        return $tenant->timezone ?: 'America/Lima';
+        return $tenant->zone();
     }
 
     private function present(CareRecord $record, Tenant $tenant, User $user): array
@@ -559,7 +559,7 @@ class CareRecordController extends Controller
             'created_at'     => $local($record->created_at),
             'signed_at'      => $local($record->signed_at),
             'locked_at'      => $local($record->locked_at),
-            'author'         => $record->author ? trim("{$record->author->first_name} {$record->author->last_name}") : null,
+            'author'         => $record->author ? \App\Support\Person::name($record->author) : null,
             'professional_id' => $record->professional_id,
             'appointment_id' => $record->appointment_id,
             'appointment'    => $record->appointment ? [
@@ -567,7 +567,7 @@ class CareRecordController extends Controller
                 'starts_at' => $local($record->appointment->starts_at),
                 'service'   => $record->appointment->service?->name,
             ] : null,
-            'customer'       => $customer ? ['id' => $customer->id, 'code' => $customer->code, 'name' => trim("{$customer->first_name} {$customer->last_name}")] : null,
+            'customer'       => $customer ? ['id' => $customer->id, 'code' => $customer->code, 'name' => \App\Support\Person::name($customer)] : null,
             'dependent'      => $record->dependent ? ['id' => $record->dependent->id, 'name' => $record->dependent->name] : null,
             'professional'   => $record->professional?->display_name,
             'consent_accepted' => $record->consent_accepted,
@@ -577,7 +577,7 @@ class CareRecordController extends Controller
             'data'           => $readable ? (object) ($record->data ?? []) : (object) [],
             'addenda'        => $readable ? $record->addenda->map(fn (CareRecordAddendum $note) => [
                 'note' => $note->note,
-                'by'   => $note->author ? trim("{$note->author->first_name} {$note->author->last_name}") : null,
+                'by'   => $note->author ? \App\Support\Person::name($note->author) : null,
                 'at'   => $local($note->created_at),
             ]) : [],
         ];

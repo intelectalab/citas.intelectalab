@@ -1,9 +1,10 @@
 'use client';
 
+import BackLink from '@/app/components/common/BackLink';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Ban, Check, Loader2, Lock, Pencil, RotateCcw, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Ban, Check, Loader2, Lock, Pencil, RotateCcw, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { PagedList } from '@/app/components/common/Pager';
@@ -134,9 +135,7 @@ export default function RoleDetail() {
   }
 
   const backLink = (
-    <Link href="/users" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
-      <ArrowLeft size={18} /> Usuarios y roles
-    </Link>
+    <BackLink href="/users">Usuarios y roles</BackLink>
   );
 
   if (!detail) {
@@ -176,8 +175,8 @@ export default function RoleDetail() {
     <div className="space-y-5 pb-8 font-sans">
       {backLink}
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className={`${card} overflow-hidden`} data-card="role">

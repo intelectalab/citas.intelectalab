@@ -151,7 +151,7 @@ class Currency
 
     private static function range(Tenant $tenant, ?string $startsOn, ?string $endsOn): array
     {
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $timezone = $tenant->zone();
 
         return [
             $startsOn ? Carbon::parse($startsOn, $timezone)->startOfDay()->toIso8601String() : null,

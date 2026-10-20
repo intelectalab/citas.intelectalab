@@ -1,5 +1,9 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { CalendarPlus, Clock } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -32,7 +36,6 @@ interface WalkInPanelProps {
   onBooked: (booked: BookedWalkIn) => void;
 }
 
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 const chip = (active: boolean, strong = false) =>
   `px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors tabular-nums ${
@@ -151,9 +154,9 @@ export default function WalkInPanel({ isOpen, onClose, branchId, services, custo
                       <li key={pro.id} data-walk-in-pro={pro.display_name} className={`rounded-xl border px-4 py-3 space-y-2.5 ${choice?.professionalId === pro.id ? 'border-[#022340] ring-2 ring-[#022340]/10' : 'border-slate-200'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <ProfessionalLink id={pro.id} className="text-sm font-bold text-[#022340]">{pro.display_name}</ProfessionalLink>
-                          <span className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${pro.free_now ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          <Badge tone={pro.free_now ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} bold className="shrink-0">
                             {pro.free_now ? 'Libre ahora' : 'Ahora no'}
-                          </span>
+                          </Badge>
                         </div>
                         {!pro.free_now && pro.now_reason && <p className="text-xs text-slate-500">{pro.now_reason}</p>}
                         <div className="flex flex-wrap gap-2">
@@ -184,16 +187,16 @@ export default function WalkInPanel({ isOpen, onClose, branchId, services, custo
             </p>
           )}
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+          <Button type="button" onClick={onClose} variant="secondary">
             Cancelar
-          </button>
-          <button type="button" data-walk-in-submit disabled={saving || !person || !service || !choice} onClick={submit} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+          </Button>
+          <Button type="button" data-walk-in-submit disabled={saving || !person || !service || !choice} onClick={submit} variant="primary">
             {saving ? 'Agendando...' : 'Agendar y pasar al carrito'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

@@ -157,6 +157,7 @@ class CustomerController extends Controller
         return response()->json([
             'customer' => $customer->load($this->relations($request)),
             'can_forgive_booking' => $request->user()->allows('customers.forgive') && \App\Support\OnlineBooking::canForgive(),
+            'consents' => \App\Support\Messaging::ready() ? MessageController::consentsOf($customer->id) : null,
         ]);
     }
 
@@ -213,12 +214,17 @@ class CustomerController extends Controller
         $customer = $this->findForTenant($request, $customer);
         $validated = $request->validate(['enabled' => 'required|boolean']);
 
+        $turnedOn = $validated['enabled'] && $customer->portal_enabled !== true;
         $customer->forceFill(['portal_enabled' => $validated['enabled']])->save();
 
         if (!$validated['enabled']) {
             $customer->tokens()->delete();
         } else {
             $customer->syncPortalPassword();
+
+            if ($turnedOn && $request->user()->tenant) {
+                \App\Support\Messaging::portalAccess($request->user()->tenant, $customer, $request->user());
+            }
         }
 
         return response()->json([
@@ -239,6 +245,10 @@ class CustomerController extends Controller
         }
 
         $customer->tokens()->delete();
+
+        if ($request->user()->tenant) {
+            \App\Support\Messaging::portalAccess($request->user()->tenant, $customer, $request->user());
+        }
 
         return response()->json([
             'message'  => 'Su contraseña volvió a ser su número de documento.',

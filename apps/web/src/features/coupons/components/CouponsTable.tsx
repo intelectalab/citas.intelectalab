@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { BadgeCheck, CalendarX2, Edit2, TicketPercent, Trash2 } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -155,9 +157,9 @@ export default function CouponsTable() {
     {
       header: 'Estado',
       cell: (coupon) => (
-        <span key={`state-${coupon.id}`} data-state={coupon.state} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${STATES[coupon.state].badge}`}>
+        <Badge key={`state-${coupon.id}`} data-state={coupon.state} tone={STATES[coupon.state].badge} nowrap>
           {STATES[coupon.state].label}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -177,8 +179,8 @@ export default function CouponsTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <DataTable<Coupon>
         title="Cupones"

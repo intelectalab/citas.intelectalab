@@ -39,7 +39,7 @@ class AvailabilityBlockController extends Controller
 
     private function timezone(Tenant $tenant): string
     {
-        return $tenant->timezone ?: 'America/Lima';
+        return $tenant->zone();
     }
 
     private function ownProfessionalId(User $user): ?string
@@ -283,9 +283,10 @@ class AvailabilityBlockController extends Controller
                     'status_name'  => AppointmentFlow::name($tenant, $a->status),
                     'starts_at'    => $a->starts_at->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
                     'ends_at'      => $a->ends_at->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
-                    'customer'     => $a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : null,
+                    'customer'     => $a->customer ? \App\Support\Person::name($a->customer) : null,
                     'service'      => $a->service?->name,
                     'professional' => $a->professional?->display_name,
+                    'package'      => \App\Support\Packages::ready() && $a->customer_package_id ? \Illuminate\Support\Facades\DB::table('customer_packages')->where('id', $a->customer_package_id)->value('code') : null,
                 ];
             })
             ->all();

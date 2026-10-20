@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Building2, CalendarClock, CalendarOff, ChevronRight, Edit2, PlayCircle, Trash2, UserRound } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -203,9 +204,9 @@ export default function BlocksTable() {
     {
       header: 'Estado',
       cell: (b) => (
-        <span key={`state-${b.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${STATE_LABELS[b.state].badge}`}>
+        <Badge key={`state-${b.id}`} tone={STATE_LABELS[b.state].badge} nowrap>
           {STATE_LABELS[b.state].label}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -331,14 +332,14 @@ export default function BlocksTable() {
                       >
                         <span>
                           <span className="block text-sm font-semibold text-slate-800">
-                            <span className="font-mono text-[#022340]">{a.code}</span> · {a.customer ?? '—'}
+                            <span className="font-mono text-[#022340]">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#84D0D9]/25 text-[#022340]">Paquete {a.package}</span>}
                           </span>
                           <span className="block text-xs text-slate-500">
                             {formatDateTime(a.starts_at)} · {a.service}{a.professional ? ` · ${a.professional}` : ''}
                           </span>
                         </span>
                         <span className="flex items-center gap-2 shrink-0">
-                          <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>{a.status_name}</span>
+                          <Badge tone={statusStyle(a.status).badge} nowrap>{a.status_name}</Badge>
                           <ChevronRight size={16} className="text-slate-400" />
                         </span>
                       </button>

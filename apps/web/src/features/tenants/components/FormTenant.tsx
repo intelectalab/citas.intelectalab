@@ -1,5 +1,7 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { labelClass } from '@/app/components/ui/forms/styles';
 import { useState, useEffect } from 'react';
 import Select from '@/app/components/common/Select';
 import { Building2 } from 'lucide-react';
@@ -59,7 +61,6 @@ const EMPTY_FORM: TenantFormData = {
   admin_email: '',
 };
 
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800';
 const sectionClass = 'text-[11px] font-bold uppercase tracking-wider text-slate-400 pt-5 mt-2 border-t border-slate-100';
@@ -331,13 +332,12 @@ export default function FormTenant({
           >
             Cancelar
           </button>
-          <button
+          <Button
             type="submit"
-            disabled={loading}
-            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+            disabled={loading} variant="classic"
           >
             {loading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Tenant')}
-          </button>
+          </Button>
         </div>
       </form>
     </FormDrawer>

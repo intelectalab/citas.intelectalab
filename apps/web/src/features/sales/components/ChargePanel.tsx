@@ -1,14 +1,19 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, Banknote, Copy, CreditCard, ExternalLink, FileText, Landmark, Link2, Receipt, RefreshCw, Smartphone, TicketPercent, Wallet, X } from 'lucide-react';
+import { BadgeCheck, Banknote, Boxes, Copy, Mail, CreditCard, ExternalLink, FileText, Landmark, Link2, Receipt, RefreshCw, Smartphone, TicketPercent, Wallet, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
 import { PagedList } from '@/app/components/common/Pager';
 import { apiError } from '@/features/appointments/appointments';
 import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type ChargeContext, type SalePayment } from '../sales';
+import { outcomeOf } from '@/features/messages/messages';
 
 interface ChargePanelProps {
   appointmentId: string | null;
@@ -18,9 +23,6 @@ interface ChargePanelProps {
   onChanged?: (context: ChargeContext) => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 const METHOD_ICONS: Record<string, React.ReactNode> = {
@@ -197,6 +199,22 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
     }
   };
 
+  const emailLink = async () => {
+    if (!pendingLink) return;
+    try {
+      setSaving(true);
+      setError('');
+      setNotice('');
+      const res = await api.post(`/payment-links/${pendingLink.id}/send`);
+      const outcome = outcomeOf(res.data, 'el link de pago');
+      if (outcome.ok) setNotice(outcome.text); else setError(outcome.text);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo enviar el link por correo.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const copyLink = async () => {
     if (!pendingLink) return;
     try {
@@ -222,6 +240,26 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
       setCouponError(apiError(err, 'No se pudo revisar el cupón.'));
     } finally {
       setCheckingCoupon(false);
+    }
+  };
+
+  const applyPackage = async (packageId: string | null) => {
+    if (!appointmentId) return;
+
+    try {
+      setSaving(true);
+      setError('');
+      setNotice('');
+      const res = packageId
+        ? await api.post(`/appointments/${appointmentId}/package`, { customer_package_id: packageId })
+        : await api.delete(`/appointments/${appointmentId}/package`);
+      apply(res.data);
+      setNotice(packageId ? `Listo: esta cita se paga con el paquete ${res.data.package?.current?.code ?? ''}.` : 'La cita ya no usa el paquete: se cobra aparte.');
+      onChanged?.(res.data);
+    } catch (err) {
+      setError(apiError(err, packageId ? 'No se pudo usar el paquete.' : 'No se pudo quitar el paquete.'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -330,9 +368,9 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
           <section className="rounded-2xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-5 py-3 bg-slate-50/80 border-b border-slate-100">
               <span className={sectionTitle}>Lo que se cobra</span>
-              <span data-sale-status={sale?.status ?? 'none'} className={`px-2.5 py-1 text-xs rounded-full font-semibold ${SALE_BADGES[sale?.status ?? 'pending']}`}>
+              <Badge data-sale-status={sale?.status ?? 'none'} tone={SALE_BADGES[sale?.status ?? 'pending']} bold>
                 {sale?.status_label ?? 'Por cobrar'}
-              </span>
+              </Badge>
             </div>
 
             <div className="px-5 py-4 space-y-2 text-sm">
@@ -372,8 +410,53 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
             </div>
           </section>
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-          {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+          {appointmentId && context.package?.current && (
+            <section className="rounded-2xl border border-[#84D0D9] bg-[#84D0D9]/10 px-5 py-4 space-y-2" data-package-current={context.package.current.code}>
+              <span className="flex items-center gap-2 text-sm font-bold text-[#022340]"><Boxes size={16} /> Se paga con el paquete {context.package.current.code}</span>
+              <span className="block text-sm text-slate-700">
+                {context.package.current.name}.{' '}
+                {context.package.current.consumed
+                  ? `Sesión ya descontada: ${context.package.current.usage_label?.toLowerCase()}.`
+                  : 'La sesión se descuenta sola al darla por atendida.'}
+              </span>
+              {!context.package.current.consumed && (
+                <span className="block text-xs text-slate-500">
+                  {context.package.current.late_policy === 'lose' ? 'Si cancela tarde o no llega, la sesión se pierde. Si avisa a tiempo, vuelve al paquete.' : 'Si no llega o cancela, la sesión vuelve al paquete.'}
+                </span>
+              )}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <Link href={`/packages/${context.package.current.id}`} className="text-xs font-bold text-[#3F768C] underline underline-offset-2">Ver el paquete</Link>
+                {!context.package.current.consumed && context.package.can_use && (
+                  <button type="button" data-package-release disabled={saving} onClick={() => applyPackage(null)} className="text-xs font-bold text-slate-600 hover:text-red-600 transition-colors">
+                    Quitar del paquete y cobrar aparte
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+
+          {appointmentId && !context.package?.current && (context.package?.usable.length ?? 0) > 0 && canPay && !(sale && sale.paid > 0) && (
+            <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 space-y-3" data-package-usable>
+              <span className="flex items-center gap-2 text-sm font-bold text-emerald-900"><Boxes size={16} /> {context.customer?.name ?? 'El cliente'} tiene un paquete con sesiones de este servicio</span>
+              {context.package!.usable.map((pkg) => (
+                <div key={pkg.id} className="flex items-center justify-between gap-3 rounded-xl bg-white border border-emerald-100 px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-800">{pkg.name}</span>
+                    <span className="block text-xs text-slate-500">{pkg.code} · quedan {pkg.sessions_available} sin fecha de {pkg.sessions_total} · vence en {pkg.days_left} días</span>
+                  </div>
+                  {context.package!.can_use && (
+                    <button type="button" data-package-use={pkg.code} disabled={saving} onClick={() => applyPackage(pkg.id)} className="shrink-0 px-3.5 py-2 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50">
+                      Usar paquete
+                    </button>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-emerald-800">Si usa el paquete, esta cita no se cobra: la sesión se descuenta al darla por atendida.</p>
+            </section>
+          )}
+
+          <ErrorAlert message={error} />
+          <SuccessAlert message={notice} />
 
           {sale && !canPay && !isPaid && (
             <p data-closed className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -423,6 +506,9 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                         <Link href={new URL(pendingLink.url).pathname} target="_blank" rel="noreferrer" data-link-open className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
                           <ExternalLink size={14} /> Abrir
                         </Link>
+                        <button type="button" data-link-email disabled={saving} onClick={emailLink} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                          <Mail size={14} /> Enviar por correo
+                        </button>
                         <button type="button" data-link-refresh onClick={refreshLink} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
                           <RefreshCw size={14} /> ¿Ya pagó?
                         </button>
@@ -431,7 +517,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                         </button>
                       </div>
                       <p className="text-xs text-slate-500">
-                        Cópialo y envíaselo al cliente por WhatsApp o correo. Cuando pague, la venta pasa a pagada sola y se emite el comprobante.
+                        Envíalo por correo con el botón, o cópialo y mándalo por WhatsApp. Cuando pague, la venta pasa a pagada sola y se emite el comprobante.
                         {pendingLink.simulated ? ' Es un link de prueba: al abrirlo verás botones para simular el pago.' : ''}
                       </p>
                     </div>
@@ -551,12 +637,12 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
               )}
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                <Button type="button" onClick={onClose} variant="secondary">
                   Cerrar
-                </button>
-                {!isLink && <button type="submit" data-pay disabled={saving || cashClosed || amountNumber <= 0} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+                </Button>
+                {!isLink && <Button type="submit" data-pay disabled={saving || cashClosed || amountNumber <= 0} variant="primary">
                   {saving ? 'Registrando...' : `Cobrar ${money(amountNumber, context?.sale?.currency ?? context?.preview.currency)}`}
-                </button>}
+                </Button>}
               </div>
             </form>
           )}
@@ -639,9 +725,9 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
               <p className="text-sm text-amber-800">Esta venta está pagada pero aún no tiene comprobante.</p>
               {docFields}
               <div className="flex justify-end">
-                <button type="button" data-issue disabled={saving} onClick={issueInvoice} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+                <Button type="button" data-issue disabled={saving} onClick={issueInvoice} variant="primary">
                   {saving ? 'Emitiendo...' : 'Emitir comprobante'}
-                </button>
+                </Button>
               </div>
             </section>
           )}

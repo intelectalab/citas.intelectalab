@@ -1,5 +1,9 @@
 'use client';
 
+import OptionCard from '@/app/components/common/OptionCard';
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { Package } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -20,9 +24,6 @@ interface FormProductProps {
   onSaved: () => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 const empty = { name: '', sku: '', price: '', kind: 'retail' as Product['kind'], categoryId: '', active: true };
 
@@ -136,18 +137,17 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
               {(catalog?.kinds ?? []).map((option) => {
                 const chosen = form.kind === option.value;
                 return (
-                  <button
+                  <OptionCard
                     key={option.value}
                     type="button"
                     role="radio"
                     aria-checked={chosen}
                     data-product-kind={option.value}
-                    onClick={() => set({ kind: option.value })}
-                    className={`text-left rounded-xl border px-4 py-2.5 transition-colors ${chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}
+                    onClick={() => set({ kind: option.value })} selected={chosen} className="text-left rounded-xl border px-4 py-2.5 transition-colors"
                   >
                     <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
                     <span className="block text-xs text-slate-500 mt-0.5">{KIND_HINTS[option.value]}</span>
-                  </button>
+                  </OptionCard>
                 );
               })}
             </div>
@@ -184,16 +184,16 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
             El stock (cuántas unidades quedan) llegará con el módulo de Inventario. Por ahora el producto se vende sin descontar unidades.
           </p>
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </form>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+          <Button type="button" onClick={onClose} variant="secondary">
             Cancelar
-          </button>
-          <button type="submit" form={formId} data-submit disabled={saving} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+          </Button>
+          <Button type="submit" form={formId} data-submit disabled={saving} variant="primary">
             {saving ? 'Guardando...' : initialData ? 'Guardar cambios' : 'Crear producto'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

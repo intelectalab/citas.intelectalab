@@ -136,6 +136,10 @@ class Confirmations
             Recalls::appointmentChanged($tenant, $fresh);
             Waitlist::appointmentChanged($tenant, $fresh);
 
+            if (Packages::ready() && $fresh->customer_package_id) {
+                Packages::unlink($tenant, $fresh, null, "La cita {$fresh->code} se liberó porque no se confirmó a tiempo: la sesión vuelve a estar libre.");
+            }
+
             return true;
         });
 

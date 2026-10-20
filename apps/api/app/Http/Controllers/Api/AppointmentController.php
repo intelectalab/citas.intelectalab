@@ -69,7 +69,7 @@ class AppointmentController extends Controller
     public function index(Request $request)
     {
         $tenant = $this->tenant($request);
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $timezone = $tenant->zone();
 
         $validated = $request->validate([
             'date'            => 'nullable|date_format:Y-m-d',
@@ -252,7 +252,7 @@ class AppointmentController extends Controller
     public function metrics(Request $request)
     {
         $tenant = $this->tenant($request);
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $timezone = $tenant->zone();
 
         $validated = $request->validate([
             'from'      => 'nullable|date_format:Y-m-d',
@@ -286,7 +286,7 @@ class AppointmentController extends Controller
             'summary'          => AppointmentTiming::summarize($appointments),
             'by_professional'  => $group('professional_id', fn (Appointment $a) => $a->professional?->display_name ?? '—'),
             'by_service'       => $group('service_id', fn (Appointment $a) => $a->service?->name ?? '—'),
-            'by_customer'      => $group('customer_id', fn (Appointment $a) => $a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : '—')->take(100)->values(),
+            'by_customer'      => $group('customer_id', fn (Appointment $a) => $a->customer ? \App\Support\Person::name($a->customer) : '—')->take(100)->values(),
         ]);
     }
 
@@ -631,27 +631,17 @@ class AppointmentController extends Controller
 
     protected function limitReached(Tenant $tenant, Carbon $start): ?JsonResponse
     {
-        $limit = $tenant->activeSubscription?->plan?->limits['appointments_month'] ?? null;
+        $reached = \App\Support\AppointmentEvents::monthLimit($tenant, $start);
 
-        if (!is_numeric($limit)) {
-            return null;
-        }
-
-        $used = Appointment::where('tenant_id', $tenant->id)
-            ->where('status', '!=', AppointmentFlow::CANCELLED)
-            ->where('starts_at', '>=', $start->copy()->startOfMonth()->toIso8601String())
-            ->where('starts_at', '<', $start->copy()->startOfMonth()->addMonth()->toIso8601String())
-            ->count();
-
-        if ($used < (int) $limit) {
+        if (!$reached) {
             return null;
         }
 
         return response()->json([
-            'message' => "Tu plan permite {$limit} citas por mes y ese mes ya las tiene. Elige otro mes o mejora tu plan.",
+            'message' => "Tu plan permite {$reached['limit']} citas por mes y ese mes ya las tiene. Elige otro mes o mejora tu plan.",
             'code'    => 'PLAN_LIMIT',
-            'limit'   => (int) $limit,
-            'used'    => $used,
+            'limit'   => $reached['limit'],
+            'used'    => $reached['used'],
         ], 422);
     }
 
@@ -741,7 +731,7 @@ class AppointmentController extends Controller
             $timezone = $start->getTimezone();
 
             abort(response()->json([
-                'message' => trim("{$customer->first_name} {$customer->last_name}") . " ya tiene la cita {$other->code} de "
+                'message' => \App\Support\Person::name($customer) . " ya tiene la cita {$other->code} de "
                     . $other->starts_at->copy()->setTimezone($timezone)->format('H:i') . ' a '
                     . $other->ends_at->copy()->setTimezone($timezone)->format('H:i')
                     . " ese día ({$other->service?->name}).",
@@ -772,21 +762,7 @@ class AppointmentController extends Controller
 
     protected function log(Appointment $appointment, ?string $from, string $to, User|Customer $actor, ?string $reason): void
     {
-        AppointmentStatusHistory::create([
-            'tenant_id'      => $appointment->tenant_id,
-            'appointment_id' => $appointment->id,
-            'from_status'    => $from,
-            'to_status'      => $to,
-            'reason'         => $reason ? mb_substr($reason, 0, 255) : null,
-            'actor_user_id'  => $actor instanceof User ? $actor->id : null,
-            'actor_customer_id' => $actor instanceof Customer ? $actor->id : null,
-        ]);
-
-        \App\Support\Notifier::appointmentStep($appointment, $from, $to, $actor);
-
-        if ($tenant = Tenant::find($appointment->tenant_id)) {
-            \App\Support\PaymentLinks::appointmentChanged($tenant->loadMissing('settings'), $appointment, $from, $to);
-        }
+        \App\Support\AppointmentEvents::record($appointment, $from, $to, $actor, $reason);
     }
 
     protected function present(Appointment $appointment, Tenant $tenant, bool $withHistory = false): array
@@ -831,7 +807,7 @@ class AppointmentController extends Controller
             'customer'         => $customer ? [
                 'id'    => $customer->id,
                 'code'  => $customer->code,
-                'name'  => trim("{$customer->first_name} {$customer->last_name}"),
+                'name'  => \App\Support\Person::name($customer),
                 'phone' => $customer->phone,
             ] : null,
             'dependent'        => $dependent ? [
@@ -861,7 +837,7 @@ class AppointmentController extends Controller
                     'to'        => $step->to_status,
                     'to_name'   => AppointmentFlow::name($tenant, $step->to_status),
                     'reason'    => $step->reason,
-                    'by'        => ($who = $step->actor ?? $step->customerActor) ? trim("{$who->first_name} {$who->last_name}") : null,
+                    'by'        => ($who = $step->actor ?? $step->customerActor) ? \App\Support\Person::name($who) : null,
                     'at'        => $local($step->created_at),
                 ]);
         }

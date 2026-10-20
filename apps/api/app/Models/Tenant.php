@@ -162,6 +162,11 @@ class Tenant extends Model
         return $this->resolvedModules = array_values(array_unique(array_merge($core, $optional)));
     }
 
+    public function zone(): string
+    {
+        return $this->timezone ?: 'America/Lima';
+    }
+
     public function hasModule(string $key): bool
     {
         return in_array($key, $this->modules(), true);

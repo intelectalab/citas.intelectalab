@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import { Ticket, Pencil, Trash2, Users, Store, Briefcase, CheckCircle, Clock, XCircle, Infinity, Eye } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -317,11 +318,11 @@ export default function SaaSPlansTable() {
     {
       header: 'Estado',
       cell: (plan) => (
-        <span key={`status-${plan.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium ${
+        <Badge key={`status-${plan.id}`} tone={
           plan.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
-        }`}>
+        }>
           {plan.status === 'active' ? 'Activo' : 'Inactivo'}
-        </span>
+        </Badge>
       ),
     },
     {

@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class Cart
 {
-    public const TYPES = ['appointment', 'service', 'product'];
+    public const TYPES = ['appointment', 'service', 'product', 'package'];
 
     public const SELLABLE = ['retail', 'both'];
 
@@ -37,7 +37,7 @@ class Cart
 
     private static function personName(?object $person): string
     {
-        return $person ? trim("{$person->first_name} {$person->last_name}") : '';
+        return $person ? \App\Support\Person::name($person) : '';
     }
 
     public static function resolve(Tenant $tenant, User $user, array $input, ?object $sale = null): array
@@ -191,6 +191,12 @@ class Cart
                 continue;
             }
 
+            if ($type === 'package') {
+                $lines[] = self::packageLine($tenant, $item, $field, $currency);
+
+                continue;
+            }
+
             if (!self::productsReady()) {
                 self::fail($field, Sales::NOT_READY);
             }
@@ -225,6 +231,10 @@ class Cart
         }
         unset($line);
 
+        if (!$customer && collect($lines)->contains('type', 'package')) {
+            self::fail('customer_id', 'Elige al cliente: el paquete queda a su nombre.');
+        }
+
         $gross = round(array_sum(array_column($lines, 'total')), 2);
 
         if ($gross <= 0) {
@@ -250,6 +260,72 @@ class Cart
         ];
     }
 
+    private static function packageLine(Tenant $tenant, array $item, string $field, string $currency): array
+    {
+        if (!Packages::enabled($tenant)) {
+            self::fail($field, Packages::ready() ? 'Tu plan no incluye paquetes.' : Packages::NOT_READY);
+        }
+
+        $plan = DB::table('package_plans')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('id', $item['id'])->first();
+
+        if (!$plan || $plan->status !== 'active') {
+            self::fail($field, 'Uno de los paquetes del carrito ya no se vende. Quítalo del carrito.');
+        }
+
+        if (($plan->currency ?? $currency) !== $currency) {
+            self::fail($field, "El precio del paquete {$plan->name} está en otra moneda. Edítalo en Paquetes → Catálogo.");
+        }
+
+        if ((int) ($item['quantity'] ?? 1) > 1) {
+            self::fail($field, 'Un paquete se vende de a uno. Si el cliente quiere dos, agrégalo otra vez.');
+        }
+
+        $c = Packages::conditionsOf($plan);
+        $items = Packages::planItems([$plan->id])[$plan->id] ?? collect();
+        $details = null;
+
+        if ($c['booking_mode'] === 'scheduled') {
+            $raw = $item['details'] ?? [];
+            $slots = array_values(array_filter($raw['slots'] ?? [], fn ($s) => !empty($s['date'])));
+            $sessions = (int) $items->sum('sessions');
+
+            if (count($slots) > $sessions) {
+                self::fail($field, "El paquete {$plan->name} trae " . Packages::sessions($sessions) . ': no se pueden agendar más.');
+            }
+
+            $details = [
+                'professional_id' => $raw['professional_id'] ?? null,
+                'branch_id'       => $raw['branch_id'] ?? null,
+                'slots'           => array_map(fn ($s) => [
+                    'date'            => (string) $s['date'],
+                    'time'            => isset($s['time']) ? (string) $s['time'] : null,
+                    'professional_id' => $s['professional_id'] ?? null,
+                ], $slots),
+            ];
+        }
+
+        return [
+            'type'            => 'package',
+            'id'              => $plan->id,
+            'item_type'       => 'package',
+            'reference_id'    => $plan->id,
+            'description'     => $plan->name,
+            'quantity'        => 1,
+            'unit_price'      => round((float) $plan->price, 2),
+            'professional_id' => null,
+            'professional'    => null,
+            'appointment_id'  => null,
+            'appointment'     => null,
+            'details'         => $details,
+            'package'         => [
+                'sessions'       => (int) $items->sum('sessions'),
+                'booking_mode'   => $c['booking_mode'],
+                'schedule_label' => Packages::scheduleLabel($c),
+                'scheduled'      => $details ? count($details['slots']) : 0,
+            ],
+        ];
+    }
+
     public static function preview(array $resolved): array
     {
         $customer = $resolved['customer'];
@@ -266,6 +342,8 @@ class Cart
                 'total'        => $line['total'],
                 'professional' => $line['professional_id'] ? ['id' => $line['professional_id'], 'name' => $line['professional']] : null,
                 'appointment'  => $line['appointment'],
+                'details'      => $line['details'] ?? null,
+                'package'      => $line['package'] ?? null,
             ], $resolved['lines']),
             'totals'    => $resolved['totals'],
             'coupon'    => $resolved['applied'] ? Coupons::summary($resolved['applied']['coupon'], $resolved['applied']['discount'], $resolved['currency']) : null,
@@ -339,6 +417,23 @@ class Cart
             }
 
             $ordered = Schema::hasColumn('sale_items', 'position');
+            $detailed = Schema::hasColumn('sale_items', 'details');
+
+            foreach ($resolved['lines'] as $index => $line) {
+                if (($line['type'] ?? null) !== 'package' || empty($line['details']['slots'])) {
+                    continue;
+                }
+
+                $plan = DB::table('package_plans')->where('id', $line['id'])->first();
+                $service = Service::where('tenant_id', $tenant->id)->with('status')->find(Packages::planItems([$plan->id])[$plan->id]->first()->service_id ?? null);
+                $branch = Branch::where('tenant_id', $tenant->id)->find($line['details']['branch_id'] ?? $resolved['branch']->id) ?? $resolved['branch'];
+                $checked = Packages::check($tenant, $branch, $service, $resolved['customer']->id, $line['details']['slots'], $line['details']['professional_id'], Packages::expiresFrom($tenant, now(), (int) $plan->validity_days));
+                $bad = collect($checked)->firstWhere('ok', false);
+
+                if ($bad) {
+                    self::fail("items.{$index}", "La sesión del {$bad['weekday']} " . Carbon::parse($bad['date'])->format('d/m') . ($bad['time'] ? ' a las ' . Packages::hour($bad['time']) : '') . ' no se puede agendar: ' . mb_strtolower(collect($bad['reasons'])->pluck('message')->implode(' · ')) . '. Cámbiala en "Agendar sesiones".');
+                }
+            }
 
             DB::table('sale_items')->insert(array_map(fn (array $line, int $position) => [
                 'id'              => (string) Str::uuid(),
@@ -353,7 +448,7 @@ class Cart
                 'total'           => $line['total'],
                 'professional_id' => $line['professional_id'],
                 'appointment_id'  => $line['appointment_id'],
-            ] + ($ordered ? ['position' => $position] : []), $resolved['lines'], array_keys($resolved['lines'])));
+            ] + ($ordered ? ['position' => $position] : []) + ($detailed ? ['details' => isset($line['details']) ? json_encode($line['details']) : null] : []), $resolved['lines'], array_keys($resolved['lines'])));
 
             if ($resolved['applied']) {
                 Coupons::redeem($resolved['applied']['coupon'], $id, $resolved['customer']?->id, $resolved['applied']['discount']);
@@ -398,6 +493,7 @@ class Cart
                 'id'              => $i->appointment_id ?? $i->reference_id,
                 'quantity'        => (int) round((float) $i->quantity),
                 'professional_id' => $i->appointment_id ? null : $i->professional_id,
+                'details'         => isset($i->details) && $i->details ? json_decode($i->details, true) : null,
             ])->values(),
         ];
     }
@@ -424,7 +520,7 @@ class Cart
             'code'       => $s->code,
             'status'     => $s->status,
             'created_at' => $iso($s->created_at),
-            'customer'   => $s->customer_id ? ['id' => $s->customer_id, 'name' => trim("{$s->first_name} {$s->last_name}")] : null,
+            'customer'   => $s->customer_id ? ['id' => $s->customer_id, 'name' => \App\Support\Person::name($s)] : null,
             'by'         => trim("{$s->user_first} {$s->user_last}") ?: null,
             'detail'     => ($items[$s->id] ?? collect())->map(fn ($i) => ((float) $i->quantity > 1 ? (int) $i->quantity . ' × ' : '') . $i->description)->implode(', '),
             'total'      => round((float) $s->total, 2),
@@ -447,6 +543,7 @@ class Cart
             ->where('price', '>', 0)
             ->whereNotIn('status', AppointmentFlow::RELEASED)
             ->when(Currency::ready(), fn ($q) => $q->where('currency', $currency))
+            ->when(Packages::ready(), fn ($q) => $q->whereNull('customer_package_id'))
             ->whereNotIn('id', DB::table('sale_items as i')->join('sales as s', 's.id', '=', 'i.sale_id')->where('s.tenant_id', $tenant->id)->where('s.status', '!=', 'void')->whereNotNull('i.appointment_id')->select('i.appointment_id'))
             ->where(fn ($q) => $q
                 ->where(fn ($q) => $q->where('starts_at', '>=', $today->toIso8601String())->where('starts_at', '<', $today->copy()->addDay()->toIso8601String()))

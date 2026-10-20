@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { Archive, Edit2, Package, ShoppingBag, Trash2 } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -142,9 +144,9 @@ export default function ProductsTable() {
     {
       header: 'Para qué es',
       cell: (product) => (
-        <span key={`kind-${product.id}`} title={product.kind_label} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${KIND_BADGES[product.kind]}`}>
+        <Badge key={`kind-${product.id}`} title={product.kind_label} tone={KIND_BADGES[product.kind]} nowrap>
           {KIND_SHORT[product.kind]}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -154,9 +156,9 @@ export default function ProductsTable() {
     {
       header: 'Estado',
       cell: (product) => (
-        <span key={`status-${product.id}`} data-status={product.status} className={`px-2.5 py-1 text-xs rounded-full font-medium ${product.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+        <Badge key={`status-${product.id}`} data-status={product.status} tone={product.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}>
           {product.status === 'active' ? 'Activo' : 'Apagado'}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -180,8 +182,8 @@ export default function ProductsTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <DataTable<Product>
         title="Productos"

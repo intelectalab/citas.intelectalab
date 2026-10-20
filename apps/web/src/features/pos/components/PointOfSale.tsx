@@ -1,8 +1,12 @@
 'use client';
 
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CalendarPlus, Minus, Package, Plus, Receipt, Search, ShoppingCart, Sparkles, TicketPercent, Trash2, X } from 'lucide-react';
+import { Boxes, CalendarClock, CalendarPlus, Minus, Package, Plus, Receipt, Search, ShoppingCart, Sparkles, TicketPercent, Trash2, X } from 'lucide-react';
+import SchedulePanel, { type ScheduleSource } from '@/features/packages/components/SchedulePanel';
+import { sessionsLabel, type ScheduleDetails } from '@/features/packages/packages';
 import { api } from '@/lib/axios';
 import Select from '@/app/components/common/Select';
 import { Pager, usePaged } from '@/app/components/common/Pager';
@@ -15,15 +19,12 @@ import { money, momentOf, type ChargeContext } from '@/features/sales/sales';
 import { emptyCart, whenOf, type Cart, type CartItem, type CartPreview, type LoadedCart, type PendingAppointment, type PendingSale, type PosBoard } from '../pos';
 import WalkInPanel, { type BookedWalkIn } from './WalkInPanel';
 
-type Tab = 'pending' | 'services' | 'products';
+type Tab = 'pending' | 'services' | 'products' | 'packages';
 
 type PendingEntry = { kind: 'sale'; sale: PendingSale } | { kind: 'appointment'; appointment: PendingAppointment };
 
 const STORAGE_KEY = 'pos-cart';
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const tileClass = 'rounded-2xl border border-slate-200/80 bg-white p-4 flex flex-col gap-2 min-h-[8.5rem]';
 const addButton = 'mt-auto self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#022340] text-white hover:bg-[#03315a] transition-colors disabled:bg-slate-100 disabled:text-slate-400';
 const stepButton = 'p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40';
@@ -47,6 +48,14 @@ const store = (cart: Cart) => {
 
 const fullName = (customer: PickedCustomer | null) => (customer ? `${customer.first_name} ${customer.last_name}` : '');
 
+const toLine = ({ type, id, quantity, professional_id, details }: CartItem) => ({
+  type,
+  id,
+  quantity,
+  professional_id: professional_id || null,
+  ...(type === 'package' && details ? { details } : {}),
+});
+
 export default function PointOfSale() {
   const [board, setBoard] = useState<PosBoard | null>(null);
   const [branchId, setBranchId] = useState<string>('');
@@ -65,6 +74,8 @@ export default function PointOfSale() {
   const [charged, setCharged] = useState<ChargeContext | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<{ message: string; run: () => void } | null>(null);
+  const [scheduleIndex, setScheduleIndex] = useState<number | null>(null);
+  const [scheduleInitial, setScheduleInitial] = useState<ScheduleDetails | null>(null);
   const restored = useRef(false);
 
   const load = useCallback((branch?: string) => {
@@ -88,7 +99,7 @@ export default function PointOfSale() {
         editBlocked: data.edit_blocked,
         customer: data.customer,
         coupon: data.coupon_code ?? '',
-        items: data.items.map((item) => ({ ...item, label: '', unit_price: 0 })),
+        items: data.items.map((item) => ({ ...item, label: '', unit_price: 0, details: item.details ?? null })),
       });
       setCouponInput('');
       setCouponError('');
@@ -103,8 +114,14 @@ export default function PointOfSale() {
     if (restored.current) return;
     restored.current = true;
 
-    const wanted = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('venta') : null;
+    const query = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const wanted = query?.get('venta') ?? null;
     const saved = readStored();
+
+    if (query?.get('tab') === 'paquetes') {
+      setTab('packages');
+      if (!wanted) window.history.replaceState(null, '', '/pos');
+    }
 
     if (wanted) {
       window.history.replaceState(null, '', '/pos');
@@ -133,7 +150,7 @@ export default function PointOfSale() {
         sale_id: cart.saleId,
         customer_id: cart.customer?.id ?? null,
         coupon_code: cart.coupon || null,
-        items: cart.items.map(({ type, id, quantity, professional_id }) => ({ type, id, quantity, professional_id: professional_id || null })),
+        items: cart.items.map(toLine),
       })
         .then((res) => {
           const data: CartPreview = res.data;
@@ -173,10 +190,24 @@ export default function PointOfSale() {
 
   const services = (board?.services ?? []).filter((s) => !term || `${s.name} ${s.category ?? ''}`.toLowerCase().includes(term));
   const products = (board?.products ?? []).filter((p) => !term || `${p.name} ${p.sku} ${p.category ?? ''}`.toLowerCase().includes(term));
+  const plans = (board?.packages ?? []).filter((p) => !term || `${p.name} ${p.items.map((i) => i.name).join(' ')}`.toLowerCase().includes(term));
 
   const pendingPage = usePaged(pendingEntries);
   const servicePage = usePaged(services);
   const productPage = usePaged(products);
+  const planPage = usePaged(plans);
+
+  const scheduleItem = scheduleIndex !== null ? cart.items[scheduleIndex] ?? null : null;
+  const schedulePlan = scheduleItem ? (board?.packages ?? []).find((p) => p.id === scheduleItem.id) ?? null : null;
+  const scheduleSource: ScheduleSource | null = useMemo(() => (schedulePlan ? {
+    kind: 'plan',
+    id: schedulePlan.id,
+    name: schedulePlan.name,
+    frequency: schedulePlan.frequency,
+    custom_days: schedulePlan.custom_days,
+    repeat_weeks: schedulePlan.repeat_weeks,
+    professional_mode: schedulePlan.professional_mode,
+  } : null), [schedulePlan]);
 
   const resetCart = (message = '') => {
     setCart(emptyCart());
@@ -219,6 +250,25 @@ export default function PointOfSale() {
     }));
   };
 
+  const addPackage = (planId: string) => {
+    const plan = (board?.packages ?? []).find((p) => p.id === planId);
+    if (!plan) return;
+    const index = cart.items.length;
+    setNotice('');
+    setCart((current) => ({ ...current, items: [...current.items, { type: 'package', id: plan.id, quantity: 1, label: plan.name, unit_price: plan.price, details: null }] }));
+    if (plan.booking_mode === 'scheduled') {
+      if (cart.customer) { setScheduleInitial(null); setScheduleIndex(index); }
+      else setNotice(`Elige al cliente y luego pulsa "Agendar sesiones" en el carrito: ${plan.name} se agenda al venderlo.`);
+    }
+  };
+
+  const saveSchedule = (details: ScheduleDetails) => {
+    if (scheduleIndex === null) return;
+    changeItem(scheduleIndex, { details });
+    setScheduleIndex(null);
+    setNotice(`${sessionsLabel(details.slots.length)} con fecha. Las citas se crean al cobrar el paquete.`);
+  };
+
   const openSale = (sale: PendingSale) => {
     if (cart.items.length > 0) {
       setPendingSwitch({
@@ -251,7 +301,7 @@ export default function PointOfSale() {
     branch_id: branchId,
     customer_id: cart.customer?.id ?? null,
     coupon_code: cart.coupon || null,
-    items: cart.items.map(({ type, id, quantity, professional_id }) => ({ type, id, quantity, professional_id: professional_id || null })),
+    items: cart.items.map(toLine),
   });
 
   const save = async (): Promise<string | null> => {
@@ -289,10 +339,11 @@ export default function PointOfSale() {
   const closeCharge = () => {
     const paid = charged?.sale?.status === 'paid';
     const code = charged?.sale?.code ?? cart.code;
+    const sold = (charged?.packages ?? []).map((p) => `${p.code} (${p.name})${p.created.length ? `: ${sessionsLabel(p.created.length)} agendadas` : ''}${p.failed.length ? `; ${p.failed.length} no se pudieron agendar porque el horario se ocupó, agéndalas desde el paquete` : ''}`);
     setCharging(null);
     setCharged(null);
     if (paid) {
-      resetCart(`Venta ${code} cobrada.`);
+      resetCart(`Venta ${code} cobrada.${sold.length ? ` Paquete ${sold.join(' · ')}. Lo ves en Paquetes y en la página del cliente.` : ''}`);
     } else {
       setNotice(`La venta ${code ?? ''} quedó por cobrar. Puedes cobrarla ahora o después, desde "Por cobrar".`);
     }
@@ -331,6 +382,7 @@ export default function PointOfSale() {
     { id: 'pending', label: 'Por cobrar', count: (board?.pending.sales.filter((s) => s.id !== cart.saleId).length ?? 0) + (board?.pending.appointments.length ?? 0) },
     { id: 'services', label: 'Servicios' },
     ...(board?.products_ready ? [{ id: 'products' as Tab, label: 'Productos' }] : []),
+    ...(board?.packages_enabled ? [{ id: 'packages' as Tab, label: 'Paquetes' }] : []),
   ];
 
   return (
@@ -361,8 +413,8 @@ export default function PointOfSale() {
         </div>
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       {board && !branchId && (
         <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Tu empresa aún no tiene una sucursal activa donde vender.</p>
@@ -391,7 +443,7 @@ export default function PointOfSale() {
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 aria-label="Buscar en el catálogo"
-                placeholder={tab === 'pending' ? 'Cliente, cita o venta' : tab === 'services' ? 'Buscar servicio' : 'Nombre o código'}
+                placeholder={tab === 'pending' ? 'Cliente, cita o venta' : tab === 'services' ? 'Buscar servicio' : tab === 'packages' ? 'Buscar paquete' : 'Nombre o código'}
                 className={`${inputClass} pl-9`}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -529,6 +581,40 @@ export default function PointOfSale() {
               {productPage.pages > 1 && <Pager page={productPage.page} pages={productPage.pages} onChange={productPage.setPage} />}
             </>
           )}
+
+          {tab === 'packages' && (
+            <>
+              {plans.length === 0 ? (
+                <p className="text-sm text-slate-500 py-6 text-center">
+                  {term ? 'Ningún paquete coincide.' : 'Aún no tienes paquetes a la venta.'}
+                  {!term && can?.packages && <> <Link href="/packages" className="font-semibold text-[#3F768C] underline underline-offset-2">Créalos en Paquetes → Catálogo</Link>.</>}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-packages-catalog>
+                  {planPage.rows.map((plan) => (
+                    <article key={plan.id} className={tileClass} data-plan={plan.name}>
+                      <span className="flex items-center gap-1.5 text-sm font-bold text-[#022340]"><Boxes size={14} className="text-[#3F768C] shrink-0" /> {plan.name}</span>
+                      <span className="text-xs text-slate-500">{plan.items.map((i) => `${i.sessions} × ${i.name}`).join(' · ')}</span>
+                      <span className="flex items-center gap-1 text-xs text-slate-500">
+                        {plan.booking_mode === 'scheduled' && <CalendarClock size={12} className="text-[#3F768C]" />}
+                        {plan.schedule_label} · vale {plan.validity_days} días
+                      </span>
+                      <div className="flex items-center justify-between gap-2 mt-auto">
+                        <span>
+                          <span className="block text-sm font-black text-[#022340] tabular-nums">{money(plan.price, plan.currency)}</span>
+                          {plan.savings > 0 && <span className="block text-[11px] font-semibold text-emerald-700">Ahorra {money(plan.savings, plan.currency)}</span>}
+                        </span>
+                        <button type="button" data-add-plan={plan.name} disabled={!!cart.editBlocked} onClick={() => addPackage(plan.id)} className={addButton.replace('mt-auto self-start ', '')}>
+                          <Plus size={13} /> Agregar
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {planPage.pages > 1 && <Pager page={planPage.page} pages={planPage.pages} onChange={planPage.setPage} />}
+            </>
+          )}
         </section>
 
         <aside className="bg-white rounded-3xl rounded-tr-[2.5rem] border border-slate-200/80 p-5 space-y-5 xl:sticky xl:top-4" data-cart>
@@ -572,7 +658,14 @@ export default function PointOfSale() {
                     <span className="block text-xs text-slate-500">
                       {item.type === 'appointment'
                         ? <>Cita {line?.appointment?.code ?? ''}{line?.appointment ? ` · ${line.appointment.starts_at.slice(11)}` : ''}{line?.professional ? <> · <ProfessionalLink id={line.professional.id}>{line.professional.name}</ProfessionalLink></> : ''}</>
-                        : `${item.type === 'service' ? 'Servicio' : 'Producto'} · ${money(line?.unit_price ?? item.unit_price, currency)} c/u`}
+                        : item.type === 'package'
+                          ? (() => {
+                            const plan = (board?.packages ?? []).find((p) => p.id === item.id);
+                            const sessions = line?.package?.sessions ?? plan?.sessions;
+                            const label = line?.package?.schedule_label ?? plan?.schedule_label;
+                            return `Paquete${sessions ? ` · ${sessionsLabel(sessions)}` : ''}${label ? ` · ${label}` : ''}`;
+                          })()
+                          : `${item.type === 'service' ? 'Servicio' : 'Producto'} · ${money(line?.unit_price ?? item.unit_price, currency)} c/u`}
                     </span>
                   </div>
                   <div className="text-right shrink-0">
@@ -580,8 +673,23 @@ export default function PointOfSale() {
                   </div>
                 </div>
 
+                {item.type === 'package' && (board?.packages ?? []).find((p) => p.id === item.id)?.booking_mode === 'scheduled' && (
+                  <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs ${item.details?.slots.length ? 'bg-[#84D0D9]/15 text-[#022340]' : 'bg-amber-50 text-amber-800'}`} data-package-schedule>
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <CalendarClock size={13} />
+                      {item.details?.slots.length ? `${item.details.slots.length} de ${(board?.packages ?? []).find((p) => p.id === item.id)?.sessions ?? item.details.slots.length} con fecha` : 'Sin fechas todavía'}
+                    </span>
+                    {!cart.editBlocked && (
+                      <button type="button" data-schedule-line disabled={!cart.customer} title={cart.customer ? undefined : 'Elige primero al cliente'} onClick={() => { setScheduleInitial(item.details ?? null); setScheduleIndex(index); }}
+                        className="font-bold underline underline-offset-2 disabled:opacity-50 disabled:no-underline">
+                        {item.details?.slots.length ? 'Cambiar fechas' : 'Agendar sesiones'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center gap-2">
-                  {item.type !== 'appointment' && (
+                  {item.type !== 'appointment' && item.type !== 'package' && (
                     <div className="flex items-center gap-1.5" data-quantity>
                       <button type="button" aria-label="Uno menos" data-qty-minus disabled={item.quantity <= 1 || !!cart.editBlocked} onClick={() => changeItem(index, { quantity: item.quantity - 1 })} className={stepButton}><Minus size={13} /></button>
                       <span className="w-7 text-center text-sm font-semibold tabular-nums" data-qty>{item.quantity}</span>
@@ -683,6 +791,17 @@ export default function PointOfSale() {
       </div>
 
       <ChargePanel saleId={charging} appointmentId={null} onClose={closeCharge} onChanged={setCharged} />
+
+      <SchedulePanel
+        isOpen={scheduleIndex !== null && scheduleSource !== null}
+        onClose={() => setScheduleIndex(null)}
+        source={scheduleSource}
+        branchId={branchId || null}
+        customerId={cart.customer?.id ?? null}
+        initial={scheduleInitial}
+        confirmLabel={(count) => `Guardar ${sessionsLabel(count)}`}
+        onConfirm={saveSchedule}
+      />
 
       <WalkInPanel
         isOpen={walkInOpen}

@@ -1,5 +1,7 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { CalendarClock, CalendarOff, Plus, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -63,7 +65,6 @@ const DEFAULT_RANGE: Range = { starts: '09:00', ends: '18:00' };
 
 const inputClass =
   'text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 const MOMENTS: { key: 'starts_at' | 'ends_at'; label: string; time: string }[] = [
   { key: 'starts_at', label: 'Desde', time: '00:00' },
@@ -310,14 +311,13 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
             {saved && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">Horario guardado.</p>}
 
             <div className="flex justify-end">
-              <button
+              <Button
                 type="button"
                 onClick={saveSchedule}
-                disabled={saving}
-                className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+                disabled={saving} variant="classic"
               >
                 {saving ? 'Guardando...' : 'Guardar horario'}
-              </button>
+              </Button>
             </div>
           </section>
 

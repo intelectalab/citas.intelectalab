@@ -91,6 +91,10 @@ class Sales
 
     public static function appointmentPaid(string $tenantId, string $appointmentId): bool
     {
+        if (Packages::ready() && DB::table('appointments')->where('id', $appointmentId)->whereNotNull('customer_package_id')->exists()) {
+            return true;
+        }
+
         return DB::table('sales')
             ->where('tenant_id', $tenantId)
             ->whereIn('id', self::holding($appointmentId))
@@ -260,12 +264,14 @@ class Sales
 
         $sale = DB::table('sales')->where('id', $sale->id)->first();
         PaymentLinks::cancelForSale($sale->id, 'Se cobró en la sede.');
+        $packages = [];
 
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, $doc, $user);
+            $packages = Packages::issueForSale($tenant, $sale, $user);
         }
 
-        return ['sale' => $sale, 'duplicate' => false, 'change' => $change];
+        return ['sale' => $sale, 'duplicate' => false, 'change' => $change, 'packages' => $packages];
     }
 
     public static function label(object $sale): string
@@ -318,7 +324,7 @@ class Sales
                 'change'       => round((float) $p->change_amount, 2),
                 'reference'    => $p->external_reference,
                 'register'     => $p->register_name,
-                'by'           => trim("{$p->first_name} {$p->last_name}") ?: null,
+                'by'           => \App\Support\Person::name($p) ?: null,
                 'at'           => $iso($p->created_at),
             ])->values(),
             'coupon'             => Coupons::ofSale($sale->id, $sale->currency ?? null),

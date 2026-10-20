@@ -1,5 +1,7 @@
 'use client';
 
+import OptionCard from '@/app/components/common/OptionCard';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { ArrowDownCircle, ArrowUpCircle, Banknote, Calculator, Lock, Unlock, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -10,9 +12,6 @@ import { PagedList } from '@/app/components/common/Pager';
 import { apiError } from '@/features/appointments/appointments';
 import { cleanAmount, money, momentOf, type CashMovement, type CashRegister, type CashSession } from '@/features/sales/sales';
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 const cancelButton = 'px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors';
 const primaryButton = 'px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50';
@@ -112,21 +111,20 @@ export function CashMovementPanel({ session, registerName, onClose, onSaved }: P
             {MOVEMENT_TYPES.map((option) => {
               const chosen = type === option.id;
               return (
-                <button
+                <OptionCard
                   key={option.id}
                   type="button"
                   role="radio"
                   aria-checked={chosen}
                   data-movement-type={option.id}
-                  onClick={() => setType(option.id)}
-                  className={`w-full flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}
+                  onClick={() => setType(option.id)} selected={chosen} className="w-full flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                 >
                   <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
                     <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5">{option.hint}</span>
                   </span>
-                </button>
+                </OptionCard>
               );
             })}
           </div>

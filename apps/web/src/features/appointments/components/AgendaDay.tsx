@@ -1,5 +1,6 @@
 'use client';
 
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, CalendarX2, CheckCircle, ChevronLeft, ChevronRight, Clock, Hourglass, Plus, RefreshCw, Stethoscope, ThumbsUp } from 'lucide-react';
@@ -309,7 +310,7 @@ export default function AgendaDay() {
         })}
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       {(day?.holidays ?? []).map((holiday) => (
         <p
@@ -508,7 +509,7 @@ export default function AgendaDay() {
                 Pasa a: <span className="font-semibold text-slate-900" data-move-to>{pendingMove.time} con {pendingMove.professional.display_name}</span>
               </p>
             </div>
-            {moveError && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{moveError}</p>}
+            <ErrorAlert message={moveError} />
           </div>
         ) : ''}
         confirmText="Sí, mover"

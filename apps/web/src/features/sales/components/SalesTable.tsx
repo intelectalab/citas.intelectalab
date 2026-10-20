@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { Eye, HandCoins, Receipt, RotateCcw } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -165,9 +167,9 @@ export default function SalesTable() {
     {
       header: 'Estado',
       cell: (sale) => (
-        <span key={`status-${sale.id}`} data-status={sale.status} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${SALE_BADGES[sale.status]}`}>
+        <Badge key={`status-${sale.id}`} data-status={sale.status} tone={SALE_BADGES[sale.status]} nowrap>
           {sale.status_label}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -182,7 +184,7 @@ export default function SalesTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <DataTable<SaleRow>
         title="Ventas"

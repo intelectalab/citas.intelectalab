@@ -96,6 +96,7 @@ class PortalController extends AppointmentController
                 'must_change_password' => (bool) $customer->must_change_password,
             ],
             'policies'     => $this->policies($tenant),
+            'consents'     => \App\Support\Messaging::ready() ? MessageController::consentsOf($customer->id) : null,
             'booking_block' => ($state = \App\Support\OnlineBooking::state($tenant, $customer->id))
                 ? $state + ['message' => $state['blocked'] ? \App\Support\OnlineBooking::blockedMessage($tenant, $state) : null]
                 : null,
@@ -118,6 +119,12 @@ class PortalController extends AppointmentController
         $assigned = DB::table('service_professionals')->where('tenant_id', $tenant->id)->get()->groupBy('service_id');
         $worksAt = ProfessionalSchedule::where('tenant_id', $tenant->id)->get()->groupBy('professional_id');
         $depositRule = (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::ready();
+        $customer = $this->customer($request);
+        $packaged = \App\Support\Packages::enabled($tenant)
+            ? collect(\App\Support\Packages::presentMany(DB::table('customer_packages')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('status', 'active')->where('expires_at', '>', now()->toIso8601String())->get(), false))
+                ->flatMap(fn (array $p) => collect($p['items'])->filter(fn ($i) => $i['available'] > 0)->map(fn ($i) => ['service_id' => $i['service_id'], 'available' => $i['available'], 'code' => $p['code'], 'name' => $p['name']]))
+                ->groupBy('service_id')
+            : collect();
 
         return response()->json([
             'branches' => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name']),
@@ -135,7 +142,8 @@ class PortalController extends AppointmentController
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
                     'is_virtual'       => $s->is_virtual,
-                    'needs_deposit'    => $depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0,
+                    'package'          => ($found = $packaged->get($s->id)) ? ['code' => $found->first()['code'], 'name' => $found->first()['name'], 'available' => $found->sum('available')] : null,
+                    'needs_deposit'    => !$packaged->has($s->id) && $depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0,
                     'deposit_amount'   => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositAmount($s) : 0,
                     'deposit_label'    => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositLabel($s) : null,
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
@@ -217,7 +225,9 @@ class PortalController extends AppointmentController
             throw ValidationException::withMessages(['service_id' => 'Este servicio no se reserva en línea. Comunícate con la sede.']);
         }
 
-        $needsDeposit = $service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service) > 0;
+        $start = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], AppointmentScheduler::timezone($branch, $tenant))->startOfMinute();
+        $package = \App\Support\Packages::enabled($tenant) ? (\App\Support\Packages::usable($tenant->id, $customer->id, $service->id, $start)[0] ?? null) : null;
+        $needsDeposit = !$package && $service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service) > 0;
 
         if ($needsDeposit && !\App\Support\PaymentLinks::ready()) {
             throw ValidationException::withMessages(['service_id' => 'Este servicio se reserva con un adelanto. Comunícate con la sede para agendarlo.']);
@@ -225,11 +235,10 @@ class PortalController extends AppointmentController
 
         $dependentId = $this->resolveDependent($tenant, $customer, $validated['customer_dependent_id'] ?? null);
 
-        $start = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], AppointmentScheduler::timezone($branch, $tenant))->startOfMinute();
         $duration = (int) $service->duration_minutes;
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit) {
+        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit, $package) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($response = $this->limitReached($tenant, $start)) {
@@ -278,6 +287,10 @@ class PortalController extends AppointmentController
             ]);
 
             $this->log($appointment, null, $status, $user, 'Reserva en línea');
+
+            if ($package) {
+                \App\Support\Packages::link($tenant, $appointment->load('service'), $package['id'], null);
+            }
 
             if (!empty($validated['waitlist_id'])) {
                 $waiting = WaitlistEntry::where('tenant_id', $tenant->id)
@@ -556,7 +569,7 @@ class PortalController extends AppointmentController
             ? \App\Support\Waitlist::slots($tenant, $entry, 3)
             : ['days' => []];
 
-        $timezone = $entry->branch ? AppointmentScheduler::timezone($entry->branch, $tenant) : ($tenant->timezone ?: 'America/Lima');
+        $timezone = $entry->branch ? AppointmentScheduler::timezone($entry->branch, $tenant) : ($tenant->zone());
         $duration = (int) ($entry->service?->duration_minutes ?? 0);
         $own = Appointment::where('tenant_id', $tenant->id)
             ->where('customer_id', $entry->customer_id)
@@ -729,6 +742,51 @@ class PortalController extends AppointmentController
         return response()->json(['message' => $prefix . $message, 'code' => 'SLOT_UNAVAILABLE'], 409);
     }
 
+    public function updateConsents(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        abort_unless(\App\Support\Messaging::ready(), 503, \App\Support\Messaging::NOT_READY);
+        $validated = $request->validate(['email' => 'nullable|boolean', 'whatsapp' => 'nullable|boolean']);
+
+        return response()->json(['consents' => MessageController::saveConsents($tenant->id, $customer->id, $validated, 'portal')]);
+    }
+
+    public function packages(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        abort_unless(\App\Support\Packages::ready(), 503, \App\Support\Packages::NOT_READY);
+        \App\Support\Packages::expireDue($tenant->id);
+
+        $rows = DB::table('customer_packages')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->orderByDesc('purchased_at')->get();
+
+        return response()->json(['packages' => collect(\App\Support\Packages::presentMany($rows, false))->map(function (array $p) use ($tenant) {
+            $c = $p['conditions'];
+            $items = array_map(fn ($i) => ['name' => $i['name'], 'sessions' => $i['total'], 'price' => $i['unit_price']], $p['items']);
+
+            return [
+                'id'                 => $p['id'],
+                'code'               => $p['code'],
+                'name'               => $p['name'],
+                'status'             => $p['status'],
+                'status_label'       => $p['status_label'],
+                'price'              => $p['price'],
+                'currency'           => $p['currency'],
+                'purchased_at'       => $p['purchased_at'],
+                'expires_at'         => $p['expires_at'],
+                'days_left'          => $p['days_left'],
+                'items'              => $p['items'],
+                'sessions_total'     => $p['sessions_total'],
+                'sessions_used'      => $p['sessions_used'],
+                'sessions_scheduled' => $p['sessions_scheduled'],
+                'sessions_available' => $p['sessions_available'],
+                'schedule_label'     => $p['schedule_label'],
+                'terms_text'         => $c['terms_text'] ?? \App\Support\Packages::terms($tenant, $c, $items, $p['currency']),
+            ];
+        })->values()]);
+    }
+
     private function presentForCustomer(Appointment $appointment, Tenant $tenant): array
     {
         $full = $this->present($appointment, $tenant);
@@ -737,6 +795,9 @@ class PortalController extends AppointmentController
         $open = in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true)
             && $appointment->starts_at->isFuture()
             && !$this->insideWindow($tenant, $appointment);
+        $package = \App\Support\Packages::ready() && $appointment->customer_package_id
+            ? DB::table('customer_packages')->where('id', $appointment->customer_package_id)->first()
+            : null;
 
         return [
             'id'               => $full['id'],
@@ -759,6 +820,7 @@ class PortalController extends AppointmentController
             'pay_on_arrival'   => $upcoming && (float) $appointment->price > 0 && $policies['pay_before_service']
                 && !\App\Support\Sales::appointmentPaid($tenant->id, $appointment->id),
             'deposit'          => $this->depositOf($tenant, $appointment),
+            'package'          => $package ? \App\Support\Packages::summary($package) + ['late_policy' => \App\Support\Packages::conditions($package)['late_policy']] : null,
             'can_confirm'      => $policies['booking_enabled'] && $appointment->status === AppointmentFlow::PENDING && $appointment->starts_at->isFuture(),
             'can_cancel'       => $policies['booking_enabled'] && $open && $policies['cancel_allowed'],
             'can_reschedule'   => $policies['booking_enabled'] && $open && $appointment->reschedule_count < $policies['reschedule_max'],

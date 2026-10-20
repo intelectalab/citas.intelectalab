@@ -1,5 +1,6 @@
 'use client';
 
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Clock, Edit2, Eye, MapPin, Power, Store, Users } from 'lucide-react';
@@ -190,7 +191,7 @@ export default function BranchesTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <div className="mb-6">
         <DataTable<Branch>

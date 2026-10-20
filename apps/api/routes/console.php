@@ -24,3 +24,36 @@ Artisan::command('subscriptions:expire', function () {
 })->purpose('Marca como vencidas las suscripciones cuya fecha de fin ya pasó');
 
 Schedule::command('subscriptions:expire')->hourly();
+
+Artisan::command('messages:send', function () {
+    if (!\App\Support\Messaging::ready()) {
+        $this->warn(\App\Support\Messaging::NOT_READY);
+
+        return;
+    }
+
+    foreach (\App\Models\Tenant::where('status', 'active')->with('settings')->get() as $tenant) {
+        \App\Support\Messaging::generate($tenant, true);
+    }
+
+    $done = \App\Support\Messaging::process(null, 200);
+    $this->info("Enviados: {$done['sent']}. Con error: {$done['failed']}. No enviados: {$done['not_sent']}.");
+})->purpose('Arma los recordatorios y envía los mensajes pendientes o programados');
+
+Schedule::command('messages:send')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('db:demo', function () {
+    if (app()->isProduction()) {
+        $this->error('Los datos de muestra no se cargan en producción.');
+
+        return 1;
+    }
+
+    if (!$this->confirm('Se borrará la base '.config('database.connections.'.config('database.default').'.database').' y se volverá a crear con los datos de muestra. ¿Continuar?', true)) {
+        return 1;
+    }
+
+    $this->call('migrate:fresh', ['--force' => true]);
+    DB::unprepared(file_get_contents(base_path('infrastructure/docker/postgres/seed_demo.sql')));
+    $this->info('Base lista con los datos de muestra.');
+})->purpose('Vuelve a crear la base local desde las migraciones y carga los datos de muestra');

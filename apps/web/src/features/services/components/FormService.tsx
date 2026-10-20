@@ -1,5 +1,6 @@
 'use client';
 
+import OptionCard from '@/app/components/common/OptionCard';
 import { useState, useEffect } from 'react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
@@ -382,18 +383,17 @@ export default function FormService({
                                     ['percent', 'Un porcentaje', 'Ej. 30 % del precio'],
                                     ['amount', 'Un monto fijo', `Ej. ${money(50)}, cueste lo que cueste`],
                                   ] as const).map(([key, title, hint]) => (
-                                    <button
+                                    <OptionCard
                                       key={key}
                                       type="button"
                                       role="radio"
                                       aria-checked={form.deposit_type === key}
                                       data-deposit-type={key}
-                                      onClick={() => setForm({ ...form, deposit_type: key, deposit_value: key === 'percent' ? '30' : String(Math.min(50, price) || '') })}
-                                      className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors ${form.deposit_type === key ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}
+                                      onClick={() => setForm({ ...form, deposit_type: key, deposit_value: key === 'percent' ? '30' : String(Math.min(50, price) || '') })} selected={form.deposit_type === key} className="text-left rounded-xl border px-3.5 py-2.5 transition-colors"
                                     >
                                       <span className="block text-sm font-bold text-[#022340]">{title}</span>
                                       <span className="block text-xs text-slate-500">{hint}</span>
-                                    </button>
+                                    </OptionCard>
                                   ))}
                                 </div>
                                 <div className="flex items-center gap-2">

@@ -71,7 +71,7 @@ class Cash
         $names = DB::table('users')
             ->whereIn('id', array_filter([$session->opened_by, $session->closed_by, ...$movements->pluck('created_by')->all()]))
             ->get(['id', 'first_name', 'last_name'])
-            ->mapWithKeys(fn ($u) => [$u->id => trim("{$u->first_name} {$u->last_name}")]);
+            ->mapWithKeys(fn ($u) => [$u->id => \App\Support\Person::name($u)]);
 
         $iso = fn ($value) => $value ? Carbon::parse($value)->toIso8601String() : null;
 

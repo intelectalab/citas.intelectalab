@@ -65,7 +65,7 @@ class Notifier
 
             $timezone = $appointment->branch?->timezone ?: (Tenant::find($appointment->tenant_id)?->timezone ?: 'America/Lima');
             $when = Carbon::parse($appointment->starts_at)->setTimezone($timezone)->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
-            $who = $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : null;
+            $who = $appointment->customer ? \App\Support\Person::name($appointment->customer) : null;
             $with = $appointment->professional?->display_name;
 
             foreach (array_unique($recipients) as $userId) {
@@ -97,7 +97,7 @@ class Notifier
             }
 
             $admins = self::adminIds($tenant->id);
-            $timezone = $tenant->timezone ?: 'America/Lima';
+            $timezone = $tenant->zone();
             $format = fn ($date) => Carbon::parse($date)->setTimezone($timezone)->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
 
             foreach ($blocks as $block) {
@@ -133,7 +133,7 @@ class Notifier
                 return;
             }
 
-            $timezone = $tenant->timezone ?: 'America/Lima';
+            $timezone = $tenant->zone();
             $local = fn (Appointment $a) => Carbon::parse($a->starts_at)->setTimezone($a->branch?->timezone ?: $timezone)->locale('es');
             $warning = $releaseHours !== null ? " · Se liberará {$releaseHours} h antes si sigue sin confirmar" : '';
 
@@ -144,7 +144,7 @@ class Notifier
                     continue;
                 }
 
-                $who = $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : null;
+                $who = $appointment->customer ? \App\Support\Person::name($appointment->customer) : null;
 
                 self::send(
                     $tenant->id,
@@ -193,9 +193,9 @@ class Notifier
 
             $appointment->loadMissing(['customer', 'service', 'professional', 'branch']);
             $professionalUser = $appointment->professional?->user_id;
-            $timezone = $appointment->branch?->timezone ?: ($tenant->timezone ?: 'America/Lima');
+            $timezone = $appointment->branch?->timezone ?: ($tenant->zone());
             $when = Carbon::parse($appointment->starts_at)->setTimezone($timezone)->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
-            $who = $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : null;
+            $who = $appointment->customer ? \App\Support\Person::name($appointment->customer) : null;
 
             foreach (array_unique(array_filter([$professionalUser, ...self::adminIds($tenant->id)])) as $userId) {
                 $parts = [$who, $appointment->service?->name, $when, $userId === $professionalUser ? null : $appointment->professional?->display_name];
@@ -225,7 +225,7 @@ class Notifier
             }
 
             $appointment->loadMissing(['service', 'professional', 'branch']);
-            $timezone = $appointment->branch?->timezone ?: ($tenant->timezone ?: 'America/Lima');
+            $timezone = $appointment->branch?->timezone ?: ($tenant->zone());
             $when = Carbon::parse($appointment->starts_at)->setTimezone($timezone)->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
             $people = $count === 1 ? 'Una persona de la lista de espera puede tomarlo' : "{$count} personas de la lista de espera pueden tomarlo";
 

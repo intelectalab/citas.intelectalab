@@ -32,6 +32,7 @@ import {
   PackageOpen,
   Gift,
   Boxes,
+  Mail,
   BadgeCheck,
   Megaphone,
   CalendarClock,
@@ -145,7 +146,8 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Fidelización',
     groupIcon: Gift,
     items: [
-      { name: 'Paquetes', href: '/modules/packages', icon: Boxes, module: 'packages', requireAdmin: true },
+      { name: 'Paquetes', href: '/packages', icon: Boxes, module: 'packages', perm: 'packages.view' },
+      { name: 'Mensajes', href: '/messages', icon: Mail, perm: 'messages.view' },
       { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships', requireAdmin: true },
       { name: 'Puntos y gift cards', href: '/modules/loyalty', icon: Gift, module: 'loyalty', requireAdmin: true },
       { name: 'Marketing', href: '/modules/marketing', icon: Megaphone, module: 'marketing', requireAdmin: true },

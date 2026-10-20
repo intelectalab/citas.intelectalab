@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ClipboardList, Download, EyeOff, Lock, PenLine, RefreshCw, ShieldAlert } from 'lucide-react';
@@ -17,8 +19,6 @@ interface RecordPanelProps {
   onChanged?: () => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 function ReadOnlyFields({ fields, data }: { fields: RecordField[]; data: RecordData }) {
@@ -229,9 +229,9 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
         <div className="flex flex-col h-full justify-between">
           <div className="space-y-6 overflow-y-auto flex-1 pr-1 pb-4">
             <div className="flex flex-wrap items-center gap-2" data-record-state={record?.status ?? 'new'}>
-              <span className={`px-2.5 py-1 text-xs rounded-full font-semibold ${status?.badge ?? 'bg-slate-100 text-slate-600'}`}>
+              <Badge tone={status?.badge ?? 'bg-slate-100 text-slate-600'} bold>
                 {status?.label ?? 'Sin llenar'}
-              </span>
+              </Badge>
               {record?.is_private && (
                 <span className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-full font-semibold bg-violet-50 text-violet-600">
                   <EyeOff size={12} /> Privada

@@ -1,5 +1,6 @@
 'use client';
 
+import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -26,8 +27,6 @@ interface CustomerPickerProps {
   lockedHint?: string;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 
 export default function CustomerPicker({ value, onChange, active = true, required = true, locked = false, lockedHint }: CustomerPickerProps) {
   const vocab = useVocabulary();

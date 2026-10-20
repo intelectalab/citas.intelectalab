@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarClock, CalendarPlus, CheckCircle, Edit2, Eye, Hourglass, PhoneCall, Repeat, RotateCcw, XCircle } from 'lucide-react';
@@ -212,9 +214,9 @@ export default function RecallsTable() {
     {
       header: 'Estado',
       cell: (r) => (
-        <span key={`status-${r.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${RECALL_STATUS_STYLES[r.status]}`} data-status={r.status}>
+        <Badge key={`status-${r.id}`} tone={RECALL_STATUS_STYLES[r.status]} nowrap data-status={r.status}>
           {r.status_name}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -276,7 +278,7 @@ export default function RecallsTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <div className="mb-6">
         <DataTable<Recall>

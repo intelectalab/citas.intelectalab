@@ -102,7 +102,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Cargos por cancelar tarde y por no asistir.** La API avisa de la cancelación tardía, pero no cobra nada. Depende de la caja.
 - **Salas y equipos en la cita.** Ya se registran por sucursal, pero la cita no valida que haya una sala libre ni asigna `room_id`.
 - **Permisos por acción en la agenda.** El prototipo separa confirmar, registrar llegada, atender, cancelar y reprogramar. Aquí "Editar" de Agenda y citas los reúne a todos. Forzar un horario ya es un permiso aparte.
-- **Avisos al cliente.** Confirmación de reserva, recordatorio y aviso de reprogramación no se envían: no hay envío de mensajes.
+- **Avisos al cliente.** Desde el 2026-10-18 se envían por correo (confirmación, recordatorio, cancelación y reprogramación), cuando la empresa configura su correo. Falta WhatsApp.
 - **Citas recurrentes y clases grupales.** El prototipo las tiene; no se incluyeron.
 - **Reglas de agenda sin editor.** `agenda.require_confirmation`, `agenda.client_overlap`, `agenda.allow_override`, `agenda.slot_interval`, `cancel.require_reason` y `noshow.grace_minutes` usan su valor por defecto; no están en el editor de reglas de la plataforma (`src/lib/rules.ts`) ni en `/settings`.
 - **Asignación de servicios a profesionales.** La tabla `service_professionals` existe y la API la respeta, pero no hay pantalla para llenarla.
@@ -157,16 +157,16 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Soporte SaaS y fichas privadas.** Quien entra al panel de una empresa actúa como su dueño, así que también puede pedir acceso de emergencia. Definir si debe impedirse.
 - **Descargar la historia completa de un cliente.** Solo se descarga ficha por ficha.
 - **Nueva cita desde la página del cliente.** No hay botón; hay que ir a la agenda y buscarlo.
-- **Página del cliente sin embudo ni ventas.** Muestra datos, citas y fichas. Faltan su etapa en el embudo, compras, paquetes y saldo cuando existan esos módulos.
+- **Página del cliente sin embudo ni ventas.** Muestra datos, citas, fichas y paquetes (desde el 2026-10-18). Faltan su etapa en el embudo, compras y saldo.
 - **Vulnerabilidades en una dependencia anterior.** `composer audit` avisa de dos (una alta) en `league/commonmark`, que viene con Laravel. Se resuelve con `composer update league/commonmark`.
 - **Pruebas en pantalla que faltan.** Editar al cliente desde su página, abrir una cita desde ahí, cliente con mascotas, aviso de emergencia visto por el autor y tema oscuro.
 
 ## Detectados el 2026-10-08 (portal del cliente)
 
-- **Avisos al cliente.** No recibe confirmación, recordatorio ni aviso de cambio: no hay envío de mensajes.
+- **Avisos al cliente.** Desde el 2026-10-18 le llegan por correo si la empresa configuró el suyo. Falta WhatsApp.
 - **Aviso a la sede.** El personal no recibe ninguna notificación cuando un cliente reserva, cambia o cancela; lo ve en la agenda.
 - **Reserva pública sin cuenta y kiosko.** El prototipo los tiene. Hoy solo reserva quien ya tiene cuenta de cliente.
-- **Lo que el portal aún no muestra.** Sus controles pendientes, sus fichas o indicaciones, sus paquetes, membresías, puntos y pagos.
+- **Lo que el portal aún no muestra.** Sus controles pendientes, sus fichas o indicaciones, membresías, puntos y pagos. Los paquetes ya se ven en "Mis paquetes" (2026-10-18).
 - **Datos del cliente.** Solo puede cambiar su celular. Ya cambia su contraseña. No edita correo, dirección ni a sus mascotas ya registradas.
 - **Reglas de la reserva sin editor.** `booking.enabled`, `booking.min_lead_minutes`, `booking.choose_professional`, `cancel.client_allowed` y `reschedule.max_times` usan su valor por defecto; no están en el editor de reglas ni en `/settings`.
 - **Exigir adelanto tras varias inasistencias** (`noshow.block_after`). Sin aplicar.
@@ -429,7 +429,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 
 ## Detectados el 2026-10-12 (ventas, entrega 1: caja y cobrar la cita)
 
-- **Entregas que siguen (acordadas).** La 3 (carrito) y la 4 (pasarela simulada) se hicieron el 2026-10-14. La 4 era: pasarela de pago simulada (link de pago, página de pago de prueba, aviso de confirmación, vencimiento del link, adelanto al reservar en el portal) y pantalla Integraciones con las pasarelas conocidas (Culqi, Niubiz, Izipay, Mercado Pago) y el proveedor de facturación. 5: Paquetes. 6: Marketing.
+- **Entregas que siguen (acordadas).** La 3 (carrito) y la 4 (pasarela simulada) se hicieron el 2026-10-14. La 4 era: pasarela de pago simulada (link de pago, página de pago de prueba, aviso de confirmación, vencimiento del link, adelanto al reservar en el portal) y pantalla Integraciones con las pasarelas conocidas (Culqi, Niubiz, Izipay, Mercado Pago) y el proveedor de facturación. La 5 (Paquetes) se hizo el 2026-10-18. Sigue la 6: Marketing.
 - **Enviar el comprobante al cliente.** Se imprime desde la venta (y se guarda como PDF desde el diálogo del navegador), pero no se envía por correo ni se ve en el portal.
 - **Comprobante real.** El envío a SUNAT es una simulación. Falta el proveedor real, la pantalla para elegirlo y guardar sus llaves, reintentar un comprobante pendiente o rechazado, y la baja.
 - **Datos del emisor.** El comprobante toma razón social, RUC y dirección de la página Empresa; si el RUC está vacío dice "RUC sin registrar" y se emite igual.
@@ -550,7 +550,7 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Devolver una línea.** La devolución sigue siendo por monto; no se elige qué línea se devuelve ni vuelve un producto al stock.
 - **Profesional de cada venta.** Las líneas guardan quién atendió (para las comisiones futuras), pero ningún reporte lo usa todavía; los productos no guardan quién los vendió.
 - **Precio a mano.** No se puede cambiar el precio de una línea en el carrito ni vender algo que no esté en el catálogo.
-- **Paquetes, membresías y gift cards en el carrito.** Esperan a sus módulos.
+- **Membresías y gift cards en el carrito.** Esperan a sus módulos. Los paquetes ya se venden (2026-10-18).
 - **Código de barras.** La tabla lo tiene, pero no se puede escanear ni buscar con lector.
 - **Ventas por cobrar antiguas.** Una venta dejada por cobrar sigue en "Por cobrar" sin límite de días ni aviso.
 - **Cita agendada desde el carrito y no cobrada.** Si se vacía el carrito, la cita queda en la agenda y en "Por cobrar"; nadie recibe un aviso.
@@ -574,3 +574,65 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **"Falta" en una venta con adelanto por devolver.** La lista de Ventas muestra "Falta S/ 150.00" aunque esa cita ya no se va a cobrar.
 - **Datos de ejemplo.** `seed_demo.sql` no trae links ni adelantos pagados: aparecen al probar.
 - **Pruebas en pantalla que faltan.** Página de pago en celular, "Anular link" desde el panel, el adelanto en "Por cobrar" del punto de venta, "No asistió" con adelanto y tema oscuro.
+
+## Pedido el 2026-10-18: historial de acciones del personal
+
+- **Qué se quiere.** Un registro de quién hizo qué y cuándo, para consultarlo o rastrear una acción. Ejemplo: "¿quién anuló la venta V-000123?", "¿quién le dio más días al paquete de Juliana?", "¿qué hizo Rosa ayer?".
+- **Lo que hay hoy.** La tabla `audit_events` existe, pero solo la usan la plataforma (empresas, planes, rubros, soporte) y el acceso de emergencia a fichas. El resto queda repartido y sin pantalla: el historial de cada cita, el historial de cada paquete, los movimientos de caja con su usuario, y los pagos y devoluciones con quién los hizo. Muchas acciones no dejan rastro: cambios de clientes, servicios, precios, cupones, permisos, bloqueos, perdonar faltas, el acceso al portal.
+- **Por decidir antes de hacerlo.** Qué acciones se registran (todo o solo lo delicado: dinero, permisos, eliminar), si se guarda "antes y después" de cada cambio, quién lo puede ver (administrador, gerente solo de su sede), cuánto tiempo se guarda, y si se ven también las acciones de soporte de la plataforma dentro de la empresa.
+- **Dónde iría.** Una pantalla "Historial de acciones" en el grupo "Tu empresa", de a 6, con filtros por persona, por tipo de acción y por fecha, y el nombre de cada persona como enlace a su página. Y en la página de cada usuario, sus últimas acciones.
+- Reúne los pendientes sueltos de bitácora de este archivo (bitácora sin pantalla, citas, fichas, bloqueos, acceso al portal, perdonar faltas, permisos).
+
+## Detectados el 2026-10-18 (ventas, entrega 5: paquetes)
+
+- **Comprar paquetes en el portal.** Solo se venden en la sede (o con link de pago desde el carrito). El prototipo tiene "Se vende en línea".
+- **Paquetes desde un presupuesto.** El "plan de tratamiento" del prototipo (un presupuesto aceptado que se vuelve paquete) espera al módulo de Presupuestos.
+- **Comisión por sesión de paquete.** Espera al módulo de Comisiones.
+- **Avisos del paquete.** Desde el 2026-10-18 el cliente recibe por correo "te queda 1 sesión" y "tu paquete vence pronto". El personal no recibe nada en la campana.
+- **Fechas acordadas con un solo servicio.** Un paquete con fechas acordadas lleva un solo servicio. Uno combinado (por ejemplo, 3 tintes y 3 diseños) es libre y sus citas se agendan una por una.
+- **Profesional distinto según el día.** En "Personalizado" todas las fechas van con la misma persona o con quien esté libre. Para "martes con el Dr. Pérez y sábado con la Dra. Gómez" hay que cambiar el profesional de cada fecha a mano.
+- **Reprogramar varias citas a la vez.** Al registrar vacaciones o un feriado se ven las citas afectadas (con la marca de paquete), pero se reprograman una por una.
+- **Salas y equipos en las citas del paquete.** No se reservan, como en el resto de la agenda (decisión del 2026-10-12).
+- **Consumir sin saldo.** Un paquete agotado no deja descontar más: el servicio se cobra normal. El prototipo tiene esa opción apagada.
+- **"Por atender (ya cobrado)" no es contabilidad.** Es el valor de las sesiones que faltan dar. No hay un reporte contable del ingreso diferido.
+- **Comprobante del paquete.** Se emite la boleta por el total al venderlo y nada al usar cada sesión. Revisarlo con el proveedor de facturación real.
+- **Cita con paquete en la agenda.** La agenda no marca las citas que usan un paquete; se ve al abrir la cita.
+- **Devolver un paquete vencido.** La devolución sigue la regla de la empresa (30 días desde la venta): un paquete de 90 días comprado hace 40 ya no se devuelve desde el sistema, aunque su condición diga "mientras esté vigente". Evaluar si el plazo de los paquetes debe ser su propia vigencia.
+- **Ventas de ejemplo solo de paquetes.** En `seed_demo.sql` las únicas ventas y pagos son los de los paquetes; las citas atendidas siguen sin venta.
+- **Paquetes por rubro.** Los rubros de la plataforma no traen paquetes de ejemplo en su plantilla.
+- **Precio del paquete al cambiar de moneda.** El catálogo conserva su número; un paquete en otra moneda no se puede vender hasta editarlo.
+- **Roles ya creados.** En una empresa que ya tenía sus roles, Gerente, Recepción y Caja no reciben solos los permisos de Paquetes: hay que encenderlos o usar "Volver a como nació".
+- **Pruebas en pantalla que faltan.** El día completo con los próximos días con espacio (probado por la API), "Registrar uso sin cita" con clics, un paquete combinado en el cobro, Recepción y Caja, el link de pago de un paquete con fechas, tema oscuro y celular.
+
+## Detectados el 2026-10-18 (ventas, entrega 6a: mensajes por correo)
+
+- **Lo que sigue de Marketing.** 6b: campañas a grupos de clientes (segmentos, plantillas de la empresa, solo a quien aceptó promociones, programables). 6c: automatizaciones (cumpleaños, cliente inactivo, primera atención, no asistió).
+- **WhatsApp real.** Queda "Listo para conectar". Necesita un proveedor (Meta u otro), con costo por mensaje y plantillas que Meta debe aprobar antes de usarlas.
+- **La tarea programada en el servidor.** `messages:send` está registrada cada 5 minutos, pero hay que activar el programador de tareas de Laravel en el servidor (una línea de cron). Sin eso, los recordatorios salen solo cuando alguien usa el panel.
+- **Enlaces dentro de los correos.** Usan la dirección de la web (`FRONTEND_URL`): en local apuntan a `localhost:3000`. Configurarla en el servidor.
+- **Envío en segundo plano.** Los correos salen al terminar cada respuesta, en el mismo proceso. Con mucho volumen convendría una cola de trabajos.
+- **Sesiones de un paquete con fechas acordadas.** Al venderlo se crean varias citas a la vez y no se envía la confirmación de cada una (serían muchos correos). Falta un correo único con todas las fechas.
+- **"Leído" y "Entregado".** Un correo SMTP común no informa si llegó o si se abrió. Solo lo dan servicios como Brevo o Amazon SES, conectados de otra forma.
+- **Mensajes con adjuntos.** El comprobante va como texto en el correo, no como PDF adjunto.
+- **Responder desde el sistema.** Si el cliente responde, la respuesta llega al correo de la empresa, no al sistema.
+- **Avisos a dependientes y mascotas.** Los textos usan el nombre del cliente (dueño o titular). Falta un dato "[Paciente]" o "[Mascota]" para la cita de un dependiente.
+- **Contraseñas del personal por correo.** Las cuentas nuevas del personal siguen sin recibir su contraseña por correo.
+- **Guiones de video.** `Documentación/Guiones de video/guiones.md` todavía nombra a `juliana.diaz@gmail.com`: la clienta de prueba ahora es `juliana.diaz@example.com`.
+- **Pruebas que faltan.** Un envío con un correo real, el link de pago por correo con clics, "Promociones" del portal en pantalla, la tarea programada en un servidor, tema oscuro y celular.
+
+## Detectados el 2026-10-19 (migraciones)
+
+- **Desde hoy los cambios de tablas van en migraciones.** `init.sql` y `seed.sql` quedan congelados. Un dato esencial nuevo (por ejemplo, un permiso) también va en una migración; si no, las empresas que ya existen no lo reciben.
+- **`seed_demo.sql` debe seguir al día** con cada migración nueva; si no, `db:demo` falla.
+- **Contraseñas de la plataforma en el servidor.** `admin@tusaas.com` y `soporte@tusaas.com` vienen del seed con la contraseña de local: cambiarlas apenas se instale.
+- **Tu base local.** Está atrasada (Paquetes y Mensajes): ejecutar `php artisan db:demo` una vez.
+- **Programador de tareas en el servidor.** Falta la línea de cron de `schedule:run`.
+
+## Pendientes de la limpieza del 2026-10-19
+
+- **Pie de los paneles laterales.** Unificarlo en un componente (ya existen `Button` y `OptionCard`); tiene variantes de texto y permisos, hay que revisarlo uno por uno.
+- **Tarjetas de números que filtran** (6 pantallas) y **"cargar datos, mostrar error, recargar"** (30 pantallas): una función común para cada una.
+- **Quitar las revisiones de "base vieja"** (`ready()`, `Schema::hasColumn`) cuando todas las bases (local y servidor) se armen con migraciones.
+- **Función `tenant()` de los controladores** (16 copias, no idénticas) y **"descartar lo inactivo"** (15 veces): pasarlas a piezas comunes.
+- **Archivos muy largos** para partir: `Packages.php` (unas 1,050 líneas), el punto de venta (829), el panel de cobro (737) y Configuración (729).
+- **Borrar `apps/web/.next`** de vez en cuando: es caché y llegó a 3.1 GB.

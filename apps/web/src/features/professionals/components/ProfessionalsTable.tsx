@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Contact, Pencil, Trash2, CheckCircle, XCircle, Award, FileBadge, UserCheck, Eye, CalendarClock, Users } from 'lucide-react';
@@ -298,14 +299,13 @@ export default function ProfessionalsTable() {
         const statusName = prof.status?.name || 'Activo';
         const isInactive = prof.status?.slug === 'inactive' || statusName.toLowerCase() === 'inactivo';
         return (
-          <span 
-            key={`status-${prof.id}`} 
-            className={`px-2.5 py-1 text-xs rounded-full font-medium ${
+          <Badge 
+            key={`status-${prof.id}`} tone={
               isInactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
-            }`}
+            }
           >
             {statusName}
-          </span>
+          </Badge>
         );
       },
     },

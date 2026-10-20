@@ -1,12 +1,11 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import SectionTitle from '@/app/components/common/SectionTitle';
+import BackLink from '@/app/components/common/BackLink';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  ArrowLeft, CalendarCheck, CalendarClock, CalendarDays, CalendarX2, ClipboardList, EyeOff, Hash, IdCard, Loader2,
-  Mail, MapPin, PawPrint, Pencil, Phone, Timer, User, Users,
-} from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarDays, CalendarX2, ClipboardList, EyeOff, Hash, IdCard, Loader2, Mail, MapPin, PawPrint, Pencil, Phone, Timer, User, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -14,6 +13,9 @@ import FormCustomer from './FormCustomer';
 import CustomerPortalAccess, { type PortalAccess } from './CustomerPortalAccess';
 import { blockLabel, missesLabel, type OnlineBookingState } from '../onlineBooking';
 import RecordPanel from '@/features/records/components/RecordPanel';
+import CustomerPackages from '@/features/packages/components/CustomerPackages';
+import CustomerMessages from '@/features/messages/components/CustomerMessages';
+import type { Consents } from '@/features/messages/messages';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import { PagedList } from '@/app/components/common/Pager';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
@@ -45,7 +47,6 @@ interface CustomerData {
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 const CLICKABLE = ['completed', 'upcoming', 'missed', 'records'];
@@ -66,6 +67,7 @@ export default function CustomerDetail() {
   const vocab = useVocabulary();
   const [customer, setCustomer] = useState<CustomerData | null>(null);
   const [canForgive, setCanForgive] = useState(false);
+  const [consents, setConsents] = useState<Consents | null>(null);
   const [forgiving, setForgiving] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [records, setRecords] = useState<CareRecord[]>([]);
@@ -94,7 +96,7 @@ export default function CustomerDetail() {
 
   const loadCustomer = useCallback(() => {
     api.get(`/customers/${params.id}`)
-      .then((res) => { setCustomer(res.data.customer); setCanForgive(Boolean(res.data.can_forgive_booking)); setError(''); })
+      .then((res) => { setCustomer(res.data.customer); setCanForgive(Boolean(res.data.can_forgive_booking)); setConsents(res.data.consents ?? null); setError(''); })
       .catch((err) => setError(err?.response?.status === 404 ? `Este ${vocab.client.toLowerCase()} no existe.` : 'No se pudo cargar la información.'))
       .finally(() => setLoading(false));
   }, [params.id, vocab.client]);
@@ -140,9 +142,7 @@ export default function CustomerDetail() {
   }
 
   const backLink = (
-    <Link href="/customers" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
-      <ArrowLeft size={18} /> {vocab.clients}
-    </Link>
+    <BackLink href="/customers">{vocab.clients}</BackLink>
   );
 
   if (!customer) {
@@ -319,10 +319,16 @@ export default function CustomerDetail() {
           ))}
         </div>
 
+        {hasModule('packages') && can('packages.view') && <CustomerPackages customerId={customer.id} />}
+
+        {(can('messages.view') || can('customers.edit')) && (
+          <CustomerMessages customer={customer} consents={consents} canView={can('messages.view')} canEditConsents={can('customers.edit')} />
+        )}
+
         {usesRecords && (
           <section className={`${card} overflow-hidden scroll-mt-4`} data-card="records">
             <div className="px-6 pt-5 pb-3">
-              <h2 className={cardTitle}><ClipboardList className="w-4 h-4 text-[#3F768C]" /> Historia de atenciones</h2>
+              <SectionTitle><ClipboardList className="w-4 h-4 text-[#3F768C]" /> Historia de atenciones</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">Las fichas llenadas en cada atención, de la más reciente a la más antigua.</p>
             </div>
             {records.length === 0 ? (
@@ -353,9 +359,9 @@ export default function CustomerDetail() {
                             {record.template_name} · {record.professional ?? record.author}{record.dependent ? ` · ${record.dependent.name}` : ''}
                           </span>
                         </div>
-                        <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${RECORD_STATUS[record.status]?.badge ?? ''}`}>
+                        <Badge tone={RECORD_STATUS[record.status]?.badge ?? ''} nowrap>
                           {RECORD_STATUS[record.status]?.label ?? record.status}
-                        </span>
+                        </Badge>
                       </button>
                     </li>
                   );
@@ -369,7 +375,7 @@ export default function CustomerDetail() {
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">
-              <h2 className={cardTitle}><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</h2>
+              <SectionTitle><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">Haz clic en una cita para ver su detalle. Las tarjetas de arriba filtran esta lista.</p>
             </div>
             {appointments.length === 0 ? (

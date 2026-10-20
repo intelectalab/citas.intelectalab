@@ -1,5 +1,6 @@
 'use client';
 
+import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useState } from 'react';
 import { Check, DoorOpen, Gauge, LifeBuoy, Loader2, Lock, Palette, RotateCcw, Tag } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -37,9 +38,9 @@ const inputClass =
 function Title({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
   return (
     <div>
-      <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+      <SectionTitle>
         <span className="text-[#3F768C]">{icon}</span> {title}
-      </h2>
+      </SectionTitle>
       <p className="text-xs text-slate-500 font-medium mt-1">{hint}</p>
     </div>
   );

@@ -51,7 +51,7 @@ class WaitlistController extends Controller
 
     private function today(Tenant $tenant): Carbon
     {
-        return now($tenant->timezone ?: 'America/Lima')->startOfDay();
+        return now($tenant->zone())->startOfDay();
     }
 
     public function index(Request $request)
@@ -327,7 +327,7 @@ class WaitlistController extends Controller
             'customer'     => $customer ? [
                 'id'         => $customer->id,
                 'code'       => $customer->code,
-                'name'       => trim("{$customer->first_name} {$customer->last_name}"),
+                'name'       => \App\Support\Person::name($customer),
                 'phone'      => $customer->phone,
                 'email'      => $customer->email,
             ] : null,

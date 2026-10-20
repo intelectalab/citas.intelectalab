@@ -31,6 +31,7 @@ export interface AffectedAppointment {
   customer: string | null;
   service: string | null;
   professional: string | null;
+  package?: string | null;
 }
 
 export interface Holiday {

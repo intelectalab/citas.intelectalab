@@ -1,5 +1,7 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useEffect, useState } from 'react';
 import { Clock, Plus, X } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -171,7 +173,7 @@ export default function BranchHoursPanel({ isOpen, onClose, branch, onSaved }: B
             </p>
           )}
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
           {saved && <p data-saved className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">Horario guardado.</p>}
 
           {saved && outside.length > 0 && (
@@ -193,9 +195,9 @@ export default function BranchHoursPanel({ isOpen, onClose, branch, onSaved }: B
             <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
               Cerrar
             </button>
-            <button type="button" data-action="save-hours" onClick={save} disabled={saving} className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+            <Button type="button" data-action="save-hours" onClick={save} disabled={saving} variant="classic">
               {saving ? 'Guardando...' : 'Guardar horario'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

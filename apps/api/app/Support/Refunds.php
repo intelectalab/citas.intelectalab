@@ -143,7 +143,9 @@ class Refunds
         ]);
 
         PaymentLinks::afterRefund($sale);
+        $fresh = DB::table('sales')->where('id', $sale->id)->first();
+        Packages::afterSaleRefunded($tenant, $fresh, $user);
 
-        return DB::table('sales')->where('id', $sale->id)->first();
+        return $fresh;
     }
 }

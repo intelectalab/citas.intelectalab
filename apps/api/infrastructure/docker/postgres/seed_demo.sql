@@ -262,13 +262,13 @@ INSERT INTO customers (
     id, tenant_id, code, first_name, last_name, birth_date, biological_sex, document_number, email, phone, address, district, department, medical_notes
 ) VALUES
 (
-    '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0001', 'Juliana', 'Díaz', '1992-05-14', 'F', '72819043', 'juliana.diaz@gmail.com', '+51 912 345 678', 'Calle Los Pinos 145', 'Miraflores', 'Lima', 'Alergica a la penicilina'
+    '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0001', 'Juliana', 'Díaz', '1992-05-14', 'F', '72819043', 'juliana.diaz@example.com', '+51 912 345 678', 'Calle Los Pinos 145', 'Miraflores', 'Lima', 'Alergica a la penicilina'
 ),
 (
-    '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0002', 'Carlos', 'Ramírez Soto', '1985-11-20', 'M', '44219873', 'carlos.ramirez@yahoo.es', '+51 987 654 321', 'Av. Benavides 789', 'Miraflores', 'Lima', 'Hipertenso controlado'
+    '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0002', 'Carlos', 'Ramírez Soto', '1985-11-20', 'M', '44219873', 'carlos.ramirez@example.com', '+51 987 654 321', 'Av. Benavides 789', 'Miraflores', 'Lima', 'Hipertenso controlado'
 ),
 (
-    '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0003', 'Sofía', 'Valverde Mendoza', '1998-03-02', 'F', '75412398', 'sofia.valverde@outlook.com', '+51 976 123 456', 'Av. Arequipa 3400', 'San Isidro', 'Lima', 'Sin antecedentes de importancia'
+    '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'CLI-0003', 'Sofía', 'Valverde Mendoza', '1998-03-02', 'F', '75412398', 'sofia.valverde@example.com', '+51 976 123 456', 'Av. Arequipa 3400', 'San Isidro', 'Lima', 'Sin antecedentes de importancia'
 )
 ON CONFLICT DO NOTHING;
 
@@ -282,7 +282,7 @@ INSERT INTO recalls (tenant_id, customer_id, service_id, professional_id, label,
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '40eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Revisión de tratamiento', current_date + 40, 'pending', NULL);
 
 INSERT INTO customers (id, tenant_id, code, first_name, last_name, email, phone) VALUES
-  ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'CLI-0001', 'Juliana', 'Díaz', 'juliana.diaz@gmail.com', '+51 912 345 678')
+  ('50eebc99-9c0b-4ef8-bb6d-6bb9bd380b01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 'CLI-0001', 'Juliana', 'Díaz', 'juliana.diaz@example.com', '+51 912 345 678')
 ON CONFLICT DO NOTHING;
 
 UPDATE customers SET password_hash = '$2y$12$asHZEj9ZDLwBioqgkZedseegEV2IcYwqBdkZZpnfEy672NFep.kkq', must_change_password = false
@@ -326,14 +326,6 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO membership_plans (id, tenant_id, name, description, price, billing_period, discount_percent, sessions_included) VALUES
   ('64eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Plan Salud Familiar', 'Descuento en consultas y una consulta general incluida al mes', 89.00, 'monthly', 10, 1)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO package_plans (id, tenant_id, name, description, price, validity_days) VALUES
-  ('65eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Paquete 5 controles pediátricos', 'Cinco controles con precio preferencial', 250.00, 180)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO package_plan_items (tenant_id, package_plan_id, service_id, sessions) VALUES
-  ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '65eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 5)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO customer_tags (id, tenant_id, name, color) VALUES
@@ -1178,5 +1170,154 @@ FROM (VALUES
 JOIN tenants t ON t.slug = p.slug
 JOIN product_categories pc ON pc.tenant_id = t.id AND pc.name = 'Venta al público'
 ON CONFLICT (tenant_id, sku) DO NOTHING;
+
+CREATE TEMP TABLE demo_package_plans (slug text, name text, description text, price numeric, days int, mode text, frequency text, custom_days jsonb, pro_mode text, late text, refund text, items jsonb, sold int) ON COMMIT DROP;
+INSERT INTO demo_package_plans VALUES
+  ('centro-medico-integral', 'Paquete 5 controles pediátricos', 'Cinco controles con precio preferencial', 250.00, 180, 'free', 'weekly', '[]', 'chosen', 'lose', 'unused_normal', '[{"service": "Control Pediátrico", "sessions": 5}]', 3),
+  ('centro-medico-integral', 'Curaciones: 6 sesiones', 'Curación de una herida dos veces por semana', 230.00, 45, 'scheduled', 'twice_weekly', '[]', 'any', 'lose', 'unused_normal', '[{"service": "Curación de heridas", "sessions": 6}]', 2),
+  ('mente-sana', 'Terapia familiar: 4 sesiones', 'Una sesión por semana durante un mes', 720.00, 60, 'scheduled', 'weekly', '[]', 'chosen', 'lose', 'unused_normal', '[{"service": "Terapia familiar", "sessions": 4}]', 2),
+  ('fisioterapia-vital', 'Rehabilitación: 10 sesiones', 'Martes y sábados con tu terapeuta', 480.00, 60, 'scheduled', 'custom', '[{"weekday": 2, "time": "18:00"}, {"weekday": 6, "time": "10:00"}]', 'chosen', 'lose', 'unused_normal', '[{"service": "Masaje descontracturante", "sessions": 10}]', 3),
+  ('fisioterapia-vital', 'Drenaje linfático: 5 sesiones', 'Úsalas cuando quieras', 400.00, 90, 'free', 'weekly', '[]', 'any', 'reschedule', 'unused_package', '[{"service": "Drenaje linfático", "sessions": 5}]', 2),
+  ('bella-aura', 'Pack uñas acrílicas x4', 'Promoción no reembolsable', 400.00, 120, 'free', 'weekly', '[]', 'any', 'reschedule', 'none', '[{"service": "Uñas acrílicas", "sessions": 4}]', 3),
+  ('barberia-don-filo', 'Pack Don Filo', 'Tres tintes de barba y tres diseños', 120.00, 90, 'free', 'weekly', '[]', 'any', 'reschedule', 'none', '[{"service": "Tinte de barba", "sessions": 3}, {"service": "Diseño y líneas", "sessions": 3}]', 2),
+  ('estetica-lumina', 'Cavitación: 8 sesiones', 'Una sesión por semana', 880.00, 90, 'scheduled', 'weekly', '[]', 'chosen', 'lose', 'unused_normal', '[{"service": "Cavitación", "sessions": 8}]', 2),
+  ('veterinaria-huellitas', 'Grooming x4 (raza grande)', 'Baño y corte una vez al mes', 380.00, 150, 'scheduled', 'monthly', '[]', 'any', 'reschedule', 'unused_normal', '[{"service": "Baño y corte (raza grande)", "sessions": 4}]', 2);
+
+DO $packages$
+DECLARE
+  p record;
+  it record;
+  c record;
+  tenant uuid;
+  plan uuid;
+  cp uuid;
+  branch uuid;
+  pro uuid;
+  seq int;
+  k int;
+  used int;
+  bought timestamptz;
+  expires timestamptz;
+  state text;
+  total int;
+  appt record;
+  seller uuid;
+  sale uuid;
+  sale_code text;
+  sale_tax numeric;
+  pay_method text;
+  buyer record;
+BEGIN
+  FOR p IN SELECT d.*, t.id AS tenant_id, t.code AS tenant_code FROM demo_package_plans d JOIN tenants t ON t.slug = d.slug LOOP
+    tenant := p.tenant_id;
+
+    IF EXISTS (SELECT 1 FROM package_plans WHERE tenant_id = tenant AND lower(name) = lower(p.name) AND deleted_at IS NULL) THEN
+      CONTINUE;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.items) e
+      WHERE NOT EXISTS (SELECT 1 FROM services s WHERE s.tenant_id = tenant AND s.name = e->>'service')
+    ) THEN
+      CONTINUE;
+    END IF;
+
+    INSERT INTO package_plans (tenant_id, name, description, price, validity_days, booking_mode, frequency, custom_days, professional_mode, late_policy, refund_policy, created_at)
+    VALUES (tenant, p.name, p.description, p.price, p.days, p.mode, p.frequency, p.custom_days, p.pro_mode, p.late, p.refund, now() - interval '200 days')
+    RETURNING id INTO plan;
+
+    INSERT INTO package_plan_items (tenant_id, package_plan_id, service_id, sessions, position)
+    SELECT tenant, plan, s.id, (e.value->>'sessions')::int, (e.ordinality - 1)::smallint
+    FROM jsonb_array_elements(p.items) WITH ORDINALITY AS e(value, ordinality)
+    JOIN services s ON s.tenant_id = tenant AND s.name = e.value->>'service';
+
+    SELECT sum((e->>'sessions')::int) INTO total FROM jsonb_array_elements(p.items) e;
+
+    k := 0;
+    FOR c IN SELECT cu.id FROM customers cu WHERE cu.tenant_id = tenant AND cu.deleted_at IS NULL ORDER BY random() LIMIT p.sold LOOP
+      k := k + 1;
+      state := CASE WHEN k = 1 THEN 'active' WHEN k = 2 AND p.sold >= 3 THEN 'expired' WHEN k = 2 THEN 'consumed' ELSE 'consumed' END;
+      bought := CASE state WHEN 'expired' THEN now() - make_interval(days => p.days + 10) WHEN 'consumed' THEN now() - make_interval(days => least(p.days - 5, 40)) ELSE now() - interval '12 days' END;
+      expires := bought + make_interval(days => p.days);
+      branch := (SELECT b.id FROM branches b WHERE b.tenant_id = tenant AND b.status = 'active' ORDER BY b.created_at LIMIT 1);
+      pro := CASE WHEN p.pro_mode = 'chosen' THEN (SELECT ps.professional_id FROM professional_schedules ps WHERE ps.tenant_id = tenant AND ps.branch_id = branch ORDER BY ps.professional_id LIMIT 1) END;
+
+      INSERT INTO tenant_sequences (tenant_id, key, next_value) VALUES (tenant, 'package', 2)
+      ON CONFLICT (tenant_id, key) DO UPDATE SET next_value = tenant_sequences.next_value + 1
+      RETURNING next_value - 1 INTO seq;
+
+      INSERT INTO customer_packages (tenant_id, code, package_plan_id, customer_id, branch_id, name, price, conditions, professional_id, status, purchased_at, expires_at, created_at)
+      VALUES (
+        tenant, 'PQ-' || lpad(seq::text, 4, '0'), plan, c.id, branch, p.name, p.price,
+        jsonb_build_object('validity_days', p.days, 'booking_mode', p.mode, 'frequency', p.frequency, 'custom_days', p.custom_days, 'repeat_weeks', 1,
+          'professional_mode', p.pro_mode, 'late_policy', p.late, 'refund_policy', p.refund, 'terms', NULL),
+        pro, state, bought, expires, bought
+      )
+      RETURNING id INTO cp;
+
+      INSERT INTO customer_package_items (tenant_id, customer_package_id, service_id, sessions_total, sessions_used, unit_price, position)
+      SELECT tenant, cp, i.service_id, i.sessions,
+        CASE state WHEN 'consumed' THEN i.sessions WHEN 'expired' THEN greatest(1, i.sessions / 2) ELSE least(i.sessions - 1, 2) END,
+        s.price, i.position
+      FROM package_plan_items i JOIN services s ON s.id = i.service_id
+      WHERE i.package_plan_id = plan;
+
+      seller := (SELECT u.id FROM users u WHERE u.tenant_id = tenant AND u.is_owner ORDER BY u.created_at LIMIT 1);
+      sale_tax := round(p.price - p.price / 1.18, 2);
+      pay_method := (ARRAY['card', 'yape', 'transfer', 'plin'])[1 + (k % 4)];
+
+      INSERT INTO tenant_sequences (tenant_id, key, next_value) VALUES (tenant, 'sale', 2)
+      ON CONFLICT (tenant_id, key) DO UPDATE SET next_value = tenant_sequences.next_value + 1
+      RETURNING next_value - 1 INTO seq;
+
+      INSERT INTO sales (tenant_id, branch_id, customer_id, code, status, subtotal, discount, tax, total, paid, balance, tax_rate, prices_include_tax, created_by, paid_at, created_at, updated_at)
+      VALUES (tenant, branch, c.id, 'V-' || lpad(seq::text, 6, '0'), 'paid', p.price, 0, sale_tax, p.price, p.price, 0, 18, true, seller, bought, bought, bought)
+      RETURNING id, code INTO sale, sale_code;
+
+      INSERT INTO sale_items (tenant_id, sale_id, item_type, reference_id, description, quantity, unit_price, discount, total, position)
+      VALUES (tenant, sale, 'package', plan, p.name, 1, p.price, 0, p.price, 0);
+
+      INSERT INTO payments (tenant_id, branch_id, sale_id, customer_id, method, status, amount, external_reference, confirmed_at, created_by, created_at)
+      VALUES (tenant, branch, sale, c.id, pay_method, 'confirmed', p.price, 'OP-' || lpad((100000 + floor(random() * 899999))::int::text, 6, '0'), bought, seller, bought);
+
+      INSERT INTO invoice_series (tenant_id, doc_type, serie, next_number) VALUES (tenant, 'boleta', 'B001', 2)
+      ON CONFLICT (tenant_id, doc_type, serie) DO UPDATE SET next_number = invoice_series.next_number + 1
+      RETURNING next_number - 1 INTO seq;
+
+      SELECT cu.first_name, cu.last_name, cu.document_number, td.name AS doc_type INTO buyer
+      FROM customers cu LEFT JOIN type_documents td ON td.id = cu.type_document_id WHERE cu.id = c.id;
+
+      INSERT INTO invoices (tenant_id, branch_id, sale_id, customer_id, doc_type, serie, number, customer_doc_type, customer_doc_number, customer_name, taxable, tax, total, status, provider, simulated, sunat_status, sunat_message, external_id, issued_by, issued_at, created_at)
+      VALUES (tenant, branch, sale, c.id, 'boleta', 'B001', seq, buyer.doc_type, buyer.document_number, trim(buyer.first_name || ' ' || buyer.last_name), p.price - sale_tax, sale_tax, p.price, 'issued', 'simulated', true, 'accepted', 'Simulación: el comprobante no se envió a SUNAT.', 'SIM-B001-' || seq, seller, bought, bought);
+
+      UPDATE customer_packages SET sale_id = sale, created_by = seller WHERE id = cp;
+
+      INSERT INTO customer_package_events (tenant_id, customer_package_id, kind, detail, amount, created_by, created_at)
+      VALUES (tenant, cp, 'sold', 'Vendido en la venta ' || sale_code || '.', p.price, seller, bought);
+
+      FOR it IN SELECT * FROM customer_package_items WHERE customer_package_id = cp LOOP
+        FOR used IN 1..it.sessions_used LOOP
+          SELECT a.id, a.professional_id, a.starts_at INTO appt
+          FROM appointments a
+          WHERE a.tenant_id = tenant AND a.customer_id = c.id AND a.service_id = it.service_id
+            AND a.status = 'completed' AND a.customer_package_id IS NULL
+            AND a.starts_at BETWEEN bought AND least(expires, now())
+          ORDER BY a.starts_at
+          LIMIT 1;
+
+          IF FOUND THEN
+            UPDATE appointments SET customer_package_id = cp WHERE id = appt.id;
+            INSERT INTO package_usages (tenant_id, customer_package_id, service_id, appointment_id, professional_id, kind, used_at)
+            VALUES (tenant, cp, it.service_id, appt.id, appt.professional_id, 'attended', appt.starts_at);
+          ELSE
+            INSERT INTO package_usages (tenant_id, customer_package_id, service_id, professional_id, kind, used_at)
+            VALUES (tenant, cp, it.service_id, pro, 'attended', least(now() - interval '1 day', bought + make_interval(days => used * 4)));
+          END IF;
+        END LOOP;
+      END LOOP;
+    END LOOP;
+  END LOOP;
+END
+$packages$;
 
 COMMIT;

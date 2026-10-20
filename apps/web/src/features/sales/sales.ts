@@ -123,6 +123,12 @@ export interface ChargeContext {
   duplicate?: boolean;
   links?: { ready: boolean; hours: number; simulated: boolean; current: PaymentLink | null };
   qr?: Partial<Record<'yape' | 'plin', PaymentQr>>;
+  packages?: { id: string; code: string; name: string; created: { code: string; starts_at: string }[]; failed: { date: string; time: string | null; message: string }[] }[];
+  package?: {
+    current: { id: string; code: string; name: string; status: string; consumed: boolean; usage_label: string | null; late_policy: string } | null;
+    usable: { id: string; code: string; name: string; sessions_available: number; sessions_total: number; sessions_used: number; expires_at: string; days_left: number }[];
+    can_use: boolean;
+  } | null;
 }
 
 export interface CashMovement {

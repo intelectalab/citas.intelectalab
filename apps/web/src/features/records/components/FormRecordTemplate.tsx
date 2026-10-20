@@ -1,5 +1,8 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -17,9 +20,6 @@ interface FormRecordTemplateProps {
   onSaved: (template: RecordTemplate) => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const blockTitle = 'text-xs font-bold uppercase tracking-wider text-slate-800';
 
 export default function FormRecordTemplate({ isOpen, onClose, initialData, services, templates, onSaved }: FormRecordTemplateProps) {
@@ -181,7 +181,7 @@ export default function FormRecordTemplate({ isOpen, onClose, initialData, servi
             )}
           </div>
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </form>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">
@@ -192,14 +192,13 @@ export default function FormRecordTemplate({ isOpen, onClose, initialData, servi
           >
             Cancelar
           </button>
-          <button
+          <Button
             type="submit"
             form={formId}
-            disabled={saving}
-            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+            disabled={saving} variant="classic"
           >
             {saving ? 'Guardando...' : initialData ? 'Guardar cambios' : 'Crear ficha'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, Eye, EyeOff, FileCheck2, FilePen, Lock } from 'lucide-react';
@@ -131,9 +132,9 @@ export default function RecordsTable() {
     {
       header: 'Estado',
       cell: (r) => (
-        <span key={`status-${r.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium ${RECORD_STATUS[r.status]?.badge ?? ''}`}>
+        <Badge key={`status-${r.id}`} tone={RECORD_STATUS[r.status]?.badge ?? ''}>
           {RECORD_STATUS[r.status]?.label ?? r.status}
-        </span>
+        </Badge>
       ),
     },
     {

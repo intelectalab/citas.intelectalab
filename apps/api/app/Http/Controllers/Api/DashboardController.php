@@ -34,7 +34,7 @@ class DashboardController extends Controller
         abort_unless($tenant, 403, 'Esta cuenta no pertenece a una empresa.');
         $tenant->loadMissing(['settings', 'activeSubscription.plan']);
 
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $timezone = $tenant->zone();
         $own = $this->ownProfessionalId($user);
         $limit = Access::branchLimit($user);
         $now = now($timezone);
@@ -46,7 +46,7 @@ class DashboardController extends Controller
             ->when($own, fn ($q) => $q->where('appointments.professional_id', $own))
             ->when($limit, fn ($q, $id) => $q->where('appointments.branch_id', $id));
         $between = fn (Builder $q, Carbon $from, Carbon $to): Builder => $q->where('appointments.starts_at', '>=', $from->toIso8601String())->where('appointments.starts_at', '<', $to->toIso8601String());
-        $who = fn (?Appointment $a) => $a ? ($a->dependent?->name ?? ($a->customer ? trim("{$a->customer->first_name} {$a->customer->last_name}") : null)) : null;
+        $who = fn (?Appointment $a) => $a ? ($a->dependent?->name ?? ($a->customer ? \App\Support\Person::name($a->customer) : null)) : null;
 
         $today = $between($appointments(), $dayStart, $dayEnd)->with(['customer', 'dependent', 'service', 'professional', 'branch'])->orderBy('starts_at')->get();
         $active = $today->whereNotIn('status', AppointmentFlow::RELEASED);
@@ -149,7 +149,7 @@ class DashboardController extends Controller
                 'from'    => $event->from_status,
                 'to'      => $event->to_status,
                 'to_name' => AppointmentFlow::name($tenant, $event->to_status),
-                'by'      => $event->actor ? trim("{$event->actor->first_name} {$event->actor->last_name}") : null,
+                'by'      => $event->actor ? \App\Support\Person::name($event->actor) : null,
                 'by_customer' => (bool) $event->actor_customer_id,
                 'code'    => $event->appointment?->code,
                 'who'     => $who($event->appointment),

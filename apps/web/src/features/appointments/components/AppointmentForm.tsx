@@ -1,5 +1,8 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarPlus, CalendarClock, Plus, Search, X } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -42,9 +45,6 @@ interface AppointmentFormProps {
   reschedule?: Appointment | null;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 export default function AppointmentForm({ isOpen, onClose, onSaved, initial, reschedule }: AppointmentFormProps) {
   const { user, can } = useAuth();
@@ -501,7 +501,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             </div>
           )}
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
 
           {canForce && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
@@ -528,14 +528,13 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
           >
             Cancelar
           </button>
-          <button
+          <Button
             type="submit"
             form={formId}
-            disabled={saving || (canForce && !overrideReason.trim())}
-            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+            disabled={saving || (canForce && !overrideReason.trim())} variant="classic"
           >
             {saving ? 'Guardando...' : canForce ? 'Agendar de todos modos' : reschedule ? 'Reprogramar' : 'Agendar cita'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

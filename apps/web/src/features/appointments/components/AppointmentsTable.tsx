@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarDays, CalendarX2, CheckCircle, Eye, Hourglass, Stethoscope, ThumbsUp } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -169,9 +170,9 @@ export default function AppointmentsTable() {
       header: 'Fase',
       cell: (a) => (
         <div key={`status-${a.id}`}>
-          <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>
+          <Badge tone={statusStyle(a.status).badge} nowrap>
             {a.status_name}
-          </span>
+          </Badge>
           {a.confirmation_overdue && (
             <span data-overdue className="block mt-1.5 text-[11px] font-semibold text-rose-600 whitespace-nowrap" title="Venció el plazo para confirmar y sigue pendiente">
               Sin confirmar a tiempo

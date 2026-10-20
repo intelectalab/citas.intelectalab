@@ -23,6 +23,12 @@ class SaleController extends AppointmentController
 
     private function blocked(Tenant $tenant, Appointment $appointment): ?string
     {
+        if (\App\Support\Packages::ready() && $appointment->customer_package_id) {
+            $code = DB::table('customer_packages')->where('id', $appointment->customer_package_id)->value('code');
+
+            return "Esta cita se paga con el paquete {$code}: no se cobra aparte.";
+        }
+
         if (in_array($appointment->status, AppointmentFlow::RELEASED, true)) {
             return 'Una cita ' . mb_strtolower(AppointmentFlow::name($tenant, $appointment->status)) . ' no se cobra.';
         }
@@ -48,7 +54,60 @@ class SaleController extends AppointmentController
         $sale = Sales::ofAppointment($tenant->id, $appointment->id);
         $applied = !$sale && $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price, Currency::of($tenant)) : null;
 
-        return $this->chargeContext($tenant, $sale, $appointment->branch_id, $appointment->customer, $appointment->service?->name, (float) $appointment->price, $applied, $sale ? null : $this->blocked($tenant, $appointment));
+        return $this->chargeContext($tenant, $sale, $appointment->branch_id, $appointment->customer, $appointment->service?->name, (float) $appointment->price, $applied, $sale ? null : $this->blocked($tenant, $appointment))
+            + ['package' => $this->packageContext($tenant, $appointment, $sale)];
+    }
+
+    private function packageContext(Tenant $tenant, Appointment $appointment, ?object $sale): ?array
+    {
+        if (!\App\Support\Packages::enabled($tenant)) {
+            return null;
+        }
+
+        $current = $appointment->customer_package_id ? DB::table('customer_packages')->where('id', $appointment->customer_package_id)->first() : null;
+        $usage = DB::table('package_usages')->where('appointment_id', $appointment->id)->first();
+        $free = !$sale || ((float) $sale->paid <= 0 && $sale->status === 'pending');
+
+        return [
+            'current'  => $current ? \App\Support\Packages::summary($current) + [
+                'consumed'     => (bool) $usage,
+                'usage_label'  => $usage ? (\App\Support\Packages::USAGE_KINDS[$usage->kind] ?? $usage->kind) : null,
+                'late_policy'  => \App\Support\Packages::conditions($current)['late_policy'],
+            ] : null,
+            'usable'   => !$current && $free && !in_array($appointment->status, AppointmentFlow::RELEASED, true)
+                ? \App\Support\Packages::usable($tenant->id, $appointment->customer_id, $appointment->service_id, $appointment->starts_at)
+                : [],
+            'can_use'  => request()->user()?->allows('sales.create') ?? false,
+        ];
+    }
+
+    public function usePackage(Request $request, string $appointment)
+    {
+        abort_unless(\App\Support\Packages::ready(), 503, \App\Support\Packages::NOT_READY);
+        $appointment = $this->find($request, $appointment);
+        $tenant = $this->tenant($request);
+        $validated = $request->validate(['customer_package_id' => 'required|uuid'], ['customer_package_id.required' => 'Elige el paquete.']);
+
+        DB::transaction(function () use ($tenant, $appointment, $validated, $request) {
+            $locked = Appointment::where('id', $appointment->id)->lockForUpdate()->first();
+            \App\Support\Packages::link($tenant, $locked->load('service'), $validated['customer_package_id'], $request->user());
+        });
+
+        return response()->json($this->payload($tenant, $appointment->fresh(self::RELATIONS)));
+    }
+
+    public function releasePackage(Request $request, string $appointment)
+    {
+        abort_unless(\App\Support\Packages::ready(), 503, \App\Support\Packages::NOT_READY);
+        $appointment = $this->find($request, $appointment);
+        $tenant = $this->tenant($request);
+
+        DB::transaction(function () use ($tenant, $appointment, $request) {
+            $locked = Appointment::where('id', $appointment->id)->lockForUpdate()->first();
+            \App\Support\Packages::unlink($tenant, $locked, $request->user());
+        });
+
+        return response()->json($this->payload($tenant, $appointment->fresh(self::RELATIONS)));
     }
 
     protected function chargeContext(Tenant $tenant, ?object $sale, string $branchId, ?object $customer, ?string $item, float $gross, ?array $applied, ?string $blocked): array
@@ -72,7 +131,7 @@ class SaleController extends AppointmentController
             'doc_types'        => collect(Invoicing::types($tenant))->map(fn ($type) => ['value' => $type, 'label' => Invoicing::LABELS[$type]])->values(),
             'default_doc_type' => Invoicing::defaultType($tenant),
             'customer'         => $customer ? [
-                'name'            => trim("{$customer->first_name} {$customer->last_name}"),
+                'name'            => \App\Support\Person::name($customer),
                 'document_number' => $customer->document_number,
             ] : null,
             'issuer'           => [

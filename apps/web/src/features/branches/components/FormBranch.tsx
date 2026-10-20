@@ -1,5 +1,8 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { Store } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -15,9 +18,6 @@ interface FormBranchProps {
   onSaved: (branch: Branch) => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 const empty = { name: '', address: '', district: '', department: 'Lima', phone: '', timezone: 'America/Lima' };
 
@@ -116,16 +116,16 @@ export default function FormBranch({ isOpen, onClose, initialData, onSaved }: Fo
             <p className="text-xs text-slate-500 mt-1.5">Las horas de su agenda se muestran en esta zona.</p>
           </div>
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </form>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">
           <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
             Cancelar
           </button>
-          <button type="submit" form={formId} disabled={saving} className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+          <Button type="submit" form={formId} disabled={saving} variant="classic">
             {saving ? 'Guardando...' : initialData ? 'Guardar cambios' : 'Crear sucursal'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

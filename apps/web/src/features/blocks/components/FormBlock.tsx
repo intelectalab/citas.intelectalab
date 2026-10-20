@@ -1,5 +1,8 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Building2, CalendarOff, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -24,7 +27,6 @@ const ALL_BRANCHES = 'all';
 
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 const emptyForm = () => ({
   scope: 'professional' as 'professional' | 'branch',
@@ -332,7 +334,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
                 {affected.slice(0, 8).map((a) => (
                   <li key={a.id} className="py-2 text-xs text-amber-800 flex items-center justify-between gap-3">
                     <span>
-                      <span className="font-mono font-bold">{a.code}</span> · {a.customer ?? '—'}
+                      <span className="font-mono font-bold">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#84D0D9]/25 text-[#022340]">Paquete {a.package}</span>}
                       <span className="block opacity-80">{a.service}{a.professional ? ` · ${a.professional}` : ''}</span>
                     </span>
                     <span className="whitespace-nowrap">{formatDateTime(a.starts_at)}</span>
@@ -343,7 +345,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
             </div>
           )}
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </form>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">
@@ -354,14 +356,13 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
           >
             Cancelar
           </button>
-          <button
+          <Button
             type="submit"
             form={formId}
-            disabled={saving}
-            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+            disabled={saving} variant="classic"
           >
             {saving ? 'Guardando...' : initialData ? 'Guardar cambios' : 'Registrar bloqueo'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

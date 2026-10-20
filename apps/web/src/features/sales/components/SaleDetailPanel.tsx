@@ -1,8 +1,11 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Ban, Banknote, CreditCard, Landmark, Printer, Receipt, RotateCcw, Smartphone, TicketPercent, Wallet, ShoppingCart } from 'lucide-react';
+import { Ban, Banknote, CreditCard, Landmark, Mail, Printer, Receipt, RotateCcw, Smartphone, TicketPercent, Wallet, ShoppingCart } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -12,6 +15,7 @@ import { apiError } from '@/features/appointments/appointments';
 import ChargePanel from './ChargePanel';
 import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type SaleDetail, type SalePayment, type SaleRefund } from '../sales';
 import { useAuth } from '@/hooks/useAuth';
+import { outcomeOf } from '@/features/messages/messages';
 
 interface SaleDetailPanelProps {
   saleId: string | null;
@@ -19,9 +23,6 @@ interface SaleDetailPanelProps {
   onChanged?: () => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 const cardHead = 'px-5 py-3 bg-slate-50/80 border-b border-slate-100';
 const ghostButton = 'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50';
@@ -77,6 +78,22 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
     setAction(action === next ? '' : next);
   };
 
+  const sendReceipt = async () => {
+    if (!sale) return;
+    try {
+      setBusy(true);
+      setError('');
+      setNotice('');
+      const res = await api.post(`/sales/${sale.id}/receipt/send`);
+      const outcome = outcomeOf(res.data, 'el comprobante');
+      if (outcome.ok) setNotice(outcome.text); else setError(outcome.text);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo enviar el comprobante.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sale || !action) return;
@@ -124,7 +141,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                 {codes.length ? ` · ${codes.length === 1 ? 'cita' : 'citas'} ${codes.join(', ')}` : ''}
               </span>
             </div>
-            <span data-sale-status={sale.status} className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${SALE_BADGES[sale.status]}`}>{sale.status_label}</span>
+            <Badge data-sale-status={sale.status} tone={SALE_BADGES[sale.status]} bold className="shrink-0">{sale.status_label}</Badge>
           </section>
 
           {sale.deposit_outcome === 'refund_due' && sale.status !== 'void' && (
@@ -147,8 +164,8 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
             <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Anulada: {sale.void_reason}</p>
           )}
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-          {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+          <ErrorAlert message={error} />
+          <SuccessAlert message={notice} />
 
           {(canCharge || canEdit || sale.can_manage) && (
             <section className="flex flex-wrap gap-2" data-actions>
@@ -166,6 +183,11 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                 <Link href={`/print/sales/${sale.id}`} target="_blank" data-action="print" className={ghostButton}>
                   <Printer size={15} /> Imprimir comprobante
                 </Link>
+              )}
+              {sale.customer && (sale.status === 'paid' || sale.status === 'partially_refunded') && (
+                <button type="button" data-action="send-receipt" disabled={busy} onClick={sendReceipt} className={ghostButton}>
+                  <Mail size={15} /> Enviar comprobante por correo
+                </button>
               )}
               {sale.can_manage && !sale.refund_blocked && (
                 <button type="button" data-action="refund" onClick={() => open('refund')} className={ghostButton}>

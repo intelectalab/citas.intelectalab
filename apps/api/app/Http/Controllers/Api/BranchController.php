@@ -185,7 +185,7 @@ class BranchController extends Controller
                 ->orderBy('first_name')->get(['first_name', 'last_name']);
 
             if ($staff->isNotEmpty()) {
-                $names = $staff->take(3)->map(fn ($u) => trim("{$u->first_name} {$u->last_name}"))->implode(', ') . ($staff->count() > 3 ? ' y ' . ($staff->count() - 3) . ' más' : '');
+                $names = $staff->take(3)->map(fn ($u) => \App\Support\Person::name($u))->implode(', ') . ($staff->count() > 3 ? ' y ' . ($staff->count() - 3) . ' más' : '');
 
                 return response()->json([
                     'message' => ($staff->count() === 1 ? "En esta sucursal trabaja {$names}" : "En esta sucursal trabajan {$staff->count()} personas: {$names}")
@@ -286,7 +286,7 @@ class BranchController extends Controller
             'district'   => $validated['district'] ?? null,
             'department' => $validated['department'] ?? null,
             'phone'      => $validated['phone'] ?? null,
-            'timezone'   => $validated['timezone'] ?? ($tenant->timezone ?: 'America/Lima'),
+            'timezone'   => $validated['timezone'] ?? ($tenant->zone()),
         ];
     }
 
@@ -300,7 +300,7 @@ class BranchController extends Controller
 
     private function present(Branch $branch, Tenant $tenant): array
     {
-        $timezone = $branch->timezone ?: ($tenant->timezone ?: 'America/Lima');
+        $timezone = $branch->timezone ?: ($tenant->zone());
         $dayStart = now($timezone)->startOfDay();
         $hours = BranchHours::of($branch->id);
 

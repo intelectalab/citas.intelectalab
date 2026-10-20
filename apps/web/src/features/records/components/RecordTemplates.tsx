@@ -1,8 +1,9 @@
 'use client';
 
+import BackLink from '@/app/components/common/BackLink';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, ClipboardList, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ClipboardList, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -80,9 +81,7 @@ export default function RecordTemplates() {
 
   return (
     <div className="space-y-5 pb-8 font-sans">
-      <Link href="/records" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
-        <ArrowLeft size={18} /> Fichas de atención
-      </Link>
+      <BackLink href="/records">Fichas de atención</BackLink>
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -103,7 +102,7 @@ export default function RecordTemplates() {
         )}
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       {templates.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-10 text-center space-y-2">

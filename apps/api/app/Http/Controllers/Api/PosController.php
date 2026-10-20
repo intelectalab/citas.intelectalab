@@ -37,6 +37,13 @@ class PosController extends SaleController
             'items.*.id'              => 'required|uuid',
             'items.*.quantity'        => 'nullable|integer|min:1|max:999',
             'items.*.professional_id' => 'nullable|uuid',
+            'items.*.details'         => 'nullable|array',
+            'items.*.details.professional_id' => 'nullable|uuid',
+            'items.*.details.branch_id'       => 'nullable|uuid',
+            'items.*.details.slots'           => 'nullable|array|max:' . \App\Support\Packages::MAX_SLOTS,
+            'items.*.details.slots.*.date'    => 'nullable|date_format:Y-m-d',
+            'items.*.details.slots.*.time'    => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
+            'items.*.details.slots.*.professional_id' => 'nullable|uuid',
         ], [
             'items.max'               => 'Una venta lleva como máximo ' . Cart::MAX_ITEMS . ' líneas.',
             'items.*.quantity.min'    => 'La cantidad debe ser al menos 1.',
@@ -86,10 +93,13 @@ class PosController extends SaleController
                 'charge'   => $user->allows('sales.create'),
                 'walk_in'  => $user->allows('agenda.create'),
                 'products' => $user->allows('products.create'),
+                'packages' => $user->allows('packages.create'),
             ],
+            'packages_enabled' => \App\Support\Packages::enabled($tenant),
             'pending'        => ['appointments' => [], 'sales' => []],
             'services'       => [],
             'products'       => [],
+            'packages'       => [],
             'professionals'  => [],
         ];
 
@@ -128,6 +138,12 @@ class PosController extends SaleController
             ->reject(fn (Professional $p) => $p->status?->slug === 'inactive')
             ->map(fn (Professional $p) => ['id' => $p->id, 'display_name' => $p->display_name])
             ->values();
+
+        if ($payload['packages_enabled']) {
+            $plans = DB::table('package_plans')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('status', 'active')->orderBy('name')->get();
+            $planItems = \App\Support\Packages::planItems($plans->pluck('id')->all());
+            $payload['packages'] = $plans->map(fn ($p) => \App\Support\Packages::presentPlan($tenant, $p, $planItems[$p->id] ?? collect()))->values();
+        }
 
         if (Cart::productsReady()) {
             $productCategories = DB::table('product_categories')->where('tenant_id', $tenant->id)->pluck('name', 'id');
@@ -237,7 +253,7 @@ class PosController extends SaleController
         $doc = Invoicing::validated($tenant, $validated);
         $result = DB::transaction(fn () => Sales::pay($tenant, $row->id, $validated, $doc, $user));
 
-        return response()->json($this->saleContext($tenant, $result['sale']) + ['change' => $result['change'], 'duplicate' => $result['duplicate']]);
+        return response()->json($this->saleContext($tenant, $result['sale']) + ['change' => $result['change'], 'duplicate' => $result['duplicate'], 'packages' => $result['packages'] ?? []]);
     }
 
     public function invoice(Request $request, string $sale)

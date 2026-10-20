@@ -17,6 +17,7 @@ export interface PortalAppointment {
   is_upcoming: boolean;
   pay_on_arrival?: boolean;
   deposit?: { amount: number; currency: string; balance: number; outcome: 'refund_due' | 'retained' | 'refunded' | null; refund_hours: number } | null;
+  package?: { id: string; code: string; name: string; status: string; late_policy: string } | null;
   is_virtual?: boolean;
   can_confirm: boolean;
   can_cancel: boolean;
@@ -58,6 +59,7 @@ export interface PortalOverview {
   booking_block?: { misses: number; blocked: boolean; blocked_until: string | null; limit: number | null; message: string | null } | null;
   dependents: { enabled: boolean; required: boolean; items: PortalDependent[] };
   appointments: PortalAppointment[];
+  consents?: { email: { granted: boolean }; whatsapp: { granted: boolean } } | null;
 }
 
 export interface PortalService {
@@ -68,6 +70,7 @@ export interface PortalService {
   price: string;
   is_virtual: boolean;
   needs_deposit: boolean;
+  package?: { code: string; name: string; available: number } | null;
   deposit_amount?: number;
   deposit_label?: string | null;
   professional_ids: string[];

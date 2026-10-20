@@ -122,7 +122,7 @@ class Invoicing
             'number'              => $number,
             'customer_doc_type'   => $type === self::FACTURA ? 'RUC' : $customerDocType,
             'customer_doc_number' => $type === self::FACTURA ? $doc['ruc'] : ($customer->document_number ?? null),
-            'customer_name'       => $type === self::FACTURA ? $doc['business_name'] : ($customer ? trim("{$customer->first_name} {$customer->last_name}") : null),
+            'customer_name'       => $type === self::FACTURA ? $doc['business_name'] : ($customer ? \App\Support\Person::name($customer) : null),
             'customer_address'    => $doc['address'] ?? null,
             'taxable'             => $taxable,
             'tax'                 => $sale->tax,
@@ -159,6 +159,7 @@ class Invoicing
         }
 
         DB::table('invoices')->insert($row);
+        Messaging::receipt($tenant, DB::table('sales')->where('id', $sale->id)->first() ?? $sale, $user);
 
         return DB::table('invoices')->where('id', $id)->first();
     }

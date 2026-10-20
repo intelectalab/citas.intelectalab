@@ -1,5 +1,8 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -16,8 +19,6 @@ interface FormRoleProps {
   onSaved: (id: string) => void;
 }
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const labelClass = 'block text-xs font-semibold text-slate-600 mb-1.5';
 
 export default function FormRole({ isOpen, onClose, initialData, roles, onSaved }: FormRoleProps) {
@@ -96,16 +97,16 @@ export default function FormRole({ isOpen, onClose, initialData, roles, onSaved 
             </div>
           )}
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </form>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+          <Button type="button" onClick={onClose} variant="secondary">
             Cancelar
-          </button>
-          <button type="submit" form={formId} data-submit="role" disabled={saving} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+          </Button>
+          <Button type="submit" form={formId} data-submit="role" disabled={saving} variant="primary">
             {saving ? 'Guardando...' : initialData ? 'Guardar cambios' : 'Crear rol'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

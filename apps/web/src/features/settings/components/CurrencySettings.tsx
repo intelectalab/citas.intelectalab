@@ -1,5 +1,10 @@
 'use client';
 
+import OptionCard from '@/app/components/common/OptionCard';
+import Button from '@/app/components/common/Button';
+import SectionTitle from '@/app/components/common/SectionTitle';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
+import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, Coins, History, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -49,8 +54,6 @@ interface Preview {
 }
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
-const inputClass = 'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const chip = (on: boolean) => `px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${on ? 'border-[#022340] bg-[#84D0D9]/15 text-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`;
 
 const label = (c: CurrencyInfo) => `${c.name} (${c.symbol})`;
@@ -188,7 +191,7 @@ export default function CurrencySettings() {
   if (error) {
     return (
       <section className={cardClass} data-card="currency">
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider"><Coins className="w-4 h-4 text-[#3F768C]" /> Moneda</h2>
+        <SectionTitle><Coins className="w-4 h-4 text-[#3F768C]" /> Moneda</SectionTitle>
         <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
       </section>
     );
@@ -210,15 +213,15 @@ export default function CurrencySettings() {
   return (
     <section className={cardClass} data-card="currency">
       <div>
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+        <SectionTitle>
           <Coins className="w-4 h-4 text-[#3F768C]" /> Moneda
-        </h2>
+        </SectionTitle>
         <p className="text-xs text-slate-500 font-medium mt-1">
           La moneda en que tu empresa cobra. Cada venta, pago, caja y cita guarda la moneda en que se hizo: cambiarla aquí no altera lo ya registrado.
         </p>
       </div>
 
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <SuccessAlert message={notice} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3">
         <div>
@@ -310,20 +313,19 @@ export default function CurrencySettings() {
                   </ul>
                 )}
 
-                {changeError && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{changeError}</p>}
+                <ErrorAlert message={changeError} />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button type="button" onClick={() => setChanging(false)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">Cancelar</button>
-                <button
+                <Button type="button" onClick={() => setChanging(false)} variant="secondary">Cancelar</Button>
+                <Button
                   type="button"
                   data-submit="currency"
                   disabled={saving || !code || code === current.code || data.blockers.length > 0}
-                  onClick={saveCurrency}
-                  className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+                  onClick={saveCurrency} variant="primary"
                 >
                   {saving ? 'Guardando...' : 'Cambiar la moneda'}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -336,20 +338,20 @@ export default function CurrencySettings() {
             <div>
               <span className={labelClass}>¿Qué pasó?</span>
               <div className="grid gap-2" role="radiogroup" aria-label="Qué pasó">
-                <button type="button" role="radio" aria-checked={kind === 'relabel'} data-kind="relabel" onClick={() => setKind('relabel')} className={`text-left rounded-xl border px-4 py-3 transition-colors ${kind === 'relabel' ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}>
+                <OptionCard type="button" role="radio" aria-checked={kind === 'relabel'} data-kind="relabel" onClick={() => setKind('relabel')} selected={kind === 'relabel'} className="text-left rounded-xl border px-4 py-3 transition-colors">
                   <span className="flex items-center gap-2 text-sm font-bold text-[#022340]">Me equivoqué de moneda <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700">Recomendado</span></span>
                   <span className="block text-xs text-slate-600 mt-1">
                     Registraste en {fromSymbol || 'otra moneda'} cobros y precios que en realidad eran en {current.symbol}. Los montos se quedan igual; solo cambia la moneda.
                   </span>
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mt-1.5">Ejemplo: {fromSymbol || '—'} 100.00 <ArrowRight size={12} /> {current.symbol} 100.00</span>
-                </button>
-                <button type="button" role="radio" aria-checked={kind === 'convert'} data-kind="convert" onClick={() => setKind('convert')} className={`text-left rounded-xl border px-4 py-3 transition-colors ${kind === 'convert' ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}>
+                </OptionCard>
+                <OptionCard type="button" role="radio" aria-checked={kind === 'convert'} data-kind="convert" onClick={() => setKind('convert')} selected={kind === 'convert'} className="text-left rounded-xl border px-4 py-3 transition-colors">
                   <span className="block text-sm font-bold text-[#022340]">Quiero pasar los montos a la otra moneda</span>
                   <span className="block text-xs text-slate-600 mt-1">
                     Los montos se recalculan con un tipo de cambio, como si siempre hubieran sido en {current.symbol}. Ojo: dejarán de decir lo que el cliente pagó en su momento.
                   </span>
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mt-1.5">Ejemplo: {fromSymbol || '—'} 370.00 <ArrowRight size={12} /> {current.symbol} 100.00, con 1 {current.symbol} = 3.70 {fromSymbol || '—'}</span>
-                </button>
+                </OptionCard>
               </div>
             </div>
 
@@ -415,16 +417,15 @@ export default function CurrencySettings() {
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <button type="button" onClick={() => setRecords(false)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">Cancelar</button>
-            <button
+            <Button type="button" onClick={() => setRecords(false)} variant="secondary">Cancelar</Button>
+            <Button
               type="button"
               data-submit="records"
               disabled={!preview || total === 0 || !rateValid || !rangeValid || applying}
-              onClick={() => setConfirming(true)}
-              className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+              onClick={() => setConfirming(true)} variant="primary"
             >
               {preview && total > 0 ? `Cambiar ${plural(total, 'registro', 'registros')}` : 'Cambiar registros'}
-            </button>
+            </Button>
           </div>
         </div>
       </FormDrawer>

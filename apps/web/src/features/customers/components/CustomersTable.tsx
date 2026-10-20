@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { User, Pencil, Trash2, Users, Mars, Venus, Phone, MapPin, Eye } from 'lucide-react';
@@ -250,9 +251,9 @@ export default function CustomersTable() {
         const label = sex === 'M' ? 'Masculino' : sex === 'F' ? 'Femenino' : 'Otro';
         const badgeColor = sex === 'M' ? 'bg-blue-50 text-blue-600' : sex === 'F' ? 'bg-pink-50 text-pink-600' : 'bg-slate-100 text-slate-600';
         return (
-          <span key={`sex-${pat.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium ${badgeColor}`}>
+          <Badge key={`sex-${pat.id}`} tone={badgeColor}>
             {label}
-          </span>
+          </Badge>
         );
       },
     },

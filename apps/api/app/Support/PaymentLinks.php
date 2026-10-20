@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Models\Appointment;
-use App\Models\AppointmentStatusHistory;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Professional;
@@ -285,7 +284,7 @@ class PaymentLinks
 
         $company = DB::table('companies')->where('tenant_id', $tenant->id)->orderBy('created_at')->first();
         $branch = $link->branch_id ? Branch::find($link->branch_id) : null;
-        $timezone = $branch ? AppointmentScheduler::timezone($branch, $tenant) : ($tenant->timezone ?: 'America/Lima');
+        $timezone = $branch ? AppointmentScheduler::timezone($branch, $tenant) : ($tenant->zone());
         $lastEvent = DB::table('payment_events')->where('payment_link_id', $link->id)->orderByDesc('created_at')->first();
 
         $booking = null;
@@ -453,6 +452,7 @@ class PaymentLinks
 
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, Invoicing::validated($tenant, ['doc_type' => Invoicing::FACTURA === Invoicing::defaultType($tenant) ? Invoicing::types($tenant)[0] : Invoicing::defaultType($tenant)]), null);
+            Packages::issueForSale($tenant, $sale, null);
         }
 
         return $sale;
@@ -481,7 +481,7 @@ class PaymentLinks
                 $link->created_by,
                 'payment.link_paid',
                 'Pago recibido por link',
-                implode(' · ', array_filter(["Venta {$sale->code}", Currency::format((float) $link->amount, $link->currency), $customer ? trim("{$customer->first_name} {$customer->last_name}") : null])),
+                implode(' · ', array_filter(["Venta {$sale->code}", Currency::format((float) $link->amount, $link->currency), $customer ? \App\Support\Person::name($customer) : null])),
                 '/sales',
                 'sale',
                 $sale->id,
@@ -524,18 +524,7 @@ class PaymentLinks
             'created_by'            => null,
         ]);
 
-        AppointmentStatusHistory::create([
-            'tenant_id'         => $tenant->id,
-            'appointment_id'    => $appointment->id,
-            'from_status'       => null,
-            'to_status'         => AppointmentFlow::CONFIRMED,
-            'reason'            => 'Reserva en línea con adelanto pagado',
-            'actor_customer_id' => $customer?->id,
-        ]);
-
-        if ($customer) {
-            Notifier::appointmentStep($appointment, null, AppointmentFlow::CONFIRMED, $customer);
-        }
+        AppointmentEvents::record($appointment, null, AppointmentFlow::CONFIRMED, $customer, 'Reserva en línea con adelanto pagado', ['payment_links', 'packages']);
 
         $sale = Sales::createForAppointment($tenant, $appointment->load('service'), null);
         $paymentId = self::gatewayPayment($tenant, $sale, $link, 'deposit', $event);
@@ -609,7 +598,7 @@ class PaymentLinks
             if ($onTime) {
                 DB::table('sales')->where('id', $sale->id)->update(['deposit_outcome' => 'refund_due', 'updated_at' => now()]);
                 $appointment->loadMissing('customer');
-                $who = $appointment->customer ? trim("{$appointment->customer->first_name} {$appointment->customer->last_name}") : 'El cliente';
+                $who = $appointment->customer ? \App\Support\Person::name($appointment->customer) : 'El cliente';
 
                 foreach (Notifier::adminIds($tenant->id) as $userId) {
                     Notifier::send(

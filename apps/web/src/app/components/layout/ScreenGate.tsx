@@ -24,6 +24,8 @@ const SCREENS: { path: string; perm: string; exact?: boolean }[] = [
   { path: '/cash', perm: 'cash.view' },
   { path: '/coupons', perm: 'coupons.view' },
   { path: '/products', perm: 'products.view' },
+  { path: '/packages', perm: 'packages.view' },
+  { path: '/messages', perm: 'messages.view' },
   { path: '/branches', perm: 'branches.view' },
   { path: '/companies', perm: 'company.view' },
   { path: '/users', perm: 'users.view' },

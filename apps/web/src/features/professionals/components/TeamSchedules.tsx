@@ -1,5 +1,6 @@
 'use client';
 
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarOff, Clock, Loader2, Pencil, Store, Users } from 'lucide-react';
@@ -100,7 +101,7 @@ export default function TeamSchedules() {
         <Link href="/professionals" className="text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">Ver {vocab.pros.toLowerCase()}</Link>
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       {data.branches.length > 1 && (
         <div className="flex flex-wrap gap-2" data-branch-tabs>

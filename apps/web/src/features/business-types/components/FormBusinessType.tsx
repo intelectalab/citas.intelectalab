@@ -1,5 +1,6 @@
 'use client';
 
+import { labelClass } from '@/app/components/ui/forms/styles';
 import { useState, useEffect } from 'react';
 import Select from '@/app/components/common/Select';
 import { ChevronDown, Layers } from 'lucide-react';
@@ -65,7 +66,6 @@ const EMPTY_FORM = {
 
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5';
 
 export default function FormBusinessType({ isOpen, onClose, initialData, onSubmitSuccess }: FormBusinessTypeProps) {
   const [form, setForm] = useState(EMPTY_FORM);

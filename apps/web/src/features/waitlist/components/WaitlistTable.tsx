@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarSearch, Edit2, Eye, Hourglass, PhoneCall, RotateCcw, Star, UserRound, XCircle } from 'lucide-react';
@@ -235,9 +237,9 @@ export default function WaitlistTable() {
     {
       header: 'Estado',
       cell: (e) => (
-        <span key={`status-${e.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${WAITLIST_STATUS_STYLES[e.status]}`} data-status={e.status}>
+        <Badge key={`status-${e.id}`} tone={WAITLIST_STATUS_STYLES[e.status]} nowrap data-status={e.status}>
           {e.status_name}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -296,7 +298,7 @@ export default function WaitlistTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <div className="mb-6">
         <DataTable<WaitlistEntry>

@@ -1,5 +1,6 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -80,9 +81,9 @@ export default function PortalPassword({ forced = false, onDone, onCancel }: Por
             Cancelar
           </button>
         )}
-        <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+        <Button type="submit" disabled={saving} variant="primary">
           {saving ? 'Guardando...' : forced ? 'Guardar y continuar' : 'Guardar contraseña'}
-        </button>
+        </Button>
       </div>
     </form>
   );

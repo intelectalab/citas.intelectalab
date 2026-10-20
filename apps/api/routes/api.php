@@ -24,6 +24,8 @@ use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\SalesController;
 use App\Http\Controllers\Api\PosController;
+use App\Http\Controllers\Api\PackageController;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\HolidayController;
@@ -114,8 +116,10 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
 Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(function () {
     Route::get('/overview', [PortalController::class, 'overview']);
     Route::put('/profile', [PortalController::class, 'updateProfile']);
+    Route::put('/consents', [PortalController::class, 'updateConsents']);
     Route::put('/password', [PortalController::class, 'updatePassword']);
     Route::post('/dependents', [PortalController::class, 'storeDependent']);
+    Route::get('/packages', [PortalController::class, 'packages'])->middleware('module:packages');
 
     Route::middleware('module:booking')->group(function () {
         Route::get('/catalog', [PortalController::class, 'catalog']);
@@ -268,6 +272,38 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/integrations/payments/test', [PaymentController::class, 'test']);
         Route::put('/payment-qr/{method}', [PaymentController::class, 'saveQr']);
         Route::delete('/payment-qr/{method}', [PaymentController::class, 'deleteQr']);
+    });
+
+    Route::get('/messages', [MessageController::class, 'index'])->middleware('perm:messages.view');
+    Route::post('/messages', [MessageController::class, 'store'])->middleware('perm:messages.create');
+    Route::post('/messages/process', [MessageController::class, 'process'])->middleware('perm:messages.view');
+    Route::put('/messages/{message}', [MessageController::class, 'update'])->middleware('perm:messages.edit');
+    Route::post('/messages/{message}/cancel', [MessageController::class, 'cancel'])->middleware('perm:messages.edit');
+    Route::post('/messages/{message}/retry', [MessageController::class, 'retry'])->middleware('perm:messages.edit');
+    Route::get('/messaging/settings', [MessageController::class, 'settings']);
+    Route::put('/messaging/email', [MessageController::class, 'saveEmail']);
+    Route::delete('/messaging/email', [MessageController::class, 'removeEmail']);
+    Route::post('/messaging/email/test', [MessageController::class, 'testEmail']);
+    Route::put('/messaging/notices/{kind}', [MessageController::class, 'saveNotice']);
+    Route::post('/messaging/notices/{kind}/reset', [MessageController::class, 'resetNotice']);
+    Route::post('/payment-links/{link}/send', [MessageController::class, 'sendPaymentLink'])->middleware('perm:sales.create');
+    Route::post('/sales/{sale}/receipt/send', [MessageController::class, 'sendReceipt'])->middleware('perm:sales.view|sales.create');
+    Route::put('/customers/{customer}/consents', [MessageController::class, 'consents'])->middleware('perm:customers.edit');
+
+    Route::middleware('module:packages')->group(function () {
+        Route::get('/packages', [PackageController::class, 'index'])->middleware('perm:packages.view');
+        Route::get('/packages/free-times', [PackageController::class, 'freeTimes'])->middleware('perm:pos.create|agenda.create');
+        Route::post('/packages/schedule/preview', [PackageController::class, 'preview'])->middleware('perm:pos.create|agenda.create');
+        Route::get('/packages/{package}', [PackageController::class, 'show'])->middleware('perm:packages.view');
+        Route::post('/packages/{package}/usages', [PackageController::class, 'use'])->middleware('perm:packages.use');
+        Route::post('/packages/{package}/extend', [PackageController::class, 'extend'])->middleware('perm:packages.edit');
+        Route::post('/packages/{package}/cancel', [PackageController::class, 'cancel'])->middleware('perm:packages.delete');
+        Route::post('/packages/{package}/schedule', [PackageController::class, 'schedule'])->middleware('perm:agenda.create');
+        Route::post('/package-plans', [PackageController::class, 'storePlan'])->middleware('perm:packages.create');
+        Route::put('/package-plans/{plan}', [PackageController::class, 'updatePlan'])->middleware('perm:packages.edit');
+        Route::delete('/package-plans/{plan}', [PackageController::class, 'destroyPlan'])->middleware('perm:packages.delete');
+        Route::post('/appointments/{appointment}/package', [SaleController::class, 'usePackage'])->middleware('perm:sales.create');
+        Route::delete('/appointments/{appointment}/package', [SaleController::class, 'releasePackage'])->middleware('perm:sales.create');
     });
 
     Route::middleware('module:crm')->group(function () use ($guarded) {

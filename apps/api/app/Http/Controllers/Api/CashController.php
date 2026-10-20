@@ -262,7 +262,7 @@ class CashController extends Controller
 
             $register = DB::table('cash_registers')->where('id', $session->cash_register_id)->value('name');
             $branch = DB::table('branches')->where('id', $session->branch_id)->value('name');
-            $who = trim("{$actor->first_name} {$actor->last_name}");
+            $who = \App\Support\Person::name($actor);
             $body = ($difference < 0 ? 'Faltan' : 'Sobran') . ' S/ ' . number_format(abs($difference), 2) . " en {$register}. La cerró {$who}.";
 
             foreach (Notifier::adminIds($tenant->id) as $userId) {

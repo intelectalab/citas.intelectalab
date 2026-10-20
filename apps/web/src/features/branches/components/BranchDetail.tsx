@@ -1,9 +1,12 @@
 'use client';
 
+import SectionTitle from '@/app/components/common/SectionTitle';
+import BackLink from '@/app/components/common/BackLink';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CalendarDays, Clock, DoorOpen, Edit2, Globe2, Loader2, MapPin, Pencil, Phone, Plus, Store, Trash2, Users, Wrench } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Clock, DoorOpen, Edit2, Globe2, Loader2, MapPin, Pencil, Phone, Plus, Store, Trash2, Users, Wrench } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -15,7 +18,6 @@ import { ROOM_KINDS, TIMEZONES, WEEK, addressLabel, rangesLabel, todayLabel, typ
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 export default function BranchDetail() {
@@ -42,9 +44,7 @@ export default function BranchDetail() {
   useEffect(() => { load(); }, [load]);
 
   const backLink = (
-    <Link href="/branches" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
-      <ArrowLeft size={18} /> Sucursales
-    </Link>
+    <BackLink href="/branches">Sucursales</BackLink>
   );
 
   if (!branch) {
@@ -102,7 +102,7 @@ export default function BranchDetail() {
     <div className="space-y-5 pb-8 font-sans">
       {backLink}
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="branch">
@@ -153,7 +153,7 @@ export default function BranchDetail() {
 
         <section className={`${card} p-6 space-y-4`} data-card="hours">
           <div className="flex items-center justify-between gap-3">
-            <h2 className={cardTitle}><Clock size={16} className="text-[#3F768C]" /> Horario de atención</h2>
+            <SectionTitle><Clock size={16} className="text-[#3F768C]" /> Horario de atención</SectionTitle>
             {canManage && (
               <button type="button" data-action="edit-hours" onClick={() => setHoursOpen(true)} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
                 Cambiar
@@ -183,7 +183,7 @@ export default function BranchDetail() {
 
         <section className={`${card} p-6 space-y-4`} data-card="team">
           <div className="flex items-center justify-between gap-3">
-            <h2 className={cardTitle}><Users size={16} className="text-[#3F768C]" /> {vocab.pros} en esta sede</h2>
+            <SectionTitle><Users size={16} className="text-[#3F768C]" /> {vocab.pros} en esta sede</SectionTitle>
             <Link href="/professionals" className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">Ver horarios</Link>
           </div>
 
@@ -228,7 +228,7 @@ export default function BranchDetail() {
         {branch.uses_rooms && (
           <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="rooms">
             <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
-              <h2 className={cardTitle}><DoorOpen size={16} className="text-[#3F768C]" /> Salas y equipos</h2>
+              <SectionTitle><DoorOpen size={16} className="text-[#3F768C]" /> Salas y equipos</SectionTitle>
               {canManage && (
                 <button type="button" data-action="add-room" onClick={() => openRoom(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors">
                   <Plus size={14} /> Agregar

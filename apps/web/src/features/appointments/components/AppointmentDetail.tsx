@@ -1,7 +1,10 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
-import { CalendarCheck, CalendarClock, Check, ChevronRight, ClipboardList, Timer, Wallet } from 'lucide-react';
+import { Boxes, CalendarCheck, CalendarClock, Check, ChevronRight, ClipboardList, Timer, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -23,8 +26,6 @@ interface AppointmentDetailProps {
 
 const FLOW = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
 
-const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 export default function AppointmentDetail({ appointmentId, onClose, onChanged, onReschedule, onOpenRecord, reloadKey = 0 }: AppointmentDetailProps) {
@@ -174,9 +175,9 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className={sectionTitle}>Fase</span>
-              <span data-status={appointment.status} className={`px-2.5 py-1 text-xs rounded-full font-semibold ${statusStyle(appointment.status).badge}`}>
+              <Badge data-status={appointment.status} tone={statusStyle(appointment.status).badge} bold>
                 {appointment.status_name}
-              </span>
+              </Badge>
             </div>
 
             {flowIndex >= 0 && (
@@ -295,7 +296,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
               </div>
             )}
 
-            {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+            <ErrorAlert message={error} />
             {notice && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
           </section>
 
@@ -305,17 +306,21 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                 <button
                   type="button"
                   data-action="charge"
-                  disabled={Boolean(charge.blocked) && !charge.sale}
+                  disabled={Boolean(charge.blocked) && !charge.sale && !charge.package?.current}
                   onClick={() => setCharging(true)}
                   className="w-full flex items-center gap-3 p-3 border border-slate-200 rounded-xl text-left hover:border-[#3F768C] hover:bg-slate-50 transition-colors disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 >
-                  <span className="p-2 bg-[#84D0D9]/20 text-[#022340] rounded-lg shrink-0"><Wallet size={18} /></span>
+                  <span className="p-2 bg-[#84D0D9]/20 text-[#022340] rounded-lg shrink-0">{charge.package?.current ? <Boxes size={18} /> : <Wallet size={18} />}</span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-bold text-slate-800">
-                      {charge.sale?.status === 'paid' ? `Cobrada · ${charge.sale.code}` : charge.sale ? `Cobro ${charge.sale.code}` : 'Cobrar'}
+                      {charge.package?.current ? `Paquete ${charge.package.current.code}` : charge.sale?.status === 'paid' ? `Cobrada · ${charge.sale.code}` : charge.sale ? `Cobro ${charge.sale.code}` : 'Cobrar'}
                     </span>
                     <span className="block text-xs text-slate-500">
-                      {charge.sale?.status === 'paid'
+                      {charge.package?.current
+                        ? `${charge.package.current.name} · ${charge.package.current.consumed ? 'sesión descontada' : 'se descuenta al atenderla'}`
+                        : !charge.sale && (charge.package?.usable.length ?? 0) > 0
+                        ? `${money(charge.preview.total, charge.preview.currency)} por cobrar, o con su paquete ${charge.package!.usable[0].code}.`
+                        : charge.sale?.status === 'paid'
                         ? `${money(charge.sale.total, charge.sale.currency)}${charge.sale.invoice ? ` · ${charge.sale.invoice.doc_type_label} ${charge.sale.invoice.number}` : ' · sin comprobante'}`
                         : charge.sale && (charge.sale.refunded ?? 0) > 0
                           ? `${money(charge.sale.total, charge.sale.currency)} · se devolvieron ${money(charge.sale.refunded, charge.sale.currency)}.`
@@ -324,14 +329,13 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                           : charge.blocked ?? `${money(charge.preview.total, charge.preview.currency)} por cobrar.`}
                     </span>
                   </span>
-                  <span
-                    data-charge-status={charge.sale?.status ?? 'none'}
-                    className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${
-                      charge.sale ? SALE_BADGES[charge.sale.status] : charge.blocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'
-                    }`}
+                  <Badge
+                    data-charge-status={charge.sale?.status ?? 'none'} tone={
+                      charge.package?.current ? 'bg-[#84D0D9]/25 text-[#022340]' : charge.sale ? SALE_BADGES[charge.sale.status] : charge.blocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'
+                    } bold className="shrink-0"
                   >
-                    {charge.sale?.status_label ?? (charge.blocked ? 'No se cobra' : 'Por cobrar')}
-                  </span>
+                    {charge.package?.current ? 'Con paquete' : charge.sale?.status_label ?? (charge.blocked ? 'No se cobra' : 'Por cobrar')}
+                  </Badge>
                   <ChevronRight size={16} className="text-slate-400 shrink-0" />
                 </button>
               ) : (
@@ -358,16 +362,15 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     {appointment.record.status === 'locked' && 'Firmada y bloqueada. Admite notas.'}
                   </span>
                 </span>
-                <span
-                  data-record-status={appointment.record.status ?? 'none'}
-                  className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${
+                <Badge
+                  data-record-status={appointment.record.status ?? 'none'} tone={
                     appointment.record.status === 'signed' || appointment.record.status === 'locked'
                       ? 'bg-emerald-50 text-emerald-700'
                       : appointment.record.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'
-                  }`}
+                  } bold className="shrink-0"
                 >
                   {appointment.record.status === null ? 'Pendiente' : appointment.record.status === 'draft' ? 'Borrador' : 'Firmada'}
-                </span>
+                </Badge>
                 <ChevronRight size={16} className="text-slate-400 shrink-0" />
               </button>
             </section>

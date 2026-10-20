@@ -1,5 +1,6 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
 import { CalendarClock, Check, Clock, MapPin, PawPrint, UserRound, Wallet, X } from 'lucide-react';
 import { dateOf, formatDate, statusStyle, timeOf } from '@/features/appointments/appointments';
 import type { PortalAppointment } from '../portal';
@@ -35,9 +36,9 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
         <div className="flex-1 min-w-0 p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-base font-extrabold text-[#022340] leading-tight">{appointment.service?.name}</h3>
-            <span data-status={appointment.status} className={`px-2.5 py-1 text-xs rounded-full font-semibold whitespace-nowrap ${statusStyle(appointment.status).badge}`}>
+            <Badge data-status={appointment.status} tone={statusStyle(appointment.status).badge} bold nowrap>
               {appointment.status_name}
-            </span>
+            </Badge>
           </div>
 
           <ul className="space-y-1 text-sm text-slate-600">
@@ -63,6 +64,15 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
                 : arriveMinutes > 0
                   ? `Llega ${arriveMinutes} minutos antes de tu hora para pagar en recepción: la atención empieza con la cita pagada.`
                   : 'Esta cita se paga en recepción antes de la atención.'}
+            </p>
+          )}
+
+          {appointment.package && (
+            <p data-appointment-package className="text-xs font-medium text-emerald-800">
+              Con tu paquete {appointment.package.name}.
+              {appointment.is_upcoming && (appointment.package.late_policy === 'lose'
+                ? ' Si no puedes venir, cancela a tiempo para no perder la sesión.'
+                : ' Si no puedes venir, la sesión vuelve a tu paquete.')}
             </p>
           )}
 

@@ -2,20 +2,22 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BellRing, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
+import { BellRing, Boxes, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import BookingFlow from './BookingFlow';
+import Switch from '@/app/components/common/Switch';
 import PortalAppointmentCard from './PortalAppointmentCard';
 import PortalAppointments from './PortalAppointments';
 import PortalWaitlist from './PortalWaitlist';
 import PortalPassword from './PortalPassword';
+import PortalPackages, { type PortalPackage } from './PortalPackages';
 import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview, type PortalWaitlistEntry } from '../portal';
 import { money, momentOf, type PaymentLink } from '@/features/sales/sales';
 
-type Tab = 'home' | 'book' | 'appointments' | 'profile';
+type Tab = 'home' | 'book' | 'appointments' | 'packages' | 'profile';
 
 export default function Portal() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -70,7 +72,23 @@ export default function Portal() {
     loadPayLinks();
   }, [overview, mustChangePassword, loadPayLinks]);
 
+  const [packages, setPackages] = useState<PortalPackage[] | null>(null);
+
+  useEffect(() => {
+    if (!overview || mustChangePassword) return;
+    api.get('/portal/packages')
+      .then((res) => setPackages(res.data.packages ?? []))
+      .catch(() => setPackages(null));
+  }, [overview, mustChangePassword]);
+
   const depositWarning = (appointment: PortalAppointment) => {
+    if (appointment.package) {
+      const hours = overview?.policies?.cancel_window_hours ?? 24;
+      const onTime = (new Date(appointment.starts_at).getTime() - Date.now()) / 3600000 >= hours;
+      return appointment.package.late_policy === 'lose' && !onTime
+        ? ` Faltan menos de ${hours} horas: la sesión de tu paquete ${appointment.package.name} se pierde.`
+        : ` La sesión vuelve a tu paquete ${appointment.package.name}.`;
+    }
     const deposit = appointment.deposit;
     if (!deposit || deposit.outcome) return '';
     const hoursLeft = (new Date(appointment.starts_at).getTime() - Date.now()) / 3600000;
@@ -163,6 +181,7 @@ export default function Portal() {
     { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
     ...(canBook ? [{ id: 'book' as Tab, label: 'Reservar', icon: <CalendarPlus size={16} /> }] : []),
     { id: 'appointments', label: 'Mis citas', icon: <CalendarDays size={16} /> },
+    ...(packages && packages.length > 0 ? [{ id: 'packages' as Tab, label: 'Mis paquetes', icon: <Boxes size={16} /> }] : []),
     { id: 'profile', label: 'Mis datos', icon: <UserRound size={16} /> },
   ];
 
@@ -331,8 +350,31 @@ export default function Portal() {
           </>
         )}
 
+        {overview && !mustChangePassword && tab === 'packages' && packages && (
+          <PortalPackages packages={packages} onBook={canBook ? () => setTab('book') : undefined} />
+        )}
+
         {overview && !mustChangePassword && tab === 'profile' && (
           <>
+            {overview.consents && (
+              <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="portal-consents">
+                <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Promociones</h2>
+                <p className="text-xs text-slate-500 -mt-1.5">Los avisos de tus citas, pagos y paquetes te llegan siempre. Aquí eliges si también quieres recibir promociones de {tenant?.name}.</p>
+                {([['email', 'Recibir promociones por correo'], ['whatsapp', 'Recibir promociones por WhatsApp']] as ['email' | 'whatsapp', string][]).map(([channel, label]) => (
+                  <div key={channel} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                    <span className="text-sm text-slate-700">{label}</span>
+                    <Switch
+                      checked={overview.consents![channel].granted}
+                      label={label}
+                      onChange={(on) => api.put('/portal/consents', { [channel]: on })
+                        .then((res) => { setOverview({ ...overview, consents: res.data.consents }); setNotice(on ? 'Listo: te avisaremos de nuestras promociones.' : 'Listo: ya no te enviaremos promociones por ese medio.'); })
+                        .catch((err) => setError(portalError(err, 'No se pudo guardar.')))}
+                    />
+                  </div>
+                ))}
+              </section>
+            )}
+
             <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="profile">
               <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Tus datos</h2>
               <p className="text-xs text-slate-500 -mt-1.5">Para corregir tu nombre, tu correo o tu documento, comunícate con {tenant?.name}.</p>

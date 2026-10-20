@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -68,7 +70,7 @@ export default function CustomerPortalAccess({ customer, clientWord, onChanged }
         <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           <KeyRound size={13} /> Acceso al portal
         </span>
-        <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${STATES[access].badge}`}>{STATES[access].label}</span>
+        <Badge tone={STATES[access].badge} nowrap>{STATES[access].label}</Badge>
       </div>
 
       <p className="text-sm text-slate-600 leading-relaxed">{explanation[access]}</p>
@@ -94,8 +96,8 @@ export default function CustomerPortalAccess({ customer, clientWord, onChanged }
         </div>
       )}
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <AppModal
         isOpen={confirmReset}

@@ -1,5 +1,6 @@
 'use client';
 
+import { WEEKDAY_LETTERS as WEEKDAYS } from '@/lib/dates';
 import { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import Floating from '@/app/components/common/Floating';
@@ -12,7 +13,6 @@ interface DateFilterProps {
   future?: boolean;
 }
 
-const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 

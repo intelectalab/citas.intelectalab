@@ -1,5 +1,6 @@
 'use client';
 
+import { WEEKDAY_LETTERS as WEEKDAYS } from '@/lib/dates';
 import { useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import Floating from './Floating';
@@ -22,7 +23,6 @@ interface DateFieldProps {
   className?: string;
 }
 
-const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const YEARS_PER_PAGE = 12;
 

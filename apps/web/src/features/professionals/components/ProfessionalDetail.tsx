@@ -1,12 +1,11 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import SectionTitle from '@/app/components/common/SectionTitle';
+import BackLink from '@/app/components/common/BackLink';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  ArrowLeft, Award, CalendarCheck, CalendarClock, CalendarDays, CalendarOff, CalendarX2, Clock, FileBadge, IdCard,
-  Loader2, Mail, Pencil, Phone, Sun, Timer, Wrench,
-} from 'lucide-react';
+import { Award, CalendarCheck, CalendarClock, CalendarDays, CalendarOff, CalendarX2, Clock, FileBadge, IdCard, Loader2, Mail, Pencil, Phone, Sun, Timer, Wrench } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -51,7 +50,6 @@ const WEEK: { weekday: number; label: string }[] = [
 const WINDOW_DAYS = 30;
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 const CLICKABLE = ['today', 'upcoming', 'completed', 'missed'];
@@ -132,9 +130,7 @@ export default function ProfessionalDetail() {
   }
 
   const backLink = (
-    <Link href="/professionals" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
-      <ArrowLeft size={18} /> {vocab.pros}
-    </Link>
+    <BackLink href="/professionals">{vocab.pros}</BackLink>
   );
 
   if (!professional) {
@@ -233,9 +229,9 @@ export default function ProfessionalDetail() {
             )}
           </div>
 
-          <span className={`inline-flex px-2.5 py-1 text-xs rounded-full font-medium ${inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`} data-status>
+          <Badge tone={inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} className="inline-flex" data-status>
             {professional.status?.name ?? 'Activo'}
-          </span>
+          </Badge>
 
           <dl className="space-y-3">
             {facts.filter(([, , value]) => value).map(([icon, label, value]) => (
@@ -308,7 +304,7 @@ export default function ProfessionalDetail() {
         <section className={`${card} overflow-hidden`} data-card="schedule">
           <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3">
             <div>
-              <h2 className={cardTitle}><Clock className="w-4 h-4 text-[#3F768C]" /> Horario de la semana</h2>
+              <SectionTitle><Clock className="w-4 h-4 text-[#3F768C]" /> Horario de la semana</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 {weeklyMinutes > 0 ? `${hoursLabel(weeklyMinutes)} de atención a la semana.` : 'Sin horario definido: la agenda no le ofrece citas.'}
               </p>
@@ -382,7 +378,7 @@ export default function ProfessionalDetail() {
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">
-              <h2 className={cardTitle}><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</h2>
+              <SectionTitle><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 Los últimos y los próximos {WINDOW_DAYS} días. La fecha y la fase abren la cita; el nombre lleva a la página de la persona. Las tarjetas de arriba filtran esta lista.
               </p>

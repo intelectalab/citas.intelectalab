@@ -1,5 +1,7 @@
 'use client';
 
+import Button from '@/app/components/common/Button';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useState, useEffect } from 'react';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
@@ -356,7 +358,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             }))}
           />
 
-          {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <ErrorAlert message={error} />
         </form>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">
@@ -367,14 +369,13 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
           >
             Cancelar
           </button>
-          <button 
+          <Button 
             type="submit" 
             form="professional-form"
-            disabled={loading}
-            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+            disabled={loading} variant="classic"
           >
             {loading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : `Crear ${vocab.pro}`)}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDrawer>

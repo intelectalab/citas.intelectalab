@@ -25,6 +25,11 @@ class NotificationController extends Controller
         if ($user->tenant) {
             Notifier::upcomingAbsences($user->tenant);
             \App\Support\Confirmations::process($user->tenant);
+            \App\Support\Messaging::generate($user->tenant);
+
+            if (\App\Support\Messaging::ready() && \App\Support\Messaging::due($user->tenant_id)->exists()) {
+                \App\Support\Messaging::kick($user->tenant_id);
+            }
         }
 
         $mine = fn () => UserNotification::where('tenant_id', $user->tenant_id)->where('user_id', $user->id);

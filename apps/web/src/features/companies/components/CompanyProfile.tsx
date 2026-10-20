@@ -1,5 +1,7 @@
 'use client';
 
+import SectionTitle from '@/app/components/common/SectionTitle';
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Building2, CalendarDays, Check, ChevronRight, Clock, Copy, CreditCard, FileText, KeyRound, MapPin, Pencil, Phone, Settings, Store, Users } from 'lucide-react';
@@ -11,7 +13,6 @@ import FormCompany from './FormCompany';
 import { SUBSCRIPTION_STATUS, type CompanyProfileData } from '../companies';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
 const shortDate = (date: string) => formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' });
@@ -80,7 +81,7 @@ export default function CompanyProfile() {
 
   return (
     <div className="space-y-5 pb-8 font-sans" data-company>
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="company">
@@ -148,7 +149,7 @@ export default function CompanyProfile() {
         </div>
 
         <section className={`${card} p-6 space-y-4`} data-card="plan">
-          <h2 className={cardTitle}><CreditCard size={16} className="text-[#3F768C]" /> Tu plan</h2>
+          <SectionTitle><CreditCard size={16} className="text-[#3F768C]" /> Tu plan</SectionTitle>
           {subscription ? (
             <>
               <div className="flex items-center justify-between gap-3">
@@ -168,7 +169,7 @@ export default function CompanyProfile() {
         </section>
 
         <section className={`${card} p-6 space-y-4`} data-card="code">
-          <h2 className={cardTitle}><KeyRound size={16} className="text-[#3F768C]" /> Código de empresa</h2>
+          <SectionTitle><KeyRound size={16} className="text-[#3F768C]" /> Código de empresa</SectionTitle>
           <div className="flex items-center justify-between gap-3">
             <span className="font-mono text-2xl font-black text-[#022340] tracking-[0.25em]" data-code>{tenant.code}</span>
             <button type="button" data-action="copy-code" onClick={copyCode} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
@@ -181,7 +182,7 @@ export default function CompanyProfile() {
         </section>
 
         <section className={`${card} p-6 space-y-3 xl:col-span-3`} data-card="links">
-          <h2 className={cardTitle}><Settings size={16} className="text-[#3F768C]" /> Lo demás de tu empresa</h2>
+          <SectionTitle><Settings size={16} className="text-[#3F768C]" /> Lo demás de tu empresa</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Sucursales', detail: 'Direcciones, horarios y salas', href: '/branches', icon: Store },

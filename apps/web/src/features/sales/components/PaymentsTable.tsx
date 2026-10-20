@@ -1,5 +1,6 @@
 'use client';
 
+import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { Banknote, Coins, CreditCard, Landmark, RotateCcw, Smartphone, Wallet } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
@@ -150,7 +151,7 @@ export default function PaymentsTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+      <ErrorAlert message={error} />
 
       <DataTable<PaymentRow>
         title="Pagos"

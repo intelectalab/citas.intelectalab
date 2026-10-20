@@ -68,7 +68,7 @@ class CompanyController extends Controller
         $plan = $subscription?->plan;
         $limits = $plan?->limits ?? [];
         $usage = $tenant->usage();
-        $timezone = $tenant->timezone ?: 'America/Lima';
+        $timezone = $tenant->zone();
         $count = fn (string $table) => DB::table($table)->where('tenant_id', $tenant->id);
 
         return [

@@ -39,7 +39,7 @@ class AppointmentScheduler
 
     public static function timezone(Branch $branch, Tenant $tenant): string
     {
-        return $branch->timezone ?: ($tenant->timezone ?: 'America/Lima');
+        return $branch->timezone ?: ($tenant->zone());
     }
 
     public function check(Service $service, Professional $professional, Branch $branch, Carbon $start, int $duration, ?string $ignoreId = null): array

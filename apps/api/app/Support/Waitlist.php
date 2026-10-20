@@ -40,6 +40,7 @@ class Waitlist
 
             if ($count > 0) {
                 Notifier::waitlistSlotFreed($tenant, $appointment, $count);
+                Messaging::waitlistSlot($tenant, $appointment);
             }
         } catch (\Throwable $e) {
             report($e);
@@ -51,7 +52,7 @@ class Waitlist
         WaitlistEntry::where('tenant_id', $tenant->id)
             ->whereIn('status', WaitlistEntry::OPEN)
             ->whereNotNull('date_to')
-            ->where('date_to', '<', now($tenant->timezone ?: 'America/Lima')->format('Y-m-d'))
+            ->where('date_to', '<', now($tenant->zone())->format('Y-m-d'))
             ->update(['status' => WaitlistEntry::EXPIRED, 'updated_at' => now()]);
     }
 

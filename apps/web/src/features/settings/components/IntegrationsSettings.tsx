@@ -1,5 +1,10 @@
 'use client';
 
+import OptionCard from '@/app/components/common/OptionCard';
+import Badge from '@/app/components/common/Badge';
+import SectionTitle from '@/app/components/common/SectionTitle';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, FileText, ImagePlus, MessageCircle, Plug, QrCode, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -33,7 +38,6 @@ interface IntegrationsPayload {
 }
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
-const inputClass = 'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
 const QR_MAX = 700 * 1024;
 
 const EVENT_TONES: Record<PaymentEvent['status'], string> = {
@@ -198,9 +202,9 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
   return (
     <section className={cardClass} data-card="integrations">
       <div>
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+        <SectionTitle>
           <Plug className="w-4 h-4 text-[#3F768C]" /> Integraciones
-        </h2>
+        </SectionTitle>
         <p className="text-xs text-slate-500 font-medium mt-1">
           Los servicios externos que usa tu empresa para cobrar y facturar. Las llaves se guardan cifradas y nunca se muestran completas.
         </p>
@@ -213,21 +217,20 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
             const active = chosen === option.key;
             const inUse = data.payments.active === option.key;
             return (
-              <button
+              <OptionCard
                 key={option.key}
                 type="button"
                 role="radio"
                 aria-checked={active}
                 data-provider={option.key}
                 disabled={!canSave}
-                onClick={() => { setChosen(option.key); setNotice(''); setError(''); }}
-                className={`text-left rounded-xl border px-3.5 py-3 transition-colors ${active ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50'}`}
+                onClick={() => { setChosen(option.key); setNotice(''); setError(''); }} selected={active} className="text-left rounded-xl border px-3.5 py-3 transition-colors"
               >
                 <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
                 <span className={`block text-xs mt-0.5 ${inUse ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>
                   {inUse ? 'En uso' : option.key === 'simulated' ? 'Para probar' : option.saved ? 'Llaves guardadas' : 'Lista para conectar'}
                 </span>
-              </button>
+              </OptionCard>
             );
           })}
         </div>
@@ -261,7 +264,7 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
           </button>
         </div>
         {notice && <p data-integrations-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
-        {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        <ErrorAlert message={error} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-slate-100">
@@ -275,8 +278,8 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
         <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
           <span className="p-2 rounded-lg bg-[#84D0D9]/20 text-[#022340] shrink-0"><MessageCircle size={16} /></span>
           <span>
-            <span className="block text-sm font-bold text-[#022340]">WhatsApp y correo</span>
-            <span className="block text-xs text-slate-500 mt-0.5">Llega con Marketing. Por ahora los links de pago se copian y se envían a mano.</span>
+            <span className="block text-sm font-bold text-[#022340]">Correo y WhatsApp</span>
+            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura más abajo, en &quot;Correo de tu empresa&quot;. WhatsApp queda listo para conectar cuando elijan un proveedor.</span>
           </span>
         </div>
       </div>
@@ -300,7 +303,7 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
             empty="Aún no hay avisos. Aparecen cuando un cliente paga o intenta pagar un link."
             renderRow={(event) => (
               <li key={event.id} className="flex items-center gap-3 px-5 py-3">
-                <span className={`px-2.5 py-1 text-xs rounded-full font-semibold shrink-0 ${EVENT_TONES[event.status]}`}>{EVENT_STATUS[event.status]}</span>
+                <Badge tone={EVENT_TONES[event.status]} bold className="shrink-0">{EVENT_STATUS[event.status]}</Badge>
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-semibold text-slate-800 truncate">{event.event}{event.description ? ` · ${event.description}` : ''}</span>
                   <span className="block text-xs text-slate-500 truncate">{event.message ?? event.provider} · {momentOf(event.at)}</span>

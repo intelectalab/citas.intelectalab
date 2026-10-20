@@ -466,7 +466,7 @@ CREATE TABLE tenant_sequences (
 CREATE TABLE tenant_integrations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    kind varchar(30) NOT NULL CHECK (kind IN ('payments', 'invoicing', 'messaging')),
+    kind varchar(30) NOT NULL CHECK (kind IN ('payments', 'invoicing', 'messaging', 'email', 'whatsapp')),
     provider varchar(40) NOT NULL DEFAULT 'simulated',
     mode varchar(20) NOT NULL DEFAULT 'simulated' CHECK (mode IN ('simulated', 'sandbox', 'production')),
     credentials text NULL,
@@ -1131,65 +1131,6 @@ CREATE TABLE memberships (
 CREATE INDEX idx_memberships_customer ON memberships(tenant_id, customer_id);
 CREATE INDEX idx_memberships_status_end ON memberships(tenant_id, status, ends_at);
 
-CREATE TABLE package_plans (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    name varchar(150) NOT NULL,
-    description text,
-    price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
-    validity_days integer NULL CHECK (validity_days > 0),
-    status varchar(30) NOT NULL DEFAULT 'active',
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (tenant_id, name)
-);
-
-CREATE TABLE package_plan_items (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    package_plan_id uuid NOT NULL REFERENCES package_plans(id) ON DELETE CASCADE,
-    service_id uuid NOT NULL REFERENCES services(id),
-    sessions integer NOT NULL CHECK (sessions > 0),
-    UNIQUE (package_plan_id, service_id)
-);
-
-CREATE TABLE customer_packages (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    package_plan_id uuid NOT NULL REFERENCES package_plans(id),
-    customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    sale_id uuid NULL REFERENCES sales(id) ON DELETE SET NULL,
-    status varchar(30) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'consumed', 'expired', 'cancelled')),
-    purchased_at timestamptz NOT NULL DEFAULT now(),
-    expires_at timestamptz NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_customer_packages_customer ON customer_packages(tenant_id, customer_id);
-
-CREATE TABLE customer_package_items (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    customer_package_id uuid NOT NULL REFERENCES customer_packages(id) ON DELETE CASCADE,
-    service_id uuid NOT NULL REFERENCES services(id),
-    sessions_total integer NOT NULL CHECK (sessions_total > 0),
-    sessions_used integer NOT NULL DEFAULT 0 CHECK (sessions_used >= 0),
-    UNIQUE (customer_package_id, service_id)
-);
-
-CREATE TABLE package_usages (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    customer_package_id uuid NOT NULL REFERENCES customer_packages(id) ON DELETE CASCADE,
-    service_id uuid NOT NULL REFERENCES services(id),
-    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
-    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
-    sessions integer NOT NULL DEFAULT 1 CHECK (sessions > 0),
-    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
-    used_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_package_usages_package ON package_usages(tenant_id, customer_package_id);
-
 CREATE TABLE loyalty_transactions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -1594,5 +1535,155 @@ CREATE TABLE currency_changes (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_currency_changes_tenant ON currency_changes(tenant_id, created_at DESC);
+
+CREATE TABLE package_plans (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name varchar(150) NOT NULL,
+    description text,
+    price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
+    currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code),
+    validity_days integer NOT NULL DEFAULT 90 CHECK (validity_days BETWEEN 1 AND 3650),
+    booking_mode varchar(20) NOT NULL DEFAULT 'free' CHECK (booking_mode IN ('free', 'scheduled')),
+    frequency varchar(20) NOT NULL DEFAULT 'weekly' CHECK (frequency IN ('weekly', 'twice_weekly', 'biweekly', 'monthly', 'custom')),
+    custom_days jsonb NOT NULL DEFAULT '[]'::jsonb,
+    repeat_weeks smallint NOT NULL DEFAULT 1 CHECK (repeat_weeks IN (1, 2)),
+    professional_mode varchar(20) NOT NULL DEFAULT 'chosen' CHECK (professional_mode IN ('chosen', 'any')),
+    late_policy varchar(20) NOT NULL DEFAULT 'lose' CHECK (late_policy IN ('lose', 'reschedule')),
+    refund_policy varchar(20) NOT NULL DEFAULT 'unused_normal' CHECK (refund_policy IN ('none', 'unused_normal', 'unused_package')),
+    terms text NULL,
+    status varchar(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    deleted_at timestamptz NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX uq_package_plans_name ON package_plans(tenant_id, lower(name)) WHERE deleted_at IS NULL;
+
+CREATE TABLE package_plan_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    package_plan_id uuid NOT NULL REFERENCES package_plans(id) ON DELETE CASCADE,
+    service_id uuid NOT NULL REFERENCES services(id),
+    sessions integer NOT NULL CHECK (sessions BETWEEN 1 AND 200),
+    position smallint NOT NULL DEFAULT 0,
+    UNIQUE (package_plan_id, service_id)
+);
+
+CREATE TABLE customer_packages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    code varchar(20) NOT NULL,
+    package_plan_id uuid NULL REFERENCES package_plans(id) ON DELETE SET NULL,
+    customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    branch_id uuid NULL REFERENCES branches(id) ON DELETE SET NULL,
+    sale_id uuid NULL REFERENCES sales(id) ON DELETE SET NULL,
+    name varchar(150) NOT NULL,
+    price numeric(14,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
+    currency char(3) NOT NULL DEFAULT 'PEN' REFERENCES currencies(code),
+    conditions jsonb NOT NULL DEFAULT '{}'::jsonb,
+    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
+    status varchar(30) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'consumed', 'expired', 'cancelled')),
+    purchased_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+    cancelled_at timestamptz NULL,
+    cancel_reason varchar(255) NULL,
+    refunded_amount numeric(14,2) NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, code)
+);
+CREATE INDEX idx_customer_packages_customer ON customer_packages(tenant_id, customer_id);
+CREATE INDEX idx_customer_packages_status ON customer_packages(tenant_id, status, expires_at);
+CREATE INDEX idx_customer_packages_sale ON customer_packages(sale_id);
+
+CREATE TABLE customer_package_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    customer_package_id uuid NOT NULL REFERENCES customer_packages(id) ON DELETE CASCADE,
+    service_id uuid NOT NULL REFERENCES services(id),
+    sessions_total integer NOT NULL CHECK (sessions_total > 0),
+    sessions_used integer NOT NULL DEFAULT 0 CHECK (sessions_used >= 0),
+    unit_price numeric(14,2) NOT NULL DEFAULT 0 CHECK (unit_price >= 0),
+    position smallint NOT NULL DEFAULT 0,
+    UNIQUE (customer_package_id, service_id),
+    CHECK (sessions_used <= sessions_total)
+);
+
+CREATE TABLE package_usages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    customer_package_id uuid NOT NULL REFERENCES customer_packages(id) ON DELETE CASCADE,
+    service_id uuid NOT NULL REFERENCES services(id),
+    appointment_id uuid NULL REFERENCES appointments(id) ON DELETE SET NULL,
+    professional_id uuid NULL REFERENCES professionals(id) ON DELETE SET NULL,
+    sessions integer NOT NULL DEFAULT 1 CHECK (sessions > 0),
+    kind varchar(20) NOT NULL DEFAULT 'attended' CHECK (kind IN ('attended', 'no_show', 'late_cancel', 'manual')),
+    note varchar(255) NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    used_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_package_usages_package ON package_usages(tenant_id, customer_package_id);
+CREATE UNIQUE INDEX uq_package_usages_appointment ON package_usages(appointment_id) WHERE appointment_id IS NOT NULL;
+
+CREATE TABLE customer_package_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    customer_package_id uuid NOT NULL REFERENCES customer_packages(id) ON DELETE CASCADE,
+    kind varchar(20) NOT NULL CHECK (kind IN ('sold', 'scheduled', 'unscheduled', 'extended', 'cancelled', 'refunded')),
+    detail varchar(500) NULL,
+    days integer NULL,
+    amount numeric(14,2) NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_customer_package_events ON customer_package_events(customer_package_id, created_at);
+
+ALTER TABLE appointments ADD COLUMN customer_package_id uuid NULL REFERENCES customer_packages(id) ON DELETE SET NULL;
+CREATE INDEX idx_appointments_package ON appointments(customer_package_id) WHERE customer_package_id IS NOT NULL;
+ALTER TABLE sale_items ADD COLUMN details jsonb NULL;
+
+CREATE TABLE messages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    customer_id uuid NULL REFERENCES customers(id) ON DELETE SET NULL,
+    branch_id uuid NULL REFERENCES branches(id) ON DELETE SET NULL,
+    channel varchar(20) NOT NULL DEFAULT 'email' CHECK (channel IN ('email', 'whatsapp')),
+    kind varchar(40) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'queued' CHECK (status IN ('scheduled', 'queued', 'sent', 'simulated', 'failed', 'not_sent', 'cancelled')),
+    to_address varchar(255) NULL,
+    to_name varchar(255) NULL,
+    subject varchar(255) NULL,
+    body text NOT NULL,
+    scheduled_at timestamptz NULL,
+    sent_at timestamptz NULL,
+    attempts integer NOT NULL DEFAULT 0,
+    error varchar(500) NULL,
+    provider varchar(40) NULL,
+    entity_type varchar(40) NULL,
+    entity_id uuid NULL,
+    dedupe_key varchar(190) NULL,
+    created_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, dedupe_key)
+);
+CREATE INDEX idx_messages_tenant_created ON messages(tenant_id, created_at DESC);
+CREATE INDEX idx_messages_due ON messages(status, scheduled_at) WHERE status IN ('scheduled', 'queued');
+CREATE INDEX idx_messages_customer ON messages(tenant_id, customer_id);
+
+CREATE TABLE message_settings (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    kind varchar(40) NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    subject varchar(255) NULL,
+    body text NULL,
+    options jsonb NOT NULL DEFAULT '{}'::jsonb,
+    updated_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, kind)
+);
 
 COMMIT;

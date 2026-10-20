@@ -1,9 +1,12 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import BackLink from '@/app/components/common/BackLink';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Ban, Check, Contact, Eye, KeyRound, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Store } from 'lucide-react';
+import { Ban, Check, Contact, Eye, KeyRound, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Store } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { apiError, formatDate } from '@/features/appointments/appointments';
@@ -105,9 +108,7 @@ export default function UserAccessDetail() {
   }
 
   const backLink = (
-    <Link href="/users" className="inline-flex items-center gap-2 text-base font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
-      <ArrowLeft size={18} /> Usuarios y roles
-    </Link>
+    <BackLink href="/users">Usuarios y roles</BackLink>
   );
 
   if (!detail) {
@@ -158,8 +159,8 @@ export default function UserAccessDetail() {
     <div className="space-y-5 pb-8 font-sans">
       {backLink}
 
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className={`${card} p-6 space-y-5`} data-card="user">
@@ -181,9 +182,9 @@ export default function UserAccessDetail() {
           </div>
 
           <div className="flex flex-wrap gap-1.5">
-            <span data-status={user.status} className={`inline-flex px-2.5 py-1 text-xs rounded-full font-medium ${inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            <Badge data-status={user.status} tone={inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} className="inline-flex">
               {inactive ? 'Desactivado' : 'Activo'}
-            </span>
+            </Badge>
             {user.is_owner && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-[#84D0D9]/25 text-[#022340]">Dueño de la empresa</span>}
             {user.is_self && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-slate-100 text-slate-600">Tu cuenta</span>}
           </div>

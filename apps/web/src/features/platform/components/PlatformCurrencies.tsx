@@ -1,5 +1,6 @@
 'use client';
 
+import SectionTitle from '@/app/components/common/SectionTitle';
 import { useCallback, useEffect, useState } from 'react';
 import { Coins } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -48,9 +49,9 @@ export default function PlatformCurrencies() {
   return (
     <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden" data-card="platform-currencies">
       <div className="p-6 pb-3 space-y-1">
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+        <SectionTitle>
           <span className="text-[#3F768C]"><Coins size={16} /></span> Monedas
-        </h2>
+        </SectionTitle>
         <p className="text-xs text-slate-500 font-medium">
           Las monedas que las empresas pueden elegir para cobrar y que puedes usar en el precio de los planes. El cambio rige al instante.
         </p>

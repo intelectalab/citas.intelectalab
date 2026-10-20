@@ -363,6 +363,9 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                   <span className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
                     <Clock size={12} /> {item.duration_minutes} min{item.category ? ` · ${item.category}` : ''}
                   </span>
+                  {item.package && (
+                    <span className="block text-xs font-semibold text-emerald-700 mt-1" data-service-package>Con tu paquete {item.package.name}: {item.package.available === 1 ? 'te queda 1 sesión por reservar' : `te quedan ${item.package.available} sesiones por reservar`}.</span>
+                  )}
                   {item.needs_deposit && (
                     <span className="block text-xs font-medium text-[#3F768C] mt-1">Se reserva pagando un adelanto de {money(item.deposit_amount ?? 0)}{item.deposit_label?.includes('%') ? ` (${item.deposit_label})` : ''}.</span>
                   )}
@@ -595,7 +598,13 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
               </div>
             )}
 
-            {policies.pay_before_service && !service?.needs_deposit && (
+            {!isReschedule && service?.package && (
+              <p data-package-notice className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                <span className="font-bold">Esta cita usa tu paquete {service.package.name}: no pagas nada ahora.</span> La sesión se descuenta cuando te atiendan.
+              </p>
+            )}
+
+            {policies.pay_before_service && !service?.needs_deposit && !service?.package && (
               <p data-pay-notice className="text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3">
                 {service?.is_virtual ? (
                   <><span className="font-bold">Esta atención es por videollamada y se paga antes de empezar.</span> Comunícate con la sede para coordinar el pago.</>

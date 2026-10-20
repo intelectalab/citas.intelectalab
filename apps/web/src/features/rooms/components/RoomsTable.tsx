@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DoorOpen, Edit2, Layers, PowerOff, Trash2, Wrench } from 'lucide-react';
@@ -143,9 +145,9 @@ export default function RoomsTable() {
     {
       header: 'Tipo',
       cell: (room) => (
-        <span key={`kind-${room.id}`} className={`px-2.5 py-1 text-xs rounded-full font-medium ${room.kind === 'equipment' ? 'bg-violet-50 text-violet-700' : 'bg-[#84D0D9]/20 text-[#022340]'}`}>
+        <Badge key={`kind-${room.id}`} tone={room.kind === 'equipment' ? 'bg-violet-50 text-violet-700' : 'bg-[#84D0D9]/20 text-[#022340]'}>
           {KIND_LABELS[room.kind]}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -160,9 +162,9 @@ export default function RoomsTable() {
       header: 'Estado',
       cell: (room) => (
         <div key={`status-${room.id}`}>
-          <span data-status={statusOf(room)} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusOf(room) === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+          <Badge data-status={statusOf(room)} tone={statusOf(room) === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} nowrap>
             {statusOf(room) === 'active' ? 'En uso' : 'Fuera de uso'}
-          </span>
+          </Badge>
           {(room.down_equipment?.length ?? 0) > 0 && (
             <span data-equipment-note className={`block mt-1.5 text-[11px] font-semibold ${room.auto_down ? 'text-rose-600' : 'text-amber-700'}`}>
               {room.auto_down ? 'Por' : 'Observación:'} {room.down_equipment!.join(', ')} fuera de uso
@@ -188,8 +190,8 @@ export default function RoomsTable() {
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <div className="mb-6">
         <DataTable<RoomRow>

@@ -166,7 +166,7 @@ class AccessController extends Controller
 
                 return [
                     'id'              => $u->id,
-                    'name'            => trim("{$u->first_name} {$u->last_name}"),
+                    'name'            => \App\Support\Person::name($u),
                     'first_name'      => $u->first_name,
                     'last_name'       => $u->last_name,
                     'email'           => $u->email,
@@ -197,7 +197,7 @@ class AccessController extends Controller
         return response()->json([
             'user' => [
                 'id'              => $target->id,
-                'name'            => trim("{$target->first_name} {$target->last_name}"),
+                'name'            => \App\Support\Person::name($target),
                 'first_name'      => $target->first_name,
                 'last_name'       => $target->last_name,
                 'email'           => $target->email,
@@ -508,7 +508,7 @@ class AccessController extends Controller
             'grid'        => $grid,
             'users'       => $people->map(fn (User $u) => [
                 'id'              => $u->id,
-                'name'            => trim("{$u->first_name} {$u->last_name}"),
+                'name'            => \App\Support\Person::name($u),
                 'email'           => $u->email,
                 'status'          => $u->status,
                 'is_owner'        => (bool) $u->is_owner,
@@ -628,7 +628,7 @@ class AccessController extends Controller
                     'message'  => ($missing->count() === 1 ? 'Una persona con este rol no tiene' : "{$missing->count()} personas con este rol no tienen")
                         . ' sede asignada. Elige la sede de cada una para que siga viendo su agenda, su caja y sus ventas.',
                     'code'     => 'NEEDS_BRANCH',
-                    'people'   => $missing->map(fn (User $u) => ['id' => $u->id, 'name' => trim("{$u->first_name} {$u->last_name}"), 'email' => $u->email])->values(),
+                    'people'   => $missing->map(fn (User $u) => ['id' => $u->id, 'name' => \App\Support\Person::name($u), 'email' => $u->email])->values(),
                     'branches' => $this->branchOptions($tenant),
                 ], 422);
             }

@@ -1,5 +1,6 @@
 'use client';
 
+import SectionTitle from '@/app/components/common/SectionTitle';
 import React, { useEffect, useState } from 'react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
@@ -98,9 +99,9 @@ const ghostButton =
 function CardTitle({ icon, title, aside }: { icon: React.ReactNode; title: string; aside?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 mb-4">
-      <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
+      <SectionTitle>
         <span className="text-[#3F768C]">{icon}</span> {title}
-      </h2>
+      </SectionTitle>
       {aside}
     </div>
   );

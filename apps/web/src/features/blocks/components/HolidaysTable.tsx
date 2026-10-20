@@ -1,5 +1,7 @@
 'use client';
 
+import Badge from '@/app/components/common/Badge';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock, CalendarDays, ChevronRight, DoorOpen, Edit2, PartyPopper, Trash2 } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem, type TabOption } from '@/app/components/ui/table/DataTable';
@@ -174,9 +176,9 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
     {
       header: 'Ese día',
       cell: (h) => (
-        <span key={`closed-${h.id}`} data-closed={h.closed} className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${h.closed ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+        <Badge key={`closed-${h.id}`} data-closed={h.closed} tone={h.closed ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'} nowrap>
           {h.closed ? 'La sede cierra' : 'Se atiende'}
-        </span>
+        </Badge>
       ),
     },
     {
@@ -211,8 +213,8 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
 
   return (
     <div className="space-y-6 mb-8">
-      {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-      {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{notice}</p>}
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       {canManage && missing.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3" data-missing>
@@ -297,14 +299,14 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
                       >
                         <span>
                           <span className="block text-sm font-semibold text-slate-800">
-                            <span className="font-mono text-[#022340]">{a.code}</span> · {a.customer ?? '—'}
+                            <span className="font-mono text-[#022340]">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#84D0D9]/25 text-[#022340]">Paquete {a.package}</span>}
                           </span>
                           <span className="block text-xs text-slate-500">
                             {formatDateTime(a.starts_at)} · {a.service}{a.professional ? ` · ${a.professional}` : ''}
                           </span>
                         </span>
                         <span className="flex items-center gap-2 shrink-0">
-                          <span className={`px-2.5 py-1 text-xs rounded-full font-medium whitespace-nowrap ${statusStyle(a.status).badge}`}>{a.status_name}</span>
+                          <Badge tone={statusStyle(a.status).badge} nowrap>{a.status_name}</Badge>
                           <ChevronRight size={16} className="text-slate-400" />
                         </span>
                       </button>

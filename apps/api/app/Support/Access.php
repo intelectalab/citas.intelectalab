@@ -19,6 +19,7 @@ class Access
         'override'  => 'Forzar horario',
         'emergency' => 'Acceso de emergencia',
         'forgive'   => 'Perdonar faltas',
+        'use'       => 'Registrar uso a mano',
     ];
 
     public const CATALOG = [
@@ -115,6 +116,18 @@ class Access
             'edit'   => 'Cambiar productos y sus precios',
             'delete' => 'Eliminar productos',
         ]],
+        'packages' => ['label' => 'Paquetes', 'module' => 'packages', 'actions' => [
+            'view'   => 'Ver los paquetes de los clientes y el catálogo de paquetes',
+            'create' => 'Crear paquetes en el catálogo',
+            'edit'   => 'Cambiar paquetes del catálogo y dar más días a un paquete vendido',
+            'delete' => 'Anular un paquete vendido, devolver lo no usado y quitar paquetes del catálogo',
+            'use'    => 'Descontar a mano una sesión de un paquete, sin cita (queda registrado quién y por qué)',
+        ]],
+        'messages' => ['label' => 'Mensajes a clientes', 'module' => null, 'actions' => [
+            'view'   => 'Ver los mensajes enviados y programados a los clientes',
+            'create' => 'Escribir un mensaje a un cliente, para ahora o programado',
+            'edit'   => 'Cambiar o cancelar un mensaje programado y reintentar los que fallaron',
+        ]],
         'branches' => ['label' => 'Sucursales', 'module' => null, 'actions' => [
             'view'   => 'Ver las sucursales',
             'create' => 'Crear sucursales',
@@ -156,6 +169,7 @@ class Access
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'rooms' => self::EVERYTHING,
                 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING,
                 'sales' => self::EVERYTHING, 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
+                'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'messages' => ['view', 'create', 'edit'],
                 'branches' => ['view'],
                 'users' => ['view', 'create', 'edit'],
             ],
@@ -171,6 +185,7 @@ class Access
                 'services' => ['view'], 'professionals' => ['view'], 'rooms' => ['view'],
                 'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
                 'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
+                'packages' => ['view', 'use'], 'messages' => ['view', 'create', 'edit'],
             ],
         ],
         'cashier' => [
@@ -181,6 +196,7 @@ class Access
                 'agenda' => ['view'], 'customers' => ['view'],
                 'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
                 'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
+                'packages' => ['view'], 'messages' => ['view'],
             ],
         ],
         'professional' => [
