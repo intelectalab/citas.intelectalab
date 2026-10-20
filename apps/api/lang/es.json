@@ -1,0 +1,5 @@
+{
+    "(and :count more error)": "(y 1 dato más por revisar)",
+    "(and :count more errors)": "(y :count datos más por revisar)",
+    "The given data was invalid.": "Revisa los datos marcados e inténtalo de nuevo."
+}

@@ -20,3 +20,12 @@ api.interceptors.request.use((config) => {
 }, (error) => {
   return Promise.reject(error);
 });
+
+api.interceptors.response.use((response) => response, (error) => {
+  if (axios.isAxiosError(error) && !error.response && !axios.isCancel(error)) {
+    error.message = error.code === 'ECONNABORTED'
+      ? 'El servidor tardó demasiado en responder. Inténtalo de nuevo en unos segundos.'
+      : 'No hay conexión con el sistema. Revisa tu internet e inténtalo de nuevo.';
+  }
+  return Promise.reject(error);
+});

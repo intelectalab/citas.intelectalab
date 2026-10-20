@@ -636,3 +636,12 @@ Lista viva de pendientes detectados. Cuando uno se resuelve, se retira de aquí 
 - **Función `tenant()` de los controladores** (16 copias, no idénticas) y **"descartar lo inactivo"** (15 veces): pasarlas a piezas comunes.
 - **Archivos muy largos** para partir: `Packages.php` (unas 1,050 líneas), el punto de venta (829), el panel de cobro (737) y Configuración (729).
 - **Borrar `apps/web/.next`** de vez en cuando: es caché y llegó a 3.1 GB.
+
+## Detectados el 2026-10-20 (publicación en el servidor)
+
+- **La pantalla de login trae precargados un correo y una contraseña de ejemplo.** En el servidor público cualquiera puede entrar a esa empresa. Sirve para las pruebas, pero hay que quitarlo antes de tener clientes reales.
+- **Contraseñas de la plataforma.** `admin@tusaas.com` y `soporte@tusaas.com` tienen en el servidor la misma contraseña que en local: cambiarlas.
+- **"¿Olvidaste tu contraseña?" lleva a una página que no existe.** Se quitaron tres páginas vacías (olvidé mi contraseña, restablecer contraseña y suscripción) porque impedían compilar. Desde el 2026-10-20 muestra la página "No encontramos esta página"; falta construir la recuperación de contraseña o quitar el enlace.
+- **Correos en el servidor.** `MAIL_MAILER=log`: el sistema no envía correos propios; cada empresa usa el suyo desde Configuración.
+- **Pasar a producción.** El día que entren clientes reales: base nueva, `APP_ENV=production`, sin `db:demo`.
+- **Subir a GitHub** los cambios del 2026-10-20 (`deploy/actualizar.sh` y las tres páginas eliminadas).
