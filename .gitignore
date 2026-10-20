@@ -1,0 +1,26 @@
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+~$*
+
+.claude/
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
+
+.env
+.env.*
+!.env.example
+*.pem
+
+*.log
+*.dump
+*.bak
+*.tmp
+
+PROTOTIPO/
+
+Documentación/Manual de uso/*
+!Documentación/Manual de uso/Manual de uso.docx
