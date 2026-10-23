@@ -32,7 +32,7 @@ export default function AuthPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [idleNotice, setIdleNotice] = useState<string | null>(null);
 
-  const [loginEmail, setLoginEmail] = useState('admin@luxuryspa.pe');
+  const [loginEmail, setLoginEmail] = useState('');
 
   useEffect(() => {
     const reason = localStorage.getItem('logout_reason');
@@ -51,7 +51,7 @@ export default function AuthPage() {
       sessionStorage.removeItem('switch_account_email');
     }
   }, []);
-  const [loginPassword, setLoginPassword] = useState('Admin123456!');
+  const [loginPassword, setLoginPassword] = useState('');
 
   const [regFirstName, setRegFirstName] = useState('');
   const [regLastName, setRegLastName] = useState('');

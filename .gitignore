@@ -21,6 +21,7 @@ apps/web/CLAUDE.md
 *.tmp
 
 PROTOTIPO/
+Credenciales de prueba/
 
 Documentación/*
 !Documentación/Manual de uso/
