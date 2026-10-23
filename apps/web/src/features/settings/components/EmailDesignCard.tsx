@@ -4,7 +4,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import Switch from '@/app/components/common/Switch';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ImagePlus, Palette, Trash2 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
@@ -17,9 +17,10 @@ interface EmailDesignCardProps {
   design: EmailDesign;
   canSave: boolean;
   onSaved: (payload: MessagingSettingsData) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export default function EmailDesignCard({ design, canSave, onSaved }: EmailDesignCardProps) {
+export default function EmailDesignCard({ design, canSave, onSaved, onDirtyChange }: EmailDesignCardProps) {
   const [color, setColor] = useState(design.color);
   const [custom, setCustom] = useState(design.color);
   const [showName, setShowName] = useState(design.show_name);
@@ -32,6 +33,8 @@ export default function EmailDesignCard({ design, canSave, onSaved }: EmailDesig
 
   const changed = color.toUpperCase() !== design.color.toUpperCase() || showName !== design.show_name || footer.trim() !== design.footer.trim();
   const valid = HEX.test(color);
+
+  useEffect(() => { onDirtyChange?.(changed); }, [changed, onDirtyChange]);
 
   const run = async (fn: () => Promise<{ data: MessagingSettingsData }>, done: string) => {
     try {

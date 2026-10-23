@@ -2,7 +2,7 @@
 
 import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
-import { Ticket, Pencil, Trash2, Users, Store, Briefcase, CheckCircle, Clock, XCircle, Infinity, Eye } from 'lucide-react';
+import { Ticket, Pencil, Trash2, Users, Store, Contact, CalendarDays, CheckCircle, Clock, XCircle, Infinity, Eye } from 'lucide-react';
 import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormSaaSPlan from './FormSaaSPlan';
@@ -21,7 +21,8 @@ interface SaaSPlan {
     usuarios?: number;
     sucursales?: number;
     sedes?: number;
-    ordenes_trabajo_mes?: number;
+    professionals?: number;
+    appointments_month?: number;
     [key: string]: any;
   };
   trial_config?: {
@@ -269,7 +270,8 @@ export default function SaaSPlansTable() {
       cell: (plan) => {
         const users = plan.limits?.users ?? plan.limits?.usuarios ?? 0;
         const branches = plan.limits?.branches ?? plan.limits?.sucursales ?? plan.limits?.sedes ?? 0;
-        const workOrders = plan.limits?.orders ?? plan.limits?.ordenes_trabajo_mes ?? 0;
+        const professionals = plan.limits?.professionals ?? 0;
+        const appointments = plan.limits?.appointments_month ?? 0;
 
         const renderLimitValue = (value: number) => {
           if (value === -1) {
@@ -279,22 +281,26 @@ export default function SaaSPlansTable() {
               </span>
             );
           }
-          return <span className="font-medium text-slate-800">{value}</span>;
+          return <span className="font-medium text-slate-800">{value.toLocaleString('es-PE')}</span>;
         };
 
         return (
-          <div key={`limits-${plan.id}`} className="flex items-center gap-3 text-xs text-slate-600">
-            <div className="flex items-center gap-1" title="Usuarios permitidos">
+          <div key={`limits-${plan.id}`} className="flex items-center gap-3 text-xs text-slate-600 whitespace-nowrap" data-plan-limits>
+            <div className="flex items-center gap-1" title="Usuarios: todas las cuentas del personal, incluidos los profesionales. El dueño no cuenta." data-limit="users">
               <Users size={14} className="text-slate-400" />
               {renderLimitValue(users)}
             </div>
-            <div className="flex items-center gap-1" title="Sucursales / Sedes">
+            <div className="flex items-center gap-1" title="Profesionales: los que atienden citas. Cada uno gasta un usuario." data-limit="professionals">
+              <Contact size={14} className="text-slate-400" />
+              {renderLimitValue(professionals)}
+            </div>
+            <div className="flex items-center gap-1" title="Sedes" data-limit="branches">
               <Store size={14} className="text-slate-400" />
               {renderLimitValue(branches)}
             </div>
-            <div className="flex items-center gap-1" title="Órdenes de trabajo mensuales">
-              <Briefcase size={14} className="text-slate-400" />
-              {renderLimitValue(workOrders)}
+            <div className="flex items-center gap-1" title="Citas al mes" data-limit="appointments_month">
+              <CalendarDays size={14} className="text-slate-400" />
+              {renderLimitValue(appointments)}
             </div>
           </div>
         );

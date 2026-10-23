@@ -3,18 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
-import { Building2, Check, ArrowRight, Sparkles } from 'lucide-react';
+import { Building2, ArrowRight, Sparkles } from 'lucide-react';
 import { RegisterModal } from '@/features/subscriptions/components/RegisterModal';
-
-interface Plan {
-  currency_symbol?: string;
-  id: string | number;
-  name: string;
-  price_monthly: number;
-  description?: string;
-  features?: string[] | Record<string, any>;
-  is_popular?: boolean;
-}
+import PlanCard, { type PublicPlan as Plan } from '@/features/subscriptions/components/PlanCard';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -140,52 +131,9 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
             {plans.map((plan) => (
-              <div 
-                key={plan.id} 
-                className={`bg-slate-50/50 border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative ${
-                  plan.is_popular ? 'border-[#3F768C] ring-2 ring-[#3F768C]/10 bg-white' : 'border-slate-200'
-                }`}
-              >
-                <div className="space-y-4">
-                  <div className="path items-center justify-between flex">
-                    <h3 className="text-xl font-bold text-[#022340]">{plan.name}</h3>
-                    <div className="w-8 h-8 rounded-xl bg-[#84D0D9]/20 flex items-center justify-center text-[#3F768C]">
-                      <Building2 className="w-4 h-4" />
-                    </div>
-                  </div>
-
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-[#022340]">{plan.currency_symbol ?? 'S/'} {plan.price_monthly}</span>
-                    <span className="text-xs text-slate-400 font-medium">/ mes</span>
-                  </div>
-
-                  <div className="border-t border-slate-200/60 pt-4 space-y-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                      Incluye
-                    </span>
-                    <ul className="text-xs text-slate-600 space-y-2 font-medium">
-                      <li className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                        Acceso completo al módulo ERP
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                        Rol de Dueño (Owner) incluido
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleSelectPlan(plan)}
-                  className="mt-6 w-full bg-[#022340] hover:bg-[#01182c] text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-sm cursor-pointer"
-                >
-                  <span>Elegir Plan y Registrarse</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#84D0D9]" />
-                </button>
-              </div>
+              <PlanCard key={plan.id} plan={plan} onSelect={handleSelectPlan} />
             ))}
           </div>
         </div>

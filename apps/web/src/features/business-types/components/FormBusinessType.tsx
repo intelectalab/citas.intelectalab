@@ -283,7 +283,7 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
 
                         <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
                           <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                          <span><span className="font-semibold text-slate-700">Agenda y citas</span> y <span className="font-semibold text-slate-700">Clientes / CRM 360</span> son la base del producto y siempre están encendidos.</span>
+                          <span><span className="font-semibold text-slate-700">Agenda y citas</span> y <span className="font-semibold text-slate-700">Clientes</span> son la base del producto y siempre están encendidos.</span>
                         </div>
 
                         {MODULE_GROUPS.map((group) => (
@@ -299,7 +299,10 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                                       isOn ? 'bg-white border-emerald-200 hover:border-emerald-300' : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                                     }`}
                                   >
-                                    <span className={`text-sm font-medium leading-snug ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{item.label}</span>
+                                    <span className="min-w-0">
+                                      <span className={`block text-sm font-medium leading-snug ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{item.label}</span>
+                                      <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{item.hint}</span>
+                                    </span>
                                     <Switch checked={isOn} onChange={() => toggleModule(item.key)} label={`${item.label} en este rubro`} />
                                   </label>
                                 );

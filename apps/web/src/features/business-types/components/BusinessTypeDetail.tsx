@@ -201,7 +201,7 @@ export default function BusinessTypeDetail() {
               aside={<span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-700">{enabledModules} de {OPTIONAL_MODULE_KEYS.length} encendidos</span>}
             />
             <p className="text-xs text-slate-500">
-              Una empresa recibe los módulos encendidos que su plan incluya. {Object.values(CORE_MODULE_LABELS).join(' y ')} siempre están.
+              Una empresa recibe los módulos encendidos que su plan incluya. Siempre tiene {Object.values(CORE_MODULE_LABELS).join(', ')}.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
               {MODULE_GROUPS.map((group) => (

@@ -54,25 +54,25 @@ ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO saas_modules (key, name, is_core, sort_order) VALUES
   ('agenda', 'Agenda y citas', true, 1),
-  ('crm', 'Clientes / CRM 360', true, 2),
+  ('crm', 'Clientes', true, 2),
   ('booking', 'Reserva online y portal', false, 3),
-  ('pos', 'Punto de venta y caja', false, 4),
-  ('invoicing', 'Facturación electrónica', false, 5),
-  ('inventory', 'Inventario', false, 6),
-  ('commissions', 'Comisiones', false, 7),
-  ('memberships', 'Membresías', false, 8),
-  ('packages', 'Paquetes', false, 9),
-  ('loyalty', 'Puntos y gift cards', false, 10),
-  ('marketing', 'Marketing y WhatsApp', false, 11),
-  ('automations', 'Automatizaciones', false, 12),
-  ('resources', 'Salas y equipos', false, 13),
-  ('classes', 'Clases grupales', false, 14),
-  ('multi_branch', 'Multisede', false, 15),
-  ('reports_adv', 'Analítica avanzada', false, 16),
-  ('api', 'API e integraciones', false, 17),
-  ('records', 'Fichas de atención e historia', false, 18),
-  ('quotes', 'Presupuestos y planes de tratamiento', false, 19),
-  ('walkin', 'Cola de llegada sin cita', false, 20)
+  ('walkin', 'Cola sin cita', false, 4),
+  ('classes', 'Clases', false, 5),
+  ('records', 'Fichas de atención', false, 6),
+  ('resources', 'Salas y equipos', false, 7),
+  ('pos', 'Punto de venta y caja', false, 8),
+  ('invoicing', 'Facturación electrónica', false, 9),
+  ('quotes', 'Presupuestos', false, 10),
+  ('commissions', 'Comisiones', false, 11),
+  ('inventory', 'Inventario', false, 12),
+  ('packages', 'Paquetes', false, 13),
+  ('memberships', 'Membresías', false, 14),
+  ('loyalty', 'Puntos y gift cards', false, 15),
+  ('marketing', 'Campañas', false, 16),
+  ('automations', 'Automatizaciones', false, 17),
+  ('multi_branch', 'Multisede', false, 18),
+  ('reports_adv', 'Analítica avanzada', false, 19),
+  ('api', 'API y webhooks', false, 20)
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO saas_plans (
@@ -104,7 +104,7 @@ INSERT INTO saas_plans (
     'active', 2
 ),
 (
-    '33333333-3333-3333-3333-333333333333', 'Empresarial', 'empresarial', 'EMP', 'Todo el producto, con API e integraciones',
+    '33333333-3333-3333-3333-333333333333', 'Empresarial', 'empresarial', 'EMP', 'Todo el producto, con API y webhooks',
     599.00, 5990.00, 'PEN',
     '{"has_trial": true, "trial_days": 30}'::jsonb,
     '{"auto_renew": true, "default_period": "monthly"}'::jsonb,

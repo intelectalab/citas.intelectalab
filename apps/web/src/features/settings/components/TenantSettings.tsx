@@ -3,7 +3,9 @@
 import OptionCard from '@/app/components/common/OptionCard';
 import Button from '@/app/components/common/Button';
 import SectionTitle from '@/app/components/common/SectionTitle';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, Type, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
@@ -14,6 +16,7 @@ import IntegrationsSettings from './IntegrationsSettings';
 import MessagingSettings from './MessagingSettings';
 import DataExportsLog from './DataExportsLog';
 import { currencySymbol } from '@/lib/currency';
+import { MODULE_HINTS } from '@/lib/modules';
 
 interface SettingsModule {
   key: string;
@@ -109,6 +112,19 @@ const LOCK_REASONS: Record<string, string> = {
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
+type SectionId = 'empresa' | 'modulos' | 'vocabulario' | 'moneda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'ventas' | 'adelantos' | 'integraciones' | 'correo' | 'diseno-correo' | 'mensajes-al-cliente' | 'grupos' | 'seguridad' | 'descargas';
+
+const SECTION_GROUPS: { title: string; sections: { id: SectionId; label: string }[] }[] = [
+  { title: 'Tu empresa', sections: [{ id: 'empresa', label: 'Datos y código' }, { id: 'modulos', label: 'Módulos' }, { id: 'vocabulario', label: 'Vocabulario' }, { id: 'moneda', label: 'Moneda' }] },
+  { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'salas', label: 'Salas y equipos' }] },
+  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
+  { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }, { id: 'diseno-correo', label: 'Diseño del correo' }, { id: 'mensajes-al-cliente', label: 'Mensajes al cliente' }] },
+  { title: 'Clientes', sections: [{ id: 'grupos', label: 'Grupos de clientes' }] },
+  { title: 'Seguridad y registros', sections: [{ id: 'seguridad', label: 'Cierre de sesión' }, { id: 'descargas', label: 'Descargas de datos' }] },
+];
+
+const SECTION_LABELS = Object.fromEntries(SECTION_GROUPS.flatMap((g) => g.sections.map((s) => [s.id, s.label]))) as Record<SectionId, string>;
+
 export default function TenantSettings() {
   const { user, loading: authLoading, refetchUser, can } = useAuth();
   const [data, setData] = useState<SettingsPayload | null>(null);
@@ -125,7 +141,12 @@ export default function TenantSettings() {
   const [groups, setGroups] = useState<{ inactive: string; frequent: string; vip: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string; section?: SectionId } | null>(null);
+  const [active, setActive] = useState<SectionId>('empresa');
+  const [baseline, setBaseline] = useState<Partial<Record<SectionId, string>>>({});
+  const [externalDirty, setExternalDirty] = useState<Partial<Record<SectionId, boolean>>>({});
+  const [pending, setPending] = useState<{ section?: SectionId; href?: string } | null>(null);
+  const router = useRouter();
 
   const isAdmin = can('settings.view');
   const canSave = can('settings.edit');
@@ -192,19 +213,15 @@ export default function TenantSettings() {
     setModulesOff((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      setMessage(null);
-      const res = await api.put('/tenant-settings', {
-        modules_off: modulesOff,
-        vocabulary,
-        appointment_statuses: statusNames,
-        session_idle_minutes: fromIdle(idle),
-        ...(groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0) } } : {}),
-        session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0,
-        ...(equipmentDown ? { equipment_down: equipmentDown } : {}),
-        ...(salesRules ? {
+  const payloadOf = (id: SectionId): Record<string, unknown> | null => {
+    switch (id) {
+      case 'modulos': return { modules_off: [...modulesOff].sort() };
+      case 'vocabulario': return { vocabulary };
+      case 'fases': return { appointment_statuses: statusNames };
+      case 'seguridad': return { session_idle_minutes: fromIdle(idle), session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0 };
+      case 'grupos': return groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0) } } : null;
+      case 'salas': return equipmentDown ? { equipment_down: equipmentDown } : null;
+      case 'ventas': return salesRules ? {
           sales_rules: {
             prices_include_tax: salesRules.includeTax,
             tax_rate: Number(salesRules.taxRate || 0),
@@ -216,35 +233,118 @@ export default function TenantSettings() {
             pay_before_service: salesRules.payFirst,
             arrive_minutes: Number(salesRules.arriveMinutes || 0),
           },
-        } : {}),
-        ...(misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : {}),
-        ...(paymentRules ? {
+        } : null;
+      case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : null;
+      case 'adelantos': return paymentRules ? {
           payment_rules: {
             require_deposit: paymentRules.requireDeposit,
             deposit_minutes: Number(paymentRules.depositMinutes || 0),
             deposit_refund_hours: Number(paymentRules.refundHours || 0),
             link_hours: Number(paymentRules.linkHours || 0),
           },
-        } : {}),
-        ...(bookingRules ? {
+        } : null;
+      case 'reservas': return bookingRules ? {
           booking_rules: {
             confirm_deadline_hours: Number(bookingRules.deadline || 0),
             confirm_on_miss: bookingRules.onMiss,
             confirm_release_hours: Number(bookingRules.release || 0),
             cancel_window_hours: Number(bookingRules.cancel || 0),
           },
-        } : {}),
-      });
+        } : null;
+      default: return null;
+    }
+  };
+
+  const snapshot = (id: SectionId) => {
+    const payload = payloadOf(id);
+    return payload ? JSON.stringify(payload) : undefined;
+  };
+
+  const ALL_IDS = SECTION_GROUPS.flatMap((g) => g.sections.map((s) => s.id));
+
+  useEffect(() => {
+    if (!data) return;
+    setBaseline(Object.fromEntries(ALL_IDS.map((id) => [id, snapshot(id)])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const isDirty = (id: SectionId) => Boolean(externalDirty[id]) || (baseline[id] !== undefined && snapshot(id) !== baseline[id]);
+
+  const dirtyHandlers = useMemo(() => Object.fromEntries(SECTION_GROUPS.flatMap((g) => g.sections.map((s) => [s.id, (dirty: boolean) => {
+    setExternalDirty((current) => (Boolean(current[s.id]) === dirty ? current : { ...current, [s.id]: dirty }));
+  }]))) as Record<SectionId, (dirty: boolean) => void>, []);
+  const markExternal = (id: SectionId) => dirtyHandlers[id];
+
+  const saveSection = async (id: SectionId) => {
+    const payload = payloadOf(id);
+    if (!payload) return;
+    try {
+      setSaving(true);
+      setMessage(null);
+      const res = await api.put('/tenant-settings', payload);
       apply(res.data);
       await refetchUser();
-      setMessage({ type: 'ok', text: 'Configuración guardada.' });
+      setMessage({ type: 'ok', text: 'Guardado.', section: id });
     } catch (err: any) {
       const errors = err.response?.data?.errors;
       const first = errors ? (Object.values(errors)[0] as string[])[0] : null;
-      setMessage({ type: 'error', text: first || err.response?.data?.message || 'No se pudo guardar la configuración.' });
+      setMessage({ type: 'error', text: first || err.response?.data?.message || 'No se pudo guardar.', section: id });
     } finally {
       setSaving(false);
     }
+  };
+
+  const activeDirty = data ? isDirty(active) : false;
+
+  useEffect(() => {
+    const fromHash = () => {
+      const hash = window.location.hash.replace('#', '') as SectionId;
+      if (ALL_IDS.includes(hash)) setActive(hash);
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!activeDirty) return;
+    const onUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    const onClick = (event: MouseEvent) => {
+      const link = (event.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!link || link.target === '_blank' || event.metaKey || event.ctrlKey) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPending({ href: url.pathname + url.search + url.hash });
+    };
+    window.addEventListener('beforeunload', onUnload);
+    document.addEventListener('click', onClick, true);
+    return () => {
+      window.removeEventListener('beforeunload', onUnload);
+      document.removeEventListener('click', onClick, true);
+    };
+  }, [activeDirty]);
+
+  const openSection = (id: SectionId, force = false) => {
+    if (id === active) return;
+    if (!force && activeDirty) {
+      setPending({ section: id });
+      return;
+    }
+    setMessage(null);
+    setActive(id);
+    window.history.replaceState(null, '', `#${id}`);
+  };
+
+  const leave = () => {
+    const target = pending;
+    setPending(null);
+    if (data) apply(data);
+    setExternalDirty({});
+    if (target?.section) openSection(target.section, true);
+    else if (target?.href) router.push(target.href);
   };
 
   if (authLoading || loading) {
@@ -300,16 +400,100 @@ export default function TenantSettings() {
   const core = data.modules.filter((m) => m.locked === 'core');
   const unavailable = data.modules.filter((m) => !m.can_toggle && m.locked !== 'core' && m.locked !== 'business_type');
 
+  const available: Record<SectionId, boolean> = {
+    empresa: true,
+    modulos: true,
+    vocabulario: true,
+    moneda: true,
+    fases: (data.appointment_statuses?.length ?? 0) > 0,
+    reservas: Boolean(bookingRules),
+    inasistencias: Boolean(misses),
+    salas: Boolean(equipmentDown),
+    ventas: Boolean(salesRules),
+    adelantos: Boolean(paymentRules),
+    integraciones: Boolean(paymentRules),
+    correo: true,
+    'diseno-correo': true,
+    'mensajes-al-cliente': true,
+    grupos: Boolean(groups),
+    seguridad: true,
+    descargas: can('users.view'),
+  };
+
+  const index = SECTION_GROUPS
+    .map((group) => ({ ...group, sections: group.sections.filter((s) => available[s.id]) }))
+    .filter((group) => group.sections.length > 0);
+
+  const current: SectionId = available[active] ? active : 'empresa';
+  const show = (id: SectionId) => current === id;
+
+  const saveBar = (id: SectionId) => (
+    <div className="flex flex-wrap items-center justify-end gap-4 pt-4 border-t border-slate-100" data-save-bar={id}>
+      {message?.section === id && (
+        <span className={`text-sm font-medium ${message.type === 'ok' ? 'text-emerald-600' : 'text-red-600'}`} data-save-message>{message.text}</span>
+      )}
+      {isDirty(id) && message?.section !== id && <span className="text-xs text-amber-700" data-unsaved>Tienes cambios sin guardar.</span>}
+      <Button
+        type="button"
+        data-save-section={id}
+        onClick={() => saveSection(id)}
+        disabled={saving || !canSave || !isDirty(id)}
+        title={canSave ? undefined : 'Tu cuenta puede ver la configuración, pero no cambiarla.'} variant="primary"
+      >
+        {saving ? 'Guardando...' : 'Guardar'}
+      </Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6 pb-10 font-sans text-[#1F2937]">
       <div>
         <h1 className="text-2xl font-black text-[#022340] tracking-tight">Configuración de la empresa</h1>
-        <p className="text-sm text-slate-500 font-medium">Ajusta los módulos y los nombres que usa tu equipo.</p>
+        <p className="text-sm text-slate-500 font-medium">Elige una sección a la izquierda. Cada sección se guarda con su propio botón.</p>
       </div>
 
+      <div className="lg:hidden" data-settings-select>
+        <Select
+          ariaLabel="Sección"
+          clearable={false}
+          value={current}
+          onChange={(e) => { if (e.target.value) openSection(e.target.value as SectionId); }}
+          options={index.flatMap((group) => group.sections.map((s) => ({ value: s.id, label: `${group.title} · ${s.label}` })))}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[15rem_minmax(0,1fr)] gap-6 items-start">
+        <nav className="hidden lg:block sticky top-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3 space-y-3" aria-label="Secciones de la configuración" data-settings-index>
+          {index.map((group) => (
+            <div key={group.title}>
+              <span className="block px-3 pb-1 text-xs font-bold text-[#022340]">{group.title}</span>
+              {group.sections.map((s) => {
+                const selected = current === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    data-section-link={s.id}
+                    aria-current={selected ? 'page' : undefined}
+                    onClick={() => openSection(s.id)}
+                    className={`w-full flex items-center justify-between gap-2 text-left px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                      selected ? 'bg-[#84D0D9]/20 text-[#022340] font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-[#022340]'
+                    }`}
+                  >
+                    <span className="truncate">{s.label}</span>
+                    {selected && activeDirty && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" title="Cambios sin guardar" />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <div className="min-w-0 space-y-6" data-settings-section={current}>
+      {show('empresa') && (
       <section className={cardClass}>
         <SectionTitle>
-          <Building2 className="w-4 h-4 text-[#3F768C]" /> Empresa
+          <Building2 className="w-4 h-4 text-[#3F768C]" /> Datos y código
         </SectionTitle>
         <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {[
@@ -328,7 +512,9 @@ export default function TenantSettings() {
           Tus clientes usan el código de empresa para crear su cuenta. El rubro y el plan los cambia el equipo de la plataforma.
         </p>
       </section>
+      )}
 
+      {show('modulos') && (
       <section className={cardClass}>
         <div>
           <SectionTitle>
@@ -350,7 +536,10 @@ export default function TenantSettings() {
                   key={module.key}
                   className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
                 >
-                  <span className={`text-sm font-semibold ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{module.name}</span>
+                  <span className="min-w-0">
+                    <span className={`block text-sm font-semibold ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{module.name}</span>
+                    {MODULE_HINTS[module.key] && <span className="block text-xs text-slate-500 mt-0.5 leading-snug">{MODULE_HINTS[module.key]}</span>}
+                  </span>
                   <Switch checked={isOn} onChange={() => toggleModule(module.key)} label={module.name} />
                 </label>
               );
@@ -375,8 +564,11 @@ export default function TenantSettings() {
             </div>
           </div>
         )}
+        {saveBar('modulos')}
       </section>
+      )}
 
+      {show('vocabulario') && (
       <section className={cardClass}>
         <div>
           <SectionTitle>
@@ -401,9 +593,11 @@ export default function TenantSettings() {
             </div>
           ))}
         </div>
+        {saveBar('vocabulario')}
       </section>
+      )}
 
-      {(data.appointment_statuses?.length ?? 0) > 0 && (
+      {show('fases') && (data.appointment_statuses?.length ?? 0) > 0 && (
         <section className={cardClass}>
           <div>
             <SectionTitle>
@@ -431,10 +625,11 @@ export default function TenantSettings() {
               </div>
             ))}
           </div>
+          {saveBar('fases')}
         </section>
       )}
 
-      {bookingRules && (
+      {show('reservas') && bookingRules && (
         <section className={cardClass} data-card="booking-rules">
           <div>
             <SectionTitle>
@@ -525,10 +720,11 @@ export default function TenantSettings() {
             <span className="text-sm text-slate-600">horas antes de su inicio.</span>
             <span className="w-full text-xs text-slate-500">Pasado ese momento, en el portal ya no puede hacerlo y debe comunicarse con la sede.</span>
           </div>
+          {saveBar('reservas')}
         </section>
       )}
 
-      {equipmentDown && (
+      {show('salas') && equipmentDown && (
         <section className={cardClass} data-card="resources-rules">
           <div>
             <SectionTitle>
@@ -559,12 +755,13 @@ export default function TenantSettings() {
               );
             })}
           </div>
+          {saveBar('salas')}
         </section>
       )}
 
-      <CurrencySettings />
+      {show('moneda') && <CurrencySettings />}
 
-      {salesRules && (
+      {show('ventas') && salesRules && (
         <section className={cardClass} data-card="sales-rules">
           <div>
             <SectionTitle>
@@ -650,10 +847,11 @@ export default function TenantSettings() {
               Si lo contado difiere en más que eso, quien cierra debe explicarlo y la administración recibe un aviso. Con 0, cualquier diferencia se explica.
             </span>
           </div>
+          {saveBar('ventas')}
         </section>
       )}
 
-      {paymentRules && (
+      {show('adelantos') && paymentRules && (
         <section className={cardClass} data-card="payment-rules">
           <div>
             <SectionTitle>
@@ -704,14 +902,17 @@ export default function TenantSettings() {
               )}
             </>
           )}
+          {saveBar('adelantos')}
         </section>
       )}
 
-      {paymentRules && <IntegrationsSettings canSave={canSave} />}
+      {show('integraciones') && paymentRules && <IntegrationsSettings canSave={canSave} onDirtyChange={markExternal('integraciones')} />}
 
-      <MessagingSettings canSave={canSave} company={user?.tenant?.name ?? ''} />
+      {show('correo') && <MessagingSettings part="email" canSave={canSave} company={user?.tenant?.name ?? ''} onDirtyChange={markExternal('correo')} />}
+      {show('diseno-correo') && <MessagingSettings part="design" canSave={canSave} company={user?.tenant?.name ?? ''} onDirtyChange={markExternal('diseno-correo')} />}
+      {show('mensajes-al-cliente') && <MessagingSettings part="notices" canSave={canSave} company={user?.tenant?.name ?? ''} />}
 
-      {misses && (
+      {show('inasistencias') && misses && (
         <section className={cardClass} data-card="booking-misses">
           <div>
             <SectionTitle>
@@ -758,10 +959,11 @@ export default function TenantSettings() {
               </span>
             </div>
           )}
+          {saveBar('inasistencias')}
         </section>
       )}
 
-      {groups && (
+      {show('grupos') && groups && (
         <section className={cardClass} data-card="customer-groups">
           <div>
             <SectionTitle>
@@ -793,13 +995,15 @@ export default function TenantSettings() {
               <span className="text-sm text-slate-600">o más en los últimos 12 meses.</span>
             </div>
           </div>
+          {saveBar('grupos')}
         </section>
       )}
 
+      {show('seguridad') && (
       <section className={cardClass} data-card="session-idle">
         <div>
           <SectionTitle>
-            <Timer className="w-4 h-4 text-[#3F768C]" /> Seguridad
+            <Timer className="w-4 h-4 text-[#3F768C]" /> Cierre de sesión
           </SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Si nadie mueve el mouse, escribe ni toca la pantalla durante ese tiempo, la sesión se cierra sola. Un minuto antes aparece un aviso para seguir conectado.
@@ -818,23 +1022,25 @@ export default function TenantSettings() {
           </div>
           {portalIdle.on && renderIdle('portal-idle', 'Cerrar la sesión del cliente tras', portalIdle, (next) => setPortalIdle({ ...portalIdle, ...next }), 'portal-idle-minutes')}
         </div>
+        {saveBar('seguridad')}
       </section>
+      )}
 
-      {can('users.view') && <DataExportsLog className={cardClass} />}
-
-      <div className="flex items-center justify-end gap-4">
-        {message && (
-          <span className={`text-sm font-medium ${message.type === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{message.text}</span>
-        )}
-        <Button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || !canSave}
-          title={canSave ? undefined : 'Tu cuenta puede ver la configuración, pero no cambiarla.'} variant="primary"
-        >
-          {saving ? 'Guardando...' : 'Guardar cambios'}
-        </Button>
+      {show('descargas') && can('users.view') && <DataExportsLog className={cardClass} />}
+        </div>
       </div>
+
+      <AppModal
+        isOpen={pending !== null}
+        type="confirm"
+        variant="danger"
+        title="¿Salir sin guardar?"
+        message={`Tienes cambios sin guardar en "${SECTION_LABELS[current]}". Si sales ahora, se pierden.`}
+        confirmText="Salir sin guardar"
+        cancelText="Seguir editando"
+        onConfirm={leave}
+        onClose={() => setPending(null)}
+      />
     </div>
   );
 }

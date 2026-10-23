@@ -142,7 +142,7 @@ function QrCard({ method, label, qr, canSave, onSaved }: { method: 'yape' | 'pli
   );
 }
 
-export default function IntegrationsSettings({ canSave }: { canSave: boolean }) {
+export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSave: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const [data, setData] = useState<IntegrationsPayload | null>(null);
   const [chosen, setChosen] = useState('simulated');
   const [keys, setKeys] = useState({ public_key: '', secret_key: '' });
@@ -161,6 +161,12 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
       .then((res) => apply(res.data))
       .catch((err) => setError(apiError(err, 'No se pudieron cargar las integraciones.')));
   }, []);
+
+  const dirty = Boolean(data) && (chosen !== data?.payments.chosen || Boolean(keys.public_key || keys.secret_key));
+
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   if (!data) {
     return error ? <section className={cardClass}><p className="text-sm text-slate-600">{error}</p></section> : null;
@@ -279,7 +285,7 @@ export default function IntegrationsSettings({ canSave }: { canSave: boolean }) 
           <span className="p-2 rounded-lg bg-[#84D0D9]/20 text-[#022340] shrink-0"><MessageCircle size={16} /></span>
           <span>
             <span className="block text-sm font-bold text-[#022340]">Correo y WhatsApp</span>
-            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura más abajo, en &quot;Correo de tu empresa&quot;. WhatsApp queda listo para conectar cuando elijan un proveedor.</span>
+            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura en Mensajes → <a href="#correo" data-link="correo" className="font-semibold text-[#3F768C] hover:underline">Correo de tu empresa</a>. WhatsApp queda listo para conectar cuando elijan un proveedor.</span>
           </span>
         </div>
       </div>

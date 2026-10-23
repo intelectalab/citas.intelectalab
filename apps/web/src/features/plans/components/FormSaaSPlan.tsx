@@ -123,7 +123,12 @@ export default function FormSaaSPlan({
 
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({
     agenda: true,
+    care: true,
+    catalog: true,
     sales: true,
+    loyalty: true,
+    company: true,
+    platform: true,
   });
 
   const toggleModuleAccordion = (section: string) => {
@@ -294,7 +299,7 @@ export default function FormSaaSPlan({
     { id: 1, title: '1. Información general' },
     { id: 2, title: '2. Precio y suscripción' },
     { id: 3, title: '3. Módulos del sistema' },
-    { id: 4, title: '4. Límites del tenant' },
+    { id: 4, title: '4. Límites de la empresa' },
     { id: 5, title: '5. Consumo SaaS' },
     { id: 6, title: '6. Soporte y canales' },
     { id: 7, title: '7. Características' },
@@ -352,7 +357,7 @@ export default function FormSaaSPlan({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Código interno (code_internal) *</label>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Código interno *</label>
                           <input
                             type="text"
                             required
@@ -392,7 +397,7 @@ export default function FormSaaSPlan({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Catálogo público (is_public_catalog)</label>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Catálogo público</label>
                           <Select
                             ariaLabel="Visible en el catálogo"
                             clearable={false}
@@ -443,7 +448,7 @@ export default function FormSaaSPlan({
                         </div>
 
                         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Prueba gratuita (trial_config)</h5>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Prueba gratuita</h5>
                           <div>
                             <label className="block text-xs text-slate-600 mb-1">¿Tiene prueba?</label>
                             <Select
@@ -477,9 +482,9 @@ export default function FormSaaSPlan({
                         </div>
 
                         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Suscripción (subscription_config)</h5>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Suscripción</h5>
                           <div>
-                            <label className="block text-xs text-slate-600 mb-1">Renovación automática (auto_renew)</label>
+                            <label className="block text-xs text-slate-600 mb-1">Renovación automática</label>
                             <Select
                               ariaLabel="Renovación automática"
                               clearable={false}
@@ -504,10 +509,8 @@ export default function FormSaaSPlan({
 
                     {sec.id === 3 && (
                       <div className="space-y-3">
-                        {MODULE_GROUPS.map((group) => ({
-                          ...group,
-                          items: group.items.map((item) => ({ key: item.key, label: `${item.label} (${item.key})` })),
-                        })).map((group) => (
+                        <p className="text-xs text-slate-500">Están agrupados como en el menú de la empresa. Agenda y citas, y Clientes, vienen en todos los planes.</p>
+                        {MODULE_GROUPS.map((group) => (
                           <div key={group.key} className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden">
                             <button
                               type="button"
@@ -527,15 +530,19 @@ export default function FormSaaSPlan({
                                   return (
                                     <div
                                       key={mod.key}
+                                      data-plan-module={mod.key}
                                       onClick={() => handleModuleChange(mod.key)}
-                                      className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
+                                      className={`flex items-center justify-between gap-2 p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
                                         isSelected
                                           ? 'border-[#030336] bg-[#030336]/10 text-[#030336] shadow-sm'
                                           : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                                       }`}
                                     >
-                                      <span className="text-xs font-semibold">{mod.label}</span>
-                                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all ${
+                                      <span className="min-w-0">
+                                        <span className="block text-xs font-semibold">{mod.label}</span>
+                                        <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{mod.hint}</span>
+                                      </span>
+                                      <div className={`w-5 h-5 shrink-0 rounded-lg flex items-center justify-center transition-all ${
                                         isSelected ? 'bg-[#030336] text-white' : 'border border-slate-300 bg-white'
                                       }`}>
                                         {isSelected && <Check size={12} strokeWidth={3} />}
@@ -553,17 +560,18 @@ export default function FormSaaSPlan({
                     {sec.id === 4 && (
                       <div className="space-y-4">
                         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Límites del tenant (limits)</h5>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Límites de la empresa</h5>
                           <p className="text-[11px] text-slate-500">Usa -1 para indicar valores ilimitados.</p>
                           {[
-                            { key: 'users', label: 'Usuarios (users)' },
-                            { key: 'branches', label: 'Sucursales (branches)' },
-                            { key: 'professionals', label: 'Profesionales (professionals)' },
-                            { key: 'appointments_month', label: 'Citas por mes (appointments_month)' },
-                            { key: 'whatsapp_month', label: 'Mensajes de WhatsApp por mes (whatsapp_month)' },
+                            { key: 'users', label: 'Usuarios', hint: 'Todas las cuentas del personal, incluidos los profesionales. El dueño no cuenta.' },
+                            { key: 'branches', label: 'Sedes' },
+                            { key: 'professionals', label: 'Profesionales', hint: 'Los que atienden citas. Cada uno gasta un usuario.' },
+                            { key: 'appointments_month', label: 'Citas al mes' },
+                            { key: 'whatsapp_month', label: 'Mensajes de WhatsApp al mes' },
                           ].map((limit) => (
                             <div key={limit.key}>
                               <label className="block text-xs text-slate-600 mb-1">{limit.label}</label>
+                              {limit.hint && <p className="text-[11px] text-slate-500 -mt-0.5 mb-1">{limit.hint}</p>}
                               <input
                                 type="number"
                                 value={formData.limits[limit.key as keyof typeof formData.limits]}
@@ -584,9 +592,9 @@ export default function FormSaaSPlan({
                     {sec.id === 5 && (
                       <div className="space-y-4">
                         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Consumo y almacenamiento (consumption)</h5>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Consumo y almacenamiento</h5>
                           <div>
-                            <label className="block text-xs text-slate-600 mb-1">Almacenamiento GB (storage_gb)</label>
+                            <label className="block text-xs text-slate-600 mb-1">Almacenamiento GB</label>
                             <input
                               type="number"
                               value={formData.consumption.storage_gb}
@@ -600,7 +608,7 @@ export default function FormSaaSPlan({
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-slate-600 mb-1">Solicitudes API mensuales (api_requests_monthly)</label>
+                            <label className="block text-xs text-slate-600 mb-1">Solicitudes API mensuales</label>
                             <input
                               type="number"
                               value={formData.consumption.api_requests_monthly}
@@ -620,9 +628,9 @@ export default function FormSaaSPlan({
                     {sec.id === 6 && (
                       <div className="space-y-4">
                         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Configuración de soporte (support)</h5>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Configuración de soporte</h5>
                           <div>
-                            <label className="block text-xs text-slate-600 mb-1">Nivel de soporte (level)</label>
+                            <label className="block text-xs text-slate-600 mb-1">Nivel de soporte</label>
                             <input
                               type="text"
                               value={formData.support.level}
@@ -637,7 +645,7 @@ export default function FormSaaSPlan({
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-slate-600 mb-1">Tickets mensuales (tickets_monthly)</label>
+                            <label className="block text-xs text-slate-600 mb-1">Tickets mensuales</label>
                             <input
                               type="number"
                               value={formData.support.tickets_monthly}
@@ -657,7 +665,7 @@ export default function FormSaaSPlan({
                     {sec.id === 7 && (
                       <div className="space-y-4">
                         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Características (features)</h5>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">Características</h5>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {Object.keys(formData.features).map((featureKey) => {
                               const isChecked = formData.features[featureKey as keyof typeof formData.features];

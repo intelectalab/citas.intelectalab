@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { MODULE_GROUPS } from '@/lib/modules';
 import { 
   X, Clock, Users, Store, Briefcase, Infinity, 
   ShieldCheck, Cpu, HardDrive, Headphones, Layers, 
@@ -61,6 +62,11 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
   if (!isOpen || !plan) return null;
 
   const currency = plan.currency || 'PEN';
+
+  const planKeys = new Set(Object.values(plan.modules ?? {}).flat().filter((key): key is string => typeof key === 'string'));
+  const includedGroups = MODULE_GROUPS
+    .map((group) => ({ ...group, items: group.items.filter((item) => planKeys.has(item.key)) }))
+    .filter((group) => group.items.length > 0);
 
   const renderLimitValue = (value: number | undefined) => {
     if (value === undefined || value === null) return <span className="text-slate-400">-</span>;
@@ -262,14 +268,14 @@ export default function PlanDetailsModal({ isOpen, onClose, plan }: PlanDetailsM
               <div className="space-y-2">
                 <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Módulos Habilitados</span>
                 <div className="grid grid-cols-1 gap-2">
-                  {plan.modules && Object.keys(plan.modules).length > 0 ? (
-                    Object.entries(plan.modules).map(([category, items]) => (
-                      <div key={category} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                        <span className="text-xs font-bold uppercase text-[#022340] block mb-1.5">{category}</span>
+                  {includedGroups.length > 0 ? (
+                    includedGroups.map((group) => (
+                      <div key={group.key} className="p-3 bg-slate-50 border border-slate-100 rounded-xl" data-detail-group={group.title}>
+                        <span className="text-xs font-bold text-[#022340] block mb-1.5">{group.title}</span>
                         <div className="flex flex-wrap gap-1.5">
-                          {Array.isArray(items) && items.map((mod: string) => (
-                            <span key={mod} className="px-2 py-0.5 bg-white text-slate-700 border border-slate-200 text-xs rounded-md font-medium">
-                              {mod}
+                          {group.items.map((item) => (
+                            <span key={item.key} title={item.hint} className="px-2 py-0.5 bg-white text-slate-700 border border-slate-200 text-xs rounded-md font-medium">
+                              {item.label}
                             </span>
                           ))}
                         </div>

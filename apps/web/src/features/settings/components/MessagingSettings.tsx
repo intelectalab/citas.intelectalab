@@ -158,10 +158,22 @@ function NoticePanel({ notice, canSave, onClose, onSaved }: { notice: NoticeSett
   );
 }
 
-export default function MessagingSettings({ canSave, company }: { canSave: boolean; company: string }) {
+type Part = 'email' | 'design' | 'notices';
+
+interface MessagingSettingsProps {
+  canSave: boolean;
+  company: string;
+  part: Part;
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+const emailState = (mode: Mode, form: Record<string, string>) => JSON.stringify({ mode, ...form, password: '' });
+
+export default function MessagingSettings({ canSave, company, part, onDirtyChange }: MessagingSettingsProps) {
   const [data, setData] = useState<MessagingSettingsData | null>(null);
   const [mode, setMode] = useState<Mode>('none');
   const [form, setForm] = useState({ preset: '', host: '', port: '587', security: 'tls', username: '', password: '', from_address: '', from_name: '', reply_to: '' });
+  const [saved, setSaved] = useState<string | null>(null);
   const [testTo, setTestTo] = useState('');
   const [editing, setEditing] = useState<NoticeSetting | null>(null);
   const [busy, setBusy] = useState(false);
@@ -188,6 +200,22 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
   useEffect(() => {
     api.get('/messaging/settings').then((res) => apply(res.data)).catch((err) => setError(apiError(err, 'No se pudo cargar la configuración de mensajes.')));
   }, []);
+
+  useEffect(() => {
+    if (data) setSaved(null);
+  }, [data]);
+
+  useEffect(() => {
+    if (data && saved === null) setSaved(emailState(mode, form));
+  }, [data, saved, mode, form]);
+
+  const emailDirty = part === 'email' && saved !== null && (emailState(mode, form) !== saved || form.password !== '');
+
+  useEffect(() => {
+    if (part === 'email') onDirtyChange?.(emailDirty);
+  }, [part, emailDirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   if (!data) return error ? <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p> : null;
 
@@ -219,7 +247,8 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
 
   return (
     <>
-      <section className={cardClass} id="correo" data-card="email-settings">
+      {part === 'email' && (
+      <section className={cardClass} id="correo-config" data-card="email-settings">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <SectionTitle><Mail className="w-4 h-4 text-[#3F768C]" /> Correo de tu empresa</SectionTitle>
@@ -422,10 +451,15 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
             <span className="block text-xs text-slate-500 mt-0.5">{data.whatsapp.label}. Siempre necesita un proveedor (Meta u otro), con costo por mensaje y plantillas aprobadas.</span>
           </span>
         </div>
+        {emailDirty && <p className="text-xs text-amber-700 text-right" data-unsaved>Tienes cambios sin guardar.</p>}
       </section>
+      )}
 
-      {data.design && <EmailDesignCard design={data.design} canSave={canSave} onSaved={apply} />}
+      {part === 'design' && (data.design
+        ? <EmailDesignCard design={data.design} canSave={canSave} onSaved={apply} onDirtyChange={onDirtyChange} />
+        : <section className={cardClass}><p className="text-sm text-slate-500">Falta actualizar la base de datos para usar el diseño del correo: ejecuta php artisan migrate.</p></section>)}
 
+      {part === 'notices' && (
       <section className={cardClass} data-card="notices">
         <div>
           <SectionTitle><BellRing className="w-4 h-4 text-[#3F768C]" /> Mensajes al cliente</SectionTitle>
@@ -463,7 +497,9 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
           <p className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><FlaskConical size={14} /> Mientras tu empresa no configure su correo, estos avisos quedan como &quot;No enviado&quot; en Mensajes.</p>
         )}
         {status.state === 'ok' && <p className="flex items-center gap-2 text-xs text-emerald-700"><CheckCircle2 size={14} /> Los avisos encendidos ya salen desde tu correo.</p>}
+        <ErrorAlert message={error} />
       </section>
+      )}
 
       <NoticePanel
         notice={editing}
