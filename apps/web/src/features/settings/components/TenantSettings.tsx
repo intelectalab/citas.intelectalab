@@ -17,6 +17,7 @@ import MessagingSettings from './MessagingSettings';
 import DataExportsLog from './DataExportsLog';
 import { currencySymbol } from '@/lib/currency';
 import { MODULE_HINTS } from '@/lib/modules';
+import InfoTip from '@/app/components/common/InfoTip';
 
 interface SettingsModule {
   key: string;
@@ -536,9 +537,9 @@ export default function TenantSettings() {
                   key={module.key}
                   className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
                 >
-                  <span className="min-w-0">
-                    <span className={`block text-sm font-semibold ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{module.name}</span>
-                    {MODULE_HINTS[module.key] && <span className="block text-xs text-slate-500 mt-0.5 leading-snug">{MODULE_HINTS[module.key]}</span>}
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className={`text-sm font-semibold ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{module.name}</span>
+                    {MODULE_HINTS[module.key] && <InfoTip text={MODULE_HINTS[module.key]} title={module.name} label={`Qué permite ${module.name}`} />}
                   </span>
                   <Switch checked={isOn} onChange={() => toggleModule(module.key)} label={module.name} />
                 </label>

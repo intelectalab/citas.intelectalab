@@ -57,7 +57,11 @@ export default function Floating({ anchorRef, open, onClose, children, align = '
       if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
       onClose();
     };
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      onClose();
+    };
 
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);

@@ -81,9 +81,9 @@ export default function ModulesBubble({ modulesOff }: ModulesBubbleProps) {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div className="columns-2 gap-x-6" data-module-columns>
               {MODULE_GROUPS.map((group) => (
-                <div key={group.key} className="space-y-2">
+                <div key={group.key} className="space-y-2 break-inside-avoid mb-4">
                   <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">{group.title}</span>
                   <ul className="space-y-2">
                     {group.items.map((item) => {

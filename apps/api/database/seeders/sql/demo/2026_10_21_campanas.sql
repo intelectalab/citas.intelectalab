@@ -24,7 +24,7 @@ DECLARE
   company text;
   site text := rtrim(coalesce(nullif(current_setting('app.frontend_url', true), ''), 'http://localhost:3000'), '/');
   portal text := site || '/login';
-  control uuid;php artisan migrate
+  control uuid;
   coupon uuid;
   camp record;
   cust record;

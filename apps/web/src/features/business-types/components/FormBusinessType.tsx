@@ -7,6 +7,7 @@ import { ChevronDown, Layers } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
 import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
+import InfoTip from '@/app/components/common/InfoTip';
 import Switch from '@/app/components/common/Switch';
 import RulesEditor from './RulesEditor';
 import type { RuleValue } from '@/lib/rules';
@@ -299,9 +300,9 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                                       isOn ? 'bg-white border-emerald-200 hover:border-emerald-300' : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                                     }`}
                                   >
-                                    <span className="min-w-0">
-                                      <span className={`block text-sm font-medium leading-snug ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{item.label}</span>
-                                      <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{item.hint}</span>
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <span className={`text-sm font-medium leading-snug ${isOn ? 'text-slate-800' : 'text-slate-400'}`}>{item.label}</span>
+                                      <InfoTip text={item.hint} title={item.label} label={`Qué permite ${item.label}`} />
                                     </span>
                                     <Switch checked={isOn} onChange={() => toggleModule(item.key)} label={`${item.label} en este rubro`} />
                                   </label>

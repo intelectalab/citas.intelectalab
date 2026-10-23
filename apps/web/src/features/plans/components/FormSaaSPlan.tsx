@@ -6,6 +6,7 @@ import { Package, ChevronDown, Check } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
 import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
+import InfoTip from '@/app/components/common/InfoTip';
 
 interface SaaSPlan {
   id?: string;
@@ -312,6 +313,7 @@ export default function FormSaaSPlan({
       title={isEditing ? 'Editar Plan SaaS' : 'Nuevo plan SaaS'}
       subtitle="Define qué puede contratar y utilizar cada empresa."
       icon={<Package size={20} />}
+      maxWidth="max-w-3xl"
     >
       <form onSubmit={handleSubmit} className="flex flex-col h-full justify-between">
         <div className="divide-y divide-slate-200 pb-24 overflow-y-auto px-1">
@@ -524,7 +526,7 @@ export default function FormSaaSPlan({
                             </button>
                             
                             {openModules[group.key] && (
-                              <div className="p-3 bg-white border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div className="p-3 bg-white border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                 {group.items.map((mod) => {
                                   const isSelected = formData.modules[mod.key];
                                   return (
@@ -538,9 +540,9 @@ export default function FormSaaSPlan({
                                           : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                                       }`}
                                     >
-                                      <span className="min-w-0">
-                                        <span className="block text-xs font-semibold">{mod.label}</span>
-                                        <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{mod.hint}</span>
+                                      <span className="flex items-center gap-1.5 min-w-0">
+                                        <span className="text-xs font-semibold">{mod.label}</span>
+                                        <InfoTip text={mod.hint} title={mod.label} label={`Qué permite ${mod.label}`} />
                                       </span>
                                       <div className={`w-5 h-5 shrink-0 rounded-lg flex items-center justify-center transition-all ${
                                         isSelected ? 'bg-[#030336] text-white' : 'border border-slate-300 bg-white'

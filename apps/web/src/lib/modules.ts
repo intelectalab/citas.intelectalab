@@ -9,60 +9,60 @@ export const MODULE_GROUPS: ModuleGroup[] = [
     key: 'agenda',
     title: 'Agenda',
     items: [
-      { key: 'booking', label: 'Reserva online y portal', hint: 'El portal donde sus clientes reservan, y sus reglas en Configuración' },
-      { key: 'walkin', label: 'Cola sin cita', hint: 'En el menú: Cola sin cita' },
-      { key: 'classes', label: 'Clases', hint: 'En el menú: Clases' },
+      { key: 'booking', label: 'Reserva online y portal', hint: 'Sus clientes reservan, cambian o cancelan sus citas desde internet, sin llamar' },
+      { key: 'walkin', label: 'Cola sin cita', hint: 'Atender por orden de llegada a quien viene sin reservar, como en una barbería' },
+      { key: 'classes', label: 'Clases', hint: 'Sesiones grupales con cupos, como yoga o pilates' },
     ],
   },
   {
     key: 'care',
     title: 'Atención',
     items: [
-      { key: 'records', label: 'Fichas de atención', hint: 'En el menú: Fichas de atención, con sus plantillas e historia' },
+      { key: 'records', label: 'Fichas de atención', hint: 'Llenar la ficha de cada atención y ver la historia del cliente' },
     ],
   },
   {
     key: 'catalog',
     title: 'Equipo y catálogo',
     items: [
-      { key: 'resources', label: 'Salas y equipos', hint: 'En el menú: Salas y equipos' },
+      { key: 'resources', label: 'Salas y equipos', hint: 'Registrar consultorios, cabinas y equipos de cada sede' },
     ],
   },
   {
     key: 'sales',
     title: 'Ventas',
     items: [
-      { key: 'pos', label: 'Punto de venta y caja', hint: 'En el menú: Punto de venta, Ventas, Pagos, Caja, Cupones y Productos' },
-      { key: 'invoicing', label: 'Facturación electrónica', hint: 'Boletas y facturas en cada venta; sin este módulo, solo comprobante interno' },
-      { key: 'quotes', label: 'Presupuestos', hint: 'En el menú: Presupuestos' },
-      { key: 'commissions', label: 'Comisiones', hint: 'Comisiones del personal por cada atención o venta' },
-      { key: 'inventory', label: 'Inventario', hint: 'En el menú: Inventario' },
+      { key: 'pos', label: 'Punto de venta y caja', hint: 'Cobrar citas y productos, abrir y cerrar caja, y usar cupones' },
+      { key: 'invoicing', label: 'Facturación electrónica', hint: 'Emitir boletas y facturas en cada venta' },
+      { key: 'quotes', label: 'Presupuestos', hint: 'Preparar presupuestos para que el cliente los apruebe antes de atenderse' },
+      { key: 'commissions', label: 'Comisiones', hint: 'Calcular lo que gana cada profesional por sus atenciones o ventas' },
+      { key: 'inventory', label: 'Inventario', hint: 'Controlar el stock de productos e insumos' },
     ],
   },
   {
     key: 'loyalty',
     title: 'Fidelización',
     items: [
-      { key: 'packages', label: 'Paquetes', hint: 'En el menú: Paquetes' },
-      { key: 'memberships', label: 'Membresías', hint: 'En el menú: Membresías' },
-      { key: 'loyalty', label: 'Puntos y gift cards', hint: 'En el menú: Puntos y gift cards' },
-      { key: 'marketing', label: 'Campañas', hint: 'En el menú: Campañas' },
-      { key: 'automations', label: 'Automatizaciones', hint: 'Mensajes que salen solos: cumpleaños, clientes inactivos, primera atención' },
+      { key: 'packages', label: 'Paquetes', hint: 'Vender varias sesiones juntas, por ejemplo 10 sesiones de fisioterapia, y descontar cada visita' },
+      { key: 'memberships', label: 'Membresías', hint: 'Cobrar un pago mensual que da beneficios al cliente' },
+      { key: 'loyalty', label: 'Puntos y gift cards', hint: 'Premiar con puntos a los clientes que vuelven y vender tarjetas de regalo' },
+      { key: 'marketing', label: 'Campañas', hint: 'Enviar correos de promoción a un grupo de clientes' },
+      { key: 'automations', label: 'Automatizaciones', hint: 'Mensajes que salen solos, por ejemplo en el cumpleaños o cuando un cliente deja de venir' },
     ],
   },
   {
     key: 'company',
     title: 'Tu empresa',
     items: [
-      { key: 'multi_branch', label: 'Multisede', hint: 'Permite tener más de una sede' },
+      { key: 'multi_branch', label: 'Multisede', hint: 'Atender en más de una sede' },
     ],
   },
   {
     key: 'platform',
     title: 'Plataforma',
     items: [
-      { key: 'reports_adv', label: 'Analítica avanzada', hint: 'Reportes y comparaciones más detallados' },
-      { key: 'api', label: 'API y webhooks', hint: 'Llaves de API y webhooks para conectar otros sistemas' },
+      { key: 'reports_adv', label: 'Analítica avanzada', hint: 'Reportes más detallados para comparar sedes, profesionales y servicios' },
+      { key: 'api', label: 'API y webhooks', hint: 'Conectar otros sistemas de la empresa, como su web o su contabilidad' },
     ],
   },
 ];

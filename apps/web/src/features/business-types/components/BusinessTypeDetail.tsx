@@ -203,9 +203,9 @@ export default function BusinessTypeDetail() {
             <p className="text-xs text-slate-500">
               Una empresa recibe los módulos encendidos que su plan incluya. Siempre tiene {Object.values(CORE_MODULE_LABELS).join(', ')}.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+            <div className="columns-1 md:columns-2 gap-x-8" data-module-columns>
               {MODULE_GROUPS.map((group) => (
-                <div key={group.key} className="space-y-2">
+                <div key={group.key} className="space-y-2 break-inside-avoid mb-5">
                   <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">{group.title}</span>
                   <ul className="space-y-1.5">
                     {group.items.map((item) => {

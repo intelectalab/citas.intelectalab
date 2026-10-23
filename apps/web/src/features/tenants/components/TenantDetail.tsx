@@ -426,9 +426,9 @@ export default function TenantDetail() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          <div className="columns-1 md:columns-2 gap-x-8" data-module-columns>
             {MODULE_GROUPS.map((group) => (
-              <div key={group.key}>
+              <div key={group.key} className="break-inside-avoid mb-4">
                 <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">{group.title}</span>
                 <ul className="divide-y divide-slate-100">
                   {group.items.map((item) => renderModule(item.key, item.label))}
