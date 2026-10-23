@@ -140,16 +140,16 @@ export default function FormService({
       api.get('/statuses', {
         params: { module: 'services' }
       })
-        .then(res => {
-          setStatuses(res.data);
-          if (!form.status_id && res.data.length > 0) {
-            const defaultStatus = res.data.find((s: any) => s.is_default) || res.data[0];
-            setForm(prev => ({ ...prev, status_id: defaultStatus.id }));
-          }
-        })
+        .then(res => setStatuses(res.data))
         .catch(err => console.error('Error cargando estados de servicios:', err));
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || initialData || form.status_id || statuses.length === 0) return;
+    const defaultStatus = statuses.find((s: any) => s.is_default) || statuses[0];
+    setForm(prev => ({ ...prev, status_id: defaultStatus.id }));
+  }, [isOpen, initialData, statuses, form.status_id]);
 
   const handleCategoryCreated = (newCategoryData: any) => {
     const cat = newCategoryData?.data || newCategoryData;
@@ -174,6 +174,11 @@ export default function FormService({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.status_id) {
+      setActiveAccordion(3);
+      setSaveError('Elige el estado del servicio: Activo o Inactivo.');
+      return;
+    }
     try {
       setLoading(true);
       setSaveError('');
@@ -336,10 +341,10 @@ export default function FormService({
                           </div>
 
                           <div>
-                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Estado</label>
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Estado *</label>
                             <Select
                               ariaLabel="Estado"
-                              placeholder="Seleccione estado..."
+                              placeholder={initialData && !initialData.status_id ? 'Sin estado: elige uno' : 'Seleccione estado...'}
                               value={form.status_id}
                               onChange={(e) => setForm({ ...form, status_id: String(e.target.value) })}
                               options={statuses.map((st) => ({ value: st.id, label: st.name }))}

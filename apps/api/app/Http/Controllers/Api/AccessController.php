@@ -177,6 +177,7 @@ class AccessController extends Controller
                     'role'            => $this->presentRole($role),
                     'branch'          => $u->branch_id ? ['id' => $u->branch_id, 'name' => $branches[$u->branch_id] ?? ''] : null,
                     'professional_id' => $professionals[$u->id] ?? null,
+                    'last_login_at'   => $u->last_login_at ?? null,
                     'granted'         => (int) ($exceptions[$u->id]->granted ?? 0),
                     'revoked'         => (int) ($exceptions[$u->id]->revoked ?? 0),
                     'created_at'      => $u->created_at,
@@ -209,6 +210,7 @@ class AccessController extends Controller
                 'branch'          => $target->branch_id ? ['id' => $target->branch_id, 'name' => DB::table('branches')->where('id', $target->branch_id)->value('name')] : null,
                 'professional_id' => DB::table('professionals')->where('tenant_id', $tenant->id)->where('user_id', $target->id)->value('id'),
                 'created_at'      => $target->created_at,
+                'last_login_at'   => $target->last_login_at ?? null,
             ],
             'everything' => $everything,
             'locked'     => $this->lockedReason($target, $actor, $role)
@@ -219,6 +221,8 @@ class AccessController extends Controller
             'branches'   => $this->branchOptions($tenant, $actor),
             'scope'      => Access::scopeOf($target),
             'scope_label' => Access::SCOPES[Access::scopeOf($target)],
+            'admin_only'  => Access::adminOnly($tenant),
+            'history'     => Access::history($tenant->id, 'user', $target->id),
         ]);
     }
 
@@ -304,6 +308,8 @@ class AccessController extends Controller
             return $user;
         });
 
+        Access::logChange($request, $tenant, 'user', $user->id, "Creó la cuenta con el rol {$role->name}.");
+
         return response()->json(['id' => $user->id, 'email' => $user->email, 'temporary_password' => $password], 201);
     }
 
@@ -371,6 +377,17 @@ class AccessController extends Controller
             }
         });
 
+        if ($roleChanges) {
+            Access::logChange($request, $tenant, 'user', $target->id, "Le cambió el rol de " . ($current?->name ?? 'ninguno') . " a {$role->name}. Se borraron sus permisos propios.");
+        }
+        if ($statusChanges) {
+            Access::logChange($request, $tenant, 'user', $target->id, $status === 'active' ? 'Activó la cuenta.' : 'Desactivó la cuenta.');
+        }
+        if ($branchChanges) {
+            $branchName = ($validated['branch_id'] ?? null) ? DB::table('branches')->where('id', $validated['branch_id'])->value('name') : null;
+            Access::logChange($request, $tenant, 'user', $target->id, $branchName ? "Le cambió la sede a {$branchName}." : 'Le quitó la sede.');
+        }
+
         return response()->json(['id' => $target->id]);
     }
 
@@ -388,6 +405,7 @@ class AccessController extends Controller
         $password = Str::password(10, symbols: false);
         $target->update(['password_hash' => Hash::make($password)]);
         $target->tokens()->delete();
+        Access::logChange($request, $tenant, 'user', $target->id, 'Le dio una contraseña nueva.');
 
         return response()->json(['email' => $target->email, 'temporary_password' => $password]);
     }
@@ -421,6 +439,9 @@ class AccessController extends Controller
             );
         }
 
+        $what = Access::permissionText($name, $tenant);
+        Access::logChange($request, $tenant, 'user', $target->id, $on === $fromRole ? "Lo dejó como su rol: {$what}." : ($on ? "Le agregó: {$what}." : "Le quitó: {$what}."));
+
         return $this->showUser($request, $target->id);
     }
 
@@ -433,7 +454,11 @@ class AccessController extends Controller
 
         abort_if($locked = $this->lockedReason($target, $actor, Access::roleOf($target)), 422, $locked ?? '');
 
-        DB::table('user_permissions')->where('user_id', $target->id)->delete();
+        $removed = DB::table('user_permissions')->where('user_id', $target->id)->delete();
+
+        if ($removed > 0) {
+            Access::logChange($request, $tenant, 'user', $target->id, "La volvió a lo de su rol: se borraron {$removed} " . ($removed === 1 ? 'cambio propio' : 'cambios propios') . '.');
+        }
 
         return $this->showUser($request, $target->id);
     }
@@ -506,6 +531,8 @@ class AccessController extends Controller
             'scopes'      => Access::SCOPES,
             'scope_ready' => Access::scopeReady(),
             'grid'        => $grid,
+            'admin_only'  => Access::adminOnly($tenant),
+            'history'     => Access::history($tenant->id, 'role', $role->id),
             'users'       => $people->map(fn (User $u) => [
                 'id'              => $u->id,
                 'name'            => \App\Support\Person::name($u),
@@ -551,6 +578,8 @@ class AccessController extends Controller
             return $role;
         });
 
+        Access::logChange($request, $tenant, 'role', $role->id, $source ? "Creó el rol copiando a {$source->name}." : 'Creó el rol, sin permisos.');
+
         return response()->json(['id' => $role->id], 201);
     }
 
@@ -570,7 +599,12 @@ class AccessController extends Controller
             'name.unique'   => 'Ya hay un rol con ese nombre.',
         ]);
 
+        $oldName = $role->name;
         $role->update(['name' => $validated['name'], 'description' => $validated['description'] ?? null]);
+
+        if ($oldName !== $role->name) {
+            Access::logChange($request, $tenant, 'role', $role->id, "Le cambió el nombre de {$oldName} a {$role->name}.");
+        }
 
         return response()->json(['id' => $role->id]);
     }
@@ -599,6 +633,9 @@ class AccessController extends Controller
 
         DB::table('user_permissions')->where('permission_id', $permissionId)->where('granted', (bool) $validated['on'])
             ->whereIn('user_id', DB::table('user_roles')->where('role_id', $role->id)->pluck('user_id'))->delete();
+
+        $what = Access::permissionText($name, $tenant);
+        Access::logChange($request, $tenant, 'role', $role->id, $validated['on'] ? "Encendió: {$what}." : "Apagó: {$what}.");
 
         return $this->showRole($request, $role->id);
     }
@@ -639,11 +676,13 @@ class AccessController extends Controller
                 }
                 $role->update(['scope' => 'branch']);
             });
+            Access::logChange($request, $tenant, 'role', $role->id, 'Cambió qué ve: ' . Access::SCOPES['branch'] . ($missing->count() ? " y asignó sede a {$missing->count()} " . ($missing->count() === 1 ? 'persona' : 'personas') : '') . '.');
 
             return response()->json($this->showRole($request, $role->id)->getData(true) + ['assigned' => $missing->count()]);
         }
 
         $role->update(['scope' => $validated['scope']]);
+        Access::logChange($request, $tenant, 'role', $role->id, 'Cambió qué ve: ' . Access::SCOPES[$validated['scope']] . '.');
 
         return response()->json($this->showRole($request, $role->id)->getData(true) + ['assigned' => 0]);
     }
@@ -661,6 +700,7 @@ class AccessController extends Controller
         if (Access::scopeReady()) {
             $role->update(['scope' => Access::FACTORY[$role->slug]['scope']]);
         }
+        Access::logChange($request, $tenant, 'role', $role->id, 'Lo volvió a como viene de fábrica.');
 
         return $this->showRole($request, $role->id);
     }

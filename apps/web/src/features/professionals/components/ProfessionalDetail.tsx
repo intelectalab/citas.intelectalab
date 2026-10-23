@@ -309,7 +309,7 @@ export default function ProfessionalDetail() {
                 {weeklyMinutes > 0 ? `${hoursLabel(weeklyMinutes)} de atención a la semana.` : 'Sin horario definido: la agenda no le ofrece citas.'}
               </p>
             </div>
-            {isAdmin && (
+            {can('schedules.edit') && (
               <button
                 type="button"
                 data-action="edit-schedule"

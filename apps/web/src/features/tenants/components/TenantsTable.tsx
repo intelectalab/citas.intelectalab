@@ -61,6 +61,7 @@ export default function TenantsTable() {
         { label: 'Activo', value: 'active' },
         { label: 'Suspendido', value: 'suspended' },
         { label: 'Inactivo', value: 'inactive' },
+        { label: 'Suspendido o inactivo', value: 'not_active' },
       ]
     }
   ];
@@ -124,8 +125,8 @@ export default function TenantsTable() {
       value: totalInactiveTenants,
       icon: <XCircle size={18} />,
       iconColorClass: 'text-slate-400',
-      onClick: () => handleFilterChange('status', filters.status === 'suspended' ? '' : 'suspended'),
-      borderColorClass: filters.status === 'suspended' ? 'border-slate-500 ring-2 ring-slate-100 shadow-sm' : 'hover:border-slate-300',
+      onClick: () => handleFilterChange('status', filters.status === 'not_active' ? '' : 'not_active'),
+      borderColorClass: filters.status === 'not_active' ? 'border-slate-500 ring-2 ring-slate-100 shadow-sm' : 'hover:border-slate-300',
     }
   ];
 

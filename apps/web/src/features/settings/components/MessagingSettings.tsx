@@ -4,8 +4,8 @@ import OptionCard from '@/app/components/common/OptionCard';
 import SectionTitle from '@/app/components/common/SectionTitle';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
-import { useEffect, useRef, useState } from 'react';
-import { BellRing, CheckCircle2, FlaskConical, Mail, MessageCircle, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BellRing, CheckCircle2, ChevronDown, Construction, FlaskConical, Mail, MessageCircle, Pencil, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -13,34 +13,51 @@ import Switch from '@/app/components/common/Switch';
 import { PagedList } from '@/app/components/common/Pager';
 import { apiError } from '@/features/appointments/appointments';
 import { momentOf } from '@/features/sales/sales';
+import EmailDesignCard from './EmailDesignCard';
+import MessageFields from '@/features/messages/components/MessageFields';
 import { EMAIL_BADGES, type MessagingSettingsData, type NoticeSetting } from '@/features/messages/messages';
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
-const SAMPLE: Record<string, string> = {
-  '[Nombre]': 'Juliana', '[Servicio]': 'Control Pediátrico', '[Fecha]': 'martes 20 de octubre', '[Hora]': '10:00 a. m.',
-  '[Profesional]': 'Dra. María Gómez', '[Sede]': 'Sede Central - Miraflores', '[Código]': 'C-0248', '[Empresa]': 'tu empresa',
-  '[Paquete]': 'Paquete 5 controles', '[Sesiones]': '2 sesiones', '[Vence]': 'viernes 30 de octubre', '[Monto]': 'S/ 60.00',
-  '[Detalle]': '• Control Pediátrico: S/ 60.00', '[Comprobante]': 'B001-00000123', '[Link]': 'https://…/pay/…',
-  '[Portal]': 'https://…/login', '[Correo]': 'juliana@correo.com', '[Control]': 'control de vacunas',
-};
-
-const fill = (text: string, company: string) => Object.entries(SAMPLE).reduce((acc, [token, value]) => acc.split(token).join(token === '[Empresa]' ? company : value), text);
-
 type Mode = 'none' | 'simulated' | 'smtp';
 
-function NoticePanel({ notice, company, canSave, onClose, onSaved }: { notice: NoticeSetting | null; company: string; canSave: boolean; onClose: () => void; onSaved: (n: NoticeSetting) => void }) {
+const STEPS: Record<string, { title: string; steps: string[] }> = {
+  gmail: {
+    title: 'Cómo sacar la contraseña de aplicación de Gmail',
+    steps: [
+      'Entra a myaccount.google.com con el correo de tu empresa y abre "Seguridad".',
+      'Activa la "Verificación en dos pasos" si aún no está activa.',
+      'Busca "Contraseñas de aplicaciones", crea una con el nombre "Citas" y copia las 16 letras que te muestra.',
+      'Pégalas aquí abajo. No es tu contraseña normal: solo sirve para enviar correos y la puedes borrar cuando quieras.',
+    ],
+  },
+  outlook: {
+    title: 'Qué contraseña usar con Outlook / Microsoft 365',
+    steps: [
+      'Si tu cuenta tiene verificación en dos pasos, crea una contraseña de aplicación en account.microsoft.com → Seguridad → Opciones de seguridad avanzadas.',
+      'Si es una cuenta de empresa (Microsoft 365), quien la administra debe tener activado el envío por SMTP.',
+      'Escribe aquí el correo y esa contraseña.',
+    ],
+  },
+  brevo: {
+    title: 'Dónde están tus datos en Brevo',
+    steps: [
+      'En Brevo, abre el menú de tu cuenta → "SMTP y API" → pestaña "SMTP".',
+      'Ahí ves tu "Usuario SMTP" y puedes generar una "Clave SMTP".',
+      'El correo que envía debe estar verificado en Brevo, en "Remitentes".',
+    ],
+  },
+};
+
+function NoticePanel({ notice, canSave, onClose, onSaved }: { notice: NoticeSetting | null; canSave: boolean; onClose: () => void; onSaved: (n: NoticeSetting) => void }) {
   const [enabled, setEnabled] = useState(true);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [hours, setHours] = useState('24');
   const [second, setSecond] = useState(false);
   const [days, setDays] = useState('7');
-  const [target, setTarget] = useState<'subject' | 'body'>('body');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const subjectRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!notice) return;
@@ -52,16 +69,6 @@ function NoticePanel({ notice, company, canSave, onClose, onSaved }: { notice: N
     setDays(String(notice.options.days ?? 7));
     setError('');
   }, [notice]);
-
-  const insert = (token: string) => {
-    const el = target === 'subject' ? subjectRef.current : bodyRef.current;
-    const value = target === 'subject' ? subject : body;
-    const start = el?.selectionStart ?? value.length;
-    const end = el?.selectionEnd ?? value.length;
-    const next = value.slice(0, start) + token + value.slice(end);
-    if (target === 'subject') setSubject(next); else setBody(next);
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(start + token.length, start + token.length); });
-  };
 
   const save = async (reset = false) => {
     if (!notice) return;
@@ -126,35 +133,8 @@ function NoticePanel({ notice, company, canSave, onClose, onSaved }: { notice: N
               </div>
             )}
 
-            <div>
-              <label className={labelClass} htmlFor="notice-subject">Asunto</label>
-              <input id="notice-subject" ref={subjectRef} maxLength={200} className={inputClass} value={subject} onFocus={() => setTarget('subject')} onChange={(e) => setSubject(e.target.value)} disabled={!canSave} />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="notice-body">Mensaje</label>
-              <textarea id="notice-body" ref={bodyRef} rows={9} maxLength={5000} className={inputClass} value={body} onFocus={() => setTarget('body')} onChange={(e) => setBody(e.target.value)} disabled={!canSave} />
-            </div>
-
-            {canSave && (
-              <div data-variables>
-                <span className={labelClass}>Agregar un dato {target === 'subject' ? 'al asunto' : 'al mensaje'}</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {notice.variables.map((v) => (
-                    <button key={v.token} type="button" data-variable={v.token} onClick={() => insert(v.token)}
-                      className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-[#84D0D9] bg-[#84D0D9]/15 text-[#022340] hover:bg-[#84D0D9]/30 transition-colors">
-                      + {v.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-500 mt-1.5">Cada dato aparece entre corchetes, por ejemplo [Nombre], y al enviarse se cambia por el dato real de cada cliente.</p>
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-slate-200 overflow-hidden" data-preview>
-              <div className="px-5 py-2.5 bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Así le llega (con datos de ejemplo)</div>
-              <div className="px-5 py-3 text-sm font-bold text-[#022340] border-b border-slate-100">{fill(subject, company)}</div>
-              <p className="px-5 py-4 text-sm text-slate-700 whitespace-pre-line leading-relaxed">{fill(body, company)}</p>
-            </div>
+            <MessageFields idPrefix="notice" subject={subject} onSubject={setSubject} body={body} onBody={setBody} variables={notice.variables} required={false} disabled={!canSave} previewOpen
+              hint={canSave ? 'Cada dato aparece entre corchetes, por ejemplo [Nombre], y al enviarse se cambia por el dato real de cada cliente.' : undefined} />
 
             <ErrorAlert message={error} />
           </div>
@@ -187,11 +167,16 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [advanced, setAdvanced] = useState(false);
 
   const apply = (payload: MessagingSettingsData) => {
     setData(payload);
     const config = payload.email.config;
-    setMode(payload.email.state === 'none' ? 'none' : config?.provider === 'simulated' ? 'simulated' : 'smtp');
+    setMode(payload.email.state === 'none' ? 'none' : config?.provider === 'simulated' ? 'simulated' : payload.own_email === false ? 'none' : 'smtp');
+    if (config?.provider !== 'smtp') {
+      const gmail = payload.presets.find((p) => p.key === 'gmail');
+      if (gmail) setForm((current) => (current.host ? current : { ...current, preset: 'gmail', host: gmail.host, port: String(gmail.port), security: gmail.security }));
+    }
     if (config?.provider === 'smtp') {
       setForm({
         preset: config.preset ?? '', host: config.host ?? '', port: String(config.port ?? 587), security: config.security ?? 'tls',
@@ -208,6 +193,7 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
 
   const set = (changes: Partial<typeof form>) => setForm((current) => ({ ...current, ...changes }));
   const preset = data.presets.find((p) => p.key === form.preset);
+  const simple = form.preset === 'gmail' || form.preset === 'outlook';
 
   const run = async (fn: () => Promise<{ data: MessagingSettingsData & { ok?: boolean; message?: string } }>, done?: (res: MessagingSettingsData & { ok?: boolean; message?: string }) => void) => {
     try {
@@ -247,15 +233,28 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
             ['none', 'Sin configurar', 'No sale ningún correo. Los mensajes quedan como "No enviado".'],
             ['simulated', 'Probar sin enviar', 'Para probar: los mensajes se arman y se ven en la bandeja, pero no salen.'],
             ['smtp', 'Con mi correo', 'Gmail, Outlook, Brevo o el correo de tu dominio. Salen de verdad.'],
-          ] as [Mode, string, string][]).map(([value, title, hint]) => (
-            <OptionCard key={value} type="button" role="radio" aria-checked={mode === value} data-email-mode={value} disabled={!canSave} onClick={() => { setMode(value); setNotice(''); setError(''); }} selected={mode === value} className="text-left rounded-xl border px-4 py-3 transition-colors disabled:opacity-60">
-              <span className="block text-sm font-bold text-[#022340]">{title}</span>
-              <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>
-            </OptionCard>
-          ))}
+          ] as [Mode, string, string][]).map(([value, title, hint]) => {
+            const building = value === 'smtp' && data.own_email === false;
+            return (
+              <OptionCard key={value} type="button" role="radio" aria-checked={mode === value} data-email-mode={value} data-building={building || undefined} disabled={!canSave || building} onClick={() => { setMode(value); setNotice(''); setError(''); }} selected={mode === value} className="text-left rounded-xl border px-4 py-3 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="block text-sm font-bold text-[#022340]">{title}</span>
+                  {building && <span className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800 shrink-0"><Construction size={12} /> En construcción</span>}
+                </span>
+                <span className="block text-xs text-slate-500 mt-0.5">{building ? 'Estamos trabajando en esto. Muy pronto tus correos saldrán desde el correo de tu empresa.' : hint}</span>
+              </OptionCard>
+            );
+          })}
         </div>
 
-        {mode === 'smtp' && (
+        {data.own_email === false && (
+          <p className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3" data-email-building>
+            <Construction size={16} className="mt-0.5 shrink-0" />
+            <span>Enviar desde el correo de tu empresa está <strong>en construcción</strong>. Mientras tanto, elige &quot;Probar sin enviar&quot;: los avisos y las campañas se arman y los ves en Mensajes, pero no salen.</span>
+          </p>
+        )}
+
+        {mode === 'smtp' && data.own_email !== false && (
           <div className="space-y-4 rounded-2xl border border-slate-200 p-4" data-smtp-form>
             <div>
               <span className={labelClass}>¿Qué correo usa tu empresa?</span>
@@ -266,53 +265,121 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
                     {p.label}
                   </button>
                 ))}
-                <button type="button" data-preset="other" disabled={!canSave} onClick={() => set({ preset: '' })}
+                <button type="button" data-preset="other" disabled={!canSave} onClick={() => { set({ preset: '' }); setAdvanced(true); }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${!form.preset ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                  Otro
+                  Otro (correo de mi dominio)
                 </button>
               </div>
-              {preset && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">{preset.hint}</p>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2">
-                <label className={labelClass} htmlFor="smtp-host">Servidor *</label>
-                <input id="smtp-host" className={inputClass} placeholder="smtp.gmail.com" value={form.host} onChange={(e) => set({ host: e.target.value.trim() })} disabled={!canSave} />
+            {preset && STEPS[preset.key] && (
+              <div className="rounded-xl bg-[#84D0D9]/15 border border-[#84D0D9]/50 px-4 py-3" data-steps={preset.key}>
+                <span className="block text-xs font-bold text-[#022340] mb-1.5">{STEPS[preset.key].title}</span>
+                <ol className="list-decimal pl-4 space-y-1 text-xs text-slate-700">
+                  {STEPS[preset.key].steps.map((step) => <li key={step}>{step}</li>)}
+                </ol>
               </div>
-              <div>
-                <label className={labelClass} htmlFor="smtp-port">Puerto *</label>
-                <input id="smtp-port" inputMode="numeric" className={inputClass} value={form.port} onChange={(e) => set({ port: e.target.value.replace(/\D/g, '').slice(0, 5) })} disabled={!canSave} />
-              </div>
-              <div>
-                <Select label="Seguridad" value={form.security} clearable={false} disabled={!canSave} onChange={(e) => set({ security: String(e.target.value) })}
-                  options={[{ value: 'tls', label: 'TLS (puerto 587)' }, { value: 'ssl', label: 'SSL (puerto 465)' }]} />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="smtp-user">Usuario</label>
-                <input id="smtp-user" className={inputClass} placeholder="citas@tuempresa.com" value={form.username} onChange={(e) => set({ username: e.target.value.trim() })} disabled={!canSave} autoComplete="off" />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="smtp-pass">Contraseña</label>
-                <input id="smtp-pass" type="password" className={inputClass} placeholder={status.config?.password_saved ?? ''} value={form.password} onChange={(e) => set({ password: e.target.value })} disabled={!canSave} autoComplete="new-password" />
-              </div>
-            </div>
-            {status.config?.password_saved && <p className="-mt-2 text-xs text-slate-500">La contraseña guardada está cifrada. Déjala vacía para no cambiarla.</p>}
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className={labelClass} htmlFor="smtp-from">Se envía desde *</label>
-                <input id="smtp-from" className={inputClass} placeholder="citas@tuempresa.com" value={form.from_address} onChange={(e) => set({ from_address: e.target.value.trim() })} disabled={!canSave} />
+            {simple && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-simple-fields>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-email">{form.preset === 'gmail' ? 'Correo de Gmail *' : 'Correo *'}</label>
+                  <input id="smtp-email" className={inputClass} placeholder={form.preset === 'gmail' ? 'citas.tuempresa@gmail.com' : 'citas@tuempresa.com'} value={form.from_address} onChange={(e) => { const v = e.target.value.trim(); set({ from_address: v, username: v }); }} disabled={!canSave} autoComplete="off" />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-pass">Contraseña de aplicación *</label>
+                  <input id="smtp-pass" type="password" className={inputClass} placeholder={status.config?.password_saved ?? 'abcd efgh ijkl mnop'} value={form.password} onChange={(e) => set({ password: e.target.value })} disabled={!canSave} autoComplete="new-password" />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-name">Nombre que ve el cliente</label>
+                  <input id="smtp-name" className={inputClass} placeholder={company} value={form.from_name} onChange={(e) => set({ from_name: e.target.value })} disabled={!canSave} />
+                </div>
               </div>
-              <div>
-                <label className={labelClass} htmlFor="smtp-name">Nombre que ve el cliente</label>
-                <input id="smtp-name" className={inputClass} placeholder={company} value={form.from_name} onChange={(e) => set({ from_name: e.target.value })} disabled={!canSave} />
+            )}
+
+            {form.preset === 'brevo' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-brevo-fields>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-user">Usuario SMTP de Brevo *</label>
+                  <input id="smtp-user" className={inputClass} placeholder="9a1b2c001@smtp-brevo.com" value={form.username} onChange={(e) => set({ username: e.target.value.trim() })} disabled={!canSave} autoComplete="off" />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-pass">Clave SMTP *</label>
+                  <input id="smtp-pass" type="password" className={inputClass} placeholder={status.config?.password_saved ?? ''} value={form.password} onChange={(e) => set({ password: e.target.value })} disabled={!canSave} autoComplete="new-password" />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-from">Correo que envía *</label>
+                  <input id="smtp-from" className={inputClass} placeholder="citas@tuempresa.com" value={form.from_address} onChange={(e) => set({ from_address: e.target.value.trim() })} disabled={!canSave} />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="smtp-name">Nombre que ve el cliente</label>
+                  <input id="smtp-name" className={inputClass} placeholder={company} value={form.from_name} onChange={(e) => set({ from_name: e.target.value })} disabled={!canSave} />
+                </div>
               </div>
-              <div>
-                <label className={labelClass} htmlFor="smtp-reply">Las respuestas llegan a</label>
-                <input id="smtp-reply" className={inputClass} placeholder="Opcional" value={form.reply_to} onChange={(e) => set({ reply_to: e.target.value.trim() })} disabled={!canSave} />
-              </div>
+            )}
+
+            {!form.preset && (
+              <p className="text-xs text-slate-600" data-other-hint>Estos datos te los da quien te vende el correo de tu dominio (tu proveedor de hosting o de correo). Búscalos como &quot;datos SMTP&quot; o &quot;configuración de correo saliente&quot;.</p>
+            )}
+
+            {status.config?.password_saved && <p className="text-xs text-slate-500">La contraseña guardada está cifrada. Déjala vacía para no cambiarla.</p>}
+
+            <div className="border-t border-slate-100 pt-3">
+              {form.preset && (
+                <button type="button" data-advanced onClick={() => setAdvanced(!advanced)} className="flex items-center gap-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                  <ChevronDown size={14} className={`transition-transform ${advanced ? 'rotate-180' : ''}`} /> Opciones avanzadas
+                </button>
+              )}
+
+              {(advanced || !form.preset) && (
+                <div className="space-y-3 mt-3" data-advanced-fields>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-2">
+                      <label className={labelClass} htmlFor="smtp-host">Servidor *</label>
+                      <input id="smtp-host" className={inputClass} placeholder="mail.tuempresa.com" value={form.host} onChange={(e) => set({ host: e.target.value.trim() })} disabled={!canSave} />
+                    </div>
+                    <div>
+                      <label className={labelClass} htmlFor="smtp-port">Puerto *</label>
+                      <input id="smtp-port" inputMode="numeric" className={inputClass} value={form.port} onChange={(e) => set({ port: e.target.value.replace(/\D/g, '').slice(0, 5) })} disabled={!canSave} />
+                    </div>
+                    <div>
+                      <Select label="Seguridad" value={form.security} clearable={false} disabled={!canSave} onChange={(e) => set({ security: String(e.target.value) })}
+                        options={[{ value: 'tls', label: 'TLS (puerto 587)' }, { value: 'ssl', label: 'SSL (puerto 465)' }]} />
+                    </div>
+                    {!form.preset && (
+                      <>
+                        <div>
+                          <label className={labelClass} htmlFor="smtp-user">Usuario</label>
+                          <input id="smtp-user" className={inputClass} placeholder="citas@tuempresa.com" value={form.username} onChange={(e) => set({ username: e.target.value.trim() })} disabled={!canSave} autoComplete="off" />
+                        </div>
+                        <div>
+                          <label className={labelClass} htmlFor="smtp-pass">Contraseña</label>
+                          <input id="smtp-pass" type="password" className={inputClass} placeholder={status.config?.password_saved ?? ''} value={form.password} onChange={(e) => set({ password: e.target.value })} disabled={!canSave} autoComplete="new-password" />
+                        </div>
+                        <div>
+                          <label className={labelClass} htmlFor="smtp-from">Se envía desde *</label>
+                          <input id="smtp-from" className={inputClass} placeholder="citas@tuempresa.com" value={form.from_address} onChange={(e) => set({ from_address: e.target.value.trim() })} disabled={!canSave} />
+                        </div>
+                        <div>
+                          <label className={labelClass} htmlFor="smtp-name">Nombre que ve el cliente</label>
+                          <input id="smtp-name" className={inputClass} placeholder={company} value={form.from_name} onChange={(e) => set({ from_name: e.target.value })} disabled={!canSave} />
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <label className={labelClass} htmlFor="smtp-reply">Las respuestas llegan a</label>
+                      <input id="smtp-reply" className={inputClass} placeholder="Opcional: otro correo" value={form.reply_to} onChange={(e) => set({ reply_to: e.target.value.trim() })} disabled={!canSave} />
+                    </div>
+                  </div>
+                  {form.preset ? (
+                    <p className="text-xs text-slate-500">Ya vienen llenos para {preset?.label}: cámbialos solo si tu proveedor te lo indica.</p>
+                  ) : (
+                    <p className="text-xs text-slate-500">Usa como &quot;Se envía desde&quot; el mismo correo de la cuenta: muchos servidores rechazan otro remitente.</p>
+                  )}
+                </div>
+              )}
             </div>
-            <p className="text-xs text-slate-500">Usa como &quot;Se envía desde&quot; el mismo correo de la cuenta: muchos servidores rechazan otro remitente.</p>
           </div>
         )}
 
@@ -357,6 +424,8 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
         </div>
       </section>
 
+      {data.design && <EmailDesignCard design={data.design} canSave={canSave} onSaved={apply} />}
+
       <section className={cardClass} data-card="notices">
         <div>
           <SectionTitle><BellRing className="w-4 h-4 text-[#3F768C]" /> Mensajes al cliente</SectionTitle>
@@ -398,7 +467,6 @@ export default function MessagingSettings({ canSave, company }: { canSave: boole
 
       <NoticePanel
         notice={editing}
-        company={company}
         canSave={canSave}
         onClose={() => setEditing(null)}
         onSaved={(n) => { setData((current) => current && { ...current, notices: current.notices.map((x) => (x.kind === n.kind ? n : x)) }); setEditing((current) => (current ? n : current)); }}

@@ -71,8 +71,20 @@ export interface NoticeSetting {
 export interface MessagingSettingsData {
   email: EmailStatus;
   presets: { key: string; label: string; host: string; port: number; security: 'tls' | 'ssl'; hint: string }[];
+  own_email?: boolean;
   notices: NoticeSetting[];
   whatsapp: { state: string; label: string };
+  design: EmailDesign;
+}
+
+export interface EmailDesign {
+  color: string;
+  show_name: boolean;
+  footer: string;
+  default_footer: string;
+  logo_url: string | null;
+  company: string;
+  colors: string[];
 }
 
 export interface Consents {

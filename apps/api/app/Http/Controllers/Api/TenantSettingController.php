@@ -65,6 +65,12 @@ class TenantSettingController extends Controller
             'booking_misses.action'     => ['required_with:booking_misses', Rule::in(['none', 'note', 'block'])],
             'booking_misses.limit'      => 'required_with:booking_misses|integer|min:1|max:20',
             'booking_misses.block_days' => 'required_with:booking_misses|integer|min:0|max:3650',
+            'session_idle_minutes' => 'sometimes|integer|min:5|max:1440',
+            'customer_groups' => 'sometimes|array',
+            'customer_groups.inactive_days'   => 'required_with:customer_groups|integer|min:15|max:730',
+            'customer_groups.frequent_visits' => 'required_with:customer_groups|integer|min:2|max:60',
+            'customer_groups.vip_spend'       => 'required_with:customer_groups|numeric|min:1|max:9999999',
+            'session_portal_idle_minutes' => ['sometimes', 'integer', 'min:0', 'max:1440', fn ($attribute, $value, $fail) => $value > 0 && $value < 5 ? $fail('El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).') : null],
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
             ->all()
@@ -80,6 +86,13 @@ class TenantSettingController extends Controller
             'payment_rules.deposit_minutes.*'      => 'El tiempo para pagar el adelanto va de 5 a 1440 minutos.',
             'payment_rules.deposit_refund_hours.*' => 'Las horas para devolver el adelanto van de 0 a 720.',
             'payment_rules.link_hours.*'           => 'Un link de pago vence entre 1 y 720 horas después.',
+            'session_idle_minutes.*'               => 'El tiempo sin actividad va de 5 a 1440 minutos (24 horas).',
+            'customer_groups.inactive_days.*'      => 'Los días para considerar inactivo a un cliente van de 15 a 730.',
+            'customer_groups.frequent_visits.*'    => 'Las visitas para ser frecuente van de 2 a 60.',
+            'customer_groups.vip_spend.*'          => 'Escribe el monto VIP como un número mayor que 0.',
+            'session_portal_idle_minutes.integer'  => 'El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).',
+            'session_portal_idle_minutes.min'      => 'El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).',
+            'session_portal_idle_minutes.max'      => 'El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).',
         ]);
 
         if (isset($validated['booking_rules'])) {
@@ -158,6 +171,22 @@ class TenantSettingController extends Controller
             ]);
         }
 
+        if (isset($validated['session_idle_minutes'])) {
+            $settings->rules = array_merge($settings->rules ?? [], ['session.idle_minutes' => (int) $validated['session_idle_minutes']]);
+        }
+
+        if (isset($validated['customer_groups'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'crm.inactive_days'   => (int) $validated['customer_groups']['inactive_days'],
+                'crm.frequent_visits' => (int) $validated['customer_groups']['frequent_visits'],
+                'crm.vip_spend'       => round((float) $validated['customer_groups']['vip_spend'], 2),
+            ]);
+        }
+
+        if (isset($validated['session_portal_idle_minutes'])) {
+            $settings->rules = array_merge($settings->rules ?? [], ['session.portal_idle_minutes' => (int) $validated['session_portal_idle_minutes']]);
+        }
+
         $settings->save();
 
         return response()->json($this->payload($tenant->fresh(['businessType', 'settings', 'activeSubscription.plan'])));
@@ -217,6 +246,13 @@ class TenantSettingController extends Controller
                 ? ['equipment_down' => in_array(AppointmentFlow::rule($tenant, 'resources.equipment_down'), ['observe', 'disable'], true) ? AppointmentFlow::rule($tenant, 'resources.equipment_down') : 'none']
                 : null,
             'sales_rules' => $tenant->hasModule('pos') ? Sales::rules($tenant) : null,
+            'session_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.idle_minutes'),
+            'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
+            'customer_groups' => $tenant->hasModule('marketing') ? [
+                'inactive_days'   => (int) AppointmentFlow::rule($tenant, 'crm.inactive_days'),
+                'frequent_visits' => (int) AppointmentFlow::rule($tenant, 'crm.frequent_visits'),
+                'vip_spend'       => (float) AppointmentFlow::rule($tenant, 'crm.vip_spend'),
+            ] : null,
             'booking_misses' => $tenant->hasModule('booking') ? \App\Support\OnlineBooking::policy($tenant) : null,
             'payment_rules' => $tenant->hasModule('pos') && \App\Support\PaymentLinks::ready() ? [
                 'require_deposit'      => (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit'),

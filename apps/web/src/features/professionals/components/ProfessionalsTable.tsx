@@ -321,7 +321,7 @@ export default function ProfessionalsTable() {
           >
             <Eye size={16} />
           </Link>
-          {can('professionals.edit') && (<button
+          {can('schedules.edit') && (<button
             onClick={() => setScheduleProfessional(prof)}
             title="Horario y ausencias"
             className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"

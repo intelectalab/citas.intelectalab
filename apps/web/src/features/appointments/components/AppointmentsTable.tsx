@@ -3,7 +3,7 @@
 import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarDays, CalendarX2, CheckCircle, Eye, Hourglass, Stethoscope, ThumbsUp } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
@@ -116,6 +116,21 @@ export default function AppointmentsTable() {
     { id: 'professional_id', label: vocab.pro, type: 'select', options: professionals.map((p) => ({ label: p.display_name, value: p.id })) },
   ];
 
+  const exportColumns: ExportColumn<Appointment>[] = [
+    { header: 'Cita', value: (a) => a.code },
+    { header: 'Fecha y hora', type: 'datetime', value: (a) => a.starts_at },
+    { header: 'Termina', value: (a) => timeOf(a.ends_at) },
+    { header: vocab.client, value: (a) => a.customer?.name },
+    { header: 'Teléfono', value: (a) => a.customer?.phone },
+    ...(usesDependents ? [{ header: vocab.dependent, value: (a: Appointment) => a.dependent?.name }] : []),
+    { header: 'Servicio', value: (a) => a.service?.name },
+    { header: 'Duración (min)', type: 'number', value: (a) => a.duration_minutes },
+    { header: 'Precio', type: 'money', value: (a) => a.price },
+    { header: vocab.pro, value: (a) => a.professional?.display_name },
+    { header: 'Fase', value: (a) => a.status_name },
+    { header: 'Sin confirmar a tiempo', value: (a) => (a.confirmation_overdue ? 'Sí' : '') },
+  ];
+
   const columns: Column<Appointment>[] = [
     {
       header: 'Cita',
@@ -204,7 +219,7 @@ export default function AppointmentsTable() {
           primaryActionLabel="Nueva cita"
           onPrimaryAction={can('agenda.create') ? () => openNew() : undefined}
           tabs={PERIODS.map((p) => ({ id: p.id, label: p.label, count: p.id === period ? appointments.length : undefined }))}
-          activeTab={period}
+          activeTab={dateRange ? '' : period}
           onTabChange={(id) => { setPeriod(id); setActiveCard(''); }}
           searchTerm={searchTerm}
           onSearchChange={handleSearchChange}
@@ -213,7 +228,7 @@ export default function AppointmentsTable() {
           onFilterChange={handleFilterChange}
           columns={columns}
           dateFilters={[
-            { id: 'starts_at', label: 'Fecha de la cita', future: true, value: (a) => a.starts_at, onRange: setDateRange },
+            { id: 'starts_at', label: 'Fecha de la cita', future: true, value: (a) => a.starts_at, onRange: setDateRange, clearOnTab: true },
           ]}
           sortOptions={[
             { id: 'starts_at', label: 'Fecha y hora', type: 'date', value: (a) => a.starts_at },
@@ -226,6 +241,10 @@ export default function AppointmentsTable() {
             { id: 'duration', label: 'Duración', type: 'number', value: (a) => a.duration_minutes },
           ]}
           data={rows}
+          exportTitle="Citas"
+          exportScreen="appointments"
+          exportColumns={exportColumns}
+          exportFilters={card ? [`Tarjeta: ${card.title}`] : []}
           getItemKey={(a) => a.id}
           entityLabel="citas"
           metricCards={metricCards}

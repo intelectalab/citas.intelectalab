@@ -1,169 +1,17 @@
 'use client';
 
-import { Dispatch, SetStateAction, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth, TenantVocabulary } from '@/hooks/useAuth';
-import { useVocabulary } from '@/hooks/useVocabulary';
 import { usePlatform } from '@/hooks/usePlatform';
-import { 
-  Home, 
-  Users, 
-  Building2, 
-  Contact, 
-  FileText, 
-  Store, 
-  Ticket, 
-  Settings,
+import {
+  Ticket,
   PanelLeftClose,
   PanelLeftOpen,
-  Target,
   ChevronDown,
-  Briefcase,
-  Layers,
-  ShieldCheck,
-  Wrench,
-  ListOrdered,
-  CalendarDays,
-  ClipboardList,
-  ShoppingCart,
-  Package,
-  PackageOpen,
-  Gift,
-  Boxes,
-  Mail,
-  BadgeCheck,
-  Megaphone,
-  CalendarClock,
-  CalendarOff,
-  Hourglass,
-  Repeat,
-  Timer,
-  Clock,
-  DoorOpen,
-  Wallet,
-  TicketPercent,
-  Receipt,
-  Coins,
-  UserCog,
-  LucideIcon
 } from 'lucide-react';
-
-interface MenuItem {
-  name: string;
-  href: string;
-  icon: LucideIcon;
-  feature?: string;     
-  requireAdmin?: boolean; 
-  requireProfessional?: boolean;
-  module?: string;
-  perm?: string;
-  saasAdminOnly?: boolean;
-}
-
-interface MenuGroup {
-  id: string;
-  groupName?: string;
-  groupIcon?: LucideIcon;
-  requireAdmin?: boolean;
-  feature?: string;
-  items: MenuItem[];
-}
-
-const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
-  {
-    id: 'home',
-    items: [
-      { name: 'Inicio', href: '/home', icon: Home },
-    ]
-  },
-  {
-    id: 'saas-admin',
-    groupName: 'Plataforma',
-    groupIcon: ShieldCheck,
-    requireAdmin: true,
-    items: [
-      { name: 'Tenants', href: '/admin/tenants', icon: Building2 },
-      { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket, saasAdminOnly: true },
-      { name: 'Plantillas de rubros', href: '/admin/business-types', icon: Layers, saasAdminOnly: true },
-      { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },
-    ]
-  },
-  {
-    id: 'agenda',
-    groupName: 'Agenda',
-    groupIcon: CalendarDays,
-    items: [
-      { name: 'Agenda', href: '/agenda', icon: CalendarDays, module: 'agenda', perm: 'agenda.view' },
-      { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda', perm: 'agenda.view' },
-      { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin' },
-      { name: 'Lista de espera', href: '/waitlist', icon: Hourglass, module: 'agenda', perm: 'waitlist.view' },
-      { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'agenda', perm: 'recalls.view' },
-      { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes' },
-      { name: 'Bloqueos y ausencias', href: '/blocks', icon: CalendarOff, module: 'agenda', perm: 'blocks.view' },
-      { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda', perm: 'attention.view' },
-    ]
-  },
-  {
-    id: 'clinical',
-    groupName: 'Atención',
-    groupIcon: Layers,
-    items: [
-      { name: vocab.clients, href: '/customers', icon: Users, module: 'crm', perm: 'customers.view' },
-      { name: 'Fichas de atención', href: '/records', icon: ClipboardList, module: 'records', perm: 'records.view' },
-    ]
-  },
-  {
-    id: 'catalog',
-    groupName: 'Equipo y catálogo',
-    groupIcon: Layers,
-    items: [
-      { name: 'Servicios', href: '/services', icon: Wrench, module: 'agenda', perm: 'services.view' },
-      { name: vocab.pros, href: '/professionals', icon: Contact, module: 'agenda', perm: 'professionals.view' },
-      { name: 'Horarios del equipo', href: '/schedules', icon: Clock, module: 'agenda', perm: 'professionals.view' },
-      { name: 'Salas y equipos', href: '/rooms', icon: DoorOpen, module: 'resources', perm: 'rooms.view' },
-    ]
-  },
-  {
-    id: 'crm',
-    groupName: 'Ventas',
-    groupIcon: Briefcase,
-    items: [
-      { name: 'Oportunidades', href: '/opportunities', icon: Target, module: 'crm', requireAdmin: true },
-      { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes', requireAdmin: true },
-      { name: 'Punto de venta', href: '/pos', icon: ShoppingCart, module: 'pos', perm: 'pos.view' },
-      { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', perm: 'sales.view' },
-      { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', perm: 'sales.view' },
-      { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', perm: 'cash.view' },
-      { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
-      { name: 'Productos', href: '/products', icon: PackageOpen, module: 'pos', perm: 'products.view' },
-      { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory', requireAdmin: true },
-    ]
-  },
-  {
-    id: 'loyalty',
-    groupName: 'Fidelización',
-    groupIcon: Gift,
-    items: [
-      { name: 'Paquetes', href: '/packages', icon: Boxes, module: 'packages', perm: 'packages.view' },
-      { name: 'Mensajes', href: '/messages', icon: Mail, perm: 'messages.view' },
-      { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships', requireAdmin: true },
-      { name: 'Puntos y gift cards', href: '/modules/loyalty', icon: Gift, module: 'loyalty', requireAdmin: true },
-      { name: 'Marketing', href: '/modules/marketing', icon: Megaphone, module: 'marketing', requireAdmin: true },
-    ]
-  },
-  {
-    id: 'clinic-admin',
-    groupName: 'Tu empresa',
-    groupIcon: Building2,
-    items: [
-      { name: 'Sucursales', href: '/branches', icon: Store, perm: 'branches.view' },
-      { name: 'Empresa', href: '/companies', icon: Building2, perm: 'company.view' },
-      { name: 'Usuarios y roles', href: '/users', icon: UserCog, perm: 'users.view' },
-    ]
-  }
-];
+import { matchesPath, recordRecent, useMenu } from './menu';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -172,10 +20,16 @@ interface SidebarProps {
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
-  const { user, hasFeature, hasModule, can, loading } = useAuth();
-  const vocab = useVocabulary();
   const { platform } = usePlatform();
-  const menuGroups = buildMenuGroups(vocab);
+  const { groups, settings, hasNoPlan, loading, userId } = useMenu();
+
+  useEffect(() => {
+    if (loading) return;
+    const items = [...groups.flatMap((g) => g.items), ...(settings ? [settings] : [])];
+    const current = items.filter((item) => matchesPath(item.href, pathname)).sort((a, b) => b.href.length - a.href.length)[0];
+    if (current) recordRecent(userId, current.href);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, loading, userId]);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     'saas-admin': true,
@@ -192,14 +46,9 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   if (loading) return <div className="w-60 bg-[#0B192C] h-screen" />;
 
-  const isSaasAdmin = Boolean(user?.is_saas_admin);
-  const isSuperAdmin = Boolean(isSaasAdmin || user?.is_saas_support);
-
-  const hasNoPlan = !isSuperAdmin && !user?.plan_slug;
-
   return (
     <aside className={`bg-[#0B192C] text-slate-300 flex flex-col h-screen transition-all duration-300 relative select-none ${isCollapsed ? 'w-16' : 'w-60'}`}>
-      
+
       <div className={`p-4 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
         <div className="w-8 h-8 bg-gradient-to-br from-[#84D0D9] to-[#3F768C] rounded-xl flex items-center justify-center text-[#022340] font-black shrink-0">
           {platform.product_name.charAt(0).toUpperCase() || 'C'}
@@ -217,8 +66,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             <div className="bg-white/5 border border-white/10 p-4 rounded-xl space-y-3">
               <span className="text-xs font-semibold text-[#84D0D9]">Sin Plan Activo</span>
               <p className="text-xs text-slate-300">¡Selecciona un plan para activar tus módulos del sistema!</p>
-              <Link 
-                href="/subscribe" 
+              <Link
+                href="/subscribe"
                 className="block w-full py-2 px-3 bg-[#84D0D9] hover:bg-[#9bdbe3] text-[#022340] font-bold text-xs rounded-lg transition-colors"
               >
                 Elegir Plan
@@ -232,26 +81,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         </div>
       ) : (
         <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto sidebar-scroll">
-          {menuGroups.map((group) => {
-            if (isSuperAdmin) {
-              if (group.id !== 'saas-admin' && group.id !== 'home') return null;
-            } else {
-              if (group.id === 'saas-admin') return null;
-            }
-
-            if (group.feature && !hasFeature(group.feature)) return null;
-
-            const visibleItems = group.items.filter((item) => {
-              if (item.saasAdminOnly && !isSaasAdmin) return false;
-              if (item.requireAdmin && !user?.is_tenant_admin) return false;
-              if (item.perm && !isSuperAdmin && !can(item.perm)) return false;
-              if (item.feature && !hasFeature(item.feature)) return false;
-              if (item.module && !hasModule(item.module)) return false;
-              return true;
-            });
-
-            if (visibleItems.length === 0) return null;
-
+          {groups.map(({ group, items: visibleItems }) => {
             if (!group.groupName) {
               return (
                 <div key={group.id} className="space-y-0.5">
@@ -344,32 +174,22 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       )}
 
       <div className="p-3 border-t border-white/5 space-y-0.5">
-        {isSaasAdmin && (
-          <Link
-            href="/admin/configuration"
-            title={isCollapsed ? 'Configuración' : undefined}
-            className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${isCollapsed ? 'justify-center' : ''} ${
-              pathname.startsWith('/admin/configuration')
-                ? 'bg-white/10 text-white'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
-            }`}
-          >
-            <Settings className={`w-4 h-4 shrink-0 ${pathname.startsWith('/admin/configuration') ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
-            {!isCollapsed && <span className="truncate">Configuración</span>}
-          </Link>
-        )}
-        {!isSuperAdmin && can('settings.view') && (
-          <Link
-            href="/settings"
-            title={isCollapsed ? 'Configuración' : undefined}
-            className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${isCollapsed ? 'justify-center' : ''} ${
-              pathname.startsWith('/settings') ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
-            }`}
-          >
-            <Settings className={`w-4 h-4 shrink-0 ${pathname.startsWith('/settings') ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
-            {!isCollapsed && <span className="truncate">Configuración</span>}
-          </Link>
-        )}
+        {settings && (() => {
+          const Icon = settings.icon;
+          const isActive = pathname.startsWith(settings.href);
+          return (
+            <Link
+              href={settings.href}
+              title={isCollapsed ? settings.name : undefined}
+              className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-colors ${isCollapsed ? 'justify-center' : ''} ${
+                isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+              }`}
+            >
+              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#84D0D9]' : 'text-slate-500 group-hover:text-slate-300'}`} />
+              {!isCollapsed && <span className="truncate">{settings.name}</span>}
+            </Link>
+          );
+        })()}
 
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}

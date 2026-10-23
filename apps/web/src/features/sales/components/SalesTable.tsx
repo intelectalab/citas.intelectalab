@@ -3,8 +3,10 @@
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import { Eye, HandCoins, Receipt, RotateCcw } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { api } from '@/lib/axios';
@@ -26,6 +28,8 @@ const VIEWS: { id: string; label: string; test: (sale: SaleRow) => boolean }[] =
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export default function SalesTable() {
+  const router = useRouter();
+  const { can, hasModule } = useAuth();
   const [sales, setSales] = useState<SaleRow[] | null>(null);
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -113,6 +117,22 @@ export default function SalesTable() {
     },
   ];
 
+  const exportColumns: ExportColumn<SaleRow>[] = [
+    { header: 'Venta', value: (s) => (s.unbilled ? `Sin venta (cita ${s.appointment_code ?? ''})` : s.code) },
+    { header: 'Fecha', type: 'datetime', value: (s) => s.created_at },
+    { header: 'Cliente', value: (s) => s.customer?.name ?? 'Sin cliente' },
+    { header: 'Sede', value: (s) => s.branch_name },
+    { header: 'Detalle', value: (s) => s.detail },
+    { header: 'Cita', value: (s) => s.appointment_code },
+    { header: 'Total', type: 'money', value: (s) => s.total },
+    { header: 'Pagado', type: 'money', value: (s) => s.paid },
+    { header: 'Falta', type: 'money', value: (s) => (s.status === 'void' ? 0 : s.balance) },
+    { header: 'Devuelto', type: 'money', value: (s) => s.refunded },
+    { header: 'Comprobante', value: (s) => s.invoice_number },
+    { header: 'Tipo de comprobante', value: (s) => s.invoice_label },
+    { header: 'Estado', value: (s) => s.status_label },
+  ];
+
   const columns: Column<SaleRow>[] = [
     {
       header: 'Venta',
@@ -188,6 +208,8 @@ export default function SalesTable() {
 
       <DataTable<SaleRow>
         title="Ventas"
+        primaryActionLabel="Nueva venta"
+        onPrimaryAction={hasModule('pos') && can('pos.view') && can('pos.create') ? () => router.push('/pos') : undefined}
         tabs={[
           ...VIEWS.map((v) => ({ id: v.id, label: v.label, count: all.filter(v.test).length })),
           ...(unbilled !== null ? [{ id: 'unbilled', label: 'Atendidas sin cobrar', count: unbilled.length }] : []),
@@ -209,6 +231,9 @@ export default function SalesTable() {
         ]}
         columns={columns}
         data={rows}
+        exportTitle={showUnbilled ? 'Atendidas sin cobrar' : 'Ventas'}
+        exportScreen="sales"
+        exportColumns={exportColumns}
         getItemKey={(s) => s.id}
         entityLabel={rows.length === 1 ? 'venta' : 'ventas'}
         metricCards={metricCards}

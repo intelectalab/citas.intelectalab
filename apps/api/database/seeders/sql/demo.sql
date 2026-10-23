@@ -4,11 +4,11 @@ SET client_encoding = 'UTF8';
 DO $check$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM business_types) THEN
-    RAISE EXCEPTION 'Faltan los datos esenciales: carga primero seed.sql y luego seed_demo.sql.';
+    RAISE EXCEPTION 'Faltan los datos esenciales: ejecuta primero php artisan db:seed --class=EssentialDataSeeder.';
   END IF;
 
   IF EXISTS (SELECT 1 FROM tenants WHERE id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11') THEN
-    RAISE EXCEPTION 'Los datos de muestra ya están cargados. Para recargarlos, vuelve a crear la base con init.sql y seed.sql.';
+    RAISE EXCEPTION 'Los datos de muestra ya están cargados. Para recargarlos desde cero: php artisan migrate:fresh --seed.';
   END IF;
 END
 $check$;
@@ -209,9 +209,9 @@ INSERT INTO service_categories (id, tenant_id, name) VALUES
   ('20ee9999-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Consultas Médicas')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO services (id, tenant_id, category_id, name, duration_minutes, buffer_before_minutes, buffer_after_minutes, price) VALUES
-  ('30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '20ee9999-9c0b-4ef8-bb6d-6bb9bd380a01', 'Consulta en Medicina General', 30, 5, 5, 50.00),
-  ('30eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '20ee9999-9c0b-4ef8-bb6d-6bb9bd380a01', 'Control Pediátrico', 30, 5, 10, 60.00)
+INSERT INTO services (id, tenant_id, category_id, name, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, status_id) VALUES
+  ('30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '20ee9999-9c0b-4ef8-bb6d-6bb9bd380a01', 'Consulta en Medicina General', 30, 5, 5, 50.00, 'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a41'),
+  ('30eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '20ee9999-9c0b-4ef8-bb6d-6bb9bd380a01', 'Control Pediátrico', 30, 5, 10, 60.00, 'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a41')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO professionals (id, tenant_id, user_id, type_document_id, document_number, display_name, license_number, phone) VALUES
@@ -345,13 +345,8 @@ INSERT INTO customer_consents (tenant_id, customer_id, channel, granted, source,
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'whatsapp', true, 'staff', now())
 ON CONFLICT DO NOTHING;
 
-INSERT INTO marketing_templates (id, tenant_id, name, channel, body, variables) VALUES
-  ('67eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Recordatorio de cita', 'whatsapp', 'Hola {{first_name}}, te recordamos tu cita del {{appointment_date}} a las {{appointment_time}}. Responde 1 para confirmar.', '["first_name", "appointment_date", "appointment_time"]'::jsonb),
-  ('67eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Te extrañamos', 'whatsapp', 'Hola {{first_name}}, hace tiempo que no nos visitas. Reserva tu próxima cita cuando gustes.', '["first_name"]'::jsonb)
-ON CONFLICT DO NOTHING;
-
 INSERT INTO automation_rules (id, tenant_id, name, trigger_event, conditions, channel, marketing_template_id, delay_minutes, is_active) VALUES
-  ('68eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Recuperación de clientes inactivos', 'customer.inactive', '{"days": 90}'::jsonb, 'whatsapp', '67eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 0, false)
+  ('68eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Recuperación de clientes inactivos', 'customer.inactive', '{"days": 90}'::jsonb, 'whatsapp', NULL, 0, false)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO record_templates (id, tenant_id, name, description, fields, consent_text, require_consent, is_default) VALUES
@@ -472,8 +467,8 @@ INSERT INTO service_categories (id, tenant_id, name) VALUES
   ('20ee9999-9c0b-4ef8-bb6d-6bb9bd380a55', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', 'Análisis')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO services (tenant_id, category_id, name, duration_minutes, buffer_before_minutes, buffer_after_minutes, price)
-SELECT v.tenant_id::uuid, v.category_id::uuid, v.name, v.minutes, 0, 5, v.price
+INSERT INTO services (tenant_id, category_id, name, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, status_id)
+SELECT v.tenant_id::uuid, v.category_id::uuid, v.name, v.minutes, 0, 5, v.price, 'f1eebc99-9c0b-4ef8-bb6d-6bb9bd380a41'
 FROM (VALUES
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', '20ee9999-9c0b-4ef8-bb6d-6bb9bd380a55', 'Toma de muestra', 15, 25.00),
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', '20ee9999-9c0b-4ef8-bb6d-6bb9bd380a55', 'Entrega y lectura de resultados', 20, 30.00)

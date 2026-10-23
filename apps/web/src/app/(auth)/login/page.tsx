@@ -30,8 +30,19 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [idleNotice, setIdleNotice] = useState<string | null>(null);
 
   const [loginEmail, setLoginEmail] = useState('admin@luxuryspa.pe');
+
+  useEffect(() => {
+    const reason = localStorage.getItem('logout_reason');
+    if (reason?.startsWith('idle:')) {
+      const minutes = Number(reason.split(':')[1]);
+      const span = minutes % 60 === 0 ? `${minutes / 60} ${minutes === 60 ? 'hora' : 'horas'}` : `${minutes} minutos`;
+      setIdleNotice(`Tu sesión se cerró porque ${minutes === 60 ? 'pasó' : 'pasaron'} ${span} sin actividad. Vuelve a ingresar para continuar.`);
+    }
+    localStorage.removeItem('logout_reason');
+  }, []);
 
   useEffect(() => {
     const switchEmail = sessionStorage.getItem('switch_account_email');
@@ -60,6 +71,7 @@ export default function AuthPage() {
       throw new Error('Respuesta inválida del servidor');
     }
 
+    localStorage.setItem('last_activity', String(Date.now()));
     localStorage.setItem('auth_token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     if (userData) {
@@ -239,6 +251,12 @@ export default function AuthPage() {
                     Ingresa con tu correo y contraseña.
                   </p>
                 </div>
+
+                {idleNotice && !errorMessage && (
+                  <div data-notice="idle" className="p-3 rounded-xl bg-[#84D0D9]/15 border border-[#84D0D9]/50 text-[#022340] text-xs font-medium">
+                    {idleNotice}
+                  </div>
+                )}
 
                 {errorMessage && (
                   <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium">

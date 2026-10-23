@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Navbar from '../components/layout/Navbar';
 import ScreenGate from '../components/layout/ScreenGate';
+import IdleLogout from '../components/layout/IdleLogout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PlatformProvider } from '@/hooks/usePlatform';
 import { useTheme } from '@/hooks/useTheme';
@@ -62,6 +63,7 @@ export default function DashboardLayout({
     <AuthProvider>
       <PlatformProvider>
       <StaffOnly>
+      <IdleLogout />
       <div className={`flex h-screen overflow-hidden ${mounted ? 'bg-[#0B192C]' : 'bg-[#0B192C]'}`}>
         <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
 

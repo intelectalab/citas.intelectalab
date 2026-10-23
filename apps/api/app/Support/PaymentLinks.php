@@ -39,7 +39,7 @@ class PaymentLinks
 
     public const SLOT_TAKEN = 'Ese horario se acaba de ocupar. Elige otro.';
 
-    public const NOT_READY = 'Falta actualizar la base de datos para usar los links de pago: carga init.sql, seed.sql y seed_demo.sql.';
+    public const NOT_READY = 'Falta actualizar la base de datos para usar los links de pago: ejecuta php artisan migrate.';
 
     public static function ready(): bool
     {

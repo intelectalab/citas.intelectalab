@@ -56,6 +56,7 @@ export interface User {
   impersonator?: { name: string } | null;
   is_tenant_admin?: boolean;
   account_type?: 'staff' | 'customer';
+  idle_minutes?: number;
   must_change_password?: boolean;
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
@@ -87,6 +88,7 @@ const restorePlatformSession = (): boolean => {
   const platformToken = localStorage.getItem(PLATFORM_TOKEN_KEY);
   if (!platformToken) return false;
 
+  localStorage.setItem('last_activity', String(Date.now()));
   localStorage.setItem('auth_token', platformToken);
   localStorage.removeItem(PLATFORM_TOKEN_KEY);
   localStorage.removeItem('user');
@@ -169,6 +171,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = (token: string, userData: User) => {
+    localStorage.setItem('last_activity', String(Date.now()));
     localStorage.setItem('auth_token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
@@ -187,6 +190,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem('auth_token');
       localStorage.removeItem(PLATFORM_TOKEN_KEY);
       localStorage.removeItem('user');
+      localStorage.removeItem('last_activity');
       setUser(null);
       setLoading(false);
       window.location.href = '/login';
@@ -198,6 +202,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const res = await api.post(`/tenants/${tenantId}/impersonate`);
 
     if (platformToken) localStorage.setItem(PLATFORM_TOKEN_KEY, platformToken);
+    localStorage.setItem('last_activity', String(Date.now()));
     localStorage.setItem('auth_token', res.data.access_token);
     localStorage.removeItem('user');
     window.location.href = '/home';

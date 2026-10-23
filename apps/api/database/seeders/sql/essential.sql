@@ -160,33 +160,6 @@ FROM (VALUES
 ) AS v(slug, template)
 WHERE b.slug = v.slug;
 
-INSERT INTO pipelines (id, name) VALUES
-('c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Pipeline de Atención de Clientes'),
-('c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Pipeline de Soporte Clínico'),
-('c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'Pipeline de Procesamiento de Exámenes')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO pipeline_stages (id, pipeline_id, name, color, probability, stage_order)
-SELECT v.id, v.pipeline_id::uuid, v.name, v.color, v.probability, v.stage_order
-FROM (VALUES
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Cita programada', '#00A3D9', 20, 1),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Triaje realizado', '#FFC107', 40, 2),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'En consulta', '#28A745', 60, 3),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Receta / Tratamiento emitido', '#FD7E14', 80, 4),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Atención finalizada', '#198754', 100, 5),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'Inasistencia', '#DC3545', 0, 6),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Nuevo', '#007BFF', 0, 1),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Esperando al cliente', '#6C757D', 0, 2),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Acción médica requerida', '#17A2B8', 0, 3),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'Cerrado', '#28A745', 0, 4),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'Muestra recibida', '#007BFF', 0, 1),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'En análisis', '#FFC107', 0, 2),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'Resultados listos', '#17A2B8', 0, 3),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'Entregado al cliente', '#28A745', 0, 4),
-(gen_random_uuid(), 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a03', 'Cancelado', '#DC3545', 0, 5)
-) AS v(id, pipeline_id, name, color, probability, stage_order)
-WHERE NOT EXISTS (SELECT 1 FROM pipeline_stages);
-
 INSERT INTO units (id, tenant_id, name, abbreviation) VALUES
   ('60eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', NULL, 'Unidad', 'UND'),
   ('60eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', NULL, 'Caja', 'CJA'),

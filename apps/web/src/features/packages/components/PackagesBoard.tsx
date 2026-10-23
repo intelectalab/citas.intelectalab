@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Boxes, CalendarClock, Edit2, Eye, Hourglass, Layers, Trash2, Wallet } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { CustomerLink } from '@/app/components/common/PersonLink';
@@ -103,21 +103,49 @@ export default function PackagesBoard() {
     }
   };
 
-  const card = (title: string, value: string | number, icon: React.ReactNode, id: View, color: string, ring: string): MetricCardItem => ({
+  const card = (title: string, value: string | number, icon: React.ReactNode, id: View | null, color: string, ring: string): MetricCardItem => ({
     title,
     value,
     icon,
     iconColorClass: color,
-    borderColorClass: view === id ? `${ring}` : 'hover:border-slate-300',
-    onClick: () => setView(view === id ? 'all' : id),
+    borderColorClass: id && view === id ? `${ring}` : 'hover:border-slate-300',
+    onClick: id ? () => setView(view === id ? 'all' : id) : undefined,
   });
 
   const metricCards: MetricCardItem[] = tab === 'sold' ? [
     card('Vigentes', active.length, <Boxes size={18} />, 'active', 'text-[#3F768C]', 'border-[#3F768C] ring-2 ring-[#3F768C]/20'),
     card('Sesiones por usar', active.reduce((sum, p) => sum + p.sessions_total - p.sessions_used, 0), <Layers size={18} />, 'pending', 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
-    card('Por atender (ya cobrado)', money(active.reduce((sum, p) => sum + p.pending_value, 0), currency), <Wallet size={18} />, 'pending', 'text-violet-600', 'border-violet-500 ring-2 ring-violet-500/20'),
+    card('Por atender (ya cobrado)', money(active.reduce((sum, p) => sum + p.pending_value, 0), currency), <Wallet size={18} />, null, 'text-violet-600', 'border-violet-500 ring-2 ring-violet-500/20'),
     card('Vencen en 30 días', expiring.length, <Hourglass size={18} />, 'expiring', 'text-amber-600', 'border-amber-500 ring-2 ring-amber-500/20'),
   ] : [];
+
+  const soldExport: ExportColumn<CustomerPackage>[] = [
+    { header: 'Código', value: (p) => p.code },
+    { header: 'Paquete', value: (p) => p.name },
+    { header: 'Cómo se agenda', value: (p) => (p.conditions.booking_mode === 'scheduled' ? 'Con fechas acordadas' : 'Libre') },
+    { header: 'Cliente', value: (p) => p.customer?.name },
+    { header: 'Sesiones', type: 'number', value: (p) => p.sessions_total },
+    { header: 'Usadas', type: 'number', value: (p) => p.sessions_used },
+    { header: 'Quedan', type: 'number', value: (p) => p.sessions_total - p.sessions_used },
+    { header: 'Comprado', type: 'date', value: (p) => p.purchased_at },
+    { header: 'Vence', type: 'date', value: (p) => p.expires_at },
+    { header: 'Precio', type: 'money', value: (p) => p.price },
+    { header: 'Por atender (ya cobrado)', type: 'money', value: (p) => p.pending_value },
+    { header: 'Estado', value: (p) => p.status_label },
+  ];
+
+  const planExport: ExportColumn<PackagePlan>[] = [
+    { header: 'Paquete', value: (p) => p.name },
+    { header: 'Incluye', value: (p) => p.items.map((i) => `${i.sessions} × ${i.name}`).join(', ') },
+    { header: 'Cómo se agenda', value: (p) => p.schedule_label },
+    { header: 'Precio', type: 'money', value: (p) => p.price },
+    { header: 'Ahorro', type: 'money', value: (p) => p.savings },
+    { header: 'Ahorro (%)', type: 'number', value: (p) => p.savings_percent },
+    { header: 'Vigencia (días)', type: 'number', value: (p) => p.validity_days },
+    { header: 'Sesiones', type: 'number', value: (p) => p.sessions },
+    { header: 'Vendidos', type: 'number', value: (p) => p.sold },
+    { header: 'Estado', value: (p) => (p.status === 'active' ? 'Se vende' : 'Apagado') },
+  ];
 
   const soldColumns: Column<CustomerPackage>[] = [
     {
@@ -238,6 +266,10 @@ export default function PackagesBoard() {
           ]}
           columns={soldColumns}
           data={soldRows}
+          exportTitle="Paquetes vendidos"
+          exportScreen="packages"
+          exportFilters={view === 'all' ? [] : [`Tarjeta: ${{ active: 'Vigentes', pending: 'Sesiones por usar', expiring: 'Vencen en 30 días' }[view]}`]}
+          exportColumns={soldExport}
           getItemKey={(p) => p.id}
           entityLabel={soldRows.length === 1 ? 'paquete' : 'paquetes'}
           metricCards={metricCards}
@@ -263,6 +295,9 @@ export default function PackagesBoard() {
           ]}
           columns={planColumns}
           data={planRows}
+          exportTitle="Catálogo de paquetes"
+          exportScreen="package_plans"
+          exportColumns={planExport}
           getItemKey={(p) => p.id}
           entityLabel={planRows.length === 1 ? 'paquete' : 'paquetes'}
         />

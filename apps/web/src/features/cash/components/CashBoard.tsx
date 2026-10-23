@@ -5,7 +5,7 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, Edit2, Eye, Lock, Plus, Unlock, Wallet } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
@@ -87,6 +87,21 @@ export default function CashBoard() {
       borderColorClass: activeCard === 'difference' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'hover:border-slate-300',
       onClick: () => toggleCard('difference'),
     },
+  ];
+
+  const exportColumns: ExportColumn<CashSession>[] = [
+    { header: 'Caja', value: (c) => c.register_name ?? 'Caja' },
+    { header: 'Sede', value: (c) => c.branch_name },
+    { header: 'Apertura', type: 'datetime', value: (c) => c.opened_at },
+    { header: 'Abrió', value: (c) => c.opened_by },
+    { header: 'Monto inicial', type: 'money', value: (c) => c.opening_amount },
+    { header: 'Cierre', type: 'datetime', value: (c) => c.closed_at },
+    { header: 'Cerró', value: (c) => c.closed_by },
+    { header: 'Debía haber', type: 'money', value: (c) => c.expected_amount },
+    { header: 'Contado', type: 'money', value: (c) => c.closing_amount },
+    { header: 'Diferencia', type: 'money', value: (c) => c.difference ?? 0 },
+    { header: 'Resultado', value: (c) => (squared(c) ? 'Cuadró' : (c.difference ?? 0) < 0 ? 'Faltó' : 'Sobró') },
+    { header: 'Nota del cierre', value: (c) => c.closing_notes },
   ];
 
   const columns: Column<CashSession>[] = [
@@ -274,6 +289,10 @@ export default function CashBoard() {
         ]}
         columns={columns}
         data={rows}
+        exportTitle="Turnos de caja"
+        exportScreen="cash"
+        exportFilters={activeCard ? [activeCard === 'squared' ? 'Tarjeta: Cuadraron' : 'Tarjeta: Con diferencia'] : []}
+        exportColumns={exportColumns}
         getItemKey={(s) => s.id}
         entityLabel={rows.length === 1 ? 'turno' : 'turnos'}
         metricCards={metricCards}

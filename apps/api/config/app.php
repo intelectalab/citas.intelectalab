@@ -12,6 +12,8 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 
+    'own_email_enabled' => env('OWN_EMAIL_ENABLED', true),
+
     'timezone' => 'UTC',
 
     'locale' => env('APP_LOCALE', 'es'),

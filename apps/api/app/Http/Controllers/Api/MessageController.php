@@ -7,8 +7,10 @@ use App\Models\Customer;
 use App\Models\Tenant;
 use App\Support\Access;
 use App\Support\Currency;
+use App\Support\EmailDesign;
 use App\Support\Messaging;
 use App\Support\PaymentLinks;
+use App\Support\RichText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
@@ -114,7 +116,7 @@ class MessageController extends Controller
         return response()->json([
             'messages' => $rows->map(fn ($m) => Messaging::present($m, $customers[$m->customer_id] ?? null, trim("{$m->by_first} {$m->by_last}") ?: null))->values(),
             'email'    => $this->emailStatus($tenant),
-            'kinds'    => collect(Messaging::KINDS)->map(fn ($k, $key) => ['value' => $key, 'label' => $k['label']])->values()->push(['value' => 'manual', 'label' => Messaging::MANUAL_LABEL]),
+            'kinds'    => collect(Messaging::KINDS)->map(fn ($k, $key) => ['value' => $key, 'label' => $k['label']])->values()->push(['value' => 'manual', 'label' => Messaging::MANUAL_LABEL])->push(['value' => 'campaign', 'label' => Messaging::kindLabel('campaign')]),
             'statuses' => collect(Messaging::STATUS_LABELS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'due'      => Messaging::due($tenant->id)->count(),
             'can'      => [
@@ -129,6 +131,7 @@ class MessageController extends Controller
     {
         $tenant = $this->tenant($request);
         Messaging::generate($tenant, true);
+        \App\Support\Campaigns::dispatchDue($tenant->id);
         $done = Messaging::process($tenant->id);
 
         return response()->json($done + ['due' => Messaging::due($tenant->id)->count()]);
@@ -139,7 +142,7 @@ class MessageController extends Controller
         $validated = $request->validate(array_filter([
             'customer_id'  => $withCustomer ? 'required|uuid' : null,
             'subject'      => 'required|string|max:200',
-            'body'         => 'required|string|max:5000',
+            'body'         => 'required|string|max:20000',
             'scheduled_at' => 'nullable|date_format:' . self::LOCAL_FORMAT,
         ]), [
             'customer_id.required' => 'Elige al cliente.',
@@ -174,7 +177,7 @@ class MessageController extends Controller
             'kind'         => 'manual',
             'customer'     => $customer,
             'subject'      => trim($data['subject']),
-            'body'         => trim($data['body']),
+            'body'         => RichText::normalize($data['body']),
             'scheduled_at' => $data['at'],
             'branch_id'    => $request->user()->branch_id,
             'entity_type'  => 'customer',
@@ -210,7 +213,7 @@ class MessageController extends Controller
         }
 
         DB::table('messages')->where('id', $row->id)->where('status', 'scheduled')->update([
-            'subject' => trim($data['subject']), 'body' => trim($data['body']), 'scheduled_at' => $data['at']->copy()->utc(), 'updated_at' => now(),
+            'subject' => trim($data['subject']), 'body' => RichText::normalize($data['body']), 'scheduled_at' => $data['at']->copy()->utc(), 'updated_at' => now(),
         ]);
 
         return response()->json($this->one($row->id));
@@ -267,7 +270,9 @@ class MessageController extends Controller
         return response()->json([
             'email'    => $this->emailStatus($tenant),
             'presets'  => collect(Messaging::PRESETS)->map(fn ($p, $key) => ['key' => $key] + $p)->values(),
+            'own_email' => (bool) config('app.own_email_enabled'),
             'notices'  => array_values(Messaging::settings($tenant->id)),
+            'design'   => EmailDesign::of($tenant) + ['colors' => EmailDesign::COLORS],
             'whatsapp' => ['state' => 'pending', 'label' => 'Listo para conectar cuando tu empresa elija un proveedor de WhatsApp'],
         ]);
     }
@@ -295,6 +300,8 @@ class MessageController extends Controller
             'from_address.email'       => 'El correo remitente no es válido.',
             'reply_to.email'           => 'El correo para respuestas no es válido.',
         ]);
+
+        abort_if($validated['provider'] === 'smtp' && !config('app.own_email_enabled'), 422, 'Enviar desde el correo de tu empresa está en construcción. Por ahora puedes usar "Probar sin enviar".');
 
         $current = Messaging::integration($tenant->id);
         $old = Messaging::emailConfig($tenant->id) ?? [];
@@ -356,6 +363,8 @@ class MessageController extends Controller
             return response()->json(['ok' => true, 'message' => 'Estás en "Probar sin enviar": la prueba no sale. Cuando configures un correo real, este botón envía un correo de verdad.'] + $this->settings($request)->getData(true));
         }
 
+        abort_unless(config('app.own_email_enabled'), 422, 'Enviar desde el correo de tu empresa está en construcción. Por ahora puedes usar "Probar sin enviar".');
+
         $company = Messaging::companyName($tenant);
         $ok = true;
 
@@ -386,7 +395,7 @@ class MessageController extends Controller
         $validated = $request->validate([
             'enabled'        => 'required|boolean',
             'subject'        => 'nullable|string|max:200',
-            'body'           => 'nullable|string|max:5000',
+            'body'           => 'nullable|string|max:20000',
             'options'        => 'nullable|array',
             'options.hours'  => 'nullable|integer|min:1|max:168',
             'options.second' => 'nullable|boolean',
@@ -399,7 +408,7 @@ class MessageController extends Controller
 
         $def = Messaging::KINDS[$kind];
         $subject = trim((string) ($validated['subject'] ?? ''));
-        $body = trim((string) ($validated['body'] ?? ''));
+        $body = RichText::normalize($validated['body'] ?? '');
         $options = array_intersect_key($validated['options'] ?? [], $def['options'] ?? []);
 
         DB::table('message_settings')->upsert([[
@@ -408,7 +417,7 @@ class MessageController extends Controller
             'kind'       => $kind,
             'enabled'    => $validated['enabled'],
             'subject'    => $subject !== '' && $subject !== $def['subject'] ? $subject : null,
-            'body'       => $body !== '' && $body !== $def['body'] ? $body : null,
+            'body'       => $body !== '' && !RichText::same($body, $def['body']) ? $body : null,
             'options'    => json_encode($options),
             'updated_by' => $request->user()->id,
             'created_at' => now(),
@@ -426,6 +435,90 @@ class MessageController extends Controller
         DB::table('message_settings')->where('tenant_id', $tenant->id)->where('kind', $kind)->update(['subject' => null, 'body' => null, 'updated_at' => now()]);
 
         return response()->json(Messaging::settings($tenant->id)[$kind]);
+    }
+
+    private function designInput(Request $request): array
+    {
+        return $request->validate([
+            'color'     => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'show_name' => 'required|boolean',
+            'footer'    => 'nullable|string|max:500',
+        ], [
+            'color.required' => 'Elige el color de tus correos.',
+            'color.regex'    => 'Escribe el color como # y seis letras o números, por ejemplo #3F768C.',
+            'footer.max'     => 'El pie del correo puede tener hasta 500 letras.',
+        ]);
+    }
+
+    public function saveDesign(Request $request)
+    {
+        abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
+        $tenant = $this->tenant($request);
+        EmailDesign::save($tenant, $this->designInput($request));
+
+        return $this->settings($request);
+    }
+
+    public function uploadLogo(Request $request)
+    {
+        abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
+        $tenant = $this->tenant($request);
+        $file = $request->validate(['logo' => 'required|file|mimes:png,jpg,jpeg,webp|max:1024'], [
+            'logo.required' => 'Elige la imagen de tu logo.',
+            'logo.mimes'    => 'El logo debe ser una imagen PNG, JPG o WEBP.',
+            'logo.max'      => 'El logo pesa más de 1 MB. Usa una imagen más liviana.',
+        ])['logo'];
+
+        abort_unless(@getimagesize($file->getRealPath()), 422, 'Ese archivo no es una imagen válida.');
+        EmailDesign::storeLogo($tenant, $file);
+
+        return $this->settings($request);
+    }
+
+    public function removeLogo(Request $request)
+    {
+        abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
+        $tenant = $this->tenant($request);
+        EmailDesign::removeLogo($tenant);
+
+        return $this->settings($request);
+    }
+
+    public function preview(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $validated = $request->validate([
+            'color'     => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'show_name' => 'nullable|boolean',
+            'footer'    => 'nullable|string|max:500',
+            'subject'   => 'nullable|string|max:200',
+            'body'      => 'nullable|string|max:20000',
+        ]);
+
+        $design = EmailDesign::of($tenant);
+
+        foreach (['color', 'show_name', 'footer'] as $key) {
+            if ($request->has($key)) {
+                $design[$key] = $validated[$key] ?? ($key === 'footer' ? '' : $design[$key]);
+            }
+        }
+
+        $vars = EmailDesign::SAMPLE + ['Empresa' => $design['company']];
+        $body = trim((string) ($validated['body'] ?? '')) ?: EmailDesign::SAMPLE_BODY;
+
+        return response()->json([
+            'subject' => Messaging::render((string) ($validated['subject'] ?? ''), $vars),
+            'html'    => EmailDesign::render($tenant, RichText::fill(RichText::normalize($body), $vars), $design),
+        ]);
+    }
+
+    public function logo(string $tenant)
+    {
+        abort_unless(\Illuminate\Support\Str::isUuid($tenant), 404);
+        $path = EmailDesign::logoPath($tenant);
+        abort_unless($path, 404);
+
+        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($path), ['Cache-Control' => 'public, max-age=86400']);
     }
 
     public function sendPaymentLink(Request $request, string $link)

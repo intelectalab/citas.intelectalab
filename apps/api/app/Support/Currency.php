@@ -15,7 +15,7 @@ class Currency
 {
     public const DEFAULT = 'PEN';
 
-    public const NOT_READY = 'Falta actualizar la base de datos: carga init.sql, seed.sql y seed_demo.sql.';
+    public const NOT_READY = 'Falta actualizar la base de datos: ejecuta php artisan migrate.';
 
     private static ?bool $ready = null;
 

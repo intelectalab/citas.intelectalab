@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Clock, DollarSign, Tag, Pencil, Trash2 } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormService from './FormService';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -37,6 +37,12 @@ interface Service {
   price: number;
   created_at?: string;
 }
+
+const STATUS_TABS: { id: string; label: string; test: (s: Service) => boolean }[] = [
+  { id: 'all', label: 'Todos', test: () => true },
+  { id: 'active', label: 'Activos', test: (s) => s.status?.slug === 'active' },
+  { id: 'inactive', label: 'Inactivos', test: (s) => s.status?.slug === 'inactive' },
+];
 
 export default function ServicesTable() {
   const { can } = useAuth();
@@ -130,7 +136,7 @@ export default function ServicesTable() {
     }
   ];
 
-  const fetchServices = async (search = searchTerm, currentFilters = filters, tab = activeTab) => {
+  const fetchServices = async (search = searchTerm, currentFilters = filters) => {
     try {
       setLoading(true);
       
@@ -138,10 +144,6 @@ export default function ServicesTable() {
         search,
         ...currentFilters,
       };
-
-      if (tab !== 'all') {
-        queryParams.tab_status = tab; 
-      }
 
       console.log('SERVICES_TABLE: Fetching services with params:', queryParams);
       const res = await api.get('/services', { params: queryParams });
@@ -162,22 +164,24 @@ export default function ServicesTable() {
   const handleSearchChange = (val: string) => {
     console.log('SERVICES_TABLE: Search term changed:', val);
     setSearchTerm(val);
-    fetchServices(val, filters, activeTab);
+    fetchServices(val, filters);
   };
 
   const handleFilterChange = (filterId: string, value: any) => {
     console.log('SERVICES_TABLE: Filter changed:', filterId, value);
     const updatedFilters = { ...filters, [filterId]: value };
     setFilters(updatedFilters);
-    fetchServices(searchTerm, updatedFilters, activeTab);
+    fetchServices(searchTerm, updatedFilters);
   };
 
   const handleTabChange = (tabId: string) => {
     console.log('SERVICES_TABLE: Tab changed:', tabId);
     setActiveTab(tabId);
-    const updatedFilters = tabId !== 'all' ? { ...filters, status_id: '' } : filters;
-    setFilters(updatedFilters);
-    fetchServices(searchTerm, updatedFilters, tabId);
+    if (tabId !== 'all' && filters.status_id) {
+      const updatedFilters = { ...filters, status_id: '' };
+      setFilters(updatedFilters);
+      fetchServices(searchTerm, updatedFilters);
+    }
   };
 
   const openCreateModal = () => {
@@ -206,7 +210,7 @@ export default function ServicesTable() {
           setIsActionLoading(true);
           console.log('SERVICES_TABLE: Deleting service ID:', id);
           await api.delete(`/services/${id}`);
-          fetchServices(searchTerm, filters, activeTab);
+          fetchServices(searchTerm, filters);
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         } catch (error) {
           console.error('SERVICES_TABLE: Error deleting service:', error);
@@ -216,6 +220,17 @@ export default function ServicesTable() {
       }
     });
   };
+
+  const exportColumns: ExportColumn<Service>[] = [
+    { header: 'Servicio', value: (s) => s.name },
+    { header: 'Categoría', value: (s) => s.category?.name ?? 'Sin categoría' },
+    { header: 'Duración (min)', type: 'number', value: (s) => s.duration_minutes },
+    { header: 'Preparación antes (min)', type: 'number', value: (s) => s.buffer_before_minutes },
+    { header: 'Preparación después (min)', type: 'number', value: (s) => s.buffer_after_minutes },
+    { header: 'Precio', type: 'money', value: (s) => s.price },
+    { header: 'Estado', value: (s) => s.status?.name ?? 'Sin estado' },
+    { header: 'Registrado', type: 'date', value: (s) => s.created_at },
+  ];
 
   const columns: Column<Service>[] = [
     {
@@ -312,11 +327,7 @@ export default function ServicesTable() {
         title="Catálogo de Servicios"
         primaryActionLabel="Nuevo Servicio"
         onPrimaryAction={can('services.create') ? openCreateModal : undefined}
-        tabs={[
-          { id: 'all', label: 'Todos', count: services.length },
-          { id: 'active', label: 'Activos' },
-          { id: 'inactive', label: 'Inactivos' },
-        ]}
+        tabs={STATUS_TABS.map((t) => ({ id: t.id, label: t.label, count: services.filter(t.test).length }))}
         activeTab={activeTab}
         onTabChange={handleTabChange}
         searchTerm={searchTerm}
@@ -336,7 +347,10 @@ export default function ServicesTable() {
           { id: 'status', label: 'Estado', value: (s) => s.status?.name },
           { id: 'created_at', label: 'Fecha de creación', type: 'date', value: (s) => s.created_at },
         ]}
-        data={services}
+        data={services.filter((STATUS_TABS.find((t) => t.id === activeTab) ?? STATUS_TABS[0]).test)}
+        exportTitle="Servicios"
+        exportScreen="services"
+        exportColumns={exportColumns}
         getItemKey={(service) => service.id}
         entityLabel="servicios registrados"
       />
@@ -348,7 +362,7 @@ export default function ServicesTable() {
         categories={categoryOptions}
         onSubmitSuccess={() => {
           console.log('SERVICES_TABLE: Form submitted successfully, refreshing data...');
-          fetchServices(searchTerm, filters, activeTab);
+          fetchServices(searchTerm, filters);
         }}
       />
 

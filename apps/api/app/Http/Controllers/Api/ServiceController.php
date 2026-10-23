@@ -19,8 +19,11 @@ class ServiceController extends Controller
         ->where('tenant_id', $currentUser->tenant_id);
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where('name', 'like', "%{$search}%");
+            $search = (string) $request->search;
+            $query->where(function ($q) use ($search) {
+                \App\Support\Search::contains($q, 'name', $search);
+                \App\Support\Search::orContains($q, "coalesce(code, '')", $search);
+            });
         }
 
         if ($request->filled('category_id')) {
@@ -30,6 +33,11 @@ class ServiceController extends Controller
         if ($request->filled('status_id')) {
             $query->where('status_id', $request->status_id);
         }
+
+        match ($request->query('tab_status')) {
+            'active', 'inactive' => $query->whereHas('status', fn ($q) => $q->where('slug', $request->query('tab_status'))),
+            default => null,
+        };
 
         return response()->json($query->orderBy('created_at', 'desc')->get());
     }
@@ -60,9 +68,17 @@ class ServiceController extends Controller
                 Rule::exists('services', 'id')->where('tenant_id', $tenantId),
                 Rule::notIn(array_filter([$serviceId])),
             ],
-            'status_id' => 'nullable|exists:statuses,id',
+            'status_id' => [
+                $serviceId ? 'required' : 'nullable',
+                Rule::exists('statuses', 'id')->whereIn('module_id', \App\Models\StatusModule::where('name', 'services')->pluck('id')->all()),
+            ],
         ];
     }
+
+    private const MESSAGES = [
+        'status_id.required' => 'Elige el estado del servicio: Activo o Inactivo.',
+        'status_id.exists'   => 'Ese estado no es válido para un servicio.',
+    ];
 
     private function normalize(array $data, ?Service $service = null): array
     {
@@ -105,7 +121,7 @@ class ServiceController extends Controller
     {
         $currentUser = $request->user();
 
-        $validated = $request->validate($this->rules($request));
+        $validated = $request->validate($this->rules($request), self::MESSAGES);
 
         if (($validated['kind'] ?? null) === Service::KIND_GROUP && !$this->canUseClasses($request)) {
             return $this->classesDisabled();
@@ -116,7 +132,8 @@ class ServiceController extends Controller
                 $q->where('name', 'services');
             })->where('is_default', true)->first();
 
-            $validated['status_id'] = $defaultStatus ? $defaultStatus->id : null;
+            abort_unless($defaultStatus, 422, 'No hay un estado por defecto para los servicios: elige uno.');
+            $validated['status_id'] = $defaultStatus->id;
         }
 
         $validated = $this->normalize($validated);
@@ -135,7 +152,7 @@ class ServiceController extends Controller
         $currentUser = $request->user();
         $service = Service::where('tenant_id', $currentUser->tenant_id)->findOrFail($id);
 
-        $validated = $request->validate($this->rules($request, $service->id));
+        $validated = $request->validate($this->rules($request, $service->id), self::MESSAGES);
 
         if (($validated['kind'] ?? null) === Service::KIND_GROUP
             && $service->kind !== Service::KIND_GROUP

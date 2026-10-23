@@ -208,26 +208,6 @@
   color: var(--brand-ink, #022340);
 }
 
-.addTabBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
-  border: 1px dashed var(--color-slate-300, #cbd5e1);
-  background: transparent;
-  color: var(--color-slate-500, #64748b);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.addTabBtn:hover {
-  background-color: var(--color-white, #ffffff);
-  color: var(--brand-ink, #022340);
-  border-color: var(--brand-link, #3f768c);
-}
-
 .filterSection {
   padding: 0.875rem 1.25rem;
   background-color: var(--color-slate-50, #f8fafc);
@@ -492,31 +472,8 @@
   background-color: #84d0d9;
 }
 
-.chipDivider {
-  height: 1.25rem;
-  width: 1px;
-  background-color: var(--color-slate-300, #cbd5e1);
-  margin: 0 0.125rem;
-}
 
-.iconCircleBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 9999px;
-  border: 1px solid var(--color-slate-300, #cbd5e1);
-  background-color: var(--color-white, #ffffff);
-  color: var(--color-slate-500, #64748b);
-  cursor: pointer;
-  transition: all 0.2s;
-}
 
-.iconCircleBtn:hover {
-  border-color: var(--brand-ink, #022340);
-  color: var(--brand-ink, #022340);
-}
 
 .drawerActions {
   display: flex;

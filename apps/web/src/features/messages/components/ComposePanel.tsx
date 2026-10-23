@@ -2,7 +2,7 @@
 
 import Button from '@/app/components/common/Button';
 import { ErrorAlert } from '@/app/components/common/Alert';
-import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
+import { labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import { CalendarClock, Mail, Send } from 'lucide-react';
 import { api } from '@/lib/axios';
@@ -12,6 +12,7 @@ import TimeField from '@/app/components/common/TimeField';
 import CustomerPicker, { type PickedCustomer } from '@/features/customers/components/CustomerPicker';
 import { apiError, todayISO } from '@/features/appointments/appointments';
 import { useAuth } from '@/hooks/useAuth';
+import MessageFields from './MessageFields';
 import { STARTERS, outcomeOf, type EmailState, type Message } from '../messages';
 
 interface ComposePanelProps {
@@ -128,7 +129,7 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
       <div className="flex flex-col h-full justify-between">
         <form id={formId} onSubmit={submit} className="space-y-5 overflow-y-auto flex-1 pr-1 pb-4" data-compose>
           {!editing && (
-            <CustomerPicker value={picked} onChange={(c) => { setPicked(c); if (c && starter) setBody((current) => current.replace(/^Hola [^:]*:/, `Hola ${c.first_name}:`)); }} locked={Boolean(customer)} />
+            <CustomerPicker value={picked} onChange={(c) => { setPicked(c); if (c && starter) setBody((current) => current.replace(/Hola [^:<]*:/, `Hola ${c.first_name}:`)); }} locked={Boolean(customer)} />
           )}
 
           {email === null && (editing || picked) && (
@@ -163,15 +164,7 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
             </div>
           )}
 
-          <div>
-            <label className={labelClass} htmlFor="compose-subject">Asunto *</label>
-            <input id="compose-subject" required maxLength={200} placeholder="Ej. Tus resultados están listos" className={inputClass} value={subject} onChange={(e) => setSubject(e.target.value)} />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="compose-body">Mensaje *</label>
-            <textarea id="compose-body" required rows={9} maxLength={5000} className={inputClass} value={body} onChange={(e) => setBody(e.target.value)} />
-          </div>
+          <MessageFields idPrefix="compose" subject={subject} onSubject={setSubject} body={body} onBody={setBody} subjectPlaceholder="Ej. Tus resultados están listos" />
 
           <div>
             <span className={labelClass}>¿Cuándo sale?</span>

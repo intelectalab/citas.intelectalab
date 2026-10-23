@@ -32,6 +32,7 @@ interface SaaSPlan {
   features: Record<string, any>;
   status: string;
   subscriptions_count?: number;
+  active_subscriptions_count?: number;
   created_at?: string;
 }
 
@@ -370,6 +371,8 @@ export default function SaaSPlansTable() {
           filterConfigs={filterConfigs}
           filterValues={filters}
           onFilterChange={handleFilterChange}
+          extraFilterCount={filters.has_trial ? 1 : 0}
+          onClearFilters={() => { const cleared = { status: '', has_trial: '' }; setFilters(cleared); fetchPlans(searchTerm, cleared); }}
           columns={columns}
           dateFilters={[
             { id: 'created_at', label: 'Fecha de creación', value: (p) => p.created_at },
@@ -378,7 +381,7 @@ export default function SaaSPlansTable() {
             { id: 'name', label: 'Nombre', value: (p) => p.name },
             { id: 'price_monthly', label: 'Precio mensual', type: 'number', value: (p) => Number(p.price_monthly) },
             { id: 'price_yearly', label: 'Precio anual', type: 'number', value: (p) => Number(p.price_yearly) },
-            { id: 'subscriptions', label: 'Empresas suscritas', type: 'number', value: (p) => p.subscriptions_count ?? 0 },
+            { id: 'subscriptions', label: 'Empresas suscritas', type: 'number', value: (p) => p.active_subscriptions_count ?? p.subscriptions_count ?? 0 },
             { id: 'status', label: 'Estado', value: (p) => p.status },
             { id: 'created_at', label: 'Fecha de creación', type: 'date', value: (p) => p.created_at },
           ]}

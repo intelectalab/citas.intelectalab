@@ -81,6 +81,7 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
       const userData = response.data.user || response.data.data;
 
       if (token) {
+        localStorage.setItem('last_activity', String(Date.now()));
         localStorage.setItem('auth_token', token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 

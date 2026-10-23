@@ -38,6 +38,7 @@ export interface StaffUser {
   granted?: number;
   revoked?: number;
   created_at?: string;
+  last_login_at?: string | null;
 }
 
 export interface GridAction {
@@ -45,6 +46,7 @@ export interface GridAction {
   special?: boolean;
   name: string;
   label: string;
+  short?: string;
   hint: string;
   role: boolean;
   override: boolean | null;
@@ -54,8 +56,45 @@ export interface GridAction {
 export interface GridModule {
   key: string;
   label: string;
+  section?: string;
+  section_label?: string;
+  screens?: string[];
+  note?: string | null;
+  building?: boolean;
   actions: GridAction[];
 }
+
+export interface AdminOnlyScreen {
+  name: string;
+  section: string;
+  section_label: string;
+  before?: string | null;
+}
+
+export const titleOf = (module: GridModule) => ((module.screens ?? []).length > 0 ? (module.screens ?? []).join(' y ') : module.label);
+
+export interface AccessChange {
+  id: string;
+  at: string;
+  by: string;
+  text: string;
+}
+
+export const entersModule = (module: GridModule) => {
+  const view = module.actions.find((a) => a.action === 'view');
+  return view ? view.on : module.actions.some((a) => a.on && !a.special);
+};
+
+export const levelOf = (module: GridModule): string => {
+  const regular = module.actions.filter((a) => !a.special && a.action !== 'view');
+  const on = regular.filter((a) => a.on);
+  if (regular.length === 0) return '';
+  if (on.length === 0) return 'solo mira';
+  if (on.length === regular.length) return 'todo';
+  return on.map((a) => (a.short ?? a.label).toLowerCase()).join(', ');
+};
+
+export const specialsOf = (grid: GridModule[]) => grid.flatMap((m) => m.actions.filter((a) => a.special).map((a) => ({ module: m, action: a })));
 
 export interface PlanUsage {
   used: number;

@@ -8,7 +8,7 @@ import { MODULE_LABELS, PENDING_SECTIONS } from '@/lib/modules';
 
 export default function ModulePage() {
   const params = useParams<{ key: string }>();
-  const { hasModule, loading } = useAuth();
+  const { hasModule, loading, can } = useAuth();
   const moduleKey = params.key;
   const section = PENDING_SECTIONS[moduleKey];
   const label = section?.label ?? MODULE_LABELS[moduleKey];
@@ -21,7 +21,9 @@ export default function ModulePage() {
     );
   }
 
-  const isAvailable = Boolean(label) && hasModule(section?.module ?? moduleKey);
+  const gated = moduleKey === 'walkin' || moduleKey === 'classes';
+  const allowed = !gated || can(`${moduleKey}.view`);
+  const isAvailable = Boolean(label) && hasModule(section?.module ?? moduleKey) && allowed;
 
   return (
     <div className="max-w-2xl mx-auto pt-10 font-sans text-[#1F2937]">
@@ -36,7 +38,9 @@ export default function ModulePage() {
           <p className="text-sm text-slate-500 font-medium leading-relaxed">
             {isAvailable
               ? 'Está activo para tu empresa. Sus pantallas aún están en construcción.'
-              : 'No está disponible para tu empresa. Depende de tu plan y del rubro de tu negocio.'}
+              : !allowed
+                ? 'Tu cuenta no tiene permiso para entrar aquí. Pídeselo a quien administra tu empresa.'
+                : 'No está disponible para tu empresa. Depende de tu plan y del rubro de tu negocio.'}
           </p>
           <Link href="/home" className="inline-block text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
             Volver al inicio

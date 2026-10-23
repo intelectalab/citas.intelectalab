@@ -1,43 +1,34 @@
 'use client';
 
-import { useEffect, useMemo, useState, ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import {
   Search,
-  Filter,
   ArrowUpDown,
   Plus,
   Lock,
   ChevronDown,
   MoreHorizontal,
-  Download,
+  Columns3,
+  Table2,
   SlidersHorizontal,
-  LayoutGrid,
-  Table as TableIcon,
   ChevronLeft,
   ChevronRight,
-  Edit2,
   X,
-  Mail,
-  Clock,
-  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import styles from './DataTable.module.css';
 import Select from '@/app/components/common/Select';
 import DateFilter from './DateFilter';
 import { PAGE_SIZE } from '@/app/components/common/Pager';
-import { dateRangeOf, inDateRange, type DateFilterValue, type DateRange } from './dateFilters';
+import { dateRangeOf, describeDateFilter, inDateRange, type DateFilterValue, type DateRange } from './dateFilters';
+import ExportMenu from './ExportMenu';
+import ScreenJump from './ScreenJump';
+import type { ExportColumn } from './exportTable';
+import { useAuth } from '@/hooks/useAuth';
+
+export type { ExportColumn } from './exportTable';
 
 export type FilterType = 'select' | 'date' | 'daterange' | 'text';
-
-const STAGES = [
-  { id: 'suscriptor', name: 'Suscriptor', colorClass: styles.badgeSuscriptor },
-  { id: 'lead', name: 'Lead', colorClass: styles.badgeLead },
-  { id: 'mql', name: 'Lead calificado por marketing', colorClass: styles.badgeMql },
-  { id: 'sql', name: 'Lead calificado por ventas', colorClass: styles.badgeSql },
-  { id: 'oportunidad', name: 'Oportunidad', colorClass: styles.badgeOportunidad },
-  { id: 'cliente', name: 'Cliente', colorClass: styles.badgeCliente },
-];
 
 export interface Column<T> {
   header: string;
@@ -65,6 +56,7 @@ export interface DateFilterConfig<T> {
   end?: (item: T) => string | null | undefined;
   future?: boolean;
   onRange?: (range: DateRange | null) => void;
+  clearOnTab?: boolean;
 }
 
 export interface SortOption<T> {
@@ -110,6 +102,8 @@ interface DataTableProps<T> {
   filterConfigs?: FilterConfig[];
   filterValues?: Record<string, any>;
   onFilterChange?: (filterId: string, value: any) => void;
+  extraFilterCount?: number;
+  onClearFilters?: () => void;
   dateFilters?: DateFilterConfig<T>[];
   sortOptions?: SortOption<T>[];
 
@@ -120,6 +114,15 @@ interface DataTableProps<T> {
   
   metricCards?: MetricCardItem[];
   pageSize?: number;
+
+  exportColumns?: ExportColumn<T>[];
+  exportTitle?: string;
+  exportScreen?: string;
+  exportFilters?: string[];
+  exportNotice?: string;
+  boardView?: (rows: T[]) => ReactNode;
+  view?: 'table' | 'board';
+  onViewChange?: (view: 'table' | 'board') => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -136,6 +139,8 @@ export function DataTable<T extends Record<string, any>>({
   filterConfigs = [],
   filterValues = {},
   onFilterChange,
+  extraFilterCount = 0,
+  onClearFilters,
   dateFilters = [],
   sortOptions = [],
   columns,
@@ -144,20 +149,69 @@ export function DataTable<T extends Record<string, any>>({
   entityLabel = 'registros',
   metricCards,
   pageSize = PAGE_SIZE,
+  exportColumns,
+  exportTitle,
+  exportScreen,
+  exportFilters = [],
+  exportNotice,
+  boardView,
+  view = 'table',
+  onViewChange,
 }: DataTableProps<T>) {
-  const [viewMode, setViewMode] = useState<'table' | 'panel'>('table');
+  const showBoard = Boolean(boardView) && view === 'board';
+  const { can } = useAuth();
+  const [selected, setSelected] = useState<Set<string | number>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [dateValues, setDateValues] = useState<Record<string, DateFilterValue | null>>({});
   const [sortId, setSortId] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [searchText, setSearchText] = useState(searchTerm);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const sentSearch = useRef(searchTerm);
+  const searchHandler = useRef(onSearchChange);
+
+  useEffect(() => {
+    searchHandler.current = onSearchChange;
+  }, [onSearchChange]);
+
+  useEffect(() => {
+    if (searchTerm !== sentSearch.current) {
+      sentSearch.current = searchTerm;
+      setSearchText(searchTerm);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (searchText === sentSearch.current) return;
+    const timer = window.setTimeout(() => {
+      sentSearch.current = searchText;
+      searchHandler.current?.(searchText);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+      if (!searchRef.current) return;
+      e.preventDefault();
+      searchRef.current.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const activeSort = sortOptions.find((option) => option.id === sortId);
   const sortType = activeSort?.type ?? 'text';
   const hasFilters = filterConfigs.length > 0 || dateFilters.length > 0 || filterChips.length > 0;
   const activeFilterCount =
     filterConfigs.filter((config) => filterValues[config.id] !== undefined && filterValues[config.id] !== null && filterValues[config.id] !== '').length +
-    dateFilters.filter((config) => dateValues[config.id]).length;
+    dateFilters.filter((config) => dateValues[config.id]).length +
+    extraFilterCount;
 
   const changeDate = (config: DateFilterConfig<T>, value: DateFilterValue | null) => {
     setDateValues((current) => ({ ...current, [config.id]: value }));
@@ -171,6 +225,14 @@ export function DataTable<T extends Record<string, any>>({
     dateFilters.forEach((config) => {
       if (dateValues[config.id]) changeDate(config, null);
     });
+    onClearFilters?.();
+  };
+
+  const chooseTab = (tabId: string) => {
+    dateFilters.forEach((config) => {
+      if (config.clearOnTab && dateValues[config.id]) changeDate(config, null);
+    });
+    onTabChange?.(tabId);
   };
 
   const changeSort = (id: string) => {
@@ -212,6 +274,34 @@ export function DataTable<T extends Record<string, any>>({
   const pageRows = data.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const filterKey = JSON.stringify(filterValues);
 
+  const selectedRows = data.filter((item) => selected.has(getItemKey(item)));
+  const allSelected = data.length > 0 && selectedRows.length === data.length;
+  const toggleRow = (key: string | number) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(data.map((item) => getItemKey(item))));
+
+  const describeFilters = (): string[] => {
+    const out: string[] = [];
+    const tab = tabs.length > 1 ? tabs.find((t) => t.id === activeTab) : null;
+    if (tab) out.push(`Pestaña: ${tab.label}`);
+    if (searchText.trim()) out.push(`Búsqueda: "${searchText.trim()}"`);
+    filterConfigs.forEach((config) => {
+      const value = filterValues[config.id];
+      if (value === undefined || value === null || value === '') return;
+      const option = config.options?.find((o) => String(o.value) === String(value));
+      out.push(`${config.label}: ${option?.label ?? value}`);
+    });
+    dateFilters.forEach((config) => {
+      if (dateValues[config.id]) out.push(`${config.label}: ${describeDateFilter(dateValues[config.id])}`);
+    });
+    out.push(...exportFilters);
+    if (activeSort) out.push(`Orden: ${activeSort.label} (${SORT_DIRECTIONS[sortType][sortDir]})`);
+    return out;
+  };
+
   useEffect(() => {
     setPage(1);
   }, [searchTerm, activeTab, filterKey, dateValues, sortId, sortDir]);
@@ -220,9 +310,9 @@ export function DataTable<T extends Record<string, any>>({
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerTop}>
-          <div className={styles.titleGroup}>
+          <div className={styles.titleGroup} ref={titleRef}>
             <h1 className={styles.title}>{title}</h1>
-            <ChevronDown size={20} className="text-slate-400 hover:text-[#022340] cursor-pointer transition-colors" />
+            <ScreenJump anchorRef={titleRef} />
           </div>
 
           <div className={styles.actionsGroup}>
@@ -257,7 +347,7 @@ export function DataTable<T extends Record<string, any>>({
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => onTabChange?.(tab.id)}
+                    onClick={() => chooseTab(tab.id)}
                     className={styles.tabBtn}
                   >
                     {isActive && (
@@ -279,10 +369,6 @@ export function DataTable<T extends Record<string, any>>({
                 );
               })}
             </div>
-
-            <button className={styles.addTabBtn} title="Añadir vista personalizada">
-              <Plus size={15} />
-            </button>
           </div>
         )}
       </div>
@@ -326,13 +412,14 @@ export function DataTable<T extends Record<string, any>>({
               <div className={styles.searchInputWrapper}>
                 <Search size={16} className="text-[#3F768C]" />
                 <input
+                  ref={searchRef}
                   type="text"
-                  placeholder="Buscar ( / )..."
-                  value={searchTerm}
-                  onChange={(e) => onSearchChange(e.target.value)}
+                  placeholder="Buscar"
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
                   className={styles.searchInput}
+                  data-table-search
                 />
-                <span className={styles.kbdHint}>⌘K</span>
               </div>
             )}
 
@@ -368,27 +455,34 @@ export function DataTable<T extends Record<string, any>>({
           </div>
 
           <div className={styles.filterRightGroup}>
-            <button className={styles.exportBtn}>
-              <Download size={14} />
-              <span className={`${styles.btnText} ${styles.btnTextCollapse}`}>Exportar</span>
-            </button>
-
-            <div className={styles.viewToggleGroup}>
-              <button
-                onClick={() => setViewMode('panel')}
-                className={`${styles.viewToggleBtn} ${viewMode === 'panel' ? styles.viewToggleActive : ''}`}
-                title="Vista Panel"
-              >
-                <LayoutGrid size={15} />
-              </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`${styles.viewToggleBtn} ${viewMode === 'table' ? styles.viewToggleActive : ''}`}
-                title="Vista Tabla"
-              >
-                <TableIcon size={15} />
-              </button>
-            </div>
+            {boardView && onViewChange && (
+              <div className={styles.segmented} role="group" aria-label="Vista">
+                {([['table', 'Tabla', Table2], ['board', 'Tablero', Columns3]] as const).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    data-view={id}
+                    aria-pressed={view === id}
+                    onClick={() => onViewChange(id)}
+                    className={`${styles.segmentedBtn} ${view === id ? styles.segmentedBtnActive : ''} inline-flex items-center gap-1.5`}
+                  >
+                    <Icon size={14} />
+                    <span className={styles.btnText}>{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {exportColumns && exportColumns.length > 0 && can('data.export') && (
+              <ExportMenu
+                title={exportTitle ?? title}
+                screen={exportScreen ?? (exportTitle ?? title)}
+                columns={exportColumns}
+                filtered={data}
+                selected={selectedRows}
+                filters={describeFilters()}
+                notice={exportNotice}
+              />
+            )}
           </div>
         </div>
 
@@ -445,11 +539,6 @@ export function DataTable<T extends Record<string, any>>({
                       <ChevronDown size={13} className="text-slate-400" />
                     </button>
                   ))}
-                  
-                  <div className={styles.chipDivider} />
-                  <button className={styles.iconCircleBtn} title="Agregar filtro">
-                    <Plus size={14} />
-                  </button>
                 </div>
 
                 <div className={styles.drawerActions}>
@@ -459,10 +548,6 @@ export function DataTable<T extends Record<string, any>>({
                       Limpiar filtros
                     </button>
                   )}
-                  <button className={styles.advancedFiltersBtn}>
-                    <Filter size={13} />
-                    Filtros avanzados
-                  </button>
                   <button
                     onClick={() => setShowFilters(false)}
                     className={styles.closeDrawerBtn}
@@ -538,103 +623,62 @@ export function DataTable<T extends Record<string, any>>({
         </AnimatePresence>
       </div>
 
-      {viewMode === 'table' ? (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead className={styles.thead}>
-              <tr>
-                <th className={styles.thCheckbox}>
-                  <input type="checkbox" className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
+      {showBoard && boardView?.(data)}
+
+      {!showBoard && (
+      <div className={styles.tableContainer}>
+        <table className={styles.table}>
+          <thead className={styles.thead}>
+            <tr>
+              <th className={styles.thCheckbox}>
+                <input type="checkbox" aria-label="Seleccionar todas las filas filtradas" data-select-all checked={allSelected} ref={(el) => { if (el) el.indeterminate = selectedRows.length > 0 && !allSelected; }} onChange={toggleAll} className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
+              </th>
+              {columns.map((col, idx) => (
+                <th key={idx} className={styles.th}>
+                  {col.header}
                 </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map((item) => (
+              <tr key={getItemKey(item)} className={styles.tr}>
+                <td className={styles.thCheckbox} onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" aria-label="Seleccionar fila" data-select-row checked={selected.has(getItemKey(item))} onChange={() => toggleRow(getItemKey(item))} className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
+                </td>
                 {columns.map((col, idx) => (
-                  <th key={idx} className={styles.th}>
-                    {col.header}
-                  </th>
+                  <td key={idx} className={col.className || styles.td}>
+                    {col.cell
+                      ? col.cell(item)
+                      : col.accessorKey
+                      ? String(item[col.accessorKey] ?? '')
+                      : null}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((item) => (
-                <tr key={getItemKey(item)} className={styles.tr}>
-                  <td className={styles.thCheckbox} onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
-                  </td>
-                  {columns.map((col, idx) => (
-                    <td key={idx} className={col.className || styles.td}>
-                      {col.cell
-                        ? col.cell(item)
-                        : col.accessorKey
-                        ? String(item[col.accessorKey] ?? '')
-                        : null}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className={styles.boardContainer}>
-          <div className={styles.boardTrack}>
-            {STAGES.map((stage) => {
-              const stageItems = data.filter(
-                (item) => item.stage === stage.id || (!item.stage && stage.id === 'lead')
-              );
-
-              return (
-                <div key={stage.id} className={styles.boardColumn}>
-                  <div className={styles.columnHeader}>
-                    <span className={`${styles.stageBadge} ${stage.colorClass}`}>
-                      {stage.name}
-                    </span>
-                    <span className={styles.stageCount}>{stageItems.length}</span>
-                  </div>
-
-                  <div className={styles.cardsContainer}>
-                    {stageItems.map((item) => {
-                      const name = item.fullName || item.name || item.contactName || 'Sin Nombre';
-                      const email = item.email || '';
-                      const activity = item.lastActivity || 'hace 2 meses';
-
-                      return (
-                        <div key={getItemKey(item)} className={styles.boardCard}>
-                          <div className={styles.cardHeader}>
-                            <h4 className={styles.cardTitle}>{name}</h4>
-                          </div>
-
-                          {email && (
-                            <div className={styles.cardEmail}>
-                              <Mail size={12} className="shrink-0 text-slate-400" />
-                              <span className="truncate">{email}</span>
-                              <ExternalLink size={10} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          )}
-
-                          <div className={styles.cardFooter}>
-                            <div className={styles.activityBadge}>
-                              <Clock size={11} />
-                              <span>{activity}</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
       )}
 
       <div className={styles.footer}>
-        <span className={styles.counterBadge}>
-          {data.length} {entityLabel}
+        <span className="flex items-center gap-2">
+          <span className={styles.counterBadge}>
+            {data.length} {entityLabel}
+          </span>
+          {selectedRows.length > 0 && (
+            <span className="text-xs text-slate-500" data-selected-count>
+              {selectedRows.length} {selectedRows.length === 1 ? 'seleccionada' : 'seleccionadas'} ·{' '}
+              <button type="button" onClick={() => setSelected(new Set())} className="font-semibold text-[#3F768C] hover:text-[#022340]">Quitar selección</button>
+            </span>
+          )}
         </span>
 
+        {!showBoard && (
         <div className={styles.paginationGroup}>
           <span className={styles.pageInfo} data-page-info>
-            {viewMode === 'table' && data.length > 0
+            {data.length > 0
               ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, data.length)} · Página ${currentPage} de ${pages}`
               : `Página ${currentPage} de ${pages}`}
           </span>
@@ -647,6 +691,7 @@ export function DataTable<T extends Record<string, any>>({
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

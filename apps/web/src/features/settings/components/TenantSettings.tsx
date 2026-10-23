@@ -4,13 +4,15 @@ import OptionCard from '@/app/components/common/OptionCard';
 import Button from '@/app/components/common/Button';
 import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useState } from 'react';
-import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Type, Unlock, Wallet } from 'lucide-react';
+import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, Type, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
+import Select from '@/app/components/common/Select';
 import CurrencySettings from './CurrencySettings';
 import IntegrationsSettings from './IntegrationsSettings';
 import MessagingSettings from './MessagingSettings';
+import DataExportsLog from './DataExportsLog';
 import { currencySymbol } from '@/lib/currency';
 
 interface SettingsModule {
@@ -33,6 +35,9 @@ interface SettingsPayload {
   sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
   booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
   payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
+  session_idle_minutes?: number;
+  session_portal_idle_minutes?: number;
+  customer_groups?: { inactive_days: number; frequent_visits: number; vip_spend: number } | null;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
@@ -66,6 +71,25 @@ const ON_MISS_OPTIONS: { id: OnMiss; title: string; hint: string; icon: React.Re
   { id: 'release', title: 'Liberar de inmediato', hint: 'Al vencer el plazo la cita se cancela y el horario queda libre.', icon: <Unlock size={18} /> },
 ];
 
+const IDLE_OPTIONS = [
+  { value: '15', label: '15 minutos' },
+  { value: '30', label: '30 minutos' },
+  { value: '60', label: '1 hora' },
+  { value: '120', label: '2 horas' },
+  { value: '240', label: '4 horas' },
+  { value: '480', label: '8 horas' },
+  { value: 'custom', label: 'Personalizado' },
+];
+
+type IdleValue = { choice: string; custom: string };
+
+const toIdle = (minutes: number): IdleValue => {
+  const value = String(minutes);
+  return IDLE_OPTIONS.some((o) => o.value === value) ? { choice: value, custom: '' } : { choice: 'custom', custom: value };
+};
+
+const fromIdle = (idle: IdleValue) => (idle.choice === 'custom' ? Number(idle.custom || 0) : Number(idle.choice));
+
 const hoursInput = 'w-24 text-sm text-center border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] outline-none';
 
 const VOCABULARY_FIELDS: { key: string; label: string }[] = [
@@ -96,6 +120,9 @@ export default function TenantSettings() {
   const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
   const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
   const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
+  const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
+  const [portalIdle, setPortalIdle] = useState<{ on: boolean } & IdleValue>({ on: false, choice: '30', custom: '' });
+  const [groups, setGroups] = useState<{ inactive: string; frequent: string; vip: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -135,6 +162,10 @@ export default function TenantSettings() {
       refundHours: String(payload.payment_rules.deposit_refund_hours),
       linkHours: String(payload.payment_rules.link_hours),
     } : null);
+    setGroups(payload.customer_groups ? { inactive: String(payload.customer_groups.inactive_days), frequent: String(payload.customer_groups.frequent_visits), vip: String(payload.customer_groups.vip_spend) } : null);
+    setIdle(toIdle(payload.session_idle_minutes ?? 30));
+    const portalMinutes = payload.session_portal_idle_minutes ?? 0;
+    setPortalIdle(portalMinutes > 0 ? { on: true, ...toIdle(portalMinutes) } : { on: false, choice: '30', custom: '' });
   };
 
   useEffect(() => {
@@ -169,6 +200,9 @@ export default function TenantSettings() {
         modules_off: modulesOff,
         vocabulary,
         appointment_statuses: statusNames,
+        session_idle_minutes: fromIdle(idle),
+        ...(groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0) } } : {}),
+        session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0,
         ...(equipmentDown ? { equipment_down: equipmentDown } : {}),
         ...(salesRules ? {
           sales_rules: {
@@ -238,6 +272,29 @@ export default function TenantSettings() {
       </div>
     );
   }
+
+  const renderIdle = (row: string, label: string, value: IdleValue, change: (next: IdleValue) => void, inputId: string) => (
+    <div className="flex flex-wrap items-center gap-3" data-row={row}>
+      <span className="text-sm font-semibold text-slate-800">{label}</span>
+      <div className="w-48">
+        <Select
+          ariaLabel={label}
+          options={IDLE_OPTIONS}
+          value={value.choice}
+          onChange={(e) => { if (e.target.value === '') return; setMessage(null); change({ choice: String(e.target.value), custom: value.custom || '30' }); }}
+        />
+      </div>
+      {value.choice === 'custom' ? (
+        <>
+          <input id={inputId} inputMode="numeric" aria-label="Minutos sin actividad" value={value.custom} onChange={(e) => { setMessage(null); change({ ...value, custom: e.target.value.replace(/\D/g, '').slice(0, 4) }); }} className={hoursInput} />
+          <span className="text-sm text-slate-600">minutos sin actividad.</span>
+          <span className="w-full text-xs text-slate-500">Entre 5 minutos y 1440 (24 horas).</span>
+        </>
+      ) : (
+        <span className="text-sm text-slate-600">sin actividad.</span>
+      )}
+    </div>
+  );
 
   const toggleable = data.modules.filter((m) => m.can_toggle);
   const core = data.modules.filter((m) => m.locked === 'core');
@@ -703,6 +760,67 @@ export default function TenantSettings() {
           )}
         </section>
       )}
+
+      {groups && (
+        <section className={cardClass} data-card="customer-groups">
+          <div>
+            <SectionTitle>
+              <Users className="w-4 h-4 text-[#3F768C]" /> Grupos de clientes
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Definen a quiénes les llega una campaña cuando eliges un grupo. Se recalculan solos con cada visita y cada pago.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3" data-row="group-inactive">
+              <span className="text-sm font-semibold text-slate-800 w-28">Inactivo</span>
+              <span className="text-sm text-slate-600">si no viene hace</span>
+              <input aria-label="Días para inactivo" inputMode="numeric" data-rule="inactive_days" value={groups.inactive} onChange={(e) => { setMessage(null); setGroups({ ...groups, inactive: e.target.value.replace(/\D/g, '').slice(0, 3) }); }} className={hoursInput} />
+              <span className="text-sm text-slate-600">días o más y no tiene una cita próxima.</span>
+              <span className="w-full text-xs text-slate-500 sm:pl-[7.75rem]">&quot;En riesgo de no volver&quot; son los que llevan dos tercios de ese tiempo ({Math.ceil(Number(groups.inactive || 0) * 0.66)} días).</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3" data-row="group-frequent">
+              <span className="text-sm font-semibold text-slate-800 w-28">Frecuente</span>
+              <span className="text-sm text-slate-600">si vino</span>
+              <input aria-label="Visitas para frecuente" inputMode="numeric" data-rule="frequent_visits" value={groups.frequent} onChange={(e) => { setMessage(null); setGroups({ ...groups, frequent: e.target.value.replace(/\D/g, '').slice(0, 2) }); }} className={hoursInput} />
+              <span className="text-sm text-slate-600">veces o más en los últimos 90 días.</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3" data-row="group-vip">
+              <span className="text-sm font-semibold text-slate-800 w-28">VIP</span>
+              <span className="text-sm text-slate-600">si pagó {currencySymbol()}</span>
+              <input aria-label="Monto para VIP" inputMode="decimal" data-rule="vip_spend" value={groups.vip} onChange={(e) => { setMessage(null); setGroups({ ...groups, vip: e.target.value.replace(/[^\d.]/g, '').slice(0, 9) }); }} className={hoursInput} />
+              <span className="text-sm text-slate-600">o más en los últimos 12 meses.</span>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className={cardClass} data-card="session-idle">
+        <div>
+          <SectionTitle>
+            <Timer className="w-4 h-4 text-[#3F768C]" /> Seguridad
+          </SectionTitle>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Si nadie mueve el mouse, escribe ni toca la pantalla durante ese tiempo, la sesión se cierra sola. Un minuto antes aparece un aviso para seguir conectado.
+          </p>
+        </div>
+
+        {renderIdle('session-idle', 'Cerrar la sesión de tu equipo tras', idle, (next) => setIdle(next), 'idle-minutes')}
+
+        <div className="pt-4 border-t border-slate-100 space-y-3" data-row="portal-idle-switch">
+          <div className="flex items-center justify-between gap-4">
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Desconectar también a los clientes del portal</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Apagado, el cliente sigue conectado en su celular hasta que cierre sesión.</span>
+            </span>
+            <Switch checked={portalIdle.on} onChange={(on) => { setMessage(null); setPortalIdle({ ...portalIdle, on }); }} label="Desconectar también a los clientes del portal" />
+          </div>
+          {portalIdle.on && renderIdle('portal-idle', 'Cerrar la sesión del cliente tras', portalIdle, (next) => setPortalIdle({ ...portalIdle, ...next }), 'portal-idle-minutes')}
+        </div>
+      </section>
+
+      {can('users.view') && <DataExportsLog className={cardClass} />}
 
       <div className="flex items-center justify-end gap-4">
         {message && (

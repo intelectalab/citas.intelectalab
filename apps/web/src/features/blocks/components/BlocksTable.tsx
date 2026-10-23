@@ -118,7 +118,7 @@ export default function BlocksTable() {
     (!card || card.match(b))
     && (!filters.kind || b.kind === filters.kind)
     && (!filters.professional_id || b.professional_id === filters.professional_id)
-    && (!filters.branch_id || b.branch_id === filters.branch_id)
+    && (!filters.branch_id || b.branch_id === filters.branch_id || (b.scope === 'professional' && !b.branch_id))
     && (!term || normalize(`${b.reason ?? ''} ${b.professional?.display_name ?? ''} ${b.branch?.name ?? ''} ${b.kind_label}`).includes(term)),
   );
 

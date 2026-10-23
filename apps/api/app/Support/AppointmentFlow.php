@@ -79,6 +79,11 @@ class AppointmentFlow
         'payments.link_hours'         => 24,
         'booking.deposit_minutes'     => 30,
         'booking.deposit_refund_hours' => 24,
+        'session.idle_minutes'        => 30,
+        'session.portal_idle_minutes' => 0,
+        'crm.inactive_days'           => 60,
+        'crm.frequent_visits'         => 4,
+        'crm.vip_spend'               => 1500,
     ];
 
     public static function keys(): array

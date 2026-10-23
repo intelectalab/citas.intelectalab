@@ -9,6 +9,7 @@ import CustomerDependents, { type CustomerDependent } from './CustomerDependents
 import { User, ChevronDown } from 'lucide-react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
+import { stageOf, type BoardInfo } from '../board';
 
 interface FormCustomerProps {
   isOpen: boolean;
@@ -25,7 +26,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
   const clinical = Boolean(user?.tenant?.rules?.['customers.clinical_fields']);
   const [pendingDependents, setPendingDependents] = useState<CustomerDependent[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stages, setStages] = useState<any[]>([]);
+  const [board, setBoard] = useState<BoardInfo | null>(null);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
   const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -110,11 +111,9 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
 
   useEffect(() => {
     if (isOpen) {
-      api.get('/pipeline-stages', {
-        params: { pipeline_id: 'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a01' }
-      })
-        .then(res => setStages(res.data))
-        .catch(err => console.error('Error cargando etapas de clientes:', err));
+      api.get('/customer-board')
+        .then(res => setBoard(res.data?.ready ? res.data : null))
+        .catch(() => setBoard(null));
 
       api.get('/type-documents')
         .then(res => {
@@ -369,16 +368,19 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             placeholder={clinical ? 'Alergias, antecedentes y otros datos relevantes...' : 'Preferencias o datos a tener en cuenta...'}
                           />
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Etapa del Pipeline</label>
+                        {board && (
+                        <div data-field="stage">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Etapa en el tablero</label>
                           <Select
-                            ariaLabel="Etapa del pipeline"
-                            placeholder="Seleccione una etapa..."
-                            value={form.pipeline_stage_id}
+                            ariaLabel="Etapa en el tablero"
+                            placeholder={`Sin elegir: aparece en "${stageOf(board, null)?.name ?? ''}"`}
+                            value={board.stages.some((stage) => stage.id === form.pipeline_stage_id) ? form.pipeline_stage_id : ''}
                             onChange={(e) => setForm({ ...form, pipeline_stage_id: String(e.target.value) })}
-                            options={stages.map((stage) => ({ value: stage.id, label: stage.name }))}
+                            options={board.stages.map((stage) => ({ value: stage.id, label: stage.name }))}
                           />
+                          <p className="text-xs text-slate-500 mt-1.5">Es la columna donde aparece en el tablero de {vocab.clients.toLowerCase()}. Cada cambio queda en su página.</p>
                         </div>
+                        )}
                       </div>
                     )}
 

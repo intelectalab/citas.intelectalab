@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class Access
 {
-    public const NOT_READY = 'Falta actualizar la base de datos: carga init.sql, seed.sql y seed_demo.sql.';
+    public const NOT_READY = 'Falta actualizar la base de datos: ejecuta php artisan migrate.';
 
     public const ACTIONS = ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Editar', 'delete' => 'Eliminar'];
 
@@ -20,6 +20,7 @@ class Access
         'emergency' => 'Acceso de emergencia',
         'forgive'   => 'Perdonar faltas',
         'use'       => 'Registrar uso a mano',
+        'export'    => 'Exportar',
     ];
 
     public const CATALOG = [
@@ -28,6 +29,9 @@ class Access
             'create' => 'Agendar citas',
             'edit'   => 'Confirmar, registrar la llegada, atender, reprogramar y cancelar citas',
             'override' => 'Agendar aunque el horario no esté disponible: fuera del horario de atención, en una pausa o sobre un bloqueo. Nunca permite dos citas a la misma hora',
+        ]],
+        'walkin' => ['label' => 'Cola sin cita', 'module' => 'walkin', 'actions' => [
+            'view' => 'Entrar a la cola sin cita (en construcción)',
         ]],
         'waitlist' => ['label' => 'Lista de espera', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver la lista de espera',
@@ -38,6 +42,9 @@ class Access
             'view'   => 'Ver los controles pendientes',
             'create' => 'Registrar un control',
             'edit'   => 'Cambiar un control o darlo por realizado',
+        ]],
+        'classes' => ['label' => 'Clases', 'module' => 'classes', 'actions' => [
+            'view' => 'Entrar a las clases (en construcción)',
         ]],
         'blocks' => ['label' => 'Bloqueos y ausencias', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver bloqueos y ausencias',
@@ -77,11 +84,15 @@ class Access
             'edit'   => 'Cambiar servicios y categorías (también sus precios)',
             'delete' => 'Eliminar servicios y categorías',
         ]],
-        'professionals' => ['label' => '{pros} y horarios', 'module' => 'agenda', 'actions' => [
-            'view'   => 'Ver {pros} y los horarios del equipo',
+        'professionals' => ['label' => '{pros}', 'module' => 'agenda', 'actions' => [
+            'view'   => 'Ver {pros} y su página',
             'create' => 'Registrar {pros}',
-            'edit'   => 'Cambiar los datos y el horario de {pros}',
+            'edit'   => 'Cambiar los datos de {pros}: documento, colegiatura, servicios que atiende y sedes',
             'delete' => 'Eliminar {pros}',
+        ]],
+        'schedules' => ['label' => 'Horarios del equipo', 'module' => 'agenda', 'actions' => [
+            'view' => 'Ver los horarios de atención del equipo',
+            'edit' => 'Cambiar el horario de atención de {pros}: días, horas y sede',
         ]],
         'rooms' => ['label' => 'Salas y equipos', 'module' => 'resources', 'actions' => [
             'view'   => 'Ver salas y equipos',
@@ -94,10 +105,13 @@ class Access
             'create' => 'Armar ventas en el carrito con citas, servicios y productos, y dejarlas por cobrar',
             'edit'   => 'Cambiar una venta que se dejó por cobrar, mientras no tenga pagos',
         ]],
-        'sales' => ['label' => 'Ventas y pagos', 'module' => 'pos', 'actions' => [
-            'view'   => 'Ver las ventas y los pagos',
+        'sales' => ['label' => 'Ventas', 'module' => 'pos', 'actions' => [
+            'view'   => 'Ver las ventas, su detalle y sus pagos',
             'create' => 'Cobrar y emitir el comprobante',
             'delete' => 'Anular una venta o devolver dinero',
+        ]],
+        'payments' => ['label' => 'Pagos', 'module' => 'pos', 'actions' => [
+            'view' => 'Ver todos los pagos: cuánto entró por cada medio (efectivo, tarjeta, transferencia…) y las devoluciones',
         ]],
         'cash' => ['label' => 'Caja', 'module' => 'pos', 'actions' => [
             'view'   => 'Ver la caja y sus turnos',
@@ -128,6 +142,11 @@ class Access
             'create' => 'Escribir un mensaje a un cliente, para ahora o programado',
             'edit'   => 'Cambiar o cancelar un mensaje programado y reintentar los que fallaron',
         ]],
+        'campaigns' => ['label' => 'Campañas', 'module' => 'marketing', 'actions' => [
+            'view'   => 'Ver las campañas y sus resultados',
+            'create' => 'Crear campañas para enviar ahora o programadas, y duplicar una campaña',
+            'edit'   => 'Cambiar o cancelar una campaña programada',
+        ]],
         'branches' => ['label' => 'Sucursales', 'module' => null, 'actions' => [
             'view'   => 'Ver las sucursales',
             'create' => 'Crear sucursales',
@@ -147,6 +166,50 @@ class Access
             'edit'   => 'Cambiar usuarios, roles y permisos',
             'delete' => 'Eliminar roles',
         ]],
+        'data' => ['label' => 'Exportar datos', 'module' => null, 'actions' => [
+            'export' => 'Descargar en Excel o CSV las listas que puede ver, con los filtros que tenga puestos. Cada descarga queda registrada',
+        ]],
+    ];
+
+    public const SECTIONS = ['agenda' => 'Agenda', 'care' => 'Atención', 'team' => 'Equipo y catálogo', 'sales' => 'Ventas', 'loyalty' => 'Fidelización', 'company' => 'Tu empresa', 'footer' => 'Al pie del menú', 'other' => 'Fuera del menú'];
+
+    public const LAYOUT = [
+        'agenda'           => ['section' => 'agenda', 'screens' => ['Agenda', 'Citas'], 'short' => ['view' => 'Ver', 'create' => 'Agendar', 'edit' => 'Confirmar, atender y cancelar']],
+        'walkin'           => ['section' => 'agenda', 'screens' => ['Cola sin cita'], 'building' => true, 'short' => ['view' => 'Entrar']],
+        'waitlist'         => ['section' => 'agenda', 'screens' => ['Lista de espera'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Cambiar o cerrar']],
+        'recalls'          => ['section' => 'agenda', 'screens' => ['Controles y seguimiento'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar o dar por hecho']],
+        'classes'          => ['section' => 'agenda', 'screens' => ['Clases'], 'building' => true, 'short' => ['view' => 'Entrar']],
+        'blocks'           => ['section' => 'agenda', 'screens' => ['Bloqueos y ausencias'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
+        'holidays'         => ['section' => 'agenda', 'screens' => [], 'note' => 'Es la pestaña Feriados de Bloqueos y ausencias.', 'short' => ['view' => 'Ver', 'create' => 'Agregar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
+        'attention'        => ['section' => 'agenda', 'screens' => ['Tiempos de atención'], 'short' => ['view' => 'Ver']],
+        'customers'        => ['section' => 'care', 'screens' => ['{Clients}'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar datos', 'delete' => 'Eliminar']],
+        'records'          => ['section' => 'care', 'screens' => ['Fichas de atención'], 'short' => ['view' => 'Ver', 'edit' => 'Llenar, firmar y corregir']],
+        'record_templates' => ['section' => 'care', 'screens' => [], 'note' => 'Se arman dentro de Fichas de atención.', 'short' => ['create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
+        'services'         => ['section' => 'team', 'screens' => ['Servicios'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
+        'professionals'    => ['section' => 'team', 'screens' => ['{Pros}'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar datos', 'delete' => 'Eliminar']],
+        'schedules'        => ['section' => 'team', 'screens' => ['Horarios del equipo'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar horarios']],
+        'rooms'            => ['section' => 'team', 'screens' => ['Salas y equipos'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
+        'pos'              => ['section' => 'sales', 'screens' => ['Punto de venta'], 'short' => ['view' => 'Abrir', 'create' => 'Armar ventas', 'edit' => 'Cambiar una venta por cobrar']],
+        'sales'            => ['section' => 'sales', 'screens' => ['Ventas'], 'short' => ['view' => 'Ver', 'create' => 'Cobrar', 'delete' => 'Anular y devolver']],
+        'payments'         => ['section' => 'sales', 'screens' => ['Pagos'], 'short' => ['view' => 'Ver']],
+        'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar']],
+        'coupons'          => ['section' => 'sales', 'screens' => ['Cupones'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
+        'products'         => ['section' => 'sales', 'screens' => ['Productos'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
+        'packages'         => ['section' => 'loyalty', 'screens' => ['Paquetes'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar más días', 'delete' => 'Anular y devolver']],
+        'messages'         => ['section' => 'loyalty', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar']],
+        'campaigns'        => ['section' => 'loyalty', 'screens' => ['Campañas'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar o cancelar']],
+        'branches'         => ['section' => 'company', 'screens' => ['Sucursales'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar']],
+        'company'          => ['section' => 'company', 'screens' => ['Empresa'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
+        'users'            => ['section' => 'company', 'screens' => ['Usuarios y roles'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar permisos', 'delete' => 'Eliminar roles']],
+        'settings'         => ['section' => 'footer', 'screens' => ['Configuración'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
+        'data'             => ['section' => 'other', 'screens' => [], 'note' => 'No es una pantalla: es el botón Exportar de las listas.', 'short' => []],
+    ];
+
+    public const ADMIN_ONLY = [
+        ['name' => 'Presupuestos', 'module' => 'quotes', 'section' => 'sales', 'before' => 'pos'],
+        ['name' => 'Inventario', 'module' => 'inventory', 'section' => 'sales', 'before' => null],
+        ['name' => 'Membresías', 'module' => 'memberships', 'section' => 'loyalty', 'before' => 'campaigns'],
+        ['name' => 'Puntos y gift cards', 'module' => 'loyalty', 'section' => 'loyalty', 'before' => 'campaigns'],
     ];
 
     private const EVERYTHING = ['view', 'create', 'edit', 'delete'];
@@ -163,15 +226,17 @@ class Access
             'description' => 'Lleva el día a día de una sede: agenda, equipo, ventas, caja y su personal.',
             'scope' => 'branch',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit', 'override'], 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
+                'agenda' => ['view', 'create', 'edit', 'override'], 'walkin' => ['view'], 'classes' => ['view'], 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
-                'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'rooms' => self::EVERYTHING,
+                'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'schedules' => ['view', 'edit'], 'rooms' => self::EVERYTHING,
                 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING,
-                'sales' => self::EVERYTHING, 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
+                'sales' => self::EVERYTHING, 'payments' => ['view'], 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
                 'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'messages' => ['view', 'create', 'edit'],
+                'campaigns' => ['view', 'create', 'edit'],
                 'branches' => ['view'],
                 'users' => ['view', 'create', 'edit'],
+                'data' => ['export'],
             ],
         ],
         'reception' => [
@@ -179,12 +244,12 @@ class Access
             'description' => 'Agenda, recibe y cobra a quien llega. No elimina ni devuelve dinero.',
             'scope' => 'branch',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
+                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => ['view'], 'holidays' => ['view'],
                 'customers' => ['view', 'create', 'edit'],
-                'services' => ['view'], 'professionals' => ['view'], 'rooms' => ['view'],
+                'services' => ['view'], 'professionals' => ['view'], 'schedules' => ['view'], 'rooms' => ['view'],
                 'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
-                'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
+                'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
                 'packages' => ['view', 'use'], 'messages' => ['view', 'create', 'edit'],
             ],
         ],
@@ -195,7 +260,7 @@ class Access
             'permissions' => [
                 'agenda' => ['view'], 'customers' => ['view'],
                 'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
-                'sales' => ['view', 'create'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
+                'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
                 'packages' => ['view'], 'messages' => ['view'],
             ],
         ],
@@ -204,7 +269,7 @@ class Access
             'description' => 'Atiende sus propias citas y llena sus fichas. Solo ve lo suyo.',
             'scope' => 'own',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
+                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => self::EVERYTHING, 'holidays' => ['view'], 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit'], 'records' => ['view', 'edit'],
                 'services' => ['view'], 'rooms' => ['view'],
@@ -482,6 +547,7 @@ class Access
             '{pros}'    => Str::lower($vocabulary['pros'] ?? 'profesionales'),
         ];
         $text = fn (string $value) => Str::ucfirst(strtr($value, $words));
+        $screenWords = ['{Clients}' => Str::ucfirst($vocabulary['clients'] ?? 'Clientes'), '{Pros}' => Str::ucfirst($vocabulary['pros'] ?? 'Profesionales')];
         $modules = [];
 
         foreach (self::CATALOG as $key => $definition) {
@@ -500,6 +566,7 @@ class Access
                     'action'   => $action,
                     'name'     => $name,
                     'label'    => self::ACTIONS[$action] ?? self::SPECIAL[$action],
+                    'short'    => isset(self::SPECIAL[$action]) ? ($name === 'data.export' ? 'Exportar datos' : self::SPECIAL[$action]) : (self::LAYOUT[$key]['short'][$action] ?? self::ACTIONS[$action]),
                     'special'  => isset(self::SPECIAL[$action]),
                     'hint'     => $text($hint),
                     'role'     => $fromRole,
@@ -508,10 +575,88 @@ class Access
                 ];
             }
 
-            $modules[] = ['key' => $key, 'label' => $text($definition['label']), 'actions' => $actions];
+            $layout = self::LAYOUT[$key] ?? ['section' => 'company', 'screens' => []];
+            $modules[] = [
+                'key'      => $key,
+                'label'    => $text($definition['label']),
+                'section'  => $layout['section'],
+                'section_label' => self::SECTIONS[$layout['section']],
+                'screens'  => array_map(fn ($screen) => strtr($screen, $screenWords), $layout['screens']),
+                'note'     => $layout['note'] ?? null,
+                'building' => (bool) ($layout['building'] ?? false),
+                'actions'  => $actions,
+            ];
         }
 
+        $order = array_flip(array_keys(self::SECTIONS));
+        $position = array_flip(array_keys(self::LAYOUT));
+        usort($modules, fn ($a, $b) => [$order[$a['section']], $position[$a['key']] ?? 99] <=> [$order[$b['section']], $position[$b['key']] ?? 99]);
+
         return $modules;
+    }
+
+    public static function adminOnly(Tenant $tenant): array
+    {
+        return collect(self::ADMIN_ONLY)
+            ->filter(fn ($item) => $tenant->hasModule($item['module']))
+            ->map(fn ($item) => ['name' => $item['name'], 'section' => $item['section'], 'section_label' => self::SECTIONS[$item['section']], 'before' => $item['before']])
+            ->values()->all();
+    }
+
+    public static function permissionText(string $name, Tenant $tenant): string
+    {
+        [$key, $action] = array_pad(explode('.', $name), 2, '');
+        $definition = self::CATALOG[$key] ?? null;
+
+        if (!$definition || !isset($definition['actions'][$action])) {
+            return $name;
+        }
+
+        $vocabulary = $tenant->vocabulary();
+        $words = ['{clients}' => Str::lower($vocabulary['clients'] ?? 'clientes'), '{pros}' => Str::lower($vocabulary['pros'] ?? 'profesionales')];
+
+        $screens = array_map(fn ($screen) => strtr($screen, ['{Clients}' => Str::ucfirst($vocabulary['clients'] ?? 'Clientes'), '{Pros}' => Str::ucfirst($vocabulary['pros'] ?? 'Profesionales')]), self::LAYOUT[$key]['screens'] ?? []);
+        $where = $screens ? implode(' y ', $screens) : Str::ucfirst(strtr($definition['label'], $words));
+
+        return Str::ucfirst(strtr($definition['actions'][$action], $words)) . " ({$where})";
+    }
+
+    public static function logChange(\Illuminate\Http\Request $request, Tenant $tenant, string $entityType, string $entityId, string $text): void
+    {
+        if (!Schema::hasTable('audit_events')) {
+            return;
+        }
+
+        \App\Models\AuditEvent::create([
+            'tenant_id'     => $tenant->id,
+            'actor_user_id' => $request->user()?->id,
+            'action'        => 'access.change',
+            'entity_type'   => $entityType,
+            'entity_id'     => $entityId,
+            'ip_address'    => $request->ip(),
+            'user_agent'    => mb_substr((string) $request->userAgent(), 0, 500),
+            'after_data'    => ['text' => $text],
+        ]);
+    }
+
+    public static function history(string $tenantId, string $entityType, string $entityId, int $limit = 50): array
+    {
+        if (!Schema::hasTable('audit_events')) {
+            return [];
+        }
+
+        return DB::table('audit_events as e')
+            ->leftJoin('users as u', 'u.id', '=', 'e.actor_user_id')
+            ->where('e.tenant_id', $tenantId)->where('e.action', 'access.change')
+            ->where('e.entity_type', $entityType)->where('e.entity_id', $entityId)
+            ->orderByDesc('e.created_at')->orderByDesc('e.id')->limit($limit)
+            ->get(['e.id', 'e.created_at', 'e.after_data', 'u.first_name', 'u.last_name'])
+            ->map(fn ($row) => [
+                'id'   => $row->id,
+                'at'   => \Illuminate\Support\Carbon::parse($row->created_at)->toIso8601String(),
+                'by'   => trim("{$row->first_name} {$row->last_name}") ?: 'El sistema',
+                'text' => (json_decode((string) $row->after_data, true) ?: [])['text'] ?? '',
+            ])->values()->all();
     }
 
     public static function denial(string $permission, ?Tenant $tenant = null): string

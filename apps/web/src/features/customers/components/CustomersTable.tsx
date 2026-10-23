@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { User, Pencil, Trash2, Users, Mars, Venus, Phone, MapPin, Eye } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import FormCustomer from './FormCustomer';
@@ -12,6 +12,20 @@ import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
 import { blockLabel, missesLabel, type OnlineBookingState } from '../onlineBooking';
+import CustomerBoard from './CustomerBoard';
+import BoardColumnsEditor from './BoardColumnsEditor';
+import { stageOf, type BoardInfo } from '../board';
+import { apiError } from '@/features/appointments/appointments';
+
+const VIEW_KEY = 'customers.view';
+
+const savedView = (): 'table' | 'board' => {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'table';
+  } catch {
+    return 'table';
+  }
+};
 
 interface Customer {
   id: string;
@@ -26,6 +40,9 @@ interface Customer {
   district?: string;
   dependents?: { id: string; name: string; species?: string | null }[];
   online_booking?: OnlineBookingState | null;
+  pipeline_stage_id?: string | null;
+  last_visit?: string | null;
+  next_visit?: string | null;
   status?: {
     id: string;
     name: string;
@@ -39,6 +56,7 @@ export default function CustomersTable() {
   const { user, can } = useAuth();
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,6 +80,39 @@ export default function CustomersTable() {
     message: '',
   });
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [view, setView] = useState<'table' | 'board'>('table');
+  const [board, setBoard] = useState<BoardInfo | null>(null);
+  const [boardError, setBoardError] = useState('');
+  const [editingColumns, setEditingColumns] = useState(false);
+
+  const loadBoard = () => {
+    api.get('/customer-board')
+      .then((res) => { setBoard(res.data); setBoardError(''); })
+      .catch(() => setBoardError('No se pudo cargar el tablero.'));
+  };
+
+  useEffect(() => {
+    setView(savedView());
+    loadBoard();
+  }, []);
+
+  const changeView = (next: 'table' | 'board') => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {}
+  };
+
+  const moveCustomer = (customerId: string, stageId: string) => {
+    const before = customers.find((c) => c.id === customerId)?.pipeline_stage_id ?? null;
+    setCustomers((current) => current.map((c) => (c.id === customerId ? { ...c, pipeline_stage_id: stageId } : c)));
+    api.put(`/customers/${customerId}/stage`, { stage_id: stageId, source: 'board' })
+      .then((res) => setBoard((current) => (current ? { ...current, stages: res.data.stages } : current)))
+      .catch((error) => {
+        setCustomers((current) => current.map((c) => (c.id === customerId ? { ...c, pipeline_stage_id: before } : c)));
+        setModalConfig({ isOpen: true, type: 'alert', title: 'No se pudo mover la tarjeta', message: apiError(error, 'Inténtalo de nuevo.') });
+      });
+  };
 
   const filterConfigs: FilterConfig[] = [
     {
@@ -83,6 +134,7 @@ export default function CustomersTable() {
         params: { search, ...currentFilters, per_page: 500 }
       });
       const responseData = res.data;
+      setTotal(Number(responseData?.total ?? (Array.isArray(responseData) ? responseData.length : 0)));
       if (Array.isArray(responseData)) {
         setCustomers(responseData);
       } else if (responseData && Array.isArray(responseData.data)) {
@@ -167,6 +219,19 @@ export default function CustomersTable() {
     }
   ];
 
+  const exportColumns: ExportColumn<Customer>[] = [
+    { header: 'Código', value: (c) => c.code },
+    { header: vocab.client, value: (c) => `${c.first_name} ${c.last_name}`.trim() },
+    { header: 'Correo', value: (c) => c.email },
+    ...(usesDependents ? [{ header: vocab.dependents, value: (c: Customer) => (c.dependents ?? []).map((d) => d.name).join(', ') }] : []),
+    { header: 'Documento', value: (c) => c.document_number },
+    { header: 'Teléfono', value: (c) => c.phone },
+    { header: 'Distrito', value: (c) => c.district },
+    { header: 'Sexo biológico', value: (c) => (c.biological_sex === 'M' ? 'Masculino' : c.biological_sex === 'F' ? 'Femenino' : c.biological_sex ? 'Otro' : '') },
+    ...(board?.ready ? [{ header: 'Etapa', value: (c: Customer) => stageOf(board, c.pipeline_stage_id)?.name }] : []),
+    { header: 'Registrado', type: 'date', value: (c) => c.created_at },
+  ];
+
   const allColumns: (Column<Customer> | null)[] = [
     {
       header: 'Código',
@@ -244,6 +309,18 @@ export default function CustomersTable() {
         </div>
       ),
     },
+    board?.ready ? {
+      header: 'Etapa',
+      cell: (pat) => {
+        const stage = stageOf(board, pat.pipeline_stage_id);
+        return stage ? (
+          <span key={`stage-${pat.id}`} data-stage-cell className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 whitespace-nowrap">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+            {stage.name}
+          </span>
+        ) : null;
+      },
+    } : null,
     {
       header: 'Sexo Biológico',
       cell: (pat) => {
@@ -317,11 +394,42 @@ export default function CustomersTable() {
             { id: 'district', label: 'Distrito', value: (c) => c.district },
           ]}
           data={safeCustomers}
+          exportTitle={vocab.clients}
+          exportScreen="customers"
+          exportColumns={exportColumns}
+          exportNotice={total > safeCustomers.length ? `Se exportan ${safeCustomers.length} de ${total} ${vocab.clients.toLowerCase()}: la lista carga hasta 500. Filtra más para exportar el resto.` : undefined}
           getItemKey={(p) => p.id}
           entityLabel={`${vocab.clients.toLowerCase()} registrados`}
           metricCards={metricCards}
+          view={view}
+          onViewChange={changeView}
+          boardView={(rows) => (
+            board?.ready ? (
+              <CustomerBoard
+                rows={rows}
+                info={board}
+                clientWord={vocab.client}
+                onMove={moveCustomer}
+                onEditColumns={board.can_edit_columns ? () => setEditingColumns(true) : undefined}
+              />
+            ) : (
+              <p role="alert" data-board-not-ready className="m-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {board?.message ?? (boardError || 'Cargando el tablero...')}
+              </p>
+            )
+          )}
         />
       </div>
+
+      {board?.ready && (
+        <BoardColumnsEditor
+          isOpen={editingColumns}
+          info={board}
+          clientsWord={vocab.clients}
+          onClose={() => setEditingColumns(false)}
+          onSaved={(info) => { setBoard(info); fetchCustomers(searchTerm, filters); }}
+        />
+      )}
 
       <FormCustomer
         isOpen={showFormModal}
@@ -331,7 +439,7 @@ export default function CustomersTable() {
           if (usesDependents) fetchCustomers(searchTerm, filters);
         }}
         initialData={editingCustomer}
-        onSubmitSuccess={() => fetchCustomers(searchTerm, filters)}
+        onSubmitSuccess={() => { fetchCustomers(searchTerm, filters); loadBoard(); }}
       />
 
       <AppModal

@@ -112,6 +112,7 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
 
       const token = response.data?.token;
       if (token) {
+        localStorage.setItem('last_activity', String(Date.now()));
         localStorage.setItem('auth_token', token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       }

@@ -30,7 +30,7 @@ class Sales
         'void' => 'Anulada', 'partially_refunded' => 'Devuelta en parte', 'refunded' => 'Devuelta',
     ];
 
-    public const NOT_READY = 'Falta actualizar la base de datos para usar ventas y caja: carga init.sql, seed.sql y seed_demo.sql.';
+    public const NOT_READY = 'Falta actualizar la base de datos para usar ventas y caja: ejecuta php artisan migrate.';
 
     public static function ready(): bool
     {

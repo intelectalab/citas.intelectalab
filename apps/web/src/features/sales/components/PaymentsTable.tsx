@@ -3,7 +3,7 @@
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { Banknote, Coins, CreditCard, Landmark, RotateCcw, Smartphone, Wallet } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { api } from '@/lib/axios';
@@ -96,6 +96,19 @@ export default function PaymentsTable() {
     },
   ];
 
+  const exportColumns: ExportColumn<PaymentRow>[] = [
+    { header: 'Fecha', type: 'datetime', value: (p) => p.at },
+    { header: 'Registrado por', value: (p) => p.by },
+    { header: 'Tipo', value: (p) => (p.kind === 'refund' ? 'Devolución' : 'Cobro') },
+    { header: 'Medio', value: (p) => p.method_label },
+    { header: 'Referencia', value: (p) => p.reference },
+    { header: 'Venta', value: (p) => p.sale_code },
+    { header: 'Cliente', value: (p) => p.customer?.name ?? 'Sin cliente' },
+    { header: 'Sede', value: (p) => p.branch_name },
+    { header: 'Caja', value: (p) => p.register },
+    { header: 'Monto', type: 'money', value: (p) => (p.kind === 'refund' ? -Math.abs(p.amount) : p.amount) },
+  ];
+
   const columns: Column<PaymentRow>[] = [
     {
       header: 'Fecha',
@@ -172,6 +185,9 @@ export default function PaymentsTable() {
         ]}
         columns={columns}
         data={rows}
+        exportTitle="Pagos"
+        exportScreen="payments"
+        exportColumns={exportColumns}
         getItemKey={(p) => p.id}
         entityLabel={rows.length === 1 ? 'movimiento' : 'movimientos'}
         metricCards={metricCards}

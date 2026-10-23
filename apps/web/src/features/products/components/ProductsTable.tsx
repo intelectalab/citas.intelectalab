@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { Archive, Edit2, Package, ShoppingBag, Trash2 } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
@@ -118,6 +118,16 @@ export default function ProductsTable() {
     },
   ];
 
+  const exportColumns: ExportColumn<Product>[] = [
+    { header: 'Producto', value: (p) => p.name },
+    { header: 'Código (SKU)', value: (p) => p.sku },
+    { header: 'Categoría', value: (p) => p.category },
+    { header: 'Precio', type: 'money', value: (p) => p.price },
+    { header: 'Para qué es', value: (p) => p.kind_label },
+    { header: 'Vendidos', type: 'number', value: (p) => p.sold },
+    { header: 'Estado', value: (p) => (p.status === 'active' ? 'Activo' : 'Apagado') },
+  ];
+
   const columns: Column<Product>[] = [
     {
       header: 'Producto',
@@ -206,6 +216,9 @@ export default function ProductsTable() {
         ]}
         columns={columns}
         data={rows}
+        exportTitle="Productos"
+        exportScreen="products"
+        exportColumns={exportColumns}
         getItemKey={(p) => p.id}
         entityLabel={rows.length === 1 ? 'producto' : 'productos'}
         metricCards={metricCards}

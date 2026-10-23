@@ -6,14 +6,17 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Ban, Check, Contact, Eye, KeyRound, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Store } from 'lucide-react';
+import { Clock, Contact, Eye, KeyRound, LayoutList, Loader2, Lock, Mail, MinusCircle, Pencil, Phone, PlusCircle, RotateCcw, ShieldCheck, Sparkles, Store } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import FormUser from './FormUser';
 import PermissionGrid from './PermissionGrid';
 import CredentialsNote from './CredentialsNote';
-import { NO_BRANCH_NOTE, countAll, countOn, countOverride, initialsOf, type BranchOption, type GridAction, type GridModule, type RoleOption, type StaffUser } from '../access';
+import AccessSummary from './AccessSummary';
+import AccessHistory from './AccessHistory';
+import { momentOf } from '@/features/sales/sales';
+import { NO_BRANCH_NOTE, countOverride, entersModule, initialsOf, type AccessChange, type AdminOnlyScreen, type BranchOption, type GridAction, type GridModule, type RoleOption, type StaffUser } from '../access';
 
 interface Detail {
   user: StaffUser;
@@ -25,6 +28,8 @@ interface Detail {
   branches: BranchOption[];
   scope?: 'tenant' | 'branch' | 'own';
   scope_label?: string;
+  admin_only?: AdminOnlyScreen[];
+  history?: AccessChange[];
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -32,8 +37,8 @@ const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340]
 const smallLabel = 'text-[11px] font-bold text-slate-400';
 
 const FOCUS_TITLES: Record<string, string> = {
-  on: 'Lo que puede hacer',
-  off: 'Lo que no puede hacer',
+  enters: 'Las pantallas a las que entra',
+  specials: 'Sus permisos especiales',
   granted: 'Lo que se le agregó a esta persona',
   revoked: 'Lo que se le quitó a esta persona',
 };
@@ -121,36 +126,32 @@ export default function UserAccessDetail() {
   }
 
   const { user, grid } = detail;
-  const total = countAll(grid);
-  const on = countOn(grid);
   const granted = countOverride(grid, true);
   const revoked = countOverride(grid, false);
   const canChange = detail.can_edit && !detail.locked;
   const inactive = user.status !== 'active';
 
-  const matches = (action: GridAction) =>
-    focus === 'on' ? action.on
-      : focus === 'off' ? !action.on
-        : focus === 'granted' ? action.override === true
-          : focus === 'revoked' ? action.override === false
+  const matches = (module: GridModule) =>
+    focus === 'enters' ? entersModule(module)
+      : focus === 'specials' ? module.actions.some((a) => a.special && a.on)
+        : focus === 'granted' ? module.actions.some((a) => a.override === true)
+          : focus === 'revoked' ? module.actions.some((a) => a.override === false)
             : true;
-  const shown = focus ? grid.filter((module) => module.actions.some(matches)) : grid;
-
-  const enters = (module: GridModule) => {
-    const view = module.actions.find((a) => a.action === 'view');
-    return view ? view.on : module.actions.some((a) => a.on);
-  };
+  const shown = focus ? grid.filter(matches) : grid;
+  const screenCount = 1 + grid.filter((m) => (m.screens ?? []).length > 0 && (detail.everything || entersModule(m))).reduce((sum, m) => sum + (m.screens ?? []).length, 0) + (detail.everything ? (detail.admin_only ?? []).length : 0);
+  const specialCount = grid.reduce((sum, m) => sum + m.actions.filter((a) => a.special && a.on).length, 0);
 
   const facts: [React.ReactNode, string, React.ReactNode][] = [
     [<Mail key="i" size={14} />, 'Correo de acceso', user.email],
     [<Phone key="i" size={14} />, 'Celular', user.phone],
     [<Store key="i" size={14} />, 'Sede', user.branch?.name],
     [<Eye key="i" size={14} />, 'Qué ve', detail.scope === 'branch' && user.branch ? `${detail.scope_label}: ${user.branch.name}` : detail.scope_label],
+    [<Clock key="i" size={14} />, 'Último ingreso', user.last_login_at ? momentOf(user.last_login_at) : 'Todavía no entra al sistema'],
   ];
 
   const stats = [
-    { id: 'on', title: 'Puede', value: detail.everything ? 'Todo' : `${on} de ${total}`, note: 'acciones encendidas', icon: <Check size={18} />, color: 'text-emerald-600' },
-    { id: 'off', title: 'No puede', value: String(total - on), note: 'acciones apagadas', icon: <Ban size={18} />, color: 'text-slate-500' },
+    { id: 'enters', title: 'Entra a', value: detail.everything ? 'Todo' : String(screenCount), note: detail.everything ? 'el menú completo' : screenCount === 1 ? 'pantalla del menú' : 'pantallas del menú', icon: <LayoutList size={18} />, color: 'text-emerald-600' },
+    { id: 'specials', title: 'Permisos especiales', value: String(specialCount), note: 'encendidos', icon: <Sparkles size={18} />, color: 'text-amber-600' },
     { id: 'granted', title: 'Agregado a esta persona', value: String(granted), note: 'su rol no lo trae', icon: <PlusCircle size={18} />, color: 'text-emerald-600' },
     { id: 'revoked', title: 'Quitado a esta persona', value: String(revoked), note: 'su rol sí lo trae', icon: <MinusCircle size={18} />, color: 'text-rose-600' },
   ];
@@ -250,27 +251,7 @@ export default function UserAccessDetail() {
             ))}
           </div>
 
-          <section className={`${card} p-6 space-y-4`} data-card="enters">
-            <div>
-              <h2 className={cardTitle}><Check className="w-4 h-4 text-emerald-600" /> A qué pantallas entra</h2>
-              <div className="flex flex-wrap gap-1.5 mt-3" data-list="enters">
-                {grid.filter(enters).length === 0 && <span className="text-sm text-slate-400">A ninguna.</span>}
-                {grid.filter(enters).map((module) => (
-                  <span key={module.key} className="px-2.5 py-1 text-xs font-semibold bg-[#84D0D9]/20 text-[#022340] rounded-lg">{module.label}</span>
-                ))}
-              </div>
-            </div>
-            {grid.some((module) => !enters(module)) && (
-              <div className="pt-4 border-t border-slate-100">
-                <h2 className={cardTitle}><Ban className="w-4 h-4 text-slate-400" /> A cuáles no</h2>
-                <div className="flex flex-wrap gap-1.5 mt-3" data-list="not-enters">
-                  {grid.filter((module) => !enters(module)).map((module) => (
-                    <span key={module.key} className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-500 rounded-lg">{module.label}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          <AccessSummary grid={grid} adminOnly={detail.admin_only} everything={detail.everything} who={user.first_name} />
         </div>
 
         <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="permissions">
@@ -305,9 +286,13 @@ export default function UserAccessDetail() {
             canEdit={canChange}
             busy={busy}
             onToggle={toggle}
-            empty={focus === 'granted' ? 'No se le agregó nada: tiene lo que trae su rol.' : focus === 'revoked' ? 'No se le quitó nada: tiene lo que trae su rol.' : 'Nada que mostrar.'}
+            empty={focus === 'granted' ? 'No se le agregó nada: tiene lo que trae su rol.' : focus === 'revoked' ? 'No se le quitó nada: tiene lo que trae su rol.' : focus === 'specials' ? 'No tiene permisos especiales encendidos.' : 'Nada que mostrar.'}
           />
         </section>
+
+        <div className="xl:col-span-3">
+          <AccessHistory history={detail.history ?? []} empty={`Todavía no hay cambios registrados para ${user.first_name}.`} />
+        </div>
       </div>
 
       <FormUser

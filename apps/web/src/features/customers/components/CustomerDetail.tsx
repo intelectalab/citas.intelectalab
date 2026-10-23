@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormCustomer from './FormCustomer';
 import CustomerPortalAccess, { type PortalAccess } from './CustomerPortalAccess';
+import CustomerStage from './CustomerStage';
 import { blockLabel, missesLabel, type OnlineBookingState } from '../onlineBooking';
 import RecordPanel from '@/features/records/components/RecordPanel';
 import CustomerPackages from '@/features/packages/components/CustomerPackages';
@@ -76,6 +77,7 @@ export default function CustomerDetail() {
   const [editing, setEditing] = useState(false);
   const [recordFor, setRecordFor] = useState<string | null>(null);
   const [focus, setFocus] = useState('');
+  const [stageKey, setStageKey] = useState(0);
 
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const usesAgenda = hasModule('agenda');
@@ -260,6 +262,8 @@ export default function CustomerDetail() {
             </div>
           )}
 
+          <CustomerStage customerId={customer.id} refreshKey={stageKey} onChanged={loadCustomer} />
+
           <CustomerPortalAccess customer={customer} clientWord={vocab.client} onChanged={loadCustomer} />
 
           {customer.online_booking && (
@@ -409,7 +413,7 @@ export default function CustomerDetail() {
       <FormCustomer
         isOpen={editing}
         initialData={customer}
-        onClose={() => { setEditing(false); loadCustomer(); }}
+        onClose={() => { setEditing(false); loadCustomer(); setStageKey((key) => key + 1); }}
         onSubmitSuccess={loadCustomer}
       />
 

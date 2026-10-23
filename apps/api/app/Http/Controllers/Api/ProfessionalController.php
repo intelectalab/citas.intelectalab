@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Professional;
 use App\Models\Status;
 use App\Support\Access;
+use App\Support\Search;
 
 class ProfessionalController extends Controller
 {
@@ -35,14 +36,14 @@ class ProfessionalController extends Controller
                     if (empty($term)) continue;
                     
                     $q->where(function($subQ) use ($term) {
-                        $subQ->where('display_name', 'like', "%{$term}%")
-                             ->orWhere('license_number', 'like', "%{$term}%")
-                             ->orWhere('document_number', 'like', "%{$term}%")
-                             ->orWhereHas('user', function($userQuery) use ($term) {
-                                 $userQuery->where('first_name', 'like', "%{$term}%")
-                                           ->orWhere('last_name', 'like', "%{$term}%")
-                                           ->orWhere('email', 'like', "%{$term}%");
-                             });
+                        Search::contains($subQ, 'display_name', $term);
+                        Search::orContains($subQ, "coalesce(license_number, '')", $term);
+                        Search::orContains($subQ, "coalesce(document_number, '')", $term);
+                        $subQ->orWhereHas('user', function($userQuery) use ($term) {
+                            Search::contains($userQuery, "coalesce(first_name, '')", $term);
+                            Search::orContains($userQuery, "coalesce(last_name, '')", $term);
+                            Search::orContains($userQuery, "coalesce(email, '')", $term);
+                        });
                     });
                 }
             });

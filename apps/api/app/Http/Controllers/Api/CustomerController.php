@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerDependent;
+use App\Support\CustomerStages;
 use App\Support\Search;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -74,11 +75,43 @@ class CustomerController extends Controller
         $customers = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         if ($tenant = $request->user()->tenant) {
-            $states = \App\Support\OnlineBooking::states($tenant, $customers->getCollection()->pluck('id')->all());
-            $customers->getCollection()->each(fn (Customer $c) => $c->setAttribute('online_booking', $states[$c->id] ?? null));
+            $ids = $customers->getCollection()->pluck('id')->all();
+            $states = \App\Support\OnlineBooking::states($tenant, $ids);
+            $visits = $this->visits($tenant->id, $ids);
+            $local = fn (?string $value) => $value ? \Illuminate\Support\Carbon::parse($value)->setTimezone($tenant->zone())->format('Y-m-d\TH:i:s') : null;
+            $customers->getCollection()->each(function (Customer $c) use ($states, $visits, $local) {
+                $c->setAttribute('online_booking', $states[$c->id] ?? null);
+                $c->setAttribute('last_visit', $local($visits[$c->id]->last_visit ?? null));
+                $c->setAttribute('next_visit', $local($visits[$c->id]->next_visit ?? null));
+            });
         }
 
         return response()->json($customers);
+    }
+
+    private function visits(string $tenantId, array $ids): array
+    {
+        if (!$ids) {
+            return [];
+        }
+
+        return DB::table('appointments')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('customer_id', $ids)
+            ->groupBy('customer_id')
+            ->selectRaw("customer_id, max(starts_at) FILTER (WHERE status = 'completed') AS last_visit, min(starts_at) FILTER (WHERE status IN ('pending', 'confirmed') AND starts_at > now()) AS next_visit")
+            ->get()
+            ->keyBy('customer_id')
+            ->all();
+    }
+
+    private function moveStage(Request $request, Customer $customer, array $validated): void
+    {
+        if (!array_key_exists('pipeline_stage_id', $validated) || !CustomerStages::ready() || !$request->user()->tenant) {
+            return;
+        }
+
+        CustomerStages::move($request->user()->tenant, $customer->id, $validated['pipeline_stage_id'] ?: null, $request->user(), 'form');
     }
 
     public function store(Request $request)
@@ -107,7 +140,8 @@ class CustomerController extends Controller
         ] + CustomerDependent::rules('dependents.*.'));
 
         $dependents = $validated['dependents'] ?? [];
-        unset($validated['dependents']);
+        $stage = array_intersect_key($validated, ['pipeline_stage_id' => true]);
+        unset($validated['dependents'], $validated['pipeline_stage_id']);
         $validated = $this->withoutClinicalFields($request, $validated);
 
         try {
@@ -122,6 +156,7 @@ class CustomerController extends Controller
             $customer = Customer::create($validated);
 
             $customer->syncPortalPassword();
+            $this->moveStage($request, $customer, $stage);
 
             if ($this->usesDependents($request)) {
                 $kind = $request->user()->tenant->dependents()['kind'];
@@ -164,7 +199,7 @@ class CustomerController extends Controller
     public function forgiveBooking(Request $request, string $customer)
     {
         abort_unless($request->user()->allows('customers.forgive'), 403, 'Tu cuenta no tiene permiso para perdonar inasistencias.');
-        abort_unless(\App\Support\OnlineBooking::canForgive(), 503, 'Falta actualizar la base de datos: carga init.sql, seed.sql y seed_demo.sql.');
+        abort_unless(\App\Support\OnlineBooking::canForgive(), 503, 'Falta actualizar la base de datos: ejecuta php artisan migrate.');
 
         $customer = $this->findForTenant($request, $customer);
         \Illuminate\Support\Facades\DB::table('customers')->where('id', $customer->id)->update(['booking_strikes_reset_at' => now()]);
@@ -198,9 +233,14 @@ class CustomerController extends Controller
             'medical_notes' => 'nullable|string',
         ]);
 
+        $stage = array_intersect_key($validated, ['pipeline_stage_id' => true]);
+        unset($validated['pipeline_stage_id']);
+
         $customer->update($this->withoutClinicalFields($request, $validated));
 
         $customer->syncPortalPassword($customer->wasChanged('document_number'));
+        $this->moveStage($request, $customer, $stage);
+        $customer->refresh();
 
         return response()->json([
             'message' => 'Cliente actualizado con éxito',

@@ -82,7 +82,7 @@ class LoginController extends Controller
         $account = $matches->first();
         $token = $account->createToken('auth_token')->plainTextToken;
 
-        if ($account instanceof Customer) {
+        if ($account instanceof Customer || \Illuminate\Support\Facades\Schema::hasColumn('users', 'last_login_at')) {
             $account->forceFill(['last_login_at' => now()])->saveQuietly();
         }
 

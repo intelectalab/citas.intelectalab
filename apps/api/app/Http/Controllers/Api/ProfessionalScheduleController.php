@@ -64,7 +64,7 @@ class ProfessionalScheduleController extends Controller
         $activeBranchIds = $branches->pluck('id');
 
         return response()->json([
-            'can_edit' => $user->allows('professionals.edit'),
+            'can_edit' => $user->allows('schedules.edit'),
             'branches' => $branches,
             'without_schedule' => $professionals
                 ->reject(fn (Professional $p) => $schedules->whereIn('branch_id', $activeBranchIds)->contains('professional_id', $p->id))

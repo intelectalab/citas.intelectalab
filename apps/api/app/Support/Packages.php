@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class Packages
 {
-    public const NOT_READY = 'Falta actualizar la base de datos para usar los paquetes: carga init.sql, seed.sql y seed_demo.sql.';
+    public const NOT_READY = 'Falta actualizar la base de datos para usar los paquetes: ejecuta php artisan migrate.';
 
     public const STATUS_LABELS = [
         'active'    => 'Vigente',

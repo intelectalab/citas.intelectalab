@@ -1,5 +1,6 @@
 'use client';
 
+import { momentOf } from '@/features/sales/sales';
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
@@ -225,9 +226,12 @@ export default function UsersRolesBoard() {
     {
       header: 'Estado',
       cell: (user) => (
-        <Badge key={`status-${user.id}`} data-status={user.status} tone={user.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}>
-          {user.status === 'active' ? 'Activo' : 'Desactivado'}
-        </Badge>
+        <div key={`status-${user.id}`}>
+          <Badge data-status={user.status} tone={user.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}>
+            {user.status === 'active' ? 'Activo' : 'Desactivado'}
+          </Badge>
+          <span className="block mt-1 text-[11px] text-slate-400" data-last-login>{user.last_login_at ? `Entró ${momentOf(user.last_login_at)}` : 'Todavía no entra'}</span>
+        </div>
       ),
     },
     {
@@ -355,12 +359,15 @@ export default function UsersRolesBoard() {
           filterConfigs={userFilters}
           filterValues={filters}
           onFilterChange={setFilter}
+          extraFilterCount={(filters.changed ? 1 : 0) + (filters.nobranch ? 1 : 0)}
+          onClearFilters={() => setFilters((current) => ({ ...current, changed: '', nobranch: '' }))}
           dateFilters={[{ id: 'created_at', label: 'Fecha de registro', value: (u) => u.created_at }]}
           sortOptions={[
             { id: 'name', label: 'Nombre', value: (u) => u.name },
             { id: 'role', label: 'Rol', value: (u) => u.role?.name },
             { id: 'branch', label: 'Sede', value: (u) => u.branch?.name },
             { id: 'changed', label: 'Permisos cambiados', type: 'number', value: (u) => changedOf(u) },
+            { id: 'last_login', label: 'Último ingreso', type: 'date', value: (u) => u.last_login_at },
             { id: 'created_at', label: 'Fecha de registro', type: 'date', value: (u) => u.created_at },
           ]}
           columns={userColumns}

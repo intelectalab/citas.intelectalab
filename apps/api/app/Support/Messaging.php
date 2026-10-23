@@ -12,11 +12,12 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Messaging
 {
-    public const NOT_READY = 'Falta actualizar la base de datos para enviar mensajes: carga init.sql, seed.sql y seed_demo.sql.';
+    public const NOT_READY = 'Falta actualizar la base de datos para enviar mensajes: ejecuta php artisan migrate.';
 
     public const NOT_CONFIGURED = 'No enviado: tu empresa aún no configura su correo (Configuración → Correo).';
 
@@ -154,7 +155,11 @@ class Messaging
 
     public static function kindLabel(string $kind): string
     {
-        return $kind === 'manual' ? self::MANUAL_LABEL : (self::KINDS[$kind]['label'] ?? $kind);
+        return match ($kind) {
+            'manual'   => self::MANUAL_LABEL,
+            'campaign' => 'Campaña',
+            default    => self::KINDS[$kind]['label'] ?? $kind,
+        };
     }
 
     public static function integration(string $tenantId): ?object
@@ -262,7 +267,7 @@ class Messaging
                 'kind'        => $kind,
                 'customer'    => $customer,
                 'subject'     => self::render($settings['subject'], $vars),
-                'body'        => self::render($settings['body'], $vars),
+                'body'        => RichText::fill($settings['body'], $vars),
                 'scheduled_at' => $extra['scheduled_at'] ?? null,
                 'branch_id'   => $extra['branch_id'] ?? null,
                 'entity_type' => $extra['entity_type'] ?? null,
@@ -433,27 +438,23 @@ class Messaging
             'timeout'   => 20,
         ]);
 
-        $html = self::html($body, $config['from_name'] ?? '');
+        $tenant = Tenant::with(['settings', 'businessType'])->find($tenantId);
+        $logo = EmailDesign::logoPath($tenantId);
+        $html = EmailDesign::render($tenant, $body, null, $logo ? EmailDesign::LOGO_PLACEHOLDER : '');
 
-        $mailer->html($html, function ($mail) use ($config, $to, $toName, $subject) {
+        $mailer->html($html, function ($mail) use ($config, $to, $toName, $subject, $logo, $html, $body) {
             $mail->to($to, $toName)->from($config['from_address'], $config['from_name'] ?? null)->subject($subject);
+
+            if ($logo) {
+                $mail->html(str_replace(EmailDesign::LOGO_PLACEHOLDER, $mail->embed(Storage::disk('local')->path($logo)), $html));
+            }
+
+            $mail->text(RichText::toText($body));
 
             if (!empty($config['reply_to'])) {
                 $mail->replyTo($config['reply_to'], $config['from_name'] ?? null);
             }
         });
-    }
-
-    public static function html(string $body, string $company): string
-    {
-        $escaped = nl2br(e($body));
-        $linked = preg_replace('#(https?://[^\s<]+)#', '<a href="$1" style="color:#3F768C">$1</a>', $escaped);
-
-        return '<!doctype html><html><body style="margin:0;padding:24px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
-            . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px;border:1px solid #e2e8f0">'
-            . ($company !== '' ? '<p style="margin:0 0 16px;font-weight:bold;color:#022340;font-size:16px">' . e($company) . '</p>' : '')
-            . '<div style="font-size:14px;line-height:1.6">' . $linked . '</div>'
-            . '</div></body></html>';
     }
 
     public static function present(object $message, ?object $customer = null, ?string $by = null): array

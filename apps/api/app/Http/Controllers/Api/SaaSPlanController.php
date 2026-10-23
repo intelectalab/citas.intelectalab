@@ -19,9 +19,9 @@ class SaaSPlanController extends Controller
     if ($request->filled('search')) {
         $search = $request->input('search');
         $query->where(function($q) use ($search) {
-            $q->where('name', 'like', "%{$search}%")
-              ->orWhere('slug', 'like', "%{$search}%")
-              ->orWhere('code_internal', 'like', "%{$search}%");
+            \App\Support\Search::contains($q, 'name', (string) $search);
+            \App\Support\Search::orContains($q, 'slug', (string) $search);
+            \App\Support\Search::orContains($q, "coalesce(code_internal, '')", (string) $search);
         });
     }
 

@@ -16,12 +16,11 @@ class TenantContactController extends Controller
             $query->where('tenant_id', $request->query('tenant_id'));
         }
 
-        if ($request->has('search')) {
-            $search = $request->query('search');
+        if ($request->filled('search')) {
+            $search = (string) $request->query('search');
             $query->where(function($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                \App\Support\Search::contains($q, "coalesce(first_name, '') || ' ' || coalesce(last_name, '')", $search);
+                \App\Support\Search::orContains($q, "coalesce(email, '')", $search);
             });
         }
 

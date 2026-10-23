@@ -4,7 +4,7 @@ import BackLink from '@/app/components/common/BackLink';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Ban, Check, Loader2, Lock, Pencil, RotateCcw, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { LayoutList, Loader2, Lock, Pencil, RotateCcw, ShieldCheck, Sparkles, Trash2, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { PagedList } from '@/app/components/common/Pager';
@@ -13,7 +13,9 @@ import Select from '@/app/components/common/Select';
 import { apiError } from '@/features/appointments/appointments';
 import FormRole from './FormRole';
 import PermissionGrid from './PermissionGrid';
-import { SCOPE_OPTIONS, countAll, countOn, initialsOf, type Scope, type GridAction, type GridModule, type RoleRow } from '../access';
+import AccessSummary from './AccessSummary';
+import AccessHistory from './AccessHistory';
+import { SCOPE_OPTIONS, entersModule, initialsOf, type AccessChange, type AdminOnlyScreen, type Scope, type GridAction, type GridModule, type RoleRow } from '../access';
 
 interface RolePerson {
   id: string;
@@ -31,6 +33,8 @@ interface Detail {
   grid: GridModule[];
   users: RolePerson[];
   scope_ready?: boolean;
+  admin_only?: AdminOnlyScreen[];
+  history?: AccessChange[];
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -148,18 +152,13 @@ export default function RoleDetail() {
   }
 
   const { role, grid, users } = detail;
-  const total = countAll(grid);
-  const on = countOn(grid);
-  const shown = focus ? grid.filter((module) => module.actions.some((a) => (focus === 'on' ? a.on : !a.on))) : grid;
-
-  const enters = (module: GridModule) => {
-    const view = module.actions.find((a) => a.action === 'view');
-    return view ? view.on : module.actions.some((a) => a.on);
-  };
+  const shown = focus ? grid.filter((module: GridModule) => (focus === 'enters' ? entersModule(module) : module.actions.some((a) => a.special && a.on))) : grid;
+  const screenCount = 1 + grid.filter((m) => (m.screens ?? []).length > 0 && (role.locked || entersModule(m))).reduce((sum, m) => sum + (m.screens ?? []).length, 0) + (role.locked ? (detail.admin_only ?? []).length : 0);
+  const specialCount = grid.reduce((sum, m) => sum + m.actions.filter((a) => a.special && a.on).length, 0);
 
   const stats = [
-    { id: 'on', title: 'Permite', value: role.locked ? 'Todo' : `${on} de ${total}`, note: 'acciones encendidas', icon: <Check size={18} />, color: 'text-emerald-600' },
-    { id: 'off', title: 'No permite', value: String(total - on), note: 'acciones apagadas', icon: <Ban size={18} />, color: 'text-slate-500' },
+    { id: 'enters', title: 'Entra a', value: role.locked ? 'Todo' : String(screenCount), note: role.locked ? 'el menú completo' : screenCount === 1 ? 'pantalla del menú' : 'pantallas del menú', icon: <LayoutList size={18} />, color: 'text-emerald-600' },
+    { id: 'specials', title: 'Permisos especiales', value: String(specialCount), note: 'encendidos', icon: <Sparkles size={18} />, color: 'text-amber-600' },
     { id: 'people', title: 'Personas con este rol', value: String(users.length), note: users.length === 1 ? 'persona' : 'personas', icon: <Users size={18} />, color: 'text-[#3F768C]' },
   ];
 
@@ -322,33 +321,13 @@ export default function RoleDetail() {
             ))}
           </div>
 
-          <section className={`${card} p-6 space-y-4`} data-card="enters">
-            <div>
-              <h2 className={cardTitle}><Check className="w-4 h-4 text-emerald-600" /> A qué pantallas entra</h2>
-              <div className="flex flex-wrap gap-1.5 mt-3" data-list="enters">
-                {grid.filter(enters).length === 0 && <span className="text-sm text-slate-400">A ninguna todavía: enciende abajo lo que deba poder hacer.</span>}
-                {grid.filter(enters).map((module) => (
-                  <span key={module.key} className="px-2.5 py-1 text-xs font-semibold bg-[#84D0D9]/20 text-[#022340] rounded-lg">{module.label}</span>
-                ))}
-              </div>
-            </div>
-            {grid.some((module) => !enters(module)) && (
-              <div className="pt-4 border-t border-slate-100">
-                <h2 className={cardTitle}><Ban className="w-4 h-4 text-slate-400" /> A cuáles no</h2>
-                <div className="flex flex-wrap gap-1.5 mt-3" data-list="not-enters">
-                  {grid.filter((module) => !enters(module)).map((module) => (
-                    <span key={module.key} className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-500 rounded-lg">{module.label}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          <AccessSummary grid={grid} adminOnly={detail.admin_only} everything={role.locked} who="quien tenga este rol" />
         </div>
 
         <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="permissions">
           <div className="px-6 pt-5 pb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-[#3F768C]" /> {focus === 'on' ? 'Lo que permite' : focus === 'off' ? 'Lo que no permite' : 'Qué permite, pantalla por pantalla'}</h2>
+              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-[#3F768C]" /> {focus === 'enters' ? 'Las pantallas a las que entra' : focus === 'specials' ? 'Sus permisos especiales' : 'Qué permite, pantalla por pantalla'}</h2>
               <p className="text-xs text-slate-500 font-medium mt-1 max-w-3xl">
                 {role.locked
                   ? 'El Administrador puede todo y no se le quitan permisos: así la empresa nunca se queda sin alguien que pueda arreglar las cosas.'
@@ -361,12 +340,16 @@ export default function RoleDetail() {
                   Ver todas las pantallas
                 </button>
               )}
-              {role.locked && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-600 rounded-lg"><Lock size={12} /> No se recorta</span>}
+              {role.locked && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-600 rounded-lg"><Lock size={12} /> Puede todo: no se le quitan permisos</span>}
             </div>
           </div>
 
-          <PermissionGrid key={focus} grid={shown} mode="role" canEdit={detail.can_edit} busy={busy} onToggle={toggle} />
+          <PermissionGrid key={focus} grid={shown} mode="role" canEdit={detail.can_edit} busy={busy} onToggle={toggle} empty={focus === 'specials' ? 'Este rol no tiene permisos especiales encendidos.' : 'Nada que mostrar.'} />
         </section>
+
+        <div className="xl:col-span-3">
+          <AccessHistory history={detail.history ?? []} empty="Todavía no hay cambios registrados para este rol." note="Quién cambió los permisos de este rol o lo que ve, y cuándo." />
+        </div>
       </div>
 
       <FormRole

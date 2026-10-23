@@ -25,13 +25,15 @@ class TenantController extends Controller
         if ($request->has('search') && !empty($request->input('search'))) {
             $search = $request->input('search');
             $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('slug', 'like', "%{$search}%");
+                \App\Support\Search::contains($q, 'name', (string) $search);
+                \App\Support\Search::orContains($q, 'slug', (string) $search);
             });
         }
 
         if ($request->has('status') && !empty($request->input('status'))) {
-            $query->where('status', $request->input('status'));
+            $request->input('status') === 'not_active'
+                ? $query->where('status', '<>', 'active')
+                : $query->where('status', $request->input('status'));
         }
 
         $tenants = $query->latest()->get();

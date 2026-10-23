@@ -161,7 +161,7 @@ export default function RecordsTable() {
           primaryActionLabel="Plantillas de ficha"
           onPrimaryAction={() => router.push('/records/templates')}
           tabs={PERIODS.map((p) => ({ id: p.id, label: p.label, count: p.id === period ? records.length : undefined }))}
-          activeTab={period}
+          activeTab={dateRange ? '' : period}
           onTabChange={(id) => { setPeriod(id); setStatus(''); }}
           searchTerm={searchTerm}
           onSearchChange={handleSearchChange}
@@ -170,7 +170,7 @@ export default function RecordsTable() {
           onFilterChange={(_, value) => setStatus(value)}
           columns={columns}
           dateFilters={[
-            { id: 'created_at', label: 'Fecha de la ficha', value: (r) => r.created_at, onRange: setDateRange },
+            { id: 'created_at', label: 'Fecha de la ficha', value: (r) => r.created_at, onRange: setDateRange, clearOnTab: true },
           ]}
           sortOptions={[
             { id: 'created_at', label: 'Fecha', type: 'date', value: (r) => r.created_at },

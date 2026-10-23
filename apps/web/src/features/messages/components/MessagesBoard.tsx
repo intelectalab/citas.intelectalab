@@ -1,5 +1,6 @@
 'use client';
 
+import RichTextView from '@/app/components/common/RichTextView';
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
@@ -66,7 +67,7 @@ export function MessageDetail({ message, can, onClose, onChanged, onEdit }: {
 
           <div className="rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-[#022340]">{message.subject}</div>
-            <p className="px-5 py-4 text-sm text-slate-700 whitespace-pre-line leading-relaxed" data-message-body>{message.body}</p>
+            <RichTextView body={message.body} className="px-5 py-4 text-sm text-slate-700" data-message-body />
           </div>
 
           <ErrorAlert message={error} />
