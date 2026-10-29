@@ -50,7 +50,7 @@ export default function PlatformCurrencies() {
     <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden" data-card="platform-currencies">
       <div className="p-6 pb-3 space-y-1">
         <SectionTitle>
-          <span className="text-[#3F768C]"><Coins size={16} /></span> Monedas
+          <span className="text-brand-accent"><Coins size={16} /></span> Monedas
         </SectionTitle>
         <p className="text-xs text-slate-500 font-medium">
           Las monedas que las empresas pueden elegir para cobrar y que puedes usar en el precio de los planes. El cambio rige al instante.

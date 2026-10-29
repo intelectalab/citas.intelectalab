@@ -11,6 +11,7 @@ import Select from '@/app/components/common/Select';
 import { cleanAmount, money } from '@/features/sales/sales';
 import { apiError } from '@/features/appointments/appointments';
 import { currencySymbol } from '@/lib/currency';
+import ServiceSuppliesFields, { toLines, validLines, type ServiceSuppliesData, type SupplyLine } from '@/features/inventory/components/ServiceSuppliesFields';
 
 interface ServiceCategory {
   label: string;
@@ -82,18 +83,37 @@ export default function FormService({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
 
-  const { hasModule } = useAuth();
+  const { hasModule, can } = useAuth();
   const canUseClasses = hasModule('classes');
   const [otherServices, setOtherServices] = useState<{ id: string; name: string }[]>([]);
 
   const [form, setForm] = useState(EMPTY_FORM);
+
+  const usesSupplies = hasModule('inventory') && (can('inventory.view') || can('services.view'));
+  const [supplies, setSupplies] = useState<ServiceSuppliesData | null>(null);
+  const [suppliesError, setSuppliesError] = useState('');
+  const [supplyLines, setSupplyLines] = useState<SupplyLine[]>([]);
+  const [suppliesTouched, setSuppliesTouched] = useState(false);
 
   const sections = [
     { id: 1, title: '1. Información del Servicio' },
     { id: 2, title: '2. Tiempos y Tiempos de Espera (Buffers)' },
     { id: 3, title: '3. Precios y Estado' },
     { id: 4, title: '4. Reserva y Seguimiento' },
+    ...(usesSupplies && form.kind !== 'group' ? [{ id: 5, title: '5. Insumos que consume' }] : []),
   ];
+
+  useEffect(() => {
+    if (!isOpen || !usesSupplies) return;
+
+    setSupplies(null);
+    setSuppliesError('');
+    setSupplyLines([]);
+    setSuppliesTouched(false);
+    api.get(`/inventory/services/${initialData?.id ?? 'new'}/supplies`)
+      .then((res) => { setSupplies(res.data); setSupplyLines(toLines(res.data)); })
+      .catch((err) => setSuppliesError(apiError(err, 'No se pudieron cargar los insumos de este servicio.')));
+  }, [isOpen, usesSupplies, initialData?.id]);
 
   useEffect(() => {
     setCategories(initialCategories);
@@ -195,7 +215,21 @@ export default function FormService({
       const res = initialData?.id
         ? await api.put(`/services/${initialData.id}`, payload)
         : await api.post('/services', payload);
-      onSubmitSuccess?.(res?.data?.data ?? res?.data);
+      const saved = res?.data?.data ?? res?.data;
+      const serviceId = initialData?.id ?? saved?.id;
+
+      if (suppliesTouched && supplies?.can_edit && serviceId && form.kind !== 'group') {
+        try {
+          await api.put(`/inventory/services/${serviceId}/supplies`, { supplies: validLines(supplyLines) });
+        } catch (error) {
+          onSubmitSuccess?.(saved);
+          setActiveAccordion(5);
+          setSaveError(apiError(error, 'El servicio se guardó, pero no sus insumos.'));
+          return;
+        }
+      }
+
+      onSubmitSuccess?.(saved);
       onClose();
     } catch (error) {
       setSaveError(apiError(error, 'No se pudo guardar el servicio.'));
@@ -248,7 +282,7 @@ export default function FormService({
                               required
                               value={form.name}
                               onChange={(e) => setForm({ ...form, name: e.target.value })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               placeholder="Ej. Corte y Peinado"
                             />
                           </div>
@@ -260,7 +294,7 @@ export default function FormService({
                               maxLength={30}
                               value={form.code}
                               onChange={(e) => setForm({ ...form, code: e.target.value })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 font-mono focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 font-mono focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               placeholder="Ej. COR-01"
                             />
                           </div>
@@ -297,7 +331,7 @@ export default function FormService({
                               required
                               value={form.duration_minutes}
                               onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-3">
@@ -308,7 +342,7 @@ export default function FormService({
                                 min="0"
                                 value={form.buffer_before_minutes}
                                 onChange={(e) => setForm({ ...form, buffer_before_minutes: Number(e.target.value) })}
-                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               />
                             </div>
                             <div>
@@ -318,7 +352,7 @@ export default function FormService({
                                 min="0"
                                 value={form.buffer_after_minutes}
                                 onChange={(e) => setForm({ ...form, buffer_after_minutes: Number(e.target.value) })}
-                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               />
                             </div>
                           </div>
@@ -336,7 +370,7 @@ export default function FormService({
                               required
                               value={form.price}
                               onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             />
                           </div>
 
@@ -366,7 +400,7 @@ export default function FormService({
                                   type="checkbox"
                                   checked={form[option.key]}
                                   onChange={(e) => setForm({ ...form, [option.key]: e.target.checked })}
-                                  className="mt-0.5 rounded border-slate-300 text-[#030336] focus:ring-[#030336]"
+                                  className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand"
                                 />
                                 <span>
                                   <span className="block text-sm font-medium text-slate-800">{option.label}</span>
@@ -396,7 +430,7 @@ export default function FormService({
                                       data-deposit-type={key}
                                       onClick={() => setForm({ ...form, deposit_type: key, deposit_value: key === 'percent' ? '30' : String(Math.min(50, price) || '') })} selected={form.deposit_type === key} className="text-left rounded-xl border px-3.5 py-2.5 transition-colors"
                                     >
-                                      <span className="block text-sm font-bold text-[#022340]">{title}</span>
+                                      <span className="block text-sm font-bold text-brand-ink">{title}</span>
                                       <span className="block text-xs text-slate-500">{hint}</span>
                                     </OptionCard>
                                   ))}
@@ -408,7 +442,7 @@ export default function FormService({
                                     aria-label="Valor del adelanto"
                                     value={form.deposit_value}
                                     onChange={(e) => setForm({ ...form, deposit_value: cleanAmount(e.target.value) })}
-                                    className="w-28 text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                    className="w-28 text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                                   />
                                   <span className="text-sm text-slate-600">{form.deposit_type === 'percent' ? '% del precio' : currencySymbol()}</span>
                                 </div>
@@ -441,7 +475,7 @@ export default function FormService({
                                     min="1"
                                     value={form.capacity}
                                     onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })}
-                                    className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                    className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                                   />
                                 </div>
                               )}
@@ -462,7 +496,7 @@ export default function FormService({
                                   required={form.recall_days !== ''}
                                   value={form.recall_label}
                                   onChange={(e) => setForm({ ...form, recall_label: e.target.value })}
-                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                                   placeholder="Ej. Profilaxis semestral"
                                 />
                               </div>
@@ -474,7 +508,7 @@ export default function FormService({
                                   required={form.recall_label.trim() !== ''}
                                   value={form.recall_days}
                                   onChange={(e) => setForm({ ...form, recall_days: e.target.value === '' ? '' : Number(e.target.value) })}
-                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                                   placeholder="180"
                                 />
                               </div>
@@ -491,6 +525,16 @@ export default function FormService({
                             </div>
                           </div>
                         </div>
+                      )}
+
+                      {sec.id === 5 && (
+                        <ServiceSuppliesFields
+                          data={supplies}
+                          error={suppliesError}
+                          lines={supplyLines}
+                          onChange={(lines) => { setSupplyLines(lines); setSuppliesTouched(true); }}
+                          servicePrice={Number(form.price || 0)}
+                        />
                       )}
                     </div>
                   </div>
@@ -511,7 +555,7 @@ export default function FormService({
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+              className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-brand hover:bg-brand/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
             >
               {loading ? 'Guardando...' : isEditing ? 'Actualizar servicio' : 'Crear servicio'}
             </button>

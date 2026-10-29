@@ -84,7 +84,7 @@ const NEW_SERVICE: TemplateService = {
 };
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white';
+  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white';
 const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1';
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
 const addLink = 'inline-flex items-center gap-1 text-xs font-bold text-sky-600 hover:text-sky-700 transition-colors';
@@ -209,7 +209,7 @@ function Toggle({ icon, label, checked, onChange }: { icon: React.ReactNode; lab
       onClick={() => onChange(!checked)}
       aria-pressed={checked}
       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-        checked ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+        checked ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
       }`}
     >
       {icon} {label}
@@ -260,7 +260,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
         <div className="flex items-center justify-between">
           <div>
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-800">
-              <FolderOpen size={14} className="text-[#3F768C]" /> Categorías y servicios
+              <FolderOpen size={14} className="text-brand-accent" /> Categorías y servicios
             </span>
             <span className="block text-xs text-slate-400">
               {value.categories.length === 0
@@ -289,7 +289,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                   maxLength={120}
                   value={category.name}
                   onChange={(e) => updateCategory(categoryIndex, { name: e.target.value })}
-                  className="flex-1 min-w-0 text-sm font-semibold text-slate-800 bg-transparent border border-transparent hover:border-slate-200 focus:border-[#030336] focus:bg-white rounded-lg px-2 py-1 outline-none"
+                  className="flex-1 min-w-0 text-sm font-semibold text-slate-800 bg-transparent border border-transparent hover:border-slate-200 focus:border-brand focus:bg-white rounded-lg px-2 py-1 outline-none"
                   placeholder="Nombre de la categoría"
                 />
                 <span className="text-[11px] font-medium text-slate-400 shrink-0">
@@ -321,7 +321,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                     const isGroup = service.kind === 'group';
 
                     return (
-                      <div key={serviceIndex} className={`border rounded-lg ${isServiceOpen ? 'border-[#3F768C]/50 shadow-sm' : 'border-slate-200'}`}>
+                      <div key={serviceIndex} className={`border rounded-lg ${isServiceOpen ? 'border-brand-accent/50 shadow-sm' : 'border-slate-200'}`}>
                         <button
                           type="button"
                           onClick={() => setOpenService(isServiceOpen ? null : serviceId)}
@@ -396,7 +396,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                                   type="checkbox"
                                   checked={Boolean(service.recall)}
                                   onChange={(e) => updateService(categoryIndex, serviceIndex, { recall: e.target.checked ? { label: '', days: 30 } : null })}
-                                  className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                                  className="rounded border-slate-300 text-brand-ink focus:ring-brand"
                                 />
                                 Sugerir un control de seguimiento al completar la atención
                               </label>
@@ -475,7 +475,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
         <div className="flex items-start justify-between gap-3">
           <div>
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-800">
-              <ClipboardList size={14} className="text-[#3F768C]" /> Ficha de atención
+              <ClipboardList size={14} className="text-brand-accent" /> Ficha de atención
             </span>
             <span className="block text-xs text-slate-400">
               Lo que el profesional llena al atender. Se usa en los servicios marcados "Con ficha".
@@ -489,7 +489,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                 onChange({ ...value, record_template: e.target.checked ? { name: '', consent_text: '', require_consent: false, fields: [] } : null });
                 setOpenField(null);
               }}
-              className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+              className="rounded border-slate-300 text-brand-ink focus:ring-brand"
             />
             Este rubro usa ficha
           </label>
@@ -510,7 +510,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                 const hasOptions = ['select', 'multiselect'].includes(field.type);
 
                 return (
-                  <div key={index} className={`border rounded-lg bg-white ${isFieldOpen ? 'border-[#3F768C]/50 shadow-sm' : 'border-slate-200'}`}>
+                  <div key={index} className={`border rounded-lg bg-white ${isFieldOpen ? 'border-brand-accent/50 shadow-sm' : 'border-slate-200'}`}>
                     <div className="flex items-center gap-1 pl-3 pr-1.5 py-1.5">
                       <button type="button" onClick={() => setOpenField(isFieldOpen ? null : index)} className="flex-1 min-w-0 flex items-center gap-2 text-left">
                         <span className="text-[11px] font-mono text-slate-300 shrink-0">{index + 1}</span>
@@ -588,7 +588,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                         )}
 
                         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                          <input type="checkbox" checked={Boolean(field.required)} onChange={(e) => updateField(index, { required: e.target.checked })} className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]" />
+                          <input type="checkbox" checked={Boolean(field.required)} onChange={(e) => updateField(index, { required: e.target.checked })} className="rounded border-slate-300 text-brand-ink focus:ring-brand" />
                           Obligatorio
                         </label>
                       </div>
@@ -619,7 +619,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                 placeholder="Texto que el cliente acepta antes de la atención. Déjalo vacío si no aplica."
               />
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={Boolean(record.require_consent)} onChange={(e) => setRecord({ require_consent: e.target.checked })} className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]" />
+                <input type="checkbox" checked={Boolean(record.require_consent)} onChange={(e) => setRecord({ require_consent: e.target.checked })} className="rounded border-slate-300 text-brand-ink focus:ring-brand" />
                 El consentimiento es obligatorio para atender
               </label>
             </div>

@@ -99,7 +99,7 @@ export default function CustomerDetail() {
   const loadCustomer = useCallback(() => {
     api.get(`/customers/${params.id}`)
       .then((res) => { setCustomer(res.data.customer); setCanForgive(Boolean(res.data.can_forgive_booking)); setConsents(res.data.consents ?? null); setError(''); })
-      .catch((err) => setError(err?.response?.status === 404 ? `Este ${vocab.client.toLowerCase()} no existe.` : 'No se pudo cargar la información.'))
+      .catch((err) => setError(err?.response?.status === 404 ? `${vocab.pick('client', 'Este', 'Esta')} ${vocab.client.toLowerCase()} no existe.` : 'No se pudo cargar la información.'))
       .finally(() => setLoading(false));
   }, [params.id, vocab.client]);
 
@@ -138,7 +138,7 @@ export default function CustomerDetail() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -205,9 +205,9 @@ export default function CustomerDetail() {
         <section className={`${card} p-6 space-y-5`} data-card="customer">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-12 h-12 rounded-2xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><User size={22} /></span>
+              <span className="w-12 h-12 rounded-2xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><User size={22} /></span>
               <div className="min-w-0">
-                <h1 className="text-xl font-black text-[#022340] tracking-tight truncate">{fullName}</h1>
+                <h1 className="text-xl font-black text-brand-ink tracking-tight truncate">{fullName}</h1>
                 <p className="text-xs text-slate-500">
                   {vocab.client}{customer.created_at ? ` desde ${formatDate(customer.created_at.slice(0, 10), { month: 'long', year: 'numeric' })}` : ''}
                 </p>
@@ -287,7 +287,7 @@ export default function CustomerDetail() {
                       .catch(() => setError('No se pudieron perdonar las inasistencias.'))
                       .finally(() => setForgiving(false));
                   }}
-                  className="text-xs font-bold text-[#022340] bg-white border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  className="text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   {forgiving ? 'Guardando...' : customer.online_booking.blocked ? 'Perdonar y permitirle reservar' : 'Perdonar inasistencias'}
                 </button>
@@ -308,7 +308,7 @@ export default function CustomerDetail() {
               title={CLICKABLE.includes(stat.id) ? 'Ver cuáles son' : undefined}
               onClick={() => pickStat(stat.id)}
               className={`bg-white px-4 py-3 rounded-2xl border text-left shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 enabled:cursor-pointer enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
-                focus === stat.id ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'border-slate-100 enabled:hover:border-slate-200'
+                focus === stat.id ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'border-slate-100 enabled:hover:border-slate-200'
               }`}
             >
               <span className="flex items-start justify-between gap-2">
@@ -332,7 +332,7 @@ export default function CustomerDetail() {
         {usesRecords && (
           <section className={`${card} overflow-hidden scroll-mt-4`} data-card="records">
             <div className="px-6 pt-5 pb-3">
-              <SectionTitle><ClipboardList className="w-4 h-4 text-[#3F768C]" /> Historia de atenciones</SectionTitle>
+              <SectionTitle><ClipboardList className="w-4 h-4 text-brand-accent" /> Historia de atenciones</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">Las fichas llenadas en cada atención, de la más reciente a la más antigua.</p>
             </div>
             {records.length === 0 ? (
@@ -379,7 +379,7 @@ export default function CustomerDetail() {
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">
-              <SectionTitle><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</SectionTitle>
+              <SectionTitle><CalendarDays className="w-4 h-4 text-brand-accent" /> Citas</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">Haz clic en una cita para ver su detalle. Las tarjetas de arriba filtran esta lista.</p>
             </div>
             {appointments.length === 0 ? (
@@ -388,7 +388,7 @@ export default function CustomerDetail() {
               <div className="border-t border-slate-100 flex flex-col" data-list="focus">
                 <div className="flex items-center justify-between gap-3 px-5 pt-3">
                   <span className={smallLabel}>{FOCUS_TITLES[focus]} ({focused.length})</span>
-                  <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                  <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
                     Ver todas las citas
                   </button>
                 </div>

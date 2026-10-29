@@ -47,35 +47,35 @@ export default function RegisterPage() {
             <span className="inline-flex p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600">
               <DoorClosed className="w-8 h-8" />
             </span>
-            <h1 className="text-3xl font-black text-[#022340] tracking-tight">
+            <h1 className="text-3xl font-black text-brand-ink tracking-tight">
               El registro está cerrado por ahora
             </h1>
             <p className="text-slate-500 text-sm font-medium leading-relaxed">
               En este momento no estamos recibiendo empresas nuevas desde esta página. Si ya tienes una cuenta, puedes iniciar sesión como siempre.
             </p>
             {supportEmail && (
-              <p className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-[#022340]">
-                <Mail className="w-4 h-4 text-[#3F768C]" />
-                Escríbenos a <a href={`mailto:${supportEmail}`} className="text-[#3F768C] hover:underline">{supportEmail}</a> y creamos tu cuenta.
+              <p className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-brand-ink">
+                <Mail className="w-4 h-4 text-brand-accent" />
+                Escríbenos a <a href={`mailto:${supportEmail}`} className="text-brand-accent hover:underline">{supportEmail}</a> y creamos tu cuenta.
               </p>
             )}
             <div>
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2 bg-[#022340] hover:bg-[#012840] text-white font-bold py-2.5 px-5 rounded-xl text-xs transition-all shadow-sm"
+                className="inline-flex items-center gap-2 bg-brand hover:bg-brand-hover text-white font-bold py-2.5 px-5 rounded-xl text-xs transition-all shadow-sm"
               >
-                Ir a iniciar sesión <ArrowRight className="w-3.5 h-3.5 text-[#84D0D9]" />
+                Ir a iniciar sesión <ArrowRight className="w-3.5 h-3.5 text-brand-soft" />
               </Link>
             </div>
           </div>
         ) : (
           <>
         <div className="text-center space-y-3 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#84D0D9]/15 border border-[#84D0D9]/30 text-[#022340] text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-[#3F768C]" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-soft/15 border border-brand-soft/30 text-brand-ink text-xs font-bold uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 text-brand-accent" />
             Paso 1: Elige tu Plan
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-[#022340] tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-black text-brand-ink tracking-tight">
             Comienza a gestionar tu negocio
           </h1>
           <p className="text-slate-500 text-sm font-medium">
@@ -94,7 +94,7 @@ export default function RegisterPage() {
 
         <div className="text-center text-xs text-slate-500 font-medium pt-4 border-t border-slate-100">
           ¿Ya tienes una cuenta registrada?{' '}
-          <Link href="/login" className="text-[#3F768C] font-bold hover:underline">
+          <Link href="/login" className="text-brand-accent font-bold hover:underline">
             Iniciar Sesión
           </Link>
         </div>

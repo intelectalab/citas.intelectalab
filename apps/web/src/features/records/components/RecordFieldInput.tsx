@@ -13,12 +13,12 @@ interface RecordFieldInputProps {
 }
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-600';
+  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white disabled:bg-slate-50 disabled:text-slate-600';
 
 const chip = (active: boolean, disabled?: boolean) =>
   `px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-    active ? 'bg-[#022340] border-[#022340] text-white font-semibold' : 'bg-white border-slate-200 text-slate-700'
-  } ${disabled ? 'cursor-default' : active ? '' : 'hover:border-[#3F768C]'} ${disabled && !active ? 'opacity-50' : ''}`;
+    active ? 'bg-brand border-brand text-white font-semibold' : 'bg-white border-slate-200 text-slate-700'
+  } ${disabled ? 'cursor-default' : active ? '' : 'hover:border-brand-accent'} ${disabled && !active ? 'opacity-50' : ''}`;
 
 export default function RecordFieldInput({ field, value, onChange, disabled = false }: RecordFieldInputProps) {
   const label = field.label;
@@ -123,8 +123,8 @@ export default function RecordFieldInput({ field, value, onChange, disabled = fa
               disabled={disabled}
               onClick={() => onChange(value === n ? null : n)}
               className={`flex-1 h-9 rounded-md border text-sm font-semibold transition-colors ${
-                value === n ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200 text-slate-600'
-              } ${disabled ? 'cursor-default' : value === n ? '' : 'hover:border-[#3F768C]'}`}
+                value === n ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200 text-slate-600'
+              } ${disabled ? 'cursor-default' : value === n ? '' : 'hover:border-brand-accent'}`}
             >
               {n}
             </button>
@@ -197,7 +197,7 @@ export default function RecordFieldInput({ field, value, onChange, disabled = fa
                     onClick={() => cycle(tooth)}
                     className={`w-7 h-8 rounded-md border text-[10px] font-bold transition-colors ${index === 8 ? 'ml-2' : ''} ${
                       state ? state.className : 'bg-white border-slate-300 text-slate-500'
-                    } ${disabled ? 'cursor-default' : 'hover:border-[#3F768C]'}`}
+                    } ${disabled ? 'cursor-default' : 'hover:border-brand-accent'}`}
                   >
                     {tooth}
                   </button>

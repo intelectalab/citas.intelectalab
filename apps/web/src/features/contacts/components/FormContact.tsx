@@ -90,7 +90,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           <input 
             type="email" required
             placeholder="carlos@empresa.com"
-            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
             value={form.email}
             onChange={e => setForm({...form, email: e.target.value})}
           />
@@ -101,7 +101,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           <input 
             type="text" required
             placeholder="Ej. Carlos"
-            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
             value={form.first_name}
             onChange={e => setForm({...form, first_name: e.target.value})}
           />
@@ -112,7 +112,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           <input 
             type="text" required
             placeholder="Ej. Mendoza Ruiz"
-            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
             value={form.last_name}
             onChange={e => setForm({...form, last_name: e.target.value})}
           />
@@ -123,7 +123,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           <input 
             type="text"
             placeholder="Ej. Gerente General"
-            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
             value={form.position}
             onChange={e => setForm({...form, position: e.target.value})}
           />
@@ -134,7 +134,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           <input 
             type="text"
             placeholder="+51 999 888 777"
-            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
             value={form.phone}
             onChange={e => setForm({...form, phone: e.target.value})}
           />
@@ -150,7 +150,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           </button>
           <button 
             type="submit" 
-            className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+            className="px-5 py-2.5 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
           >
             {isEditing ? 'Guardar Cambios' : 'Crear Contacto'}
           </button>

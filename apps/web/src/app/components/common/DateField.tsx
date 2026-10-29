@@ -88,7 +88,7 @@ export default function DateField({
 
   const cellClass = (selected: boolean, muted = false) =>
     `text-sm rounded-lg transition-colors ${
-      selected ? 'bg-[#022340] text-white font-semibold' : `${muted ? 'text-slate-300' : 'text-slate-700'} hover:bg-slate-100`
+      selected ? 'bg-brand text-white font-semibold' : `${muted ? 'text-slate-300' : 'text-slate-700'} hover:bg-slate-100`
     }`;
 
   return (
@@ -107,7 +107,7 @@ export default function DateField({
           rounded === 'xl' ? 'rounded-xl' : 'rounded-lg'
         } ${size === 'compact' ? 'px-2.5 py-2' : 'px-3.5 py-2.5'} ${
           disabled ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : 'bg-white cursor-pointer'
-        } ${open ? 'border-[#022340] ring-2 ring-[#022340]/20' : 'border-slate-200 hover:border-slate-300'}`}
+        } ${open ? 'border-brand ring-2 ring-brand/20' : 'border-slate-200 hover:border-slate-300'}`}
       >
         <span className={`truncate ${value ? (disabled ? 'text-slate-600' : 'text-slate-800') : 'text-slate-400'}`}>
           {value ? formatDay(value) : placeholder}
@@ -145,7 +145,7 @@ export default function DateField({
               title={view === 'years' ? undefined : view === 'days' ? 'Elegir mes y año' : 'Elegir año'}
               disabled={view === 'years'}
               onClick={() => setView(view === 'days' ? 'months' : 'years')}
-              className="px-2.5 py-1 rounded-lg text-sm font-semibold text-[#022340] first-letter:uppercase enabled:hover:bg-slate-100 transition-colors"
+              className="px-2.5 py-1 rounded-lg text-sm font-semibold text-brand-ink first-letter:uppercase enabled:hover:bg-slate-100 transition-colors"
             >
               {title}
             </button>
@@ -175,7 +175,7 @@ export default function DateField({
                     onClick={() => pick(iso)}
                     className={`h-8 ${
                       blocked ? 'text-sm rounded-lg text-slate-300 line-through cursor-not-allowed' : cellClass(selected, date.getMonth() !== month)
-                    } ${iso === today && !selected ? 'ring-1 ring-inset ring-[#3F768C]' : ''}`}
+                    } ${iso === today && !selected ? 'ring-1 ring-inset ring-brand-accent' : ''}`}
                   >
                     {date.getDate()}
                   </button>
@@ -218,7 +218,7 @@ export default function DateField({
 
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between">
             {allowed(today) ? (
-              <button type="button" data-date-today onClick={() => pick(today)} className="text-xs font-semibold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <button type="button" data-date-today onClick={() => pick(today)} className="text-xs font-semibold text-brand-accent hover:text-brand-ink transition-colors">
                 Hoy
               </button>
             ) : <span />}

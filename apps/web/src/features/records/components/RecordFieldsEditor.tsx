@@ -11,7 +11,7 @@ interface RecordFieldsEditorProps {
 }
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white';
+  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white';
 const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1';
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
 
@@ -39,7 +39,7 @@ export default function RecordFieldsEditor({ value, onChange }: RecordFieldsEdit
         const hasOptions = ['select', 'multiselect'].includes(field.type);
 
         return (
-          <div key={index} data-field-row={index} className={`border rounded-lg bg-white ${isOpen ? 'border-[#3F768C]/50 shadow-sm' : 'border-slate-200'}`}>
+          <div key={index} data-field-row={index} className={`border rounded-lg bg-white ${isOpen ? 'border-brand-accent/50 shadow-sm' : 'border-slate-200'}`}>
             <div className="flex items-center gap-1 pl-3 pr-1.5 py-1.5">
               <button type="button" onClick={() => setOpenField(isOpen ? null : index)} className="flex-1 min-w-0 flex items-center gap-2 text-left">
                 <span className="text-[11px] font-mono text-slate-300 shrink-0">{index + 1}</span>
@@ -130,7 +130,7 @@ export default function RecordFieldsEditor({ value, onChange }: RecordFieldsEdit
                 )}
 
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={Boolean(field.required)} onChange={(e) => update(index, { required: e.target.checked })} className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]" />
+                  <input type="checkbox" checked={Boolean(field.required)} onChange={(e) => update(index, { required: e.target.checked })} className="rounded border-slate-300 text-brand-ink focus:ring-brand" />
                   Obligatorio para firmar la ficha
                 </label>
               </div>

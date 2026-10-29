@@ -38,7 +38,7 @@ export function TenantSelectModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-[#022340]/60 backdrop-blur-xs flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-brand/60 backdrop-blur-xs flex items-center justify-center p-4"
         >
           <motion.div
             role="dialog"
@@ -52,7 +52,7 @@ export function TenantSelectModal({
           >
             <div className="flex items-start justify-between gap-4 p-6 pb-4">
               <div className="space-y-1">
-                <h2 id="tenant-select-title" className="text-xl font-black text-[#022340] tracking-tight">
+                <h2 id="tenant-select-title" className="text-xl font-black text-brand-ink tracking-tight">
                   ¿A qué empresa deseas ingresar?
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
@@ -85,7 +85,7 @@ export function TenantSelectModal({
                       type="button"
                       onClick={() => onSelect(account)}
                       disabled={isBusy}
-                      className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-[#3F768C] text-left transition-all disabled:opacity-60 cursor-pointer"
+                      className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-brand-accent text-left transition-all disabled:opacity-60 cursor-pointer"
                     >
                       <span
                         className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0"
@@ -94,7 +94,7 @@ export function TenantSelectModal({
                         <Building2 className="w-5 h-5" />
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="block text-sm font-bold text-[#022340] truncate">
+                        <span className="block text-sm font-bold text-brand-ink truncate">
                           {account.tenant_name}
                         </span>
                         <span className="block text-[11px] text-slate-500 font-medium truncate">
@@ -104,7 +104,7 @@ export function TenantSelectModal({
                         </span>
                       </span>
                       {isLoading ? (
-                        <span className="w-5 h-5 border-2 border-[#3F768C] border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span className="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin shrink-0" />
                       ) : (
                         <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                       )}

@@ -27,11 +27,11 @@ export function UsageBar({ pkg }: { pkg: Pick<CustomerPackage, 'sessions_total' 
     <div className="min-w-[10rem]" data-usage>
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="font-semibold text-slate-700">{pkg.sessions_used} de {pkg.sessions_total} usadas</span>
-        {pkg.sessions_scheduled > 0 && <span className="text-[#3F768C] font-medium">{pkg.sessions_scheduled} con cita</span>}
+        {pkg.sessions_scheduled > 0 && <span className="text-brand-accent font-medium">{pkg.sessions_scheduled} con cita</span>}
       </div>
       <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden flex">
-        <span className="h-full bg-[#022340]" style={{ width: `${(pkg.sessions_used / total) * 100}%` }} />
-        <span className="h-full bg-[#84D0D9]" style={{ width: `${(pkg.sessions_scheduled / total) * 100}%` }} />
+        <span className="h-full bg-brand" style={{ width: `${(pkg.sessions_used / total) * 100}%` }} />
+        <span className="h-full bg-brand-soft" style={{ width: `${(pkg.sessions_scheduled / total) * 100}%` }} />
       </div>
     </div>
   );
@@ -113,7 +113,7 @@ export default function PackagesBoard() {
   });
 
   const metricCards: MetricCardItem[] = tab === 'sold' ? [
-    card('Vigentes', active.length, <Boxes size={18} />, 'active', 'text-[#3F768C]', 'border-[#3F768C] ring-2 ring-[#3F768C]/20'),
+    card('Vigentes', active.length, <Boxes size={18} />, 'active', 'text-brand-accent', 'border-brand-accent ring-2 ring-brand-accent/20'),
     card('Sesiones por usar', active.reduce((sum, p) => sum + p.sessions_total - p.sessions_used, 0), <Layers size={18} />, 'pending', 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
     card('Por atender (ya cobrado)', money(active.reduce((sum, p) => sum + p.pending_value, 0), currency), <Wallet size={18} />, null, 'text-violet-600', 'border-violet-500 ring-2 ring-violet-500/20'),
     card('Vencen en 30 días', expiring.length, <Hourglass size={18} />, 'expiring', 'text-amber-600', 'border-amber-500 ring-2 ring-amber-500/20'),
@@ -129,8 +129,8 @@ export default function PackagesBoard() {
     { header: 'Quedan', type: 'number', value: (p) => p.sessions_total - p.sessions_used },
     { header: 'Comprado', type: 'date', value: (p) => p.purchased_at },
     { header: 'Vence', type: 'date', value: (p) => p.expires_at },
-    { header: 'Precio', type: 'money', value: (p) => p.price },
-    { header: 'Por atender (ya cobrado)', type: 'money', value: (p) => p.pending_value },
+    { header: 'Precio', type: 'money', total: true, value: (p) => p.price },
+    { header: 'Por atender (ya cobrado)', type: 'money', total: true, value: (p) => p.pending_value },
     { header: 'Estado', value: (p) => p.status_label },
   ];
 
@@ -152,9 +152,9 @@ export default function PackagesBoard() {
       header: 'Paquete',
       cell: (p) => (
         <div key={`name-${p.id}`} className="flex items-center gap-3">
-          <span className="p-2 rounded-lg shrink-0 bg-[#84D0D9]/20 text-[#022340]"><Boxes size={16} /></span>
+          <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><Boxes size={16} /></span>
           <div className="min-w-0">
-            <Link href={`/packages/${p.id}`} data-package={p.code} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>{p.name}</Link>
+            <Link href={`/packages/${p.id}`} data-package={p.code} className={`${styles.customerName} hover:text-brand-accent transition-colors`}>{p.name}</Link>
             <span className="block text-xs text-slate-400" title={p.schedule_label}><span className="font-mono">{p.code}</span> · {p.conditions.booking_mode === 'scheduled' ? 'Con fechas acordadas' : 'Libre'}</span>
           </div>
         </div>
@@ -182,7 +182,7 @@ export default function PackagesBoard() {
     {
       header: 'Acciones',
       cell: (p) => (
-        <Link key={`actions-${p.id}`} href={`/packages/${p.id}`} title={`Ver ${p.code}`} className={`${iconButton} inline-flex hover:text-[#022340] hover:bg-slate-100`}>
+        <Link key={`actions-${p.id}`} href={`/packages/${p.id}`} title={`Ver ${p.code}`} className={`${iconButton} inline-flex hover:text-brand-ink hover:bg-slate-100`}>
           <Eye size={16} />
         </Link>
       ),
@@ -194,9 +194,9 @@ export default function PackagesBoard() {
       header: 'Paquete',
       cell: (p) => (
         <div key={`plan-${p.id}`} className="flex items-center gap-3">
-          <span className="p-2 rounded-lg shrink-0 bg-[#84D0D9]/20 text-[#022340]"><Boxes size={16} /></span>
+          <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><Boxes size={16} /></span>
           <div className="min-w-0">
-            <button type="button" data-edit-plan={p.name} disabled={!data?.can.edit} onClick={() => openPlan(p)} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left disabled:hover:text-inherit`}>{p.name}</button>
+            <button type="button" data-edit-plan={p.name} disabled={!data?.can.edit} onClick={() => openPlan(p)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left disabled:hover:text-inherit`}>{p.name}</button>
             <span className="block text-xs text-slate-400">{p.items.map((i) => `${i.sessions} × ${i.name}`).join(' · ')}</span>
           </div>
         </div>
@@ -206,7 +206,7 @@ export default function PackagesBoard() {
       header: 'Cómo se agenda',
       cell: (p) => (
         <span key={`mode-${p.id}`} className="flex items-center gap-1.5 text-sm text-slate-700">
-          {p.booking_mode === 'scheduled' && <CalendarClock size={14} className="text-[#3F768C] shrink-0" />}{p.schedule_label}
+          {p.booking_mode === 'scheduled' && <CalendarClock size={14} className="text-brand-accent shrink-0" />}{p.schedule_label}
         </span>
       ),
     },
@@ -226,7 +226,7 @@ export default function PackagesBoard() {
       cell: (p) => (
         <div key={`actions-${p.id}`} className="flex items-center gap-1">
           {data?.can.edit && (
-            <button title={`Editar ${p.name}`} onClick={() => openPlan(p)} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}><Edit2 size={16} /></button>
+            <button title={`Editar ${p.name}`} onClick={() => openPlan(p)} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}><Edit2 size={16} /></button>
           )}
           {data?.can.delete && (
             <button data-delete-plan={p.name} title={`Eliminar ${p.name}`} onClick={() => { setError(''); setNotice(''); setDeleting(p); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}><Trash2 size={16} /></button>

@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
+use App\Support\Audit;
 
 class ProfessionalScheduleController extends Controller
 {
@@ -133,6 +134,8 @@ class ProfessionalScheduleController extends Controller
             }
         }
 
+        $previous = $this->summary($professional, $branch);
+
         DB::transaction(function () use ($professional, $branch, $validated) {
             ProfessionalSchedule::where('professional_id', $professional->id)
                 ->where('branch_id', $branch->id)
@@ -150,7 +153,35 @@ class ProfessionalScheduleController extends Controller
             }
         });
 
+        [$before, $after] = Audit::changed(['schedule' => $previous], ['schedule' => $this->summary($professional, $branch)]);
+
+        if ($after) {
+            Audit::log($request, 'schedule.updated', [
+                'tenant'       => $request->user()->tenant_id,
+                'entity_type'  => 'professional',
+                'entity_id'    => $professional->id,
+                'entity_label' => $professional->display_name,
+                'branch_id'    => $branch->id,
+                'before'       => $before,
+                'after'        => $after + ['branch' => $branch->name],
+            ]);
+        }
+
         return response()->json($this->payload($professional));
+    }
+
+    private function summary(Professional $professional, Branch $branch): array
+    {
+        return ProfessionalSchedule::where('professional_id', $professional->id)
+            ->where('branch_id', $branch->id)
+            ->orderBy('weekday')
+            ->orderBy('starts_local')
+            ->get()
+            ->groupBy('weekday')
+            ->sortKeys()
+            ->map(fn ($ranges, $weekday) => self::WEEKDAYS[$weekday] . ' ' . $ranges->map(fn (ProfessionalSchedule $s) => substr($s->starts_local, 0, 5) . '–' . substr($s->ends_local, 0, 5))->implode(' y '))
+            ->values()
+            ->all();
     }
 
     private function payload(Professional $professional): array

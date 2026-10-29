@@ -10,13 +10,13 @@ interface AccessSummaryProps {
   who: string;
 }
 
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340]';
+const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-brand-ink';
 
 const jump = (key: string) => {
   const row = document.querySelector(`[data-module="${key}"]`);
   row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  row?.classList.add('ring-2', 'ring-[#84D0D9]');
-  window.setTimeout(() => row?.classList.remove('ring-2', 'ring-[#84D0D9]'), 1600);
+  row?.classList.add('ring-2', 'ring-brand-soft');
+  window.setTimeout(() => row?.classList.remove('ring-2', 'ring-brand-soft'), 1600);
 };
 
 export default function AccessSummary({ grid, adminOnly = [], everything = false, who }: AccessSummaryProps) {
@@ -51,7 +51,7 @@ export default function AccessSummary({ grid, adminOnly = [], everything = false
         <div className="mt-3 space-y-2.5" data-list="enters">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="w-32 shrink-0 text-[11px] font-bold text-slate-400">Inicio</span>
-            <span className="px-2.5 py-1 text-xs font-semibold bg-[#84D0D9]/20 text-[#022340] rounded-lg">Inicio</span>
+            <span className="px-2.5 py-1 text-xs font-semibold bg-brand-soft/20 text-brand-ink rounded-lg">Inicio</span>
           </div>
           {sections.map((section) => (
             <div key={section.label} className="flex flex-wrap items-start gap-1.5" data-menu-section={section.label}>
@@ -61,7 +61,7 @@ export default function AccessSummary({ grid, adminOnly = [], everything = false
                   const level = everything ? 'todo' : levelOf(module);
                   return module.key ? (
                     <button key={`${module.key}-${name}`} type="button" data-menu-item={name} onClick={() => jump(module.key)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-[#84D0D9]/20 text-[#022340] rounded-lg hover:bg-[#84D0D9]/40 transition-colors">
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-brand-soft/20 text-brand-ink rounded-lg hover:bg-brand-soft/40 transition-colors">
                       {name}
                       {module.building && <Construction size={11} className="text-amber-700" />}
                       {level && <span className="font-normal text-slate-500">· {level}</span>}

@@ -20,6 +20,7 @@ use App\Models\WaitlistEntry;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
 use App\Support\AppointmentTiming;
+use App\Support\Audit;
 use App\Support\Search;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -231,6 +232,7 @@ class AppointmentController extends Controller
             'now'           => now($timezone)->format(self::LOCAL_FORMAT),
             'holidays'      => $holidays->map(fn ($h) => ['name' => $h->name, 'closed' => (bool) $h->closed])->values(),
             'professionals' => $professionals,
+            'my_professional_id' => Professional::where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->value('id'),
             'appointments'  => $appointments->map(fn (Appointment $a) => $this->present($a, $tenant)),
         ]);
     }
@@ -358,7 +360,7 @@ class AppointmentController extends Controller
         $duration = (int) ($validated['duration_minutes'] ?? $service->duration_minutes);
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall, $waiting) {
+        return DB::transaction(function () use ($request, $tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall, $waiting) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($response = $this->limitReached($tenant, $start)) {
@@ -397,6 +399,11 @@ class AppointmentController extends Controller
             ]);
 
             $this->log($appointment, null, $status, $user, $override ? "Sobre-agenda: {$override}" : null);
+            $this->auditAppointment($request, 'appointment.created', $appointment, $this->auditFacts($appointment));
+
+            if ($override) {
+                $this->auditAppointment($request, 'appointment.forced', $appointment, ['override_reason' => $override, 'appointment_at' => $start->toIso8601String()]);
+            }
 
             if ($recall) {
                 \App\Support\Recalls::book($recall, $appointment);
@@ -516,6 +523,19 @@ class AppointmentController extends Controller
 
             $appointment->update($changes);
             $this->log($appointment, $from, $to, $user, $reason);
+
+            if ($to === AppointmentFlow::CANCELLED) {
+                $this->auditAppointment($request, 'appointment.cancelled', $appointment, $this->auditFacts($appointment) + array_filter(['reason' => $reason]) + ['late_cancel' => $lateCancel]);
+            }
+
+            if ($to === AppointmentFlow::NO_SHOW) {
+                $this->auditAppointment($request, 'appointment.no_show', $appointment, $this->auditFacts($appointment));
+            }
+
+            if ($to === AppointmentFlow::COMPLETED) {
+                \App\Support\Inventory::consumeForAppointment($tenant, $appointment, $user);
+            }
+
             \App\Support\Recalls::appointmentChanged($tenant, $appointment);
             \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
 
@@ -580,6 +600,7 @@ class AppointmentController extends Controller
             }
 
             $this->assertCustomerFree($tenant, $appointment->customer, $start, $end, $appointment->id);
+            $auditBefore = $this->auditPlace($appointment);
 
             $appointment->update([
                 'starts_at'        => $start,
@@ -593,6 +614,11 @@ class AppointmentController extends Controller
             $detail = 'Reprogramada de ' . $previous->format('d/m/Y H:i') . ' a ' . $start->format('d/m/Y H:i');
             $reason = trim((string) ($validated['reason'] ?? ''));
             $this->log($appointment, $appointment->status, $appointment->status, $user, $reason ? "{$detail} · {$reason}" : $detail);
+            $this->auditRescheduled($request, $appointment->fresh(self::RELATIONS), $auditBefore, $reason);
+
+            if ($override) {
+                $this->auditAppointment($request, 'appointment.forced', $appointment, ['override_reason' => $override, 'appointment_at' => $start->toIso8601String()]);
+            }
 
             return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true));
         });
@@ -758,6 +784,55 @@ class AppointmentController extends Controller
         }
 
         return $appointment->record !== null || in_array($appointment->service_id, $attributes->get('record_services'), true);
+    }
+
+    protected function auditPlace(Appointment $appointment): array
+    {
+        $appointment->loadMissing(['professional', 'branch']);
+
+        return [
+            'appointment_at' => $appointment->starts_at?->toIso8601String(),
+            'professional'   => $appointment->professional?->display_name,
+            'branch'         => $appointment->branch?->name,
+        ];
+    }
+
+    protected function auditFacts(Appointment $appointment): array
+    {
+        $appointment->loadMissing(['service', 'dependent']);
+
+        return array_filter([
+            'service'        => $appointment->service?->name,
+        ] + $this->auditPlace($appointment) + [
+            'dependent_name' => $appointment->dependent?->name,
+        ], fn ($value) => $value !== null);
+    }
+
+    protected function auditRescheduled(Request $request, Appointment $appointment, array $before, ?string $reason): void
+    {
+        [$from, $to] = Audit::changed($before, $this->auditPlace($appointment));
+
+        if (!$from && !$to) {
+            return;
+        }
+
+        $this->auditAppointment($request, 'appointment.rescheduled', $appointment, $to + array_filter(['reason' => $reason]), $from);
+    }
+
+    protected function auditAppointment(Request $request, string $action, Appointment $appointment, array $after = [], array $before = []): void
+    {
+        $appointment->loadMissing('customer');
+        $name = \App\Support\Person::name($appointment->customer);
+
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $appointment->tenant_id,
+            'entity_type'  => 'appointment',
+            'entity_id'    => $appointment->id,
+            'entity_label' => trim($appointment->code . ($name !== '' ? " · {$name}" : '')),
+            'branch_id'    => $appointment->branch_id,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
     }
 
     protected function log(Appointment $appointment, ?string $from, string $to, User|Customer $actor, ?string $reason): void

@@ -4,9 +4,7 @@ namespace App\Support;
 
 use App\Models\Tenant;
 use App\Models\TenantSetting;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class EmailDesign
 {
@@ -44,7 +42,8 @@ class EmailDesign
         $default = self::defaultFooter($tenant);
 
         return [
-            'color'          => $rules['email.color'] ?? $tenant->settings?->brand_color ?? $tenant->businessType?->color ?? self::COLORS[0],
+            'color'          => Branding::primary($tenant) ?? $rules['email.color'] ?? $tenant->businessType?->color ?? self::COLORS[0],
+            'color_from_brand' => Branding::primary($tenant) !== null,
             'show_name'      => (bool) ($rules['email.show_name'] ?? true),
             'footer'         => array_key_exists('email.footer', $rules) ? (string) $rules['email.footer'] : $default,
             'default_footer' => $default,
@@ -65,7 +64,7 @@ class EmailDesign
     {
         $settings = $tenant->settings ?? new TenantSetting(['tenant_id' => $tenant->id]);
         $settings->rules = array_merge($settings->rules ?? [], [
-            'email.color'     => strtoupper($values['color']),
+            'email.color'     => strtoupper((string) ($values['color'] ?? ($settings->rules['email.color'] ?? self::COLORS[0]))),
             'email.show_name' => (bool) $values['show_name'],
             'email.footer'    => trim((string) ($values['footer'] ?? '')),
         ]);
@@ -75,35 +74,7 @@ class EmailDesign
 
     public static function logoPath(string $tenantId): ?string
     {
-        foreach (Storage::disk('local')->files("branding/{$tenantId}") as $file) {
-            if (str_starts_with(basename($file), 'logo.')) {
-                return $file;
-            }
-        }
-
-        return null;
-    }
-
-    public static function storeLogo(Tenant $tenant, UploadedFile $file): void
-    {
-        self::removeLogo($tenant);
-        $extension = strtolower($file->extension() ?: 'png');
-        Storage::disk('local')->putFileAs("branding/{$tenant->id}", $file, "logo.{$extension}");
-
-        $settings = $tenant->settings ?? new TenantSetting(['tenant_id' => $tenant->id]);
-        $settings->logo_url = rtrim((string) config('app.url'), '/') . "/api/branding/{$tenant->id}/logo?v=" . now()->timestamp;
-        $settings->save();
-        $tenant->setRelation('settings', $settings);
-    }
-
-    public static function removeLogo(Tenant $tenant): void
-    {
-        Storage::disk('local')->deleteDirectory("branding/{$tenant->id}");
-
-        if ($tenant->settings?->logo_url) {
-            $tenant->settings->logo_url = null;
-            $tenant->settings->save();
-        }
+        return Branding::logoPath($tenantId, 'light');
     }
 
     public static function render(Tenant $tenant, string $body, ?array $design = null, ?string $logoSrc = null): string

@@ -27,7 +27,7 @@ interface PortalAppointmentsProps {
 
 const chip = 'flex items-center gap-1 bg-white pl-3 pr-1.5 py-1 rounded-lg border border-slate-300 shadow-xs';
 const chipLabel = 'text-xs leading-5 text-slate-500';
-const sectionTitle = 'text-sm font-extrabold text-[#022340] uppercase tracking-wider';
+const sectionTitle = 'text-sm font-extrabold text-brand-ink uppercase tracking-wider';
 
 const optionsOf = (appointments: PortalAppointment[], pick: (a: PortalAppointment) => { id: string; label: string } | null) => {
   const seen = new Map<string, string>();
@@ -90,7 +90,7 @@ export default function PortalAppointments({ upcoming, past, policies, proWord, 
   return (
     <>
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-black text-[#022340] tracking-tight">Mis citas</h1>
+        <h1 className="text-xl font-black text-brand-ink tracking-tight">Mis citas</h1>
         {all.length > 0 && (
           <button
             type="button"
@@ -98,13 +98,13 @@ export default function PortalAppointments({ upcoming, past, policies, proWord, 
             aria-expanded={open}
             onClick={() => setOpen(!open)}
             className={`inline-flex items-center gap-2 px-3.5 py-2 text-sm font-bold rounded-xl border transition-colors ${
-              open ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-300 text-[#022340] hover:border-[#3F768C]'
+              open ? 'bg-brand border-brand text-white' : 'bg-white border-slate-300 text-brand-ink hover:border-brand-accent'
             }`}
           >
-            <SlidersHorizontal size={15} className={open ? 'text-[#84D0D9]' : 'text-[#3F768C]'} />
+            <SlidersHorizontal size={15} className={open ? 'text-brand-soft' : 'text-brand-accent'} />
             Filtrar
             {active > 0 && (
-              <span data-filter-count className={`min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[11px] font-bold rounded-full ${open ? 'bg-[#84D0D9] text-[#022340]' : 'bg-[#3F768C] text-white'}`}>
+              <span data-filter-count className={`min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[11px] font-bold rounded-full ${open ? 'bg-brand-soft text-brand-ink' : 'bg-brand-accent text-white'}`}>
                 {active}
               </span>
             )}
@@ -136,7 +136,7 @@ export default function PortalAppointments({ upcoming, past, policies, proWord, 
           </div>
 
           {active > 0 && (
-            <button type="button" data-clear-filters onClick={clear} className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+            <button type="button" data-clear-filters onClick={clear} className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
               <X size={13} /> Limpiar filtros
             </button>
           )}

@@ -75,7 +75,7 @@ export default function ModulesBubble({ modulesOff }: ModulesBubbleProps) {
             )}
 
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-[#022340]">{enabled} módulos encendidos</span>
+              <span className="text-sm font-bold text-brand-ink">{enabled} módulos encendidos</span>
               {total - enabled > 0 && (
                 <span className="text-xs font-medium text-slate-400">{total - enabled} apagados</span>
               )}

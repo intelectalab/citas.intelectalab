@@ -5,7 +5,7 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DoorOpen, Edit2, Layers, PowerOff, Trash2, Wrench } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
@@ -97,8 +97,8 @@ export default function RoomsTable() {
       title: 'Salas en uso',
       value: rooms.filter((r) => r.kind === 'room' && statusOf(r) === 'active').length,
       icon: <DoorOpen size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: view === 'room' && !activeCard ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: view === 'room' && !activeCard ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => { setActiveCard(''); setView(view === 'room' ? 'all' : 'room'); },
     },
     {
@@ -119,17 +119,28 @@ export default function RoomsTable() {
     },
   ];
 
+  const exportColumns: ExportColumn<RoomRow>[] = [
+    { header: 'Nombre', value: (r) => r.name },
+    { header: 'Tipo', value: (r) => KIND_LABELS[r.kind] },
+    { header: 'Descripción', value: (r) => r.description ?? '' },
+    ...(list?.links_equipment ? [{ header: 'Está en', value: (r: RoomRow) => r.parent_name ?? '' }] : []),
+    { header: 'Sede', value: (r) => r.branch_name ?? '' },
+    { header: 'Estado', value: (r) => (statusOf(r) === 'active' ? 'En uso' : 'Fuera de uso') },
+    { header: 'Equipos fuera de uso', value: (r) => (r.down_equipment ?? []).join(', ') },
+    { header: 'Registrado', type: 'date', value: (r) => r.created_at },
+  ];
+
   const columns: Column<RoomRow>[] = [
     {
       header: 'Sala o equipo',
       cell: (room) => (
         <div key={`name-${room.id}`} className="flex items-center gap-3">
-          <span className={`p-2 rounded-lg shrink-0 ${room.kind === 'equipment' ? 'bg-violet-50 text-violet-600' : 'bg-[#84D0D9]/20 text-[#022340]'}`}>
+          <span className={`p-2 rounded-lg shrink-0 ${room.kind === 'equipment' ? 'bg-violet-50 text-violet-600' : 'bg-brand-soft/20 text-brand-ink'}`}>
             {room.kind === 'equipment' ? <Wrench size={16} /> : <DoorOpen size={16} />}
           </span>
           <div>
             {canManage ? (
-              <button type="button" data-edit={room.id} onClick={() => { setEditing(room); setFormOpen(true); }} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left`}>
+              <button type="button" data-edit={room.id} onClick={() => { setEditing(room); setFormOpen(true); }} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}>
                 {room.name}
               </button>
             ) : (
@@ -145,7 +156,7 @@ export default function RoomsTable() {
     {
       header: 'Tipo',
       cell: (room) => (
-        <Badge key={`kind-${room.id}`} tone={room.kind === 'equipment' ? 'bg-violet-50 text-violet-700' : 'bg-[#84D0D9]/20 text-[#022340]'}>
+        <Badge key={`kind-${room.id}`} tone={room.kind === 'equipment' ? 'bg-violet-50 text-violet-700' : 'bg-brand-soft/20 text-brand-ink'}>
           {KIND_LABELS[room.kind]}
         </Badge>
       ),
@@ -153,7 +164,7 @@ export default function RoomsTable() {
     {
       header: 'Sede',
       cell: (room) => (
-        <Link key={`branch-${room.id}`} href={`/branches/${room.branch_id}`} className="text-sm text-slate-700 hover:text-[#3F768C] hover:underline underline-offset-2 transition-colors">
+        <Link key={`branch-${room.id}`} href={`/branches/${room.branch_id}`} className="text-sm text-slate-700 hover:text-brand-accent hover:underline underline-offset-2 transition-colors">
           {room.branch_name ?? '—'}
         </Link>
       ),
@@ -177,7 +188,7 @@ export default function RoomsTable() {
       header: 'Acciones',
       cell: (room: RoomRow) => (
         <div key={`actions-${room.id}`} className="flex items-center gap-1">
-          <button title={`Editar ${room.name}`} onClick={() => { setEditing(room); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+          <button title={`Editar ${room.name}`} onClick={() => { setEditing(room); setFormOpen(true); }} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
             <Edit2 size={16} />
           </button>
           <button data-delete={room.id} title={`Eliminar ${room.name}`} onClick={() => { setError(''); setNotice(''); setDeleting(room); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
@@ -208,6 +219,9 @@ export default function RoomsTable() {
           filterValues={filters}
           onFilterChange={(id, value) => setFilters((current) => ({ ...current, [id]: value }))}
           columns={columns}
+          exportTitle="Salas y equipos"
+          exportScreen="rooms"
+          exportColumns={exportColumns}
           sortOptions={[
             { id: 'name', label: 'Nombre', value: (r) => r.name },
             { id: 'kind', label: 'Tipo', value: (r) => KIND_LABELS[r.kind] },

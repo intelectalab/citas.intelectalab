@@ -14,8 +14,6 @@ class Customer extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasUuids, SoftDeletes;
 
-    public const CODE_PREFIX = 'CLI-';
-
     protected $table = 'customers';
 
     protected $fillable = [
@@ -70,14 +68,7 @@ class Customer extends Authenticatable
 
     public static function nextCode(?string $tenantId): string
     {
-        $max = static::withTrashed()
-            ->where('tenant_id', $tenantId)
-            ->where('code', 'like', static::CODE_PREFIX . '%')
-            ->pluck('code')
-            ->map(fn ($code) => (int) substr($code, strlen(static::CODE_PREFIX)))
-            ->max() ?? 0;
-
-        return static::CODE_PREFIX . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+        return \App\Support\Codes::next((string) $tenantId, 'customer');
     }
 
     public function typeDocument()

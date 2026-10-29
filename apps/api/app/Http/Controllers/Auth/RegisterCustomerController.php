@@ -20,6 +20,9 @@ class RegisterCustomerController extends Controller
             'email'       => 'required|email|max:190',
             'password'    => 'required|string|min:8|max:72',
             'phone'       => 'nullable|string|max:30',
+            'accept_privacy' => 'accepted',
+        ], [
+            'accept_privacy.accepted' => 'Para crear tu cuenta, acepta la política de privacidad de la empresa.',
         ]);
 
         $tenant = Tenant::with('settings')
@@ -54,6 +57,8 @@ class RegisterCustomerController extends Controller
                 'email'      => $email,
                 'phone'      => $validated['phone'] ?? null,
             ]);
+
+            \App\Http\Controllers\Api\PortalController::acceptPrivacy($tenant->id, $customer->id, 'portal_signup');
 
             $customer->forceFill([
                 'password_hash'        => Hash::make($validated['password']),

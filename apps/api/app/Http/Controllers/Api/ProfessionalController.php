@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Professional;
 use App\Models\Status;
 use App\Support\Access;
+use App\Support\Audit;
 use App\Support\Search;
 
 class ProfessionalController extends Controller
@@ -75,6 +76,33 @@ class ProfessionalController extends Controller
         }
 
         return null;
+    }
+
+    private function auditProfessional(Professional $professional): array
+    {
+        $professional->loadMissing(['user', 'status', 'specialties']);
+
+        return [
+            'display_name'   => $professional->display_name,
+            'name'           => $professional->user ? trim("{$professional->user->first_name} {$professional->user->last_name}") : null,
+            'email'          => $professional->user?->email,
+            'license_number' => $professional->license_number,
+            'phone'          => $professional->phone,
+            'status'         => $professional->status?->name,
+            'specialties'    => $professional->specialties->pluck('name')->sort()->values()->all(),
+        ];
+    }
+
+    private function audit(Request $request, string $action, Professional $professional, array $before = [], array $after = []): void
+    {
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $request->user()->tenant_id,
+            'entity_type'  => 'professional',
+            'entity_id'    => $professional->id,
+            'entity_label' => $professional->display_name,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
     }
 
     private function assertOwnBranch(\App\Models\User $user, string $professionalId): void
@@ -178,6 +206,8 @@ class ProfessionalController extends Controller
             $professional->specialties()->sync($syncData);
         }
 
+        $this->audit($request, 'professional.created', $professional, [], array_filter($this->auditProfessional($professional), fn ($value) => $value !== null && $value !== '' && $value !== []));
+
         return response()->json([
             'professional' => $professional->load(['status', 'specialties', 'user', 'typeDocument']),
             'temporary_password' => $rawPassword,
@@ -226,6 +256,8 @@ class ProfessionalController extends Controller
             'specialties.*' => 'exists:specialties,id',
         ]);
 
+        $auditBefore = $this->auditProfessional($professional);
+
         if ($professional->user) {
             $userData = [];
             if (isset($validated['first_name'])) $userData['first_name'] = $validated['first_name'];
@@ -254,7 +286,13 @@ class ProfessionalController extends Controller
             $professional->specialties()->sync($syncData);
         }
 
-        return response()->json($professional->load(['status', 'specialties', 'user', 'typeDocument']));
+        $professional->load(['status', 'specialties', 'user', 'typeDocument']);
+        [$from, $to] = Audit::changed($auditBefore, $this->auditProfessional($professional));
+        if ($to) {
+            $this->audit($request, 'professional.updated', $professional, $from, $to);
+        }
+
+        return response()->json($professional);
     }
 
     public function destroy(Request $request, $id)
@@ -265,7 +303,9 @@ class ProfessionalController extends Controller
             ->findOrFail($id);
         $this->assertOwnBranch($currentUser, $professional->id);
 
+        $auditBefore = array_filter($this->auditProfessional($professional), fn ($value) => $value !== null && $value !== '' && $value !== []);
         $professional->delete();
+        $this->audit($request, 'professional.deleted', $professional, $auditBefore);
 
         return response()->json(['message' => 'Professional deleted successfully']);
     }

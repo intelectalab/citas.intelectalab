@@ -37,7 +37,7 @@ const METHOD_ICONS: Record<string, React.ReactNode> = {
 
 const chip = (active: boolean) =>
   `flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg border transition-colors ${
-    active ? 'bg-[#022340] text-white border-[#022340]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+    active ? 'bg-brand text-white border-brand' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
   }`;
 
 export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDetailPanelProps) {
@@ -135,7 +135,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
         <div className="space-y-6 pb-4" data-sale={sale.status}>
           <section className="flex items-start justify-between gap-4">
             <div>
-              <span className="block text-3xl font-black text-[#022340] tabular-nums">{money(sale.total, sale?.currency)}</span>
+              <span className="block text-3xl font-black text-brand-ink tabular-nums">{money(sale.total, sale?.currency)}</span>
               <span className="block text-sm text-slate-600 mt-1">
                 {sale.customer ? <CustomerLink id={sale.customer.id} className="font-semibold text-slate-800">{sale.customer.name}</CustomerLink> : 'Sin cliente'}
                 {codes.length ? ` · ${codes.length === 1 ? 'cita' : 'citas'} ${codes.join(', ')}` : ''}
@@ -155,7 +155,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
             </p>
           )}
           {(sale.deposit ?? 0) > 0 && !sale.deposit_outcome && sale.status === 'partial' && (
-            <p data-deposit-paid className="text-sm text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-lg px-3 py-2">
+            <p data-deposit-paid className="text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-lg px-3 py-2">
               Pagó {money(sale.deposit ?? 0, sale?.currency)} de adelanto al reservar en línea. Falta {money(sale.balance, sale?.currency)}, que se cobra en la sede.
             </p>
           )}
@@ -170,7 +170,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
           {(canCharge || canEdit || sale.can_manage) && (
             <section className="flex flex-wrap gap-2" data-actions>
               {canCharge && (
-                <button type="button" data-action="charge" onClick={() => setCharging(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors">
+                <button type="button" data-action="charge" onClick={() => setCharging(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors">
                   <Wallet size={15} /> Cobrar {money(sale.balance, sale?.currency)}
                 </button>
               )}
@@ -253,7 +253,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
 
               {cashClosed && (
                 <p data-cash-closed className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  La caja de esta sede está cerrada. <Link href="/cash" className="font-semibold underline underline-offset-2 hover:text-[#022340]">Abrir caja</Link> o devuelve por otro medio.
+                  La caja de esta sede está cerrada. <Link href="/cash" className="font-semibold underline underline-offset-2 hover:text-brand-ink">Abrir caja</Link> o devuelve por otro medio.
                 </p>
               )}
 
@@ -263,7 +263,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
 
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setAction('')} className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
-                <button type="submit" data-submit disabled={busy || Number(amount || 0) <= 0} className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50">
+                <button type="submit" data-submit disabled={busy || Number(amount || 0) <= 0} className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50">
                   {busy ? 'Registrando...' : `Devolver ${money(Number(amount || 0), sale?.currency)}`}
                 </button>
               </div>
@@ -294,8 +294,8 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                 <div className="flex justify-between"><span>IGV {sale.tax_rate}%{sale.prices_include_tax ? ' (incluido en el precio)' : ''}</span><span className="tabular-nums">{money(sale.tax, sale?.currency)}</span></div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <span className="font-bold text-[#022340]">Total</span>
-                <span className="text-lg font-black text-[#022340] tabular-nums">{money(sale.total, sale?.currency)}</span>
+                <span className="font-bold text-brand-ink">Total</span>
+                <span className="text-lg font-black text-brand-ink tabular-nums">{money(sale.total, sale?.currency)}</span>
               </div>
               {sale.balance > 0 && sale.status !== 'void' && (
                 <div className="flex justify-between text-amber-700 font-semibold" data-balance><span>Por cobrar</span><span className="tabular-nums">{money(sale.balance, sale?.currency)}</span></div>
@@ -313,7 +313,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
               empty="Aún no se ha cobrado nada."
               renderRow={(payment) => (
                 <li key={payment.id} className="flex items-center gap-3 px-5 py-3">
-                  <span className={`p-2 rounded-lg shrink-0 ${payment.amount < 0 ? 'bg-rose-50 text-rose-600' : 'bg-[#84D0D9]/20 text-[#022340]'}`}>{payment.amount < 0 ? <RotateCcw size={16} /> : METHOD_ICONS[payment.method] ?? <Wallet size={16} />}</span>
+                  <span className={`p-2 rounded-lg shrink-0 ${payment.amount < 0 ? 'bg-rose-50 text-rose-600' : 'bg-brand-soft/20 text-brand-ink'}`}>{payment.amount < 0 ? <RotateCcw size={16} /> : METHOD_ICONS[payment.method] ?? <Wallet size={16} />}</span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-slate-800">{payment.amount < 0 ? `Devolución · ${payment.method_label}` : `${payment.method_label}${payment.reference ? ` · ${payment.reference}` : ''}`}</span>
                     <span className="block text-xs text-slate-500 truncate">{momentOf(payment.at)}{payment.by ? ` · ${payment.by}` : ''}{payment.register ? ` · ${payment.register}` : ''}</span>
@@ -326,8 +326,8 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
 
           {sale.invoice && (
             <section className="rounded-2xl border border-slate-200 overflow-hidden" data-invoice={sale.invoice.number}>
-              <div className="flex items-center justify-between gap-3 px-5 py-3 bg-[#022340] text-white">
-                <span className="flex items-center gap-2 text-sm font-bold"><Receipt size={16} className="text-[#84D0D9]" /> {sale.invoice.doc_type_label}</span>
+              <div className="flex items-center justify-between gap-3 px-5 py-3 bg-brand text-white">
+                <span className="flex items-center gap-2 text-sm font-bold"><Receipt size={16} className="text-brand-soft" /> {sale.invoice.doc_type_label}</span>
                 <span className="text-sm font-black tabular-nums">{sale.invoice.number}</span>
               </div>
               <div className="px-5 py-3 text-sm text-slate-600">
@@ -355,7 +355,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                       {refund.method_label} · {momentOf(refund.at)}{refund.by ? ` · ${refund.by}` : ''}
                     </span>
                     {refund.credit_note && (
-                      <span className="block text-xs font-medium text-[#3F768C] mt-0.5" data-credit-note={refund.credit_note.number}>
+                      <span className="block text-xs font-medium text-brand-accent mt-0.5" data-credit-note={refund.credit_note.number}>
                         Nota de crédito {refund.credit_note.number}{refund.credit_note.simulated ? ' · simulación' : ''}
                       </span>
                     )}

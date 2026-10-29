@@ -86,7 +86,7 @@ class PosController extends SaleController
             'branch_id'      => $branch?->id,
             'currency'       => Currency::of($tenant),
             'tax'            => ['rate' => $rules['tax_rate'], 'included' => $rules['prices_include_tax']],
-            'products_ready' => Cart::productsReady(),
+            'products_ready' => Cart::productsEnabled($tenant),
             'can'            => [
                 'create'   => $user->allows('pos.create'),
                 'edit'     => $user->allows('pos.edit'),
@@ -96,6 +96,8 @@ class PosController extends SaleController
                 'packages' => $user->allows('packages.create'),
             ],
             'packages_enabled' => \App\Support\Packages::enabled($tenant),
+            'inventory_enabled' => \App\Support\Inventory::enabled($tenant),
+            'allow_negative_stock' => (bool) AppointmentFlow::rule($tenant, 'inventory.allow_negative'),
             'pending'        => ['appointments' => [], 'sales' => []],
             'services'       => [],
             'products'       => [],
@@ -145,8 +147,9 @@ class PosController extends SaleController
             $payload['packages'] = $plans->map(fn ($p) => \App\Support\Packages::presentPlan($tenant, $p, $planItems[$p->id] ?? collect()))->values();
         }
 
-        if (Cart::productsReady()) {
+        if (Cart::productsEnabled($tenant)) {
             $productCategories = DB::table('product_categories')->where('tenant_id', $tenant->id)->pluck('name', 'id');
+            $branchStocks = $payload['inventory_enabled'] ? \App\Support\Inventory::branchStocks($tenant, $branch->id) : [];
 
             $payload['products'] = DB::table('products')
                 ->where('tenant_id', $tenant->id)
@@ -156,11 +159,13 @@ class PosController extends SaleController
                 ->orderBy('name')
                 ->get()
                 ->map(fn ($p) => [
-                    'id'       => $p->id,
-                    'name'     => $p->name,
-                    'sku'      => $p->sku,
-                    'price'    => round((float) $p->price, 2),
-                    'category' => $productCategories[$p->category_id] ?? null,
+                    'id'          => $p->id,
+                    'name'        => $p->name,
+                    'sku'         => $p->sku,
+                    'price'       => round((float) $p->price, 2),
+                    'category'    => $productCategories[$p->category_id] ?? null,
+                    'track_stock' => (bool) ($p->track_stock ?? true),
+                    'stock'       => $payload['inventory_enabled'] && ($p->track_stock ?? true) ? ($branchStocks[$p->id] ?? 0) : null,
                 ])->values();
         }
 
@@ -230,7 +235,7 @@ class PosController extends SaleController
         $row = $this->sale($request, $tenant, $sale);
 
         $validated = $request->validate([
-            'method'          => ['required', Rule::in(array_keys(Sales::METHODS))],
+            'method'          => ['required', Rule::in([...array_keys(Sales::METHODS), ...Sales::LOYALTY_METHODS])],
             'amount'          => 'required|numeric|min:0.01|max:9999999',
             'received'        => 'nullable|numeric|min:0|max:9999999',
             'reference'       => 'nullable|string|max:190',

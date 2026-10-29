@@ -25,7 +25,8 @@
         .fields { padding: 14px 18px 0; }
         .field { margin-bottom: 11px; page-break-inside: avoid; }
         .field .name { font-size: 9px; font-weight: bold; color: #475569; margin-bottom: 3px; }
-        .field .answer { border: 1px solid #e2e8f0; background: #ffffff; padding: 6px 9px; min-height: 12px; white-space: pre-line; }
+        .field .answer { border: 1px solid #e2e8f0; background: #ffffff; padding: 6px 9px; min-height: 12px; }
+        .multiline { white-space: pre-line; }
         .empty { color: #94a3b8; font-style: italic; }
         .chip { display: inline-block; border: 1px solid #cbd5e1; padding: 2px 7px; margin: 0 4px 3px 0; font-size: 9.5px; }
         .box { margin: 6px 18px 0; border: 1px solid #e2e8f0; background: #f8fafc; padding: 10px 12px; page-break-inside: avoid; }
@@ -33,23 +34,31 @@
         .note { border-top: 1px solid #e2e8f0; padding: 6px 0; }
         .note:first-of-type { border-top: 0; }
         .small { font-size: 8.5px; color: #64748b; }
-        table.sign { width: 100%; margin-top: 44px; border-collapse: collapse; page-break-inside: avoid; }
-        table.sign td { width: 50%; padding: 0 28px; text-align: center; }
+        table.sign { width: 100%; margin-top: 24px; border-collapse: collapse; page-break-inside: avoid; }
+        table.sign td { width: 50%; padding: 0 28px; text-align: center; vertical-align: top; }
         .line { border-top: 1px solid #475569; padding-top: 4px; font-size: 9px; color: #475569; }
-        .footer { position: fixed; bottom: -30px; left: 0; right: 0; font-size: 8px; color: #94a3b8; text-align: center; }
+        .footer { position: fixed; bottom: -34px; left: 0; right: 70px; font-size: 8px; color: #94a3b8; text-align: left; }
+        .footer .brand { color: #64748b; }
+        .logo { float: left; background: #ffffff; padding: 5px 8px; margin-right: 12px; }
+        .logo img { max-height: 38px; max-width: 120px; }
+        .signature img { max-height: 60px; max-width: 170px; }
+        .signature { height: 64px; }
         .draft { color: #b45309; border: 1px solid #f59e0b; background: #fffbeb; padding: 6px 10px; margin: 10px 18px 0; font-size: 9.5px; }
     </style>
 </head>
 <body>
     <div class="footer">
-        {{ $company }} · Documento generado el {{ $printedAt }} por {{ $printedBy }} · Información confidencial
+        @if ($document['footer'])<div class="brand">{{ $document['footer'] }}</div>@endif
+        Documento generado el {{ $printedAt }} por {{ $printedBy }} · Información confidencial
     </div>
 
     <div class="header">
+        @if ($document['logo'])<div class="logo"><img src="{{ $document['logo'] }}" alt=""></div>@endif
         <span class="badge">{{ $statusLabels[$record['status']] ?? $record['status'] }}</span>
         <div class="kicker">Ficha de atención</div>
         <h1>{{ $record['template_name'] ?? 'Ficha de atención' }}</h1>
         <div class="company">{{ $company }}</div>
+        <div style="clear: both;"></div>
     </div>
 
     <table class="meta">
@@ -113,7 +122,7 @@
                     @elseif ($field['type'] === 'odontogram')
                         @foreach ((array) $value as $tooth => $state)<span class="chip">Pieza {{ $tooth }}: {{ $toothStates[$state] ?? $state }}</span>@endforeach
                     @else
-                        {{ is_scalar($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE) }}
+                        <span class="multiline">{{ is_scalar($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE) }}</span>
                     @endif
                 </div>
             </div>
@@ -144,8 +153,14 @@
 
     <table class="sign">
         <tr>
-            <td><div class="line">{{ $record['professional'] ?? $pro }}</div></td>
-            <td><div class="line">{{ $record['customer']['name'] ?? $client }}</div></td>
+            <td>
+                <div class="signature">@if ($signer['image'])<img src="{{ $signer['image'] }}" alt="">@endif</div>
+                <div class="line">{{ $record['professional'] ?? $pro }}@if ($signer['license'])<br>{{ $signer['license'] }}@endif</div>
+            </td>
+            <td>
+                <div class="signature"></div>
+                <div class="line">{{ $record['customer']['name'] ?? $client }}</div>
+            </td>
         </tr>
     </table>
 </body>

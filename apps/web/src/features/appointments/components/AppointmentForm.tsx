@@ -182,9 +182,9 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     e.preventDefault();
     setError('');
 
-    if (!isReschedule && !customer) return setError(`Elige un ${vocab.client.toLowerCase()}.`);
+    if (!isReschedule && !customer) return setError(`Elige ${vocab.pick('client', 'un', 'una')} ${vocab.client.toLowerCase()}.`);
     if (!serviceId) return setError('Elige un servicio.');
-    if (!professionalId) return setError(`Elige un ${vocab.pro.toLowerCase()} o uno de los horarios libres.`);
+    if (!professionalId) return setError(`Elige ${vocab.pick('pro', 'un', 'una')} ${vocab.pro.toLowerCase()} o uno de los horarios libres.`);
     if (!time) return setError('Elige una hora.');
 
     const startsAt = `${date}T${time}`;
@@ -304,10 +304,10 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
                     <button
                       type="button"
                       data-new-customer
-                      title={`Nuevo ${vocab.client.toLowerCase()}`}
-                      aria-label={`Nuevo ${vocab.client.toLowerCase()}`}
+                      title={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client.toLowerCase()}`}
+                      aria-label={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client.toLowerCase()}`}
                       onClick={() => setCustomerFormOpen(true)}
-                      className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+                      className="shrink-0 p-2.5 bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
                     >
                       <Plus size={18} className="stroke-[2.5]" />
                     </button>
@@ -347,7 +347,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             <div>
               <Select
                 label={`${vocab.dependent}${dependents.required ? ' *' : ''}`}
-                placeholder={(customer.dependents?.length ?? 0) === 0 ? `Aún no tiene ${vocab.dependents.toLowerCase()}: agrégalo con +` : dependents.required ? 'Seleccione...' : 'Ninguno'}
+                placeholder={(customer.dependents?.length ?? 0) === 0 ? `Aún no tiene ${vocab.dependents.toLowerCase()}: ${vocab.pick('dependent', 'agrégalo', 'agrégala')} con +` : dependents.required ? 'Seleccione...' : vocab.pick('dependent', 'Ninguno', 'Ninguna')}
                 value={dependentId}
                 onChange={(e) => setDependentId(String(e.target.value))}
                 options={(customer.dependents ?? []).map((d) => ({ value: d.id, label: d.species ? `${d.name} (${d.species})` : d.name }))}
@@ -460,8 +460,8 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
                             onClick={() => pickSlot(group.professional.id, slot)}
                             className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
                               isPicked
-                                ? 'bg-[#022340] text-white border-[#022340]'
-                                : 'bg-white text-slate-700 border-slate-200 hover:border-[#3F768C] hover:text-[#022340]'
+                                ? 'bg-brand text-white border-brand'
+                                : 'bg-white text-slate-700 border-slate-200 hover:border-brand-accent hover:text-brand-ink'
                             }`}
                           >
                             {slot}

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -17,15 +18,7 @@ class DataExportController extends Controller
         $user = $request->user();
         abort_unless($user->tenant_id, 403);
 
-        $validated = $request->validate([
-            'screen'    => 'required|string|max:100',
-            'title'     => 'required|string|max:150',
-            'format'    => 'required|in:xlsx,csv',
-            'scope'     => 'required|in:filtered,selected',
-            'rows'      => 'required|integer|min:0|max:1000000',
-            'filters'   => 'nullable|array|max:30',
-            'filters.*' => 'string|max:300',
-        ]);
+        $validated = $this->validated($request);
 
         AuditEvent::create([
             'tenant_id'     => $user->tenant_id,
@@ -39,12 +32,51 @@ class DataExportController extends Controller
                 'format'  => $validated['format'],
                 'scope'   => $validated['scope'],
                 'rows'    => (int) $validated['rows'],
+                'limit'   => $validated['limit'] ?? null,
+                'columns' => array_values($validated['columns'] ?? []),
                 'filters' => array_values($validated['filters'] ?? []),
                 'branch'  => $user->branch_id ? DB::table('branches')->where('id', $user->branch_id)->value('name') : null,
             ],
         ]);
 
         return response()->json(['ok' => true], 201);
+    }
+
+    public function platform(Request $request)
+    {
+        $validated = $this->validated($request);
+
+        Audit::log($request, self::ACTION, [
+            'entity_type'  => mb_substr($validated['screen'], 0, 100),
+            'entity_label' => $validated['title'],
+            'after'        => [
+                'title'   => $validated['title'],
+                'format'  => $validated['format'],
+                'scope'   => $validated['scope'],
+                'rows'    => (int) $validated['rows'],
+                'limit'   => $validated['limit'] ?? null,
+                'columns' => array_values($validated['columns'] ?? []),
+                'filters' => array_values($validated['filters'] ?? []),
+            ],
+        ]);
+
+        return response()->json(['ok' => true], 201);
+    }
+
+    private function validated(Request $request): array
+    {
+        return $request->validate([
+            'screen'    => 'required|string|max:100',
+            'title'     => 'required|string|max:150',
+            'format'    => 'required|in:xlsx,csv',
+            'scope'     => 'required|in:filtered,selected',
+            'rows'      => 'required|integer|min:0|max:1000000',
+            'limit'     => 'nullable|integer|min:1|max:1000000',
+            'columns'   => 'nullable|array|max:80',
+            'columns.*' => 'string|max:150',
+            'filters'   => 'nullable|array|max:30',
+            'filters.*' => 'string|max:300',
+        ]);
     }
 
     public function index(Request $request)
@@ -73,6 +105,8 @@ class DataExportController extends Controller
                     'format'  => $data['format'] ?? '',
                     'scope'   => $data['scope'] ?? 'filtered',
                     'rows'    => (int) ($data['rows'] ?? 0),
+                    'limit'   => $data['limit'] ?? null,
+                    'columns' => $data['columns'] ?? [],
                     'filters' => $data['filters'] ?? [],
                 ];
             })->values(),

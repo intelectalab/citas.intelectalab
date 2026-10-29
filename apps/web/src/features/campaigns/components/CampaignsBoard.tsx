@@ -5,7 +5,7 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarCheck, CalendarClock, Copy, Eye, Mail, MailCheck, Pencil, XCircle } from 'lucide-react';
-import { DataTable, type Column, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
@@ -60,7 +60,7 @@ export default function CampaignsBoard() {
   const metricCards: MetricCardItem[] = [
     card('Enviadas', campaigns.filter((c) => c.status === 'sent' || c.status === 'sending').length, <MailCheck size={18} />, 'sent', 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
     card('Programadas', campaigns.filter((c) => c.status === 'scheduled').length, <CalendarClock size={18} />, 'scheduled', 'text-violet-600', 'border-violet-500 ring-2 ring-violet-500/20'),
-    card('Agendaron después', bookedTotal, <CalendarCheck size={18} />, null, 'text-[#3F768C]', ''),
+    card('Agendaron después', bookedTotal, <CalendarCheck size={18} />, null, 'text-brand-accent', ''),
     card('Canceladas', campaigns.filter((c) => c.status === 'cancelled').length, <XCircle size={18} />, 'cancelled', 'text-slate-500', 'border-slate-400 ring-2 ring-slate-400/20'),
   ];
 
@@ -69,7 +69,7 @@ export default function CampaignsBoard() {
       header: 'Campaña',
       cell: (c) => (
         <div key={`name-${c.id}`} className="min-w-0 max-w-sm">
-          <Link href={`/campaigns/${c.id}`} data-open-campaign={c.name} className={`${styles.customerName} hover:text-[#3F768C] transition-colors truncate block`}>{c.name}</Link>
+          <Link href={`/campaigns/${c.id}`} data-open-campaign={c.name} className={`${styles.customerName} hover:text-brand-accent transition-colors truncate block`}>{c.name}</Link>
           <span className="block text-xs text-slate-400 truncate">{c.audience}</span>
         </div>
       ),
@@ -93,7 +93,7 @@ export default function CampaignsBoard() {
     },
     {
       header: 'Agendaron después',
-      cell: (c) => <span key={`booked-${c.id}`} className="text-sm font-semibold text-[#022340]">{c.results ? c.results.booked.customers : '—'}</span>,
+      cell: (c) => <span key={`booked-${c.id}`} className="text-sm font-semibold text-brand-ink">{c.results ? c.results.booked.customers : '—'}</span>,
     },
     {
       header: 'Estado',
@@ -103,16 +103,33 @@ export default function CampaignsBoard() {
       header: 'Acciones',
       cell: (c) => (
         <div key={`actions-${c.id}`} className="flex items-center gap-1">
-          <Link href={`/campaigns/${c.id}`} title="Ver resultados" className="p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:bg-slate-100 transition-colors"><Eye size={16} /></Link>
+          <Link href={`/campaigns/${c.id}`} title="Ver resultados" className="p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors"><Eye size={16} /></Link>
           {c.editable && can('campaigns.edit') && (
-            <button type="button" title="Cambiar campaña" onClick={() => openCampaign(c)} className="p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:bg-slate-100 transition-colors"><Pencil size={16} /></button>
+            <button type="button" title="Cambiar campaña" onClick={() => openCampaign(c)} className="p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors"><Pencil size={16} /></button>
           )}
           {can('campaigns.create') && (
-            <button type="button" title="Duplicar: crear una campaña nueva con lo mismo" data-action="duplicate" data-duplicate={c.name} onClick={() => openCampaign(null, c)} className="p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:bg-slate-100 transition-colors"><Copy size={16} /></button>
+            <button type="button" title="Duplicar: crear una campaña nueva con lo mismo" data-action="duplicate" data-duplicate={c.name} onClick={() => openCampaign(null, c)} className="p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors"><Copy size={16} /></button>
           )}
         </div>
       ),
     },
+  ];
+
+  const exportColumns: ExportColumn<Campaign>[] = [
+    { header: 'Campaña', value: (c) => c.name },
+    { header: 'A quiénes', value: (c) => c.audience },
+    { header: 'Asunto', value: (c) => c.subject },
+    { header: 'Cupón', value: (c) => c.coupon?.code },
+    { header: 'Estado', value: (c) => c.status_label },
+    { header: 'Creada', type: 'datetime', value: (c) => c.created_at },
+    { header: 'Programada para', type: 'datetime', value: (c) => c.scheduled_at },
+    { header: 'Enviada', type: 'datetime', value: (c) => c.sent_at },
+    { header: 'Creada por', value: (c) => c.by },
+    { header: 'Enviados', type: 'number', value: (c) => c.results?.sent },
+    { header: 'Por salir', type: 'number', value: (c) => c.results?.pending },
+    { header: 'Con error', type: 'number', value: (c) => c.results?.failed },
+    { header: 'Agendaron después', type: 'number', value: (c) => c.results?.booked.customers },
+    { header: 'Citas agendadas', type: 'number', value: (c) => c.results?.booked.appointments },
   ];
 
   return (
@@ -141,6 +158,9 @@ export default function CampaignsBoard() {
           ]}
           columns={columns}
           data={rows}
+          exportTitle="Campañas"
+          exportScreen="campaigns"
+          exportColumns={exportColumns}
           getItemKey={(c) => c.id}
           entityLabel={rows.length === 1 ? 'campaña' : 'campañas'}
           metricCards={metricCards}

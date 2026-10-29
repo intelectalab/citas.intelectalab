@@ -100,6 +100,12 @@ class Access
             'edit'   => 'Cambiar salas y equipos, o ponerlos fuera de uso',
             'delete' => 'Eliminar salas y equipos',
         ]],
+        'quotes' => ['label' => 'Presupuestos', 'module' => 'quotes', 'actions' => [
+            'view'   => 'Ver los presupuestos, planes de tratamiento y cronogramas de cuotas',
+            'create' => 'Crear presupuestos y planes de tratamiento para {clients}',
+            'edit'   => 'Cambiar presupuestos, aprobarlos, registrar sesiones avanzadas y gestionar cuotas',
+            'delete' => 'Anular o rechazar presupuestos',
+        ]],
         'pos' => ['label' => 'Punto de venta', 'module' => 'pos', 'actions' => [
             'view'   => 'Abrir el punto de venta y ver lo que falta cobrar',
             'create' => 'Armar ventas en el carrito con citas, servicios y productos, y dejarlas por cobrar',
@@ -124,11 +130,17 @@ class Access
             'edit'   => 'Cambiar cupones',
             'delete' => 'Eliminar cupones',
         ]],
-        'products' => ['label' => 'Productos', 'module' => 'pos', 'actions' => [
+        'products' => ['label' => 'Productos', 'module' => 'pos|inventory', 'actions' => [
             'view'   => 'Ver los productos',
             'create' => 'Registrar productos y sus categorías',
             'edit'   => 'Cambiar productos y sus precios',
             'delete' => 'Eliminar productos',
+        ]],
+        'inventory' => ['label' => 'Inventario', 'module' => 'inventory', 'actions' => [
+            'view'   => 'Ver las existencias, el kárdex, las órdenes de compra y los traslados entre sedes',
+            'create' => 'Registrar entradas, salidas, órdenes de compra, proveedores y traslados entre sedes',
+            'edit'   => 'Hacer conteos físicos, recibir mercadería, configurar costos, stocks mínimos e insumos por servicio',
+            'delete' => 'Cancelar órdenes de compra o traslados y eliminar proveedores',
         ]],
         'packages' => ['label' => 'Paquetes', 'module' => 'packages', 'actions' => [
             'view'   => 'Ver los paquetes de los clientes y el catálogo de paquetes',
@@ -136,6 +148,12 @@ class Access
             'edit'   => 'Cambiar paquetes del catálogo y dar más días a un paquete vendido',
             'delete' => 'Anular un paquete vendido, devolver lo no usado y quitar paquetes del catálogo',
             'use'    => 'Descontar a mano una sesión de un paquete, sin cita (queda registrado quién y por qué)',
+        ]],
+        'loyalty' => ['label' => 'Puntos y gift cards', 'module' => 'loyalty', 'actions' => [
+            'view'   => 'Ver los puntos acumulados por {clients} y las tarjetas de regalo (gift cards)',
+            'create' => 'Emitir tarjetas de regalo y registrar puntos por compras o referidos',
+            'edit'   => 'Ajustar puntos, descontar saldo o ampliar el vencimiento de una gift card',
+            'delete' => 'Anular tarjetas de regalo vigentes',
         ]],
         'messages' => ['label' => 'Mensajes a clientes', 'module' => null, 'actions' => [
             'view'   => 'Ver los mensajes enviados y programados a los clientes',
@@ -166,12 +184,15 @@ class Access
             'edit'   => 'Cambiar usuarios, roles y permisos',
             'delete' => 'Eliminar roles',
         ]],
+        'audit' => ['label' => 'Auditoría', 'module' => null, 'actions' => [
+            'view' => 'Ver la auditoría: quién hizo qué y cuándo en la empresa. Con un rol de una sede, solo lo de su sede',
+        ]],
         'data' => ['label' => 'Exportar datos', 'module' => null, 'actions' => [
             'export' => 'Descargar en Excel o CSV las listas que puede ver, con los filtros que tenga puestos. Cada descarga queda registrada',
         ]],
     ];
 
-    public const SECTIONS = ['agenda' => 'Agenda', 'care' => 'Atención', 'team' => 'Equipo y catálogo', 'sales' => 'Ventas', 'loyalty' => 'Fidelización', 'company' => 'Tu empresa', 'footer' => 'Al pie del menú', 'other' => 'Fuera del menú'];
+    public const SECTIONS = ['agenda' => 'Agenda', 'care' => 'Atención', 'team' => 'Equipo y catálogo', 'sales' => 'Ventas', 'inventory' => 'Inventario', 'loyalty' => 'Fidelización', 'marketing' => 'Marketing', 'company' => 'Tu empresa', 'footer' => 'Al pie del menú', 'other' => 'Fuera del menú'];
 
     public const LAYOUT = [
         'agenda'           => ['section' => 'agenda', 'screens' => ['Agenda', 'Citas'], 'short' => ['view' => 'Ver', 'create' => 'Agendar', 'edit' => 'Confirmar, atender y cancelar']],
@@ -183,6 +204,7 @@ class Access
         'holidays'         => ['section' => 'agenda', 'screens' => [], 'note' => 'Es la pestaña Feriados de Bloqueos y ausencias.', 'short' => ['view' => 'Ver', 'create' => 'Agregar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'attention'        => ['section' => 'agenda', 'screens' => ['Tiempos de atención'], 'short' => ['view' => 'Ver']],
         'customers'        => ['section' => 'care', 'screens' => ['{Clients}'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar datos', 'delete' => 'Eliminar']],
+        'quotes'           => ['section' => 'care', 'screens' => ['Presupuestos'], 'short' => ['view' => 'Ver', 'create' => 'Crear planes', 'edit' => 'Aprobar y avanzar sesiones', 'delete' => 'Anular']],
         'records'          => ['section' => 'care', 'screens' => ['Fichas de atención'], 'short' => ['view' => 'Ver', 'edit' => 'Llenar, firmar y corregir']],
         'record_templates' => ['section' => 'care', 'screens' => [], 'note' => 'Se arman dentro de Fichas de atención.', 'short' => ['create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'services'         => ['section' => 'team', 'screens' => ['Servicios'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
@@ -193,23 +215,23 @@ class Access
         'sales'            => ['section' => 'sales', 'screens' => ['Ventas'], 'short' => ['view' => 'Ver', 'create' => 'Cobrar', 'delete' => 'Anular y devolver']],
         'payments'         => ['section' => 'sales', 'screens' => ['Pagos'], 'short' => ['view' => 'Ver']],
         'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar']],
-        'coupons'          => ['section' => 'sales', 'screens' => ['Cupones'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
-        'products'         => ['section' => 'sales', 'screens' => ['Productos'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
+        'products'         => ['section' => 'inventory', 'screens' => ['Productos y stock'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
+        'inventory'        => ['section' => 'inventory', 'screens' => ['Kárdex', 'Traslados', 'Compras'], 'short' => ['view' => 'Ver', 'create' => 'Mover, comprar y trasladar', 'edit' => 'Contar, recibir y ajustar', 'delete' => 'Cancelar y eliminar']],
         'packages'         => ['section' => 'loyalty', 'screens' => ['Paquetes'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar más días', 'delete' => 'Anular y devolver']],
-        'messages'         => ['section' => 'loyalty', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar']],
-        'campaigns'        => ['section' => 'loyalty', 'screens' => ['Campañas'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar o cancelar']],
+        'loyalty'          => ['section' => 'loyalty', 'screens' => ['Puntos', 'Gift cards'], 'short' => ['view' => 'Ver', 'create' => 'Emitir y acreditar', 'edit' => 'Ajustar y canjear', 'delete' => 'Anular']],
+        'campaigns'        => ['section' => 'marketing', 'screens' => ['Campañas'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar o cancelar']],
+        'messages'         => ['section' => 'marketing', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar']],
+        'coupons'          => ['section' => 'marketing', 'screens' => ['Cupones'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'branches'         => ['section' => 'company', 'screens' => ['Sucursales'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar']],
         'company'          => ['section' => 'company', 'screens' => ['Empresa'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
         'users'            => ['section' => 'company', 'screens' => ['Usuarios y roles'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar permisos', 'delete' => 'Eliminar roles']],
+        'audit'            => ['section' => 'company', 'screens' => ['Auditoría'], 'short' => ['view' => 'Ver']],
         'settings'         => ['section' => 'footer', 'screens' => ['Configuración'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
         'data'             => ['section' => 'other', 'screens' => [], 'note' => 'No es una pantalla: es el botón Exportar de las listas.', 'short' => []],
     ];
 
     public const ADMIN_ONLY = [
-        ['name' => 'Presupuestos', 'module' => 'quotes', 'section' => 'sales', 'before' => 'pos'],
-        ['name' => 'Inventario', 'module' => 'inventory', 'section' => 'sales', 'before' => null],
-        ['name' => 'Membresías', 'module' => 'memberships', 'section' => 'loyalty', 'before' => 'campaigns'],
-        ['name' => 'Puntos y gift cards', 'module' => 'loyalty', 'section' => 'loyalty', 'before' => 'campaigns'],
+        ['name' => 'Membresías', 'module' => 'memberships', 'section' => 'loyalty', 'before' => 'packages'],
     ];
 
     private const EVERYTHING = ['view', 'create', 'edit', 'delete'];
@@ -230,9 +252,9 @@ class Access
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'schedules' => ['view', 'edit'], 'rooms' => self::EVERYTHING,
-                'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING,
+                'quotes' => self::EVERYTHING, 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING, 'inventory' => self::EVERYTHING,
                 'sales' => self::EVERYTHING, 'payments' => ['view'], 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
-                'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'messages' => ['view', 'create', 'edit'],
+                'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'loyalty' => self::EVERYTHING, 'messages' => ['view', 'create', 'edit'],
                 'campaigns' => ['view', 'create', 'edit'],
                 'branches' => ['view'],
                 'users' => ['view', 'create', 'edit'],
@@ -248,9 +270,9 @@ class Access
                 'blocks' => ['view'], 'holidays' => ['view'],
                 'customers' => ['view', 'create', 'edit'],
                 'services' => ['view'], 'professionals' => ['view'], 'schedules' => ['view'], 'rooms' => ['view'],
-                'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
+                'quotes' => ['view', 'create', 'edit'], 'pos' => ['view', 'create', 'edit'], 'products' => ['view'], 'inventory' => ['view', 'create'],
                 'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
-                'packages' => ['view', 'use'], 'messages' => ['view', 'create', 'edit'],
+                'packages' => ['view', 'use'], 'loyalty' => ['view', 'create', 'edit'], 'messages' => ['view', 'create', 'edit'],
             ],
         ],
         'cashier' => [
@@ -259,9 +281,9 @@ class Access
             'scope' => 'branch',
             'permissions' => [
                 'agenda' => ['view'], 'customers' => ['view'],
-                'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
+                'quotes' => ['view'], 'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
                 'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
-                'packages' => ['view'], 'messages' => ['view'],
+                'packages' => ['view'], 'loyalty' => ['view', 'create'], 'messages' => ['view'],
             ],
         ],
         'professional' => [
@@ -273,7 +295,7 @@ class Access
                 'blocks' => self::EVERYTHING, 'holidays' => ['view'], 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit'], 'records' => ['view', 'edit'],
                 'services' => ['view'], 'rooms' => ['view'],
-                'sales' => ['create'],
+                'quotes' => ['view', 'create', 'edit'], 'sales' => ['create'],
             ],
         ],
     ];

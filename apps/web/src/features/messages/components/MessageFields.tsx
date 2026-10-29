@@ -67,7 +67,7 @@ export default function MessageFields({ idPrefix, subject, onSubject, body, onBo
             <div className="flex flex-wrap gap-1.5">
               {variables.map((v) => (
                 <button key={v.token} type="button" data-variable={v.token} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(v.token)}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-[#84D0D9] bg-[#84D0D9]/15 text-[#022340] hover:bg-[#84D0D9]/30 transition-colors">
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-brand-soft bg-brand-soft/15 text-brand-ink hover:bg-brand-soft/30 transition-colors">
                   + {v.label}
                 </button>
               ))}
@@ -78,7 +78,7 @@ export default function MessageFields({ idPrefix, subject, onSubject, body, onBo
       </div>
 
       <div className="space-y-3">
-        <button type="button" data-toggle-preview onClick={() => setPreview(!preview)} className="flex items-center gap-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+        <button type="button" data-toggle-preview onClick={() => setPreview(!preview)} className="flex items-center gap-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink">
           {preview ? <EyeOff size={14} /> : <Eye size={14} />} {preview ? 'Ocultar cómo le llega' : 'Ver cómo le llega'}
         </button>
         {preview && <EmailPreview subject={subject} body={body} />}

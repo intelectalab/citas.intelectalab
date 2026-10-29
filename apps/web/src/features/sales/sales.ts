@@ -129,6 +129,28 @@ export interface ChargeContext {
     usable: { id: string; code: string; name: string; sessions_available: number; sessions_total: number; sessions_used: number; expires_at: string; days_left: number }[];
     can_use: boolean;
   } | null;
+  loyalty?: {
+    points_enabled: boolean;
+    gift_cards_enabled: boolean;
+    points: {
+      balance: number;
+      point_value: number;
+      min_redeem_points: number;
+      can_redeem: boolean;
+      redeemable_value: number;
+      max_amount: number;
+      amount_per_point: number;
+      will_earn: number;
+    } | null;
+    customer_gift_cards: {
+      id: string;
+      code: string;
+      balance: number;
+      initial_amount: number;
+      recipient_name: string | null;
+      expires_at: string | null;
+    }[];
+  } | null;
 }
 
 export interface CashMovement {
@@ -257,7 +279,7 @@ export interface SaleDetail extends Sale {
   appointments?: { id: string; code: string }[];
   can_edit?: boolean;
   void_reason: string | null;
-  issuer: { name: string; tax_id: string | null; address: string | null };
+  issuer: { name: string; tax_id: string | null; address: string | null; logo_url?: string | null; footer?: string };
   refunds: SaleRefund[];
   can_manage: boolean;
   void_blocked: string | null;

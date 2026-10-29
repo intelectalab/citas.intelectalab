@@ -151,7 +151,7 @@ export default function FormServiceCategory({
                         <button
                             type="submit"
                             disabled={loading || isDuplicate || !name.trim() || !!successMessage}
-                            className="px-4 py-2 text-xs font-medium text-white bg-[#022340] hover:bg-[#022340]/90 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                            className="px-4 py-2 text-xs font-medium text-white bg-brand hover:bg-brand/90 rounded-xl transition-colors shadow-sm disabled:opacity-50"
                         >
                             {loading ? 'Guardando...' : 'Crear Categoría'}
                         </button>

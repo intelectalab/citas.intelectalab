@@ -354,7 +354,7 @@ export default function FormSaaSPlan({
                             required
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Ej. Starter"
                           />
                         </div>
@@ -365,7 +365,7 @@ export default function FormSaaSPlan({
                             required
                             value={formData.code_internal}
                             onChange={(e) => setFormData({ ...formData, code_internal: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Ej. STA"
                           />
                         </div>
@@ -375,7 +375,7 @@ export default function FormSaaSPlan({
                             rows={3}
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Describe para qué tipo de empresa está pensado este plan."
                           />
                         </div>
@@ -395,7 +395,7 @@ export default function FormSaaSPlan({
                             type="number"
                             value={formData.presentation_order}
                             onChange={(e) => setFormData({ ...formData, presentation_order: parseInt(e.target.value) || 0 })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                           />
                         </div>
                         <div>
@@ -423,7 +423,7 @@ export default function FormSaaSPlan({
                                 step="0.01"
                                 value={formData.price_monthly}
                                 onChange={(e) => setFormData({ ...formData, price_monthly: parseFloat(e.target.value) || 0 })}
-                                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               />
                             </div>
                             <div>
@@ -433,7 +433,7 @@ export default function FormSaaSPlan({
                                 step="0.01"
                                 value={formData.price_yearly}
                                 onChange={(e) => setFormData({ ...formData, price_yearly: parseFloat(e.target.value) || 0 })}
-                                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               />
                             </div>
                           </div>
@@ -468,7 +468,7 @@ export default function FormSaaSPlan({
                               disabled={!formData.has_trial}
                               value={formData.trial_days}
                               onChange={(e) => setFormData({ ...formData, trial_days: parseInt(e.target.value) || 0 })}
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 disabled:opacity-50 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 disabled:opacity-50 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             />
                           </div>
                           <div>
@@ -536,7 +536,7 @@ export default function FormSaaSPlan({
                                       onClick={() => handleModuleChange(mod.key)}
                                       className={`flex items-center justify-between gap-2 p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
                                         isSelected
-                                          ? 'border-[#030336] bg-[#030336]/10 text-[#030336] shadow-sm'
+                                          ? 'border-brand bg-brand/10 text-brand-ink shadow-sm'
                                           : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                                       }`}
                                     >
@@ -545,7 +545,7 @@ export default function FormSaaSPlan({
                                         <InfoTip text={mod.hint} title={mod.label} label={`Qué permite ${mod.label}`} />
                                       </span>
                                       <div className={`w-5 h-5 shrink-0 rounded-lg flex items-center justify-center transition-all ${
-                                        isSelected ? 'bg-[#030336] text-white' : 'border border-slate-300 bg-white'
+                                        isSelected ? 'bg-brand text-white' : 'border border-slate-300 bg-white'
                                       }`}>
                                         {isSelected && <Check size={12} strokeWidth={3} />}
                                       </div>
@@ -583,7 +583,7 @@ export default function FormSaaSPlan({
                                     limits: { ...formData.limits, [limit.key]: parseInt(e.target.value) || 0 },
                                   })
                                 }
-                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               />
                             </div>
                           ))}
@@ -606,7 +606,7 @@ export default function FormSaaSPlan({
                                   consumption: { ...formData.consumption, storage_gb: parseInt(e.target.value) || 0 },
                                 })
                               }
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             />
                           </div>
                           <div>
@@ -620,7 +620,7 @@ export default function FormSaaSPlan({
                                   consumption: { ...formData.consumption, api_requests_monthly: parseInt(e.target.value) || 0 },
                                 })
                               }
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             />
                           </div>
                         </div>
@@ -642,7 +642,7 @@ export default function FormSaaSPlan({
                                   support: { ...formData.support, level: e.target.value },
                                 })
                               }
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               placeholder="Ej. Estándar"
                             />
                           </div>
@@ -657,7 +657,7 @@ export default function FormSaaSPlan({
                                   support: { ...formData.support, tickets_monthly: parseInt(e.target.value) || 0 },
                                 })
                               }
-                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             />
                           </div>
                         </div>
@@ -685,13 +685,13 @@ export default function FormSaaSPlan({
                                   }
                                   className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
                                     isChecked
-                                      ? 'border-[#030336] bg-[#030336]/10 text-[#030336] shadow-sm'
+                                      ? 'border-brand bg-brand/10 text-brand-ink shadow-sm'
                                       : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                                   }`}
                                 >
                                   <span className="text-xs font-semibold uppercase">{featureKey.replace(/_/g, ' ')}</span>
                                   <div className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all ${
-                                    isChecked ? 'bg-[#030336] text-white' : 'border border-slate-300 bg-white'
+                                    isChecked ? 'bg-brand text-white' : 'border border-slate-300 bg-white'
                                   }`}>
                                     {isChecked && <Check size={12} strokeWidth={3} />}
                                   </div>
@@ -720,7 +720,7 @@ export default function FormSaaSPlan({
           <button
             type="submit"
             disabled={loading}
-            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-brand hover:bg-brand/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
           >
             {loading ? 'Guardando...' : isEditing ? 'Actualizar plan' : 'Crear plan'}
           </button>

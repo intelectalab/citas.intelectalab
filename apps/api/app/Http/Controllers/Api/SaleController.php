@@ -24,9 +24,11 @@ class SaleController extends AppointmentController
     private function blocked(Tenant $tenant, Appointment $appointment): ?string
     {
         if (\App\Support\Packages::ready() && $appointment->customer_package_id) {
-            $code = DB::table('customer_packages')->where('id', $appointment->customer_package_id)->value('code');
+            $package = DB::table('customer_packages')->where('id', $appointment->customer_package_id)->first(['code', 'name']);
 
-            return "Esta cita se paga con el paquete {$code}: no se cobra aparte.";
+            return str_starts_with((string) $package?->name, 'Plan de tratamiento')
+                ? "Esta cita es parte del {$package->name}: se paga con el presupuesto, no aparte."
+                : "Esta cita se paga con el paquete {$package?->code}: no se cobra aparte.";
         }
 
         if (in_array($appointment->status, AppointmentFlow::RELEASED, true)) {
@@ -60,7 +62,7 @@ class SaleController extends AppointmentController
 
     private function packageContext(Tenant $tenant, Appointment $appointment, ?object $sale): ?array
     {
-        if (!\App\Support\Packages::enabled($tenant)) {
+        if (!\App\Support\Packages::linkable($tenant)) {
             return null;
         }
 
@@ -115,15 +117,18 @@ class SaleController extends AppointmentController
         $rules = Sales::rules($tenant);
         $company = DB::table('companies')->where('tenant_id', $tenant->id)->orderBy('created_at')->first();
         $currency = $sale->currency ?? Currency::of($tenant);
+        $preview = Sales::totals($rules, $gross, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax'], 'currency' => $currency];
+        $due = $sale ? (float) $sale->balance : (float) $preview['total'];
 
         return [
             'sale'             => $sale ? Sales::present($sale) : null,
-            'preview'          => Sales::totals($rules, $gross, $applied['discount'] ?? 0) + ['tax_rate' => $rules['tax_rate'], 'prices_include_tax' => $rules['prices_include_tax'], 'currency' => $currency],
+            'preview'          => $preview,
             'coupon'           => $applied ? Coupons::summary($applied['coupon'], $applied['discount'], $currency) : null,
             'blocked'          => $blocked,
             'item'             => $item,
             'methods'          => collect(Sales::METHODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label, 'needs_reference' => in_array($key, Sales::NEEDS_REFERENCE, true)])->values(),
-            'partial_payments' => $rules['partial_payments'],
+            'partial_payments' => $rules['partial_payments'] || ($sale && \App\Support\Quotes::isQuoteSale($sale)),
+            'loyalty'          => \App\Support\Loyalty::chargeContext($tenant, $customer, $due),
             'cash'             => [
                 'required' => $rules['require_open_cash'],
                 'sessions' => Cash::openSessions($tenant->id, $branchId)->map(fn ($s) => ['id' => $s->id, 'register_name' => $s->register_name])->values(),
@@ -191,7 +196,7 @@ class SaleController extends AppointmentController
         $user = $request->user();
 
         $validated = $request->validate([
-            'method'          => ['required', Rule::in(array_keys(Sales::METHODS))],
+            'method'          => ['required', Rule::in([...array_keys(Sales::METHODS), ...Sales::LOYALTY_METHODS])],
             'amount'          => 'required|numeric|min:0.01|max:9999999',
             'received'        => 'nullable|numeric|min:0|max:9999999',
             'reference'       => 'nullable|string|max:190',

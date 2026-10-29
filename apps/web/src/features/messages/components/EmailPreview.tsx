@@ -45,7 +45,7 @@ export default function EmailPreview({ subject, body, design, version = 0, title
         <span className="text-xs font-bold text-slate-500">{title}</span>
         {loading && <Loader2 size={14} className="animate-spin text-slate-400" />}
       </div>
-      {subject !== undefined && <div className="px-5 py-3 text-sm font-bold text-[#022340] border-b border-slate-100" data-preview-subject>{shownSubject || 'Sin asunto'}</div>}
+      {subject !== undefined && <div className="px-5 py-3 text-sm font-bold text-brand-ink border-b border-slate-100" data-preview-subject>{shownSubject || 'Sin asunto'}</div>}
       {failed ? (
         <p className="px-5 py-4 text-sm text-slate-500">No se pudo mostrar la vista previa. Revisa tu conexión.</p>
       ) : (

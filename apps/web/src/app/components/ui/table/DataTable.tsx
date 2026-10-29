@@ -20,6 +20,8 @@ import styles from './DataTable.module.css';
 import Select from '@/app/components/common/Select';
 import DateFilter from './DateFilter';
 import { PAGE_SIZE } from '@/app/components/common/Pager';
+
+const ROW_OPTIONS = [6, 10, 25, 50, 100];
 import { dateRangeOf, describeDateFilter, inDateRange, type DateFilterValue, type DateRange } from './dateFilters';
 import ExportMenu from './ExportMenu';
 import ScreenJump from './ScreenJump';
@@ -159,7 +161,7 @@ export function DataTable<T extends Record<string, any>>({
   onViewChange,
 }: DataTableProps<T>) {
   const showBoard = Boolean(boardView) && view === 'board';
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const [selected, setSelected] = useState<Set<string | number>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
@@ -269,9 +271,24 @@ export function DataTable<T extends Record<string, any>>({
   }, [allData, dateValues, sortId, sortDir]);
 
   const [page, setPage] = useState(1);
-  const pages = Math.max(1, Math.ceil(data.length / pageSize));
+  const rowsKey = `table-rows:${exportScreen || title}`;
+  const [rows, setRows] = useState<number>(() => {
+    if (typeof window === 'undefined') return pageSize;
+    try {
+      const saved = Number(localStorage.getItem(rowsKey));
+      return ROW_OPTIONS.includes(saved) ? saved : pageSize;
+    } catch {
+      return pageSize;
+    }
+  });
+  const chooseRows = (value: number) => {
+    setRows(value);
+    setPage(1);
+    try { localStorage.setItem(rowsKey, String(value)); } catch {}
+  };
+  const pages = Math.max(1, Math.ceil(data.length / rows));
   const currentPage = Math.min(page, pages);
-  const pageRows = data.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pageRows = data.slice((currentPage - 1) * rows, currentPage * rows);
   const filterKey = JSON.stringify(filterValues);
 
   const selectedRows = data.filter((item) => selected.has(getItemKey(item)));
@@ -322,7 +339,7 @@ export function DataTable<T extends Record<string, any>>({
             {onPrimaryAction && primaryActionBlocked && (
               <div className={styles.blockedAction} data-primary-blocked>
                 <button type="button" className={`${styles.btnPrimary} ${styles.btnPrimaryBlocked}`} disabled aria-describedby="primary-blocked-reason">
-                  <Lock size={16} className="text-[#84D0D9]" />
+                  <Lock size={16} className="text-brand-soft" />
                   {primaryActionLabel}
                 </button>
                 <div id="primary-blocked-reason" role="tooltip" className={styles.blockedReason}>
@@ -332,7 +349,7 @@ export function DataTable<T extends Record<string, any>>({
             )}
             {onPrimaryAction && !primaryActionBlocked && (
               <button className={styles.btnPrimary} onClick={onPrimaryAction}>
-                <Plus size={18} className="text-[#84D0D9] stroke-[2.5]" />
+                <Plus size={18} className="text-brand-soft stroke-[2.5]" />
                 {primaryActionLabel}
               </button>
             )}
@@ -374,27 +391,27 @@ export function DataTable<T extends Record<string, any>>({
       </div>
 
       {metricCards && metricCards.length > 0 && (
-        <div className="mt-5 mb-5 px-4 relative z-10">
-          <div className={`grid grid-cols-1 sm:grid-cols-3 ${metricCards.length > 3 ? "xl:grid-cols-6 gap-4" : "gap-5"}`}>
+        <div className="mt-4 mb-4 sm:mt-5 sm:mb-5 px-3 sm:px-4 relative z-10">
+          <div className={`grid grid-cols-2 sm:grid-cols-3 gap-3 ${metricCards.length > 3 ? "xl:grid-cols-6 sm:gap-4" : "sm:gap-5"}`}>
             {metricCards.map((card, idx) => (
               <div
                 key={idx}
                 onClick={card.onClick}
-                className={`relative overflow-hidden bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 ${
+                className={`relative overflow-hidden bg-white px-3 sm:px-4 py-3 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 ${
                   card.onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] hover:border-slate-200' : ''
                 } ${card.borderColorClass || ''}`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 sm:gap-0">
                   <div>
                     <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
                       {card.title}
                     </span>
-                    <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">
+                    <div className="mt-0.5 text-lg sm:text-2xl font-extrabold tracking-tight text-slate-900">
                       {card.value}
                     </div>
                   </div>
                   {card.icon && (
-                    <div className={`p-2 rounded-xl bg-slate-50 border border-slate-100 ${card.iconColorClass || 'text-slate-500'}`}>
+                    <div className={`hidden sm:block p-2 rounded-xl bg-slate-50 border border-slate-100 ${card.iconColorClass || 'text-slate-500'}`}>
                       {card.icon}
                     </div>
                   )}
@@ -410,7 +427,7 @@ export function DataTable<T extends Record<string, any>>({
           <div className={styles.filterLeftGroup}>
             {onSearchChange && (
               <div className={styles.searchInputWrapper}>
-                <Search size={16} className="text-[#3F768C]" />
+                <Search size={16} className="text-brand-accent" />
                 <input
                   ref={searchRef}
                   type="text"
@@ -430,7 +447,7 @@ export function DataTable<T extends Record<string, any>>({
                 onClick={() => setShowFilters(!showFilters)}
                 className={`${styles.filterActionBtn} ${showFilters ? styles.filterActionBtnActive : ''}`}
               >
-                <SlidersHorizontal size={15} className={showFilters ? 'text-white' : 'text-[#3F768C]'} />
+                <SlidersHorizontal size={15} className={showFilters ? 'text-white' : 'text-brand-accent'} />
                 <span className={styles.btnText}>Filtro</span>
                 {activeFilterCount > 0
                   ? <span className={`${styles.countPill} ${showFilters ? styles.countPillOnDark : ''}`} data-filter-count>{activeFilterCount}</span>
@@ -445,7 +462,7 @@ export function DataTable<T extends Record<string, any>>({
                 onClick={() => setShowSort(!showSort)}
                 className={`${styles.filterActionBtn} ${showSort ? styles.filterActionBtnActive : ''}`}
               >
-                <ArrowUpDown size={15} className={showSort ? 'text-white' : 'text-[#3F768C]'} />
+                <ArrowUpDown size={15} className={showSort ? 'text-white' : 'text-brand-accent'} />
                 <span className={`${styles.btnText} ${styles.btnTextCollapse}`}>
                   {activeSort ? `Orden: ${activeSort.label}` : 'Ordenar por'}
                 </span>
@@ -472,7 +489,7 @@ export function DataTable<T extends Record<string, any>>({
                 ))}
               </div>
             )}
-            {exportColumns && exportColumns.length > 0 && can('data.export') && (
+            {exportColumns && exportColumns.length > 0 && (can('data.export') || (!user?.tenant && Boolean(user?.is_saas_admin))) && (
               <ExportMenu
                 title={exportTitle ?? title}
                 screen={exportScreen ?? (exportTitle ?? title)}
@@ -631,7 +648,7 @@ export function DataTable<T extends Record<string, any>>({
           <thead className={styles.thead}>
             <tr>
               <th className={styles.thCheckbox}>
-                <input type="checkbox" aria-label="Seleccionar todas las filas filtradas" data-select-all checked={allSelected} ref={(el) => { if (el) el.indeterminate = selectedRows.length > 0 && !allSelected; }} onChange={toggleAll} className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
+                <input type="checkbox" aria-label="Seleccionar todas las filas filtradas" data-select-all checked={allSelected} ref={(el) => { if (el) el.indeterminate = selectedRows.length > 0 && !allSelected; }} onChange={toggleAll} className="rounded border-slate-300 accent-brand cursor-pointer" />
               </th>
               {columns.map((col, idx) => (
                 <th key={idx} className={styles.th}>
@@ -644,7 +661,7 @@ export function DataTable<T extends Record<string, any>>({
             {pageRows.map((item) => (
               <tr key={getItemKey(item)} className={styles.tr}>
                 <td className={styles.thCheckbox} onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" aria-label="Seleccionar fila" data-select-row checked={selected.has(getItemKey(item))} onChange={() => toggleRow(getItemKey(item))} className="rounded border-slate-300 accent-[#022340] cursor-pointer" />
+                  <input type="checkbox" aria-label="Seleccionar fila" data-select-row checked={selected.has(getItemKey(item))} onChange={() => toggleRow(getItemKey(item))} className="rounded border-slate-300 accent-brand cursor-pointer" />
                 </td>
                 {columns.map((col, idx) => (
                   <td key={idx} className={col.className || styles.td}>
@@ -670,16 +687,28 @@ export function DataTable<T extends Record<string, any>>({
           {selectedRows.length > 0 && (
             <span className="text-xs text-slate-500" data-selected-count>
               {selectedRows.length} {selectedRows.length === 1 ? 'seleccionada' : 'seleccionadas'} ·{' '}
-              <button type="button" onClick={() => setSelected(new Set())} className="font-semibold text-[#3F768C] hover:text-[#022340]">Quitar selección</button>
+              <button type="button" onClick={() => setSelected(new Set())} className="font-semibold text-brand-accent hover:text-brand-ink">Quitar selección</button>
             </span>
           )}
         </span>
 
         {!showBoard && (
         <div className={styles.paginationGroup}>
+          <span className="flex items-center gap-1.5 text-xs text-slate-500" data-rows-per-page>
+            Filas
+            <Select
+              variant="chip"
+              ariaLabel="Filas por página"
+              clearable={false}
+              align="right"
+              value={rows}
+              onChange={(e) => chooseRows(Number(e.target.value))}
+              options={ROW_OPTIONS.map((option) => ({ value: option, label: String(option) }))}
+            />
+          </span>
           <span className={styles.pageInfo} data-page-info>
             {data.length > 0
-              ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, data.length)} · Página ${currentPage} de ${pages}`
+              ? `${(currentPage - 1) * rows + 1}–${Math.min(currentPage * rows, data.length)} · Página ${currentPage} de ${pages}`
               : `Página ${currentPage} de ${pages}`}
           </span>
           <div className={styles.paginationBtns}>

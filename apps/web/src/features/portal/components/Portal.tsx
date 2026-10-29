@@ -14,10 +14,11 @@ import PortalAppointments from './PortalAppointments';
 import PortalWaitlist from './PortalWaitlist';
 import PortalPassword from './PortalPassword';
 import PortalPackages, { type PortalPackage } from './PortalPackages';
+import PortalPrivacy, { PortalContact } from './PortalPrivacy';
 import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview, type PortalWaitlistEntry } from '../portal';
 import { money, momentOf, type PaymentLink } from '@/features/sales/sales';
 
-type Tab = 'home' | 'book' | 'appointments' | 'packages' | 'profile';
+type Tab = 'home' | 'book' | 'appointments' | 'packages' | 'profile' | 'privacy';
 
 export default function Portal() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -119,7 +120,7 @@ export default function Portal() {
   if (authLoading || !user || isStaff || (!overview && !error)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
         <p className="text-sm font-medium text-slate-500">Cargando tu portal...</p>
       </div>
     );
@@ -133,6 +134,8 @@ export default function Portal() {
   const next = upcoming[0] ?? null;
   const block = overview?.booking_block ?? null;
   const canBook = Boolean(policies?.booking_enabled) && !block?.blocked;
+  const texts = overview?.look?.texts;
+  const contact = overview?.look?.contact ?? null;
 
   const act = async (run: () => Promise<unknown>, done: string) => {
     try {
@@ -190,15 +193,19 @@ export default function Portal() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
         <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4" data-portal-bar>
           <div className="flex items-center gap-3 min-w-0">
-            <span className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0" style={{ backgroundColor: tenant?.color ?? '#022340' }}>
-              <Building2 className="w-5 h-5" />
-            </span>
+            {tenant?.branding?.logo_url ? (
+              <img src={tenant.branding.logo_url} alt={tenant.name} className="h-10 max-w-36 object-contain shrink-0" data-portal-logo />
+            ) : (
+              <span className="min-w-10 h-10 px-1.5 rounded-2xl flex items-center justify-center text-white text-xs font-black shrink-0" style={{ backgroundColor: tenant?.color ?? '#022340' }}>
+                {tenant?.branding?.short_name ?? <Building2 className="w-5 h-5" />}
+              </span>
+            )}
             <div className="min-w-0">
-              <p className="text-base font-black text-[#022340] tracking-tight truncate">{tenant?.name}</p>
-              <p className="text-[11px] text-slate-500 font-medium truncate">Portal de {vocab.client.toLowerCase()}</p>
+              <p className="text-base font-black text-brand-ink tracking-tight truncate">{tenant?.name}</p>
+              <p className="text-[11px] text-slate-500 font-medium truncate" data-portal-subtitle>{texts?.subtitle || `Portal de ${vocab.client.toLowerCase()}`}</p>
             </div>
           </div>
-          <button type="button" onClick={logout} className="inline-flex items-center gap-2 text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors cursor-pointer shrink-0">
+          <button type="button" onClick={logout} className="inline-flex items-center gap-2 text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors cursor-pointer shrink-0">
             <LogOut className="w-4 h-4" /> Cerrar sesión
           </button>
         </div>
@@ -211,8 +218,8 @@ export default function Portal() {
               data-tab={item.id}
               aria-current={tab === item.id ? 'page' : undefined}
               onClick={() => openTab(item.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
-                tab === item.id ? 'border-[#022340] text-[#022340]' : 'border-transparent text-slate-500 hover:text-slate-800'
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
+                tab === item.id ? 'border-brand text-brand-ink' : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               {item.icon} {item.label}
@@ -226,15 +233,15 @@ export default function Portal() {
         {notice && <p data-notice className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">{notice}</p>}
 
         {overview && !mustChangePassword && tab !== 'book' && payLinks.map((link) => (
-          <section key={link.id} data-portal-pay-link className="bg-white rounded-2xl border border-[#84D0D9] shadow-xs p-4 flex flex-wrap items-center gap-3">
-            <span className="p-2.5 rounded-xl bg-[#84D0D9]/20 text-[#022340] shrink-0"><CreditCard size={18} /></span>
+          <section key={link.id} data-portal-pay-link className="bg-white rounded-2xl border border-brand-soft shadow-xs p-4 flex flex-wrap items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-brand-soft/20 text-brand-ink shrink-0"><CreditCard size={18} /></span>
             <span className="flex-1 min-w-[12rem]">
-              <span className="block text-sm font-bold text-[#022340]">{link.purpose === 'deposit' ? 'Tienes un adelanto por pagar' : 'Tienes un pago pendiente'} · {money(link.amount, link.currency)}</span>
+              <span className="block text-sm font-bold text-brand-ink">{link.purpose === 'deposit' ? 'Tienes un adelanto por pagar' : 'Tienes un pago pendiente'} · {money(link.amount, link.currency)}</span>
               <span className="block text-xs text-slate-500">{link.description} · vence {momentOf(link.expires_at)}</span>
               {link.purpose === 'deposit' && <span className="block text-xs text-slate-500">Tu cita se reserva al pagar. Si otra persona toma el horario antes, este pago se anula.</span>}
             </span>
             <span className="flex gap-2">
-              <Link href={`/pay/${link.token}`} data-portal-pay className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors">Pagar</Link>
+              <Link href={`/pay/${link.token}`} data-portal-pay className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">Pagar</Link>
               {link.purpose === 'deposit' && (
                 <button type="button" data-portal-pay-drop onClick={() => dropPayLink(link)} className="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-red-600 transition-colors">Ya no quiero</button>
               )}
@@ -249,23 +256,27 @@ export default function Portal() {
         {overview && !mustChangePassword && tab === 'home' && (
           <>
             <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-black text-[#022340] tracking-tight">Hola, {overview.customer.first_name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-black text-brand-ink tracking-tight">Hola, {overview.customer.first_name}</h1>
               <p className="text-sm text-slate-500 font-medium">
                 {next ? 'Esta es tu próxima cita.' : 'No tienes citas próximas.'}
               </p>
             </div>
 
+            {texts?.welcome && (
+              <p data-portal-welcome className="text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-2xl px-4 py-3 whitespace-pre-line">{texts.welcome}</p>
+            )}
+
             {next ? (
               <PortalAppointmentCard appointment={next} featured {...cardActions} />
             ) : (
               <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 flex items-start gap-4">
-                <span className="p-2.5 bg-[#84D0D9]/20 text-[#022340] rounded-xl shrink-0"><CalendarDays className="w-5 h-5" /></span>
+                <span className="p-2.5 bg-brand-soft/20 text-brand-ink rounded-xl shrink-0"><CalendarDays className="w-5 h-5" /></span>
                 <div className="space-y-1">
-                  <h2 className="text-sm font-bold text-[#022340]">{canBook ? 'Reserva cuando quieras' : 'Reserva de citas'}</h2>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                  <h2 className="text-sm font-bold text-brand-ink">{canBook ? (texts?.book_title || 'Reserva cuando quieras') : 'Reserva de citas'}</h2>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed" data-portal-book-text>
                     {canBook
-                      ? 'Elige el servicio, el día y la hora que te acomoden.'
-                      : `Para agendar una cita, comunícate con ${tenant?.name}. Aquí verás las que tengas.`}
+                      ? (texts?.book_text || 'Elige el servicio, el día y la hora que te acomoden.')
+                      : (texts?.no_booking_text || `Para agendar una cita, comunícate con ${tenant?.name}. Aquí verás las que tengas.`)}
                   </p>
                 </div>
               </section>
@@ -307,17 +318,19 @@ export default function Portal() {
                 type="button"
                 data-action="book"
                 onClick={() => openTab('book')}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold bg-[#022340] text-white rounded-2xl hover:bg-[#03315a] shadow-sm transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold bg-brand text-white rounded-2xl hover:bg-brand-hover shadow-sm transition-colors"
               >
                 <CalendarPlus size={18} /> Reservar una cita
               </button>
             )}
 
             {upcoming.length > 1 && (
-              <button type="button" onClick={() => openTab('appointments')} className="text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <button type="button" onClick={() => openTab('appointments')} className="text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 Tienes {upcoming.length - 1} {upcoming.length - 1 === 1 ? 'cita más' : 'citas más'} · Ver todas
               </button>
             )}
+
+            {contact && <PortalContact contact={contact} />}
 
           </>
         )}
@@ -358,7 +371,7 @@ export default function Portal() {
           <>
             {overview.consents && (
               <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="portal-consents">
-                <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Promociones</h2>
+                <h2 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">Promociones</h2>
                 <p className="text-xs text-slate-500 -mt-1.5">Los avisos de tus citas, pagos y paquetes te llegan siempre. Aquí eliges si también quieres recibir promociones de {tenant?.name}.</p>
                 {([['email', 'Recibir promociones por correo'], ['whatsapp', 'Recibir promociones por WhatsApp']] as ['email' | 'whatsapp', string][]).map(([channel, label]) => (
                   <div key={channel} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
@@ -376,8 +389,8 @@ export default function Portal() {
             )}
 
             <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="profile">
-              <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Tus datos</h2>
-              <p className="text-xs text-slate-500 -mt-1.5">Para corregir tu nombre, tu correo o tu documento, comunícate con {tenant?.name}.</p>
+              <h2 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">Tus datos</h2>
+              <p className="text-xs text-slate-500 -mt-1.5">{texts?.profile_note || `Para corregir tu nombre, tu correo o tu documento, comunícate con ${tenant?.name}.`}</p>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nombre</dt>
@@ -401,16 +414,16 @@ export default function Portal() {
                         maxLength={30}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="flex-1 text-sm border border-slate-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340]"
+                        className="flex-1 text-sm border border-slate-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
                       />
-                      <button type="button" data-action="save-phone" disabled={busy} onClick={savePhone} className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] disabled:opacity-50">
+                      <button type="button" data-action="save-phone" disabled={busy} onClick={savePhone} className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">
                         Guardar
                       </button>
                     </dd>
                   ) : (
                     <dd className="flex items-center gap-3 font-semibold text-slate-800">
                       <span className="flex items-center gap-1.5"><Phone size={14} className="text-slate-400" /> {overview.customer.phone || 'Sin registrar'}</span>
-                      <button type="button" data-action="edit-phone" onClick={() => setEditingPhone(true)} className="text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                      <button type="button" data-action="edit-phone" onClick={() => setEditingPhone(true)} className="text-xs font-bold text-brand-accent hover:text-brand-ink">
                         Cambiar
                       </button>
                     </dd>
@@ -429,11 +442,20 @@ export default function Portal() {
                   ) : (
                     <dd className="flex items-center gap-3 font-semibold text-slate-800">
                       <span className="flex items-center gap-1.5"><KeyRound size={14} className="text-slate-400" /> ••••••••</span>
-                      <button type="button" data-action="edit-password" onClick={() => setEditingPassword(true)} className="text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                      <button type="button" data-action="edit-password" onClick={() => setEditingPassword(true)} className="text-xs font-bold text-brand-accent hover:text-brand-ink">
                         Cambiar
                       </button>
                     </dd>
                   )}
+                </div>
+                <div className="sm:col-span-2" data-row="privacy">
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Política de privacidad</dt>
+                  <dd className="flex flex-wrap items-center gap-3 font-semibold text-slate-800">
+                    <span>{overview.privacy_accepted_at ? `La aceptaste el ${new Date(overview.privacy_accepted_at).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Aún no la aceptas'}</span>
+                    <button type="button" data-action="open-privacy" onClick={() => openTab('privacy')} className="text-xs font-bold text-brand-accent hover:text-brand-ink">
+                      Leerla
+                    </button>
+                  </dd>
                 </div>
               </dl>
 
@@ -455,6 +477,21 @@ export default function Portal() {
               )}
             </section>
           </>
+        )}
+
+        {overview && !mustChangePassword && tab === 'privacy' && (
+          <PortalPrivacy
+            acceptedAt={overview.privacy_accepted_at ?? null}
+            onAccepted={(at) => { setOverview({ ...overview, privacy_accepted_at: at }); setNotice('Gracias: quedó registrado que aceptaste la política de privacidad.'); }}
+            onBack={() => openTab('profile')}
+          />
+        )}
+
+        {overview && !mustChangePassword && (
+          <footer className="pt-4 text-center text-xs text-slate-400" data-portal-footer>
+            {tenant?.name} ·{' '}
+            <button type="button" data-action="footer-privacy" onClick={() => openTab('privacy')} className="underline hover:text-brand-ink">Política de privacidad</button>
+          </footer>
         )}
       </main>
 

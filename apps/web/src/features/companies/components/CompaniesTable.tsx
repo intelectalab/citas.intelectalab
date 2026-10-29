@@ -74,9 +74,9 @@ export default function CompaniesTable() {
       cell: (company) => (
         <div className={styles.customerCell}>
           <div className={styles.avatar}>
-            <Building2 size={16} className="text-[#022340]" />
+            <Building2 size={16} className="text-brand-ink" />
           </div>
-          <span className={`${styles.customerName} font-semibold text-[#022340]`}>
+          <span className={`${styles.customerName} font-semibold text-brand-ink`}>
             {company.name}
           </span>
         </div>
@@ -128,7 +128,7 @@ export default function CompaniesTable() {
       header: 'Ciudad',
       cell: (company) => (
         <div className="flex items-center gap-1.5 text-slate-700 capitalize">
-          {company.city !== '--' && <MapPin size={13} className="text-[#3F768C]" />}
+          {company.city !== '--' && <MapPin size={13} className="text-brand-accent" />}
           <span>{company.city}</span>
         </div>
       ),

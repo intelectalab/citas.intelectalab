@@ -56,7 +56,7 @@ export default function PermissionGrid({ grid, mode, canEdit, busy, onToggle, em
                         aria-expanded={expanded}
                         title="Ver qué permite cada uno"
                         onClick={() => setOpen(expanded ? null : module.key)}
-                        className="inline-flex items-center gap-1.5 text-left text-sm font-semibold text-[#022340] hover:text-[#3F768C] transition-colors"
+                        className="inline-flex items-center gap-1.5 text-left text-sm font-semibold text-brand-ink hover:text-brand-accent transition-colors"
                       >
                         {titleOf(module)}
                         <ChevronDown size={14} className={`text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />

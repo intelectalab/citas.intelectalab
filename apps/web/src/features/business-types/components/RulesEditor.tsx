@@ -27,7 +27,7 @@ export default function RulesEditor({ value, onChange }: RulesEditorProps) {
     }
 
     return (
-      <div className="flex items-stretch shrink-0 border border-slate-200 rounded-lg overflow-hidden bg-white focus-within:ring-2 focus-within:ring-[#030336]/20 focus-within:border-[#030336]">
+      <div className="flex items-stretch shrink-0 border border-slate-200 rounded-lg overflow-hidden bg-white focus-within:ring-2 focus-within:ring-brand/20 focus-within:border-brand">
         <input
           type="number"
           min="0"
@@ -67,7 +67,7 @@ export default function RulesEditor({ value, onChange }: RulesEditorProps) {
               <span key={rule.key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-xs font-medium text-slate-700">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 {rule.label}
-                {rule.type === 'number' && <span className="font-bold text-[#022340]">{String(value[rule.key])} {rule.unit}</span>}
+                {rule.type === 'number' && <span className="font-bold text-brand-ink">{String(value[rule.key])} {rule.unit}</span>}
               </span>
             ))}
           </div>

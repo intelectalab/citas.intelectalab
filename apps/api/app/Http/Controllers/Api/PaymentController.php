@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Support\Access;
+use App\Support\Audit;
 use App\Support\PaymentLinks;
 use App\Support\Sales;
 use Illuminate\Http\Request;
@@ -163,6 +164,27 @@ class PaymentController extends Controller
             DB::table('tenant_integrations')->insert($values + ['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'kind' => 'payments', 'created_at' => now()]);
         }
 
+        $label = fn (?string $key) => $key ? (PaymentLinks::PROVIDERS[$key]['label'] ?? $key) : 'Sin configurar';
+        $from = $current?->provider !== $provider ? ['payment_provider' => $label($current?->provider)] : [];
+        $to = $current?->provider !== $provider ? ['payment_provider' => $label($provider)] : [];
+        if ($provider !== 'simulated') {
+            if (trim((string) ($validated['public_key'] ?? '')) !== '') {
+                $to['public_key'] = 'Cambiada';
+            }
+            if (trim((string) ($validated['secret_key'] ?? '')) !== '') {
+                $to['secret_key'] = 'Cambiada';
+            }
+        }
+        if ($to) {
+            Audit::log($request, 'settings.changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'settings',
+                'entity_label' => 'Pasarela de pagos',
+                'before'       => $from,
+                'after'        => $to,
+            ]);
+        }
+
         return $this->integrations($request);
     }
 
@@ -208,6 +230,14 @@ class PaymentController extends Controller
             DB::table('payment_qr_codes')->insert($values + ['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'method' => $method, 'created_at' => now()]);
         }
 
+        Audit::log($request, 'payment_qr.changed', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'payment_qr',
+            'entity_label' => self::QR_METHODS[$method],
+            'before'       => $existing ? array_filter(['qr_holder' => $existing->holder]) : [],
+            'after'        => array_filter(['qr_image' => 'Cambiada', 'qr_holder' => $values['holder']]),
+        ]);
+
         return response()->json(['qr' => self::qrCodes($tenant->id)]);
     }
 
@@ -215,7 +245,15 @@ class PaymentController extends Controller
     {
         abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
         $tenant = $this->tenant($request);
-        DB::table('payment_qr_codes')->where('tenant_id', $tenant->id)->where('method', $method)->delete();
+        $deleted = DB::table('payment_qr_codes')->where('tenant_id', $tenant->id)->where('method', $method)->delete();
+
+        if ($deleted) {
+            Audit::log($request, 'payment_qr.deleted', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'payment_qr',
+                'entity_label' => self::QR_METHODS[$method] ?? $method,
+            ]);
+        }
 
         return response()->json(['qr' => self::qrCodes($tenant->id)]);
     }

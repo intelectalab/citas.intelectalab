@@ -68,6 +68,8 @@ export interface PosProduct {
   sku: string;
   price: number;
   category: string | null;
+  track_stock?: boolean;
+  stock?: number | null;
 }
 
 export interface PosBoard {
@@ -78,6 +80,8 @@ export interface PosBoard {
   products_ready: boolean;
   can: { create: boolean; edit: boolean; charge: boolean; walk_in: boolean; products: boolean; packages?: boolean };
   packages_enabled?: boolean;
+  inventory_enabled?: boolean;
+  allow_negative_stock?: boolean;
   pending: { appointments: PendingAppointment[]; sales: PendingSale[] };
   services: PosService[];
   products: PosProduct[];

@@ -12,10 +12,9 @@ use App\Models\RecordTemplate;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\AppointmentFlow;
+use App\Support\Audit;
 use App\Support\RecordFields;
 use App\Support\Search;
-use Dompdf\Dompdf;
-use Dompdf\Options;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -135,11 +134,20 @@ class CareRecordController extends Controller
         $data = $this->present($record, $tenant, $user);
         $tenant->loadMissing(['company', 'businessType']);
 
+        $document = \App\Support\Documents::forPdf($tenant);
+        $professional = $record->professional;
+        $signed = $data['status'] !== CareRecord::DRAFT;
+
         $html = view('records.pdf', [
             'record'  => $data,
             'values'  => (array) $data['data'],
             'company' => $tenant->name,
-            'color'   => $tenant->settings?->brand_color ?? $tenant->businessType?->color ?? '#022340',
+            'document' => $document,
+            'signer'  => [
+                'image'   => $signed && $professional ? \App\Support\Documents::dataUri(\App\Support\Documents::professionalSignaturePath($professional)) : null,
+                'license' => $professional?->license_number,
+            ],
+            'color'   => $document['color'],
             'client'  => $tenant->vocabulary()['client'],
             'pro'     => $tenant->vocabulary()['pro'],
             'dependentLabel' => $tenant->vocabulary()['dependent'],
@@ -147,19 +155,10 @@ class CareRecordController extends Controller
             'printedBy' => \App\Support\Person::name($user),
         ])->render();
 
-        $options = new Options();
-        $options->set('defaultFont', 'DejaVu Sans');
-        $options->set('isRemoteEnabled', false);
-
-        $pdf = new Dompdf($options);
-        $pdf->loadHtml($html, 'UTF-8');
-        $pdf->setPaper('A4');
-        $pdf->render();
-
         $name = 'Ficha ' . ($data['appointment']['code'] ?? '') . ' ' . ($data['customer']['name'] ?? '');
         $name = trim(preg_replace('/[^\pL\pN \-]+/u', '', $name)) ?: 'Ficha';
 
-        return response($pdf->output(), 200, [
+        return response(\App\Support\Documents::pdf($html), 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . \Illuminate\Support\Str::ascii($name) . '.pdf"',
         ]);
@@ -312,7 +311,9 @@ class CareRecordController extends Controller
 
         $sign = !empty($validated['sign']);
 
-        $record = DB::transaction(function () use ($tenant, $user, $appointment, $validated, $sign) {
+        $auditAction = null;
+
+        $record = DB::transaction(function () use ($tenant, $user, $appointment, $validated, $sign, &$auditAction) {
             $record = CareRecord::where('appointment_id', $appointment->id)->lockForUpdate()->first();
 
             if (!$record) {
@@ -374,7 +375,12 @@ class CareRecordController extends Controller
                 $record->consent_accepted_at = $consent ? now() : null;
             }
 
+            if ($record->exists && $record->status === CareRecord::SIGNED && $record->isDirty(['data', 'consent_accepted'])) {
+                $auditAction = 'record.corrected';
+            }
+
             if ($sign && $record->status === CareRecord::DRAFT) {
+                $auditAction = 'record.signed';
                 $record->status = CareRecord::SIGNED;
                 $record->signed_at = now();
                 $record->signed_by = $user->id;
@@ -390,7 +396,26 @@ class CareRecordController extends Controller
             return $record;
         });
 
+        if ($auditAction) {
+            $this->audit($request, $auditAction, $record, $appointment);
+        }
+
         return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
+    }
+
+    private function audit(Request $request, string $action, CareRecord $record, ?Appointment $appointment = null): void
+    {
+        $record->loadMissing('customer');
+        $appointment ??= $record->appointment_id ? Appointment::find($record->appointment_id) : null;
+
+        Audit::log($request, $action, [
+            'tenant'       => $record->tenant_id,
+            'entity_type'  => 'care_record',
+            'entity_id'    => $record->id,
+            'entity_label' => \App\Support\Person::name($record->customer),
+            'branch_id'    => $record->branch_id,
+            'after'        => array_filter(['template_name' => $record->template_name, 'appointment_code' => $appointment?->code]),
+        ]);
     }
 
     public function addAddendum(Request $request, string $careRecord)
@@ -413,6 +438,7 @@ class CareRecordController extends Controller
             'author_user_id' => $user->id,
             'note'           => trim($validated['note']),
         ]);
+        $this->audit($request, 'record.note_added', $record);
 
         return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
     }

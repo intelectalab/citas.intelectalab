@@ -33,7 +33,7 @@ class TenantProvisioner
                 'status'           => $data['status'] ?? 'active',
             ]);
 
-            TenantSetting::create(['tenant_id' => $tenantId]);
+            TenantSetting::create(['tenant_id' => $tenantId, 'modules_off' => Tenant::startingModulesOff($tenant->businessType)]);
 
             $installed = $tenant->installBusinessTemplate();
 

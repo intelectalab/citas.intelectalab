@@ -4,7 +4,7 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Clock, Edit2, Eye, MapPin, Power, Store, Users } from 'lucide-react';
-import { DataTable, type Column, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
@@ -121,9 +121,9 @@ export default function BranchesTable() {
       header: 'Sucursal',
       cell: (b) => (
         <div key={`name-${b.id}`} className="flex items-center gap-3">
-          <span className="p-2 rounded-lg shrink-0 bg-[#84D0D9]/20 text-[#022340]"><Store size={16} /></span>
+          <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><Store size={16} /></span>
           <div>
-            <Link href={`/branches/${b.id}`} data-open={b.id} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>{b.name}</Link>
+            <Link href={`/branches/${b.id}`} data-open={b.id} className={`${styles.customerName} hover:text-brand-accent transition-colors`}>{b.name}</Link>
             <span className="block text-xs text-slate-400">{b.phone ?? 'Sin teléfono'}</span>
           </div>
         </div>
@@ -168,10 +168,10 @@ export default function BranchesTable() {
           </Link>
           {canManage && (
             <>
-              <button data-hours={b.id} title="Horario de atención" onClick={() => setHoursFor(b)} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+              <button data-hours={b.id} title="Horario de atención" onClick={() => setHoursFor(b)} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
                 <Clock size={16} />
               </button>
-              <button title="Editar" onClick={() => { setEditing(b); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+              <button title="Editar" onClick={() => { setEditing(b); setFormOpen(true); }} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
                 <Edit2 size={16} />
               </button>
               <button
@@ -187,6 +187,20 @@ export default function BranchesTable() {
         </div>
       ),
     },
+  ];
+
+  const exportColumns: ExportColumn<Branch>[] = [
+    { header: 'Sucursal', value: (b) => b.name },
+    { header: 'Teléfono', value: (b) => b.phone },
+    { header: 'Dirección', value: (b) => b.address },
+    { header: 'Distrito', value: (b) => b.district },
+    { header: 'Departamento', value: (b) => b.department },
+    { header: 'Hoy', value: (b) => todayLabel(b) },
+    { header: 'Días que abre a la semana', type: 'number', value: (b) => (b.has_hours ? b.open_days : null) },
+    { header: vocab.pros, type: 'number', value: (b) => b.professionals_count },
+    { header: 'Citas de hoy', type: 'number', value: (b) => b.appointments_today },
+    { header: 'Citas por atender', type: 'number', value: (b) => b.upcoming },
+    { header: 'Estado', value: (b) => (b.status === 'active' ? 'Activa' : 'Inactiva') },
   ];
 
   return (
@@ -212,6 +226,9 @@ export default function BranchesTable() {
             { id: 'upcoming', label: 'Citas próximas', type: 'number', value: (b) => b.upcoming },
           ]}
           data={rows}
+          exportTitle="Sucursales"
+          exportScreen="branches"
+          exportColumns={exportColumns}
           getItemKey={(b) => b.id}
           entityLabel="sucursales"
           metricCards={metricCards}

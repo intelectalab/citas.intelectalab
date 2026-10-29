@@ -76,7 +76,7 @@ export const AppModal: React.FC<AppModalProps> = ({
             className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center min-w-[90px] ${
               isDanger 
                 ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-100' 
-                : 'bg-[#022340] text-white hover:bg-[#03365e] shadow-slate-100'
+                : 'bg-brand text-white hover:bg-brand-hover shadow-slate-100'
             }`}
           >
             {isLoading ? (

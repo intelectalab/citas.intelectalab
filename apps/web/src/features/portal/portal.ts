@@ -60,6 +60,11 @@ export interface PortalOverview {
   dependents: { enabled: boolean; required: boolean; items: PortalDependent[] };
   appointments: PortalAppointment[];
   consents?: { email: { granted: boolean }; whatsapp: { granted: boolean } } | null;
+  look?: {
+    texts: { subtitle: string; welcome: string; book_title: string; book_text: string; no_booking_text: string; profile_note: string };
+    contact: { phone: string | null; email: string | null; branches: { id: string; name: string; address: string | null; phone: string | null }[] } | null;
+  };
+  privacy_accepted_at?: string | null;
 }
 
 export interface PortalService {

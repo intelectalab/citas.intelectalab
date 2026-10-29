@@ -7,7 +7,7 @@ interface PersonLinkProps {
   className?: string;
 }
 
-const hover = 'hover:text-[#3F768C] hover:underline underline-offset-2 transition-colors';
+const hover = 'hover:text-brand-accent hover:underline underline-offset-2 transition-colors';
 
 const personLink = (base: string) =>
   function PersonLink({ id, children, className = '' }: PersonLinkProps) {

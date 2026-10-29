@@ -96,6 +96,8 @@ class PortalController extends AppointmentController
                 'must_change_password' => (bool) $customer->must_change_password,
             ],
             'policies'     => $this->policies($tenant),
+            'look'         => \App\Support\PortalLook::forPortal($tenant),
+            'privacy_accepted_at' => self::privacyAccepted($customer->id),
             'consents'     => \App\Support\Messaging::ready() ? MessageController::consentsOf($customer->id) : null,
             'booking_block' => ($state = \App\Support\OnlineBooking::state($tenant, $customer->id))
                 ? $state + ['message' => $state['blocked'] ? \App\Support\OnlineBooking::blockedMessage($tenant, $state) : null]
@@ -120,7 +122,7 @@ class PortalController extends AppointmentController
         $worksAt = ProfessionalSchedule::where('tenant_id', $tenant->id)->get()->groupBy('professional_id');
         $depositRule = (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::ready();
         $customer = $this->customer($request);
-        $packaged = \App\Support\Packages::enabled($tenant)
+        $packaged = \App\Support\Packages::linkable($tenant)
             ? collect(\App\Support\Packages::presentMany(DB::table('customer_packages')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('status', 'active')->where('expires_at', '>', now()->toIso8601String())->get(), false))
                 ->flatMap(fn (array $p) => collect($p['items'])->filter(fn ($i) => $i['available'] > 0)->map(fn ($i) => ['service_id' => $i['service_id'], 'available' => $i['available'], 'code' => $p['code'], 'name' => $p['name']]))
                 ->groupBy('service_id')
@@ -226,7 +228,7 @@ class PortalController extends AppointmentController
         }
 
         $start = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], AppointmentScheduler::timezone($branch, $tenant))->startOfMinute();
-        $package = \App\Support\Packages::enabled($tenant) ? (\App\Support\Packages::usable($tenant->id, $customer->id, $service->id, $start)[0] ?? null) : null;
+        $package = \App\Support\Packages::linkable($tenant) ? (\App\Support\Packages::usable($tenant->id, $customer->id, $service->id, $start)[0] ?? null) : null;
         $needsDeposit = !$package && $service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service) > 0;
 
         if ($needsDeposit && !\App\Support\PaymentLinks::ready()) {
@@ -287,6 +289,7 @@ class PortalController extends AppointmentController
             ]);
 
             $this->log($appointment, null, $status, $user, 'Reserva en línea');
+            $this->auditAppointment(request(), 'appointment.created', $appointment, $this->auditFacts($appointment));
 
             if ($package) {
                 \App\Support\Packages::link($tenant, $appointment->load('service'), $package['id'], null);
@@ -381,6 +384,7 @@ class PortalController extends AppointmentController
 
         $from = $appointment->status;
         $reason = trim((string) ($validated['reason'] ?? '')) ?: 'Cancelada por el cliente';
+        $late = $this->insideWindow($tenant, $appointment);
 
         $appointment->update([
             'status'        => AppointmentFlow::CANCELLED,
@@ -389,6 +393,7 @@ class PortalController extends AppointmentController
             'cancelled_by'  => 'customer',
         ]);
         $this->log($appointment, $from, AppointmentFlow::CANCELLED, $request->user(), $reason);
+        $this->auditAppointment($request, 'appointment.cancelled', $appointment, $this->auditFacts($appointment) + ['reason' => $reason, 'late_cancel' => $late]);
         \App\Support\Recalls::appointmentChanged($tenant, $appointment);
         \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
 
@@ -449,6 +454,7 @@ class PortalController extends AppointmentController
             }
 
             $this->assertCustomerFree($tenant, $appointment->customer, $start, $end, $appointment->id);
+            $auditBefore = $this->auditPlace($appointment);
 
             $appointment->update([
                 'starts_at'        => $start,
@@ -459,6 +465,7 @@ class PortalController extends AppointmentController
 
             $this->log($appointment, $appointment->status, $appointment->status, $user,
                 'Reprogramada por el cliente de ' . $previous->format('d/m/Y H:i') . ' a ' . $start->format('d/m/Y H:i'));
+            $this->auditRescheduled($request, $appointment->fresh(self::RELATIONS), $auditBefore, null);
 
             return response()->json($this->presentForCustomer($appointment->fresh(self::RELATIONS), $tenant));
         });
@@ -559,6 +566,15 @@ class PortalController extends AppointmentController
             ->findOrFail($entry);
 
         $entry->update(['status' => WaitlistEntry::CANCELLED]);
+        $entry->loadMissing(['service', 'branch']);
+        \App\Support\Audit::log($request, 'waitlist.withdrawn', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'waitlist_entry',
+            'entity_id'    => $entry->id,
+            'entity_label' => \App\Support\Person::name($customer),
+            'branch_id'    => $entry->branch_id,
+            'after'        => array_filter(['service' => $entry->service?->name, 'branch' => $entry->branch?->name]),
+        ]);
 
         return response()->json(['ok' => true]);
     }
@@ -664,7 +680,19 @@ class PortalController extends AppointmentController
             'phone' => ['required', 'string', 'max:30', 'regex:/^[0-9+ ()-]{6,30}$/'],
         ], ['phone.regex' => 'Escribe un número de celular válido.', 'phone.required' => 'Escribe tu celular.']);
 
+        $previous = $customer->phone;
         $customer->update(['phone' => trim($validated['phone'])]);
+
+        if ($previous !== $customer->phone) {
+            \App\Support\Audit::log($request, 'customer.updated', [
+                'tenant'       => $customer->tenant_id,
+                'entity_type'  => 'customer',
+                'entity_id'    => $customer->id,
+                'entity_label' => \App\Support\Person::name($customer),
+                'before'       => ['phone' => $previous],
+                'after'        => ['phone' => $customer->phone],
+            ]);
+        }
 
         return response()->json(['phone' => $customer->phone]);
     }
@@ -680,6 +708,7 @@ class PortalController extends AppointmentController
         $validated = $request->validate(CustomerDependent::rules());
 
         $dependent = $customer->dependents()->create($validated + ['tenant_id' => $tenant->id, 'kind' => $config['kind']]);
+        CustomerDependentController::audit($request, 'customer_dependent.created', $customer, $dependent, [], array_filter(CustomerDependentController::auditable($dependent)));
 
         return response()->json($dependent->only(['id', 'name', 'species', 'breed']), 201);
     }
@@ -750,6 +779,46 @@ class PortalController extends AppointmentController
         $validated = $request->validate(['email' => 'nullable|boolean', 'whatsapp' => 'nullable|boolean']);
 
         return response()->json(['consents' => MessageController::saveConsents($tenant->id, $customer->id, $validated, 'portal')]);
+    }
+
+    public static function privacyAccepted(string $customerId): ?string
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('customer_consents')) {
+            return null;
+        }
+
+        $row = DB::table('customer_consents')->where('customer_id', $customerId)->where('channel', 'data_processing')->where('granted', true)->first();
+
+        return $row?->granted_at ? Carbon::parse($row->granted_at)->toIso8601String() : null;
+    }
+
+    public static function acceptPrivacy(string $tenantId, string $customerId, string $source): void
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('customer_consents')) {
+            return;
+        }
+
+        DB::table('customer_consents')->updateOrInsert(
+            ['customer_id' => $customerId, 'channel' => 'data_processing'],
+            ['tenant_id' => $tenantId, 'granted' => true, 'source' => $source, 'granted_at' => now(), 'revoked_at' => null, 'updated_at' => now()],
+        );
+    }
+
+    public function privacy(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        return response()->json(\App\Support\PortalLook::privacyHtml($tenant) + [
+            'accepted_at' => self::privacyAccepted($this->customer($request)->id),
+        ]);
+    }
+
+    public function acceptPrivacyNow(Request $request)
+    {
+        $customer = $this->customer($request);
+        self::acceptPrivacy($this->tenant($request)->id, $customer->id, 'portal');
+
+        return response()->json(['accepted_at' => self::privacyAccepted($customer->id)]);
     }
 
     public function packages(Request $request)

@@ -26,7 +26,7 @@ type PendingEntry = { kind: 'sale'; sale: PendingSale } | { kind: 'appointment';
 const STORAGE_KEY = 'pos-cart';
 
 const tileClass = 'rounded-2xl border border-slate-200/80 bg-white p-4 flex flex-col gap-2 min-h-[8.5rem]';
-const addButton = 'mt-auto self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#022340] text-white hover:bg-[#03315a] transition-colors disabled:bg-slate-100 disabled:text-slate-400';
+const addButton = 'mt-auto self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-brand text-white hover:bg-brand-hover transition-colors disabled:bg-slate-100 disabled:text-slate-400';
 const stepButton = 'p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40';
 
 const readStored = (): Cart | null => {
@@ -389,7 +389,7 @@ export default function PointOfSale() {
     <div className="space-y-6 mb-8" data-pos>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#022340]">Punto de venta</h1>
+          <h1 className="text-2xl font-bold text-brand-ink">Punto de venta</h1>
           <p className="text-sm text-slate-500 mt-1">Cobra citas, servicios y productos en una sola venta, o déjala por cobrar.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -406,7 +406,7 @@ export default function PointOfSale() {
             </div>
           )}
           {can?.walk_in && (
-            <button type="button" data-walk-in-open onClick={() => setWalkInOpen(true)} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border border-[#022340] text-[#022340] rounded-xl hover:bg-[#84D0D9]/15 transition-colors">
+            <button type="button" data-walk-in-open onClick={() => setWalkInOpen(true)} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border border-brand text-brand-ink rounded-xl hover:bg-brand-soft/15 transition-colors">
               <CalendarPlus size={16} /> Agendar para ahora
             </button>
           )}
@@ -432,7 +432,7 @@ export default function PointOfSale() {
                   aria-selected={tab === t.id}
                   data-tab={t.id}
                   onClick={() => { setTab(t.id); setQuery(''); }}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${tab === t.id ? 'bg-[#022340] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${tab === t.id ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'}`}
                 >
                   {t.label}
                   {t.count !== undefined && <span className={`px-2 py-0.5 text-xs rounded-full ${tab === t.id ? 'bg-white/15' : 'bg-slate-100'}`}>{t.count}</span>}
@@ -462,17 +462,17 @@ export default function PointOfSale() {
                   {pendingPage.rows.map((entry) => entry.kind === 'sale' ? (
                     <article key={entry.sale.id} className={`${tileClass} border-amber-200 bg-amber-50/40`} data-pending-sale={entry.sale.code}>
                       <div className="flex items-start justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-sm font-bold text-[#022340]"><Receipt size={15} /> Venta {entry.sale.code}</span>
+                        <span className="flex items-center gap-1.5 text-sm font-bold text-brand-ink"><Receipt size={15} /> Venta {entry.sale.code}</span>
                         <span className="px-2 py-0.5 text-xs rounded-full font-semibold bg-amber-100 text-amber-800">{(entry.sale.deposit ?? 0) > 0 ? 'Adelanto pagado' : entry.sale.status === 'partial' ? 'Pago parcial' : 'Por cobrar'}</span>
                       </div>
                       <span className="text-sm font-semibold text-slate-800">
                         {entry.sale.customer ? <CustomerLink id={entry.sale.customer.id}>{entry.sale.customer.name}</CustomerLink> : 'Sin cliente'}
                       </span>
                       <span className="text-xs text-slate-500 line-clamp-2">{entry.sale.detail}</span>
-                      {(entry.sale.deposit ?? 0) > 0 && <span className="text-xs font-semibold text-[#3F768C]">Adelanto en línea {money(entry.sale.deposit, entry.sale.currency)} · falta {money(entry.sale.balance, entry.sale.currency)}</span>}
+                      {(entry.sale.deposit ?? 0) > 0 && <span className="text-xs font-semibold text-brand-accent">Adelanto en línea {money(entry.sale.deposit, entry.sale.currency)} · falta {money(entry.sale.balance, entry.sale.currency)}</span>}
                       <span className="text-xs text-slate-400">{momentOf(entry.sale.created_at)}{entry.sale.by ? ` · ${entry.sale.by}` : ''}</span>
                       <div className="flex items-center justify-between gap-2 mt-auto">
-                        <span className="text-sm font-black text-[#022340] tabular-nums">{money(entry.sale.balance, entry.sale.currency)}</span>
+                        <span className="text-sm font-black text-brand-ink tabular-nums">{money(entry.sale.balance, entry.sale.currency)}</span>
                         <button type="button" data-open-sale={entry.sale.code} onClick={() => openSale(entry.sale)} className={addButton.replace('mt-auto self-start ', '')}>
                           Abrir
                         </button>
@@ -481,7 +481,7 @@ export default function PointOfSale() {
                   ) : (
                     <article key={entry.appointment.id} className={tileClass} data-pending-appointment={entry.appointment.code}>
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-bold text-[#022340]">{whenOf(entry.appointment.starts_at, entry.appointment.today)}</span>
+                        <span className="text-sm font-bold text-brand-ink">{whenOf(entry.appointment.starts_at, entry.appointment.today)}</span>
                         <span className="px-2 py-0.5 text-xs rounded-full font-semibold bg-slate-100 text-slate-600">{entry.appointment.status_name}</span>
                       </div>
                       <span className="text-sm font-semibold text-slate-800">
@@ -491,7 +491,7 @@ export default function PointOfSale() {
                         {entry.appointment.service} · {entry.appointment.professional ? <ProfessionalLink id={entry.appointment.professional.id}>{entry.appointment.professional.name}</ProfessionalLink> : '—'} · {entry.appointment.code}
                       </span>
                       <div className="flex items-center justify-between gap-2 mt-auto">
-                        <span className="text-sm font-black text-[#022340] tabular-nums">{money(entry.appointment.price, entry.appointment.currency)}</span>
+                        <span className="text-sm font-black text-brand-ink tabular-nums">{money(entry.appointment.price, entry.appointment.currency)}</span>
                         <button
                           type="button"
                           data-add-appointment={entry.appointment.code}
@@ -527,10 +527,10 @@ export default function PointOfSale() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-services>
                   {servicePage.rows.map((service) => (
                     <article key={service.id} className={tileClass} data-service={service.name}>
-                      <span className="text-sm font-bold text-[#022340]">{service.name}</span>
+                      <span className="text-sm font-bold text-brand-ink">{service.name}</span>
                       <span className="text-xs text-slate-500">{[service.category, `${service.duration_minutes} min`].filter(Boolean).join(' · ')}</span>
                       <div className="flex items-center justify-between gap-2 mt-auto">
-                        <span className="text-sm font-black text-[#022340] tabular-nums">{money(service.price, currency)}</span>
+                        <span className="text-sm font-black text-brand-ink tabular-nums">{money(service.price, currency)}</span>
                         <button
                           type="button"
                           data-add-service={service.name}
@@ -554,28 +554,42 @@ export default function PointOfSale() {
               {products.length === 0 ? (
                 <p className="text-sm text-slate-500 py-6 text-center">
                   {term ? 'Ningún producto coincide.' : 'Aún no tienes productos para vender.'}
-                  {!term && can?.products && <> <Link href="/products" className="font-semibold text-[#3F768C] underline underline-offset-2">Regístralos en Productos</Link>.</>}
+                  {!term && can?.products && <> <Link href="/products" className="font-semibold text-brand-accent underline underline-offset-2">Regístralos en Productos</Link>.</>}
                 </p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-products>
-                  {productPage.rows.map((product) => (
-                    <article key={product.id} className={tileClass} data-product={product.name}>
-                      <span className="flex items-center gap-1.5 text-sm font-bold text-[#022340]"><Package size={14} className="text-[#3F768C] shrink-0" /> {product.name}</span>
-                      <span className="text-xs text-slate-500">{[product.category, product.sku].filter(Boolean).join(' · ')}</span>
-                      <div className="flex items-center justify-between gap-2 mt-auto">
-                        <span className="text-sm font-black text-[#022340] tabular-nums">{money(product.price, currency)}</span>
-                        <button
-                          type="button"
-                          data-add-product={product.name}
-                          disabled={!!cart.editBlocked}
-                          onClick={() => addItem({ type: 'product', id: product.id, quantity: 1, label: product.name, unit_price: product.price })}
-                          className={addButton.replace('mt-auto self-start ', '')}
-                        >
-                          <Plus size={13} /> Agregar
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                  {productPage.rows.map((product) => {
+                    const showStock = Boolean(board?.inventory_enabled && product.track_stock && product.stock !== null && product.stock !== undefined);
+                    const stockVal = product.stock ?? 0;
+                    const inCartQty = cart.items.filter((i) => i.type === 'product' && i.id === product.id).reduce((s, i) => s + i.quantity, 0);
+                    const noMoreStock = showStock && !board?.allow_negative_stock && stockVal - inCartQty <= 0;
+
+                    return (
+                      <article key={product.id} className={tileClass} data-product={product.name}>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="flex items-center gap-1.5 text-sm font-bold text-brand-ink"><Package size={14} className="text-brand-accent shrink-0" /> {product.name}</span>
+                          {showStock && (
+                            <span className={`shrink-0 px-2 py-0.5 text-[11px] font-bold rounded-full ${stockVal <= 0 ? 'bg-red-50 text-red-600' : stockVal <= 3 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                              {stockVal <= 0 ? 'Sin stock' : `${stockVal} disp.`}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-slate-500">{[product.category, product.sku].filter(Boolean).join(' · ')}</span>
+                        <div className="flex items-center justify-between gap-2 mt-auto">
+                          <span className="text-sm font-black text-brand-ink tabular-nums">{money(product.price, currency)}</span>
+                          <button
+                            type="button"
+                            data-add-product={product.name}
+                            disabled={!!cart.editBlocked || noMoreStock}
+                            onClick={() => addItem({ type: 'product', id: product.id, quantity: 1, label: product.name, unit_price: product.price })}
+                            className={addButton.replace('mt-auto self-start ', '')}
+                          >
+                            <Plus size={13} /> {noMoreStock ? 'Agotado' : 'Agregar'}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
               {productPage.pages > 1 && <Pager page={productPage.page} pages={productPage.pages} onChange={productPage.setPage} />}
@@ -587,21 +601,21 @@ export default function PointOfSale() {
               {plans.length === 0 ? (
                 <p className="text-sm text-slate-500 py-6 text-center">
                   {term ? 'Ningún paquete coincide.' : 'Aún no tienes paquetes a la venta.'}
-                  {!term && can?.packages && <> <Link href="/packages" className="font-semibold text-[#3F768C] underline underline-offset-2">Créalos en Paquetes → Catálogo</Link>.</>}
+                  {!term && can?.packages && <> <Link href="/packages" className="font-semibold text-brand-accent underline underline-offset-2">Créalos en Paquetes → Catálogo</Link>.</>}
                 </p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-packages-catalog>
                   {planPage.rows.map((plan) => (
                     <article key={plan.id} className={tileClass} data-plan={plan.name}>
-                      <span className="flex items-center gap-1.5 text-sm font-bold text-[#022340]"><Boxes size={14} className="text-[#3F768C] shrink-0" /> {plan.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm font-bold text-brand-ink"><Boxes size={14} className="text-brand-accent shrink-0" /> {plan.name}</span>
                       <span className="text-xs text-slate-500">{plan.items.map((i) => `${i.sessions} × ${i.name}`).join(' · ')}</span>
                       <span className="flex items-center gap-1 text-xs text-slate-500">
-                        {plan.booking_mode === 'scheduled' && <CalendarClock size={12} className="text-[#3F768C]" />}
+                        {plan.booking_mode === 'scheduled' && <CalendarClock size={12} className="text-brand-accent" />}
                         {plan.schedule_label} · vale {plan.validity_days} días
                       </span>
                       <div className="flex items-center justify-between gap-2 mt-auto">
                         <span>
-                          <span className="block text-sm font-black text-[#022340] tabular-nums">{money(plan.price, plan.currency)}</span>
+                          <span className="block text-sm font-black text-brand-ink tabular-nums">{money(plan.price, plan.currency)}</span>
                           {plan.savings > 0 && <span className="block text-[11px] font-semibold text-emerald-700">Ahorra {money(plan.savings, plan.currency)}</span>}
                         </span>
                         <button type="button" data-add-plan={plan.name} disabled={!!cart.editBlocked} onClick={() => addPackage(plan.id)} className={addButton.replace('mt-auto self-start ', '')}>
@@ -617,10 +631,21 @@ export default function PointOfSale() {
           )}
         </section>
 
-        <aside className="bg-white rounded-3xl rounded-tr-[2.5rem] border border-slate-200/80 p-5 space-y-5 xl:sticky xl:top-4" data-cart>
+        {cart.items.length > 0 && (
+          <button
+            type="button"
+            data-jump-cart
+            onClick={() => document.querySelector('[data-cart]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-5 py-3 whitespace-nowrap rounded-full bg-brand text-white text-sm font-bold shadow-xl"
+          >
+            <ShoppingCart size={16} /> Ver carrito ({cart.items.length}){totals ? ` · ${money(totals.total, totals.currency)}` : ''}
+          </button>
+        )}
+
+        <aside className="bg-white rounded-3xl rounded-tr-[2.5rem] border border-slate-200/80 p-4 sm:p-5 space-y-5 xl:sticky xl:top-4 scroll-mt-4" data-cart>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="flex items-center gap-2 text-lg font-black text-[#022340]"><ShoppingCart size={18} /> Carrito</h2>
+              <h2 className="flex items-center gap-2 text-lg font-black text-brand-ink"><ShoppingCart size={18} /> Carrito</h2>
               <p className="text-xs text-slate-500 mt-0.5" data-cart-title>
                 {cart.code ? `Venta ${cart.code} · ${cart.editBlocked ? 'con pagos' : 'por cobrar'}` : 'Venta nueva'}{branchName ? ` · ${branchName}` : ''}
               </p>
@@ -674,7 +699,7 @@ export default function PointOfSale() {
                 </div>
 
                 {item.type === 'package' && (board?.packages ?? []).find((p) => p.id === item.id)?.booking_mode === 'scheduled' && (
-                  <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs ${item.details?.slots.length ? 'bg-[#84D0D9]/15 text-[#022340]' : 'bg-amber-50 text-amber-800'}`} data-package-schedule>
+                  <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs ${item.details?.slots.length ? 'bg-brand-soft/15 text-brand-ink' : 'bg-amber-50 text-amber-800'}`} data-package-schedule>
                     <span className="flex items-center gap-1.5 font-semibold">
                       <CalendarClock size={13} />
                       {item.details?.slots.length ? `${item.details.slots.length} de ${(board?.packages ?? []).find((p) => p.id === item.id)?.sessions ?? item.details.slots.length} con fecha` : 'Sin fechas todavía'}
@@ -762,8 +787,8 @@ export default function PointOfSale() {
                 </>
               )}
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <span className="font-bold text-[#022340]">Total</span>
-                <span className="text-2xl font-black text-[#022340] tabular-nums" data-cart-total>{totals ? money(totals.total, totals.currency) : previewing ? 'Calculando...' : '—'}</span>
+                <span className="font-bold text-brand-ink">Total</span>
+                <span className="text-2xl font-black text-brand-ink tabular-nums" data-cart-total>{totals ? money(totals.total, totals.currency) : previewing ? 'Calculando...' : '—'}</span>
               </div>
             </div>
           )}
@@ -778,7 +803,7 @@ export default function PointOfSale() {
                 </button>
               )}
               {can?.charge && (canSave || cart.editBlocked) && (
-                <button type="button" data-charge-cart disabled={!ready || saving} onClick={charge} className="flex-1 px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+                <button type="button" data-charge-cart disabled={!ready || saving} onClick={charge} className="flex-1 px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
                   {saving ? 'Guardando...' : `Cobrar ${totals ? money(totals.total, totals.currency) : ''}`}
                 </button>
               )}

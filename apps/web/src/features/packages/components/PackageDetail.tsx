@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import OptionCard from '@/app/components/common/OptionCard';
 import Badge from '@/app/components/common/Badge';
 import SectionTitle from '@/app/components/common/SectionTitle';
@@ -152,8 +153,8 @@ export default function PackageDetail() {
   ];
 
   const stats = [
-    { id: 'used', title: 'Usadas', value: data.sessions_used, note: `de ${data.sessions_total}`, icon: <CheckCircle2 size={18} />, color: 'text-[#022340]' },
-    { id: 'scheduled', title: 'Con cita', value: data.sessions_scheduled, note: 'agendadas', icon: <CalendarClock size={18} />, color: 'text-[#3F768C]' },
+    { id: 'used', title: 'Usadas', value: data.sessions_used, note: `de ${data.sessions_total}`, icon: <CheckCircle2 size={18} />, color: 'text-brand-ink' },
+    { id: 'scheduled', title: 'Con cita', value: data.sessions_scheduled, note: 'agendadas', icon: <CalendarClock size={18} />, color: 'text-brand-accent' },
     { id: 'available', title: 'Sin fecha', value: data.sessions_available, note: 'por agendar', icon: <Layers size={18} />, color: 'text-emerald-600' },
     { id: 'pending', title: 'Por atender', value: money(data.pending_value, data.currency), note: 'ya cobrado', icon: <Wallet size={18} />, color: 'text-violet-600' },
   ];
@@ -168,9 +169,9 @@ export default function PackageDetail() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className={`${card} p-6 space-y-5`} data-card="package">
           <div className="flex items-start gap-3">
-            <span className="w-12 h-12 rounded-2xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><Boxes size={22} /></span>
+            <span className="w-12 h-12 rounded-2xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><Boxes size={22} /></span>
             <div className="min-w-0">
-              <h1 className="text-xl font-black text-[#022340] tracking-tight">{data.name}</h1>
+              <h1 className="text-xl font-black text-brand-ink tracking-tight">{data.name}</h1>
               <p className="text-xs text-slate-500 font-mono">{data.code}</p>
               <Badge data-status={data.status} tone={STATUS_BADGES[data.status]} bold className="inline-block mt-2">{data.status_label}</Badge>
             </div>
@@ -197,7 +198,7 @@ export default function PackageDetail() {
 
           <div className="flex flex-col gap-2 pt-4 border-t border-slate-100" data-actions>
             {canSchedule && (
-              <button type="button" data-action="schedule" onClick={() => { setNotice(''); setScheduling(true); }} className={`${actionButton} bg-[#022340] text-white hover:bg-[#03315a]`}>
+              <button type="button" data-action="schedule" onClick={() => { setNotice(''); setScheduling(true); }} className={`${actionButton} bg-brand text-white hover:bg-brand-hover`}>
                 <CalendarPlus size={16} /> Agendar sesiones ({single!.available} sin fecha)
               </button>
             )}
@@ -211,10 +212,15 @@ export default function PackageDetail() {
                 <Hourglass size={16} /> Dar más días
               </button>
             )}
-            {data.can.delete && isOpen && (
+            {data.can.delete && isOpen && !data.quote && (
               <button type="button" data-action="cancel" onClick={() => open('cancel')} className={`${actionButton} text-rose-700 hover:bg-rose-50`}>
                 <Ban size={16} /> Anular paquete
               </button>
+            )}
+            {data.quote && (
+              <p className="text-xs text-slate-500" data-plan-quote>
+                Viene del presupuesto <Link href="/quotes" className="font-semibold text-brand-accent hover:underline">{data.quote.code}</Link>. Si hay que anularlo, se hace desde el presupuesto: ahí se calcula qué se devuelve o se cobra.
+              </p>
             )}
           </div>
         </section>
@@ -236,7 +242,7 @@ export default function PackageDetail() {
           </div>
 
           <section className={`${card} p-6 space-y-4`} data-card="items">
-            <SectionTitle><Layers className="w-4 h-4 text-[#3F768C]" /> Sesiones</SectionTitle>
+            <SectionTitle><Layers className="w-4 h-4 text-brand-accent" /> Sesiones</SectionTitle>
             {data.items.map((item) => (
               <div key={item.service_id} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -251,7 +257,7 @@ export default function PackageDetail() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
             <section className={`${card} overflow-hidden flex flex-col`} data-card="appointments">
               <div className="px-5 pt-5 pb-3">
-                <SectionTitle><CalendarClock className="w-4 h-4 text-[#3F768C]" /> Citas por atender</SectionTitle>
+                <SectionTitle><CalendarClock className="w-4 h-4 text-brand-accent" /> Citas por atender</SectionTitle>
                 <p className="text-xs text-slate-500 mt-1">Se descuentan solas al darlas por atendidas.</p>
               </div>
               <PagedList
@@ -271,7 +277,7 @@ export default function PackageDetail() {
 
             <section className={`${card} overflow-hidden flex flex-col`} data-card="usages">
               <div className="px-5 pt-5 pb-3">
-                <SectionTitle><CheckCircle2 className="w-4 h-4 text-[#3F768C]" /> Sesiones usadas</SectionTitle>
+                <SectionTitle><CheckCircle2 className="w-4 h-4 text-brand-accent" /> Sesiones usadas</SectionTitle>
                 <p className="text-xs text-slate-500 mt-1">Atendidas, perdidas por faltar y las registradas a mano.</p>
               </div>
               <PagedList
@@ -282,7 +288,7 @@ export default function PackageDetail() {
                     <div className="flex-1 min-w-0">
                       <span className="block text-sm font-semibold text-slate-800 first-letter:uppercase">{dayLabel(u.at)} · {u.service}</span>
                       <span className="block text-xs text-slate-500 truncate">
-                        {u.appointment ? <button type="button" onClick={() => openDetail(u.appointment!.id)} className="hover:text-[#3F768C] hover:underline">{u.appointment.code}</button> : 'Sin cita'}
+                        {u.appointment ? <button type="button" onClick={() => openDetail(u.appointment!.id)} className="hover:text-brand-accent hover:underline">{u.appointment.code}</button> : 'Sin cita'}
                         {u.professional ? <> · <ProfessionalLink id={u.professional.id}>{u.professional.name}</ProfessionalLink></> : ''}
                         {u.note ? ` · ${u.note}` : ''}{u.by && u.kind === 'manual' ? ` · ${u.by}` : ''}
                       </span>
@@ -296,7 +302,7 @@ export default function PackageDetail() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
             <section className={`${card} p-6 space-y-3`} data-card="conditions">
-              <SectionTitle><FileText className="w-4 h-4 text-[#3F768C]" /> Condiciones</SectionTitle>
+              <SectionTitle><FileText className="w-4 h-4 text-brand-accent" /> Condiciones</SectionTitle>
               <p className="text-sm text-slate-700 leading-relaxed" data-terms-text>{data.terms_text}</p>
               <dl className="grid grid-cols-1 gap-2 text-sm pt-2 border-t border-slate-100">
                 <div><dt className={smallLabel}>Cómo se agenda</dt><dd className="font-semibold text-slate-800">{data.schedule_label}{c.booking_mode === 'scheduled' ? ` · ${c.professional_mode === 'chosen' ? 'con la misma persona' : 'con quien esté libre'}` : ''}</dd></div>
@@ -308,7 +314,7 @@ export default function PackageDetail() {
 
             <section className={`${card} overflow-hidden flex flex-col`} data-card="events">
               <div className="px-5 pt-5 pb-3">
-                <SectionTitle><History className="w-4 h-4 text-[#3F768C]" /> Historial</SectionTitle>
+                <SectionTitle><History className="w-4 h-4 text-brand-accent" /> Historial</SectionTitle>
               </div>
               <PagedList
                 items={data.events}
@@ -316,7 +322,7 @@ export default function PackageDetail() {
                 renderRow={(e) => (
                   <li key={e.id} className="px-5 py-2.5">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-[#022340]">{EVENT_LABELS[e.kind] ?? e.kind}</span>
+                      <span className="text-xs font-bold text-brand-ink">{EVENT_LABELS[e.kind] ?? e.kind}</span>
                       <span className="text-xs text-slate-400">{momentOf(e.at)}</span>
                     </span>
                     <span className="block text-sm text-slate-700">{e.detail}</span>
@@ -344,7 +350,7 @@ export default function PackageDetail() {
           <ErrorAlert message={formError} />
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button type="button" onClick={() => setDrawer(null)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-            <button type="submit" data-submit disabled={saving || !serviceId} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] disabled:opacity-50">{saving ? 'Guardando...' : 'Descontar 1 sesión'}</button>
+            <button type="submit" data-submit disabled={saving || !serviceId} className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">{saving ? 'Guardando...' : 'Descontar 1 sesión'}</button>
           </div>
         </form>
       </FormDrawer>
@@ -364,7 +370,7 @@ export default function PackageDetail() {
           <ErrorAlert message={formError} />
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button type="button" onClick={() => setDrawer(null)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-            <button type="submit" data-submit disabled={saving || !Number(days)} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] disabled:opacity-50">{saving ? 'Guardando...' : `Dar ${days || 0} días más`}</button>
+            <button type="submit" data-submit disabled={saving || !Number(days)} className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">{saving ? 'Guardando...' : `Dar ${days || 0} días más`}</button>
           </div>
         </form>
       </FormDrawer>
@@ -380,11 +386,11 @@ export default function PackageDetail() {
           {refundInfo && (
             <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Qué pasa con el dinero">
               <OptionCard type="button" role="radio" aria-checked={refund} data-refund-option="yes" disabled={Boolean(refundInfo.blocked) || refundInfo.policy === 'none'} onClick={() => setRefund(true)} selected={refund} className="text-left rounded-xl border px-4 py-3 transition-colors disabled:opacity-60">
-                <span className="block text-sm font-bold text-[#022340]">Devolver lo que no usó{refundInfo.policy !== 'none' ? ' (recomendado)' : ''}</span>
+                <span className="block text-sm font-bold text-brand-ink">Devolver lo que no usó{refundInfo.policy !== 'none' ? ' (recomendado)' : ''}</span>
                 <span className="block text-xs text-slate-500 mt-0.5">{refundInfo.explain} {refundInfo.suggested > 0 ? `Corresponde ${money(refundInfo.suggested, refundInfo.currency)}.` : ''}</span>
               </OptionCard>
               <OptionCard type="button" role="radio" aria-checked={!refund} data-refund-option="no" onClick={() => setRefund(false)} selected={!refund} className="text-left rounded-xl border px-4 py-3 transition-colors">
-                <span className="block text-sm font-bold text-[#022340]">Sin devolución{refundInfo.policy === 'none' ? ' (así se vendió)' : ''}</span>
+                <span className="block text-sm font-bold text-brand-ink">Sin devolución{refundInfo.policy === 'none' ? ' (así se vendió)' : ''}</span>
                 <span className="block text-xs text-slate-500 mt-0.5">Ej. el cliente ya no vendrá y el paquete no tenía devolución, o se le devolvió por fuera.</span>
               </OptionCard>
             </div>

@@ -5,7 +5,7 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarClock, CalendarPlus, CheckCircle, Edit2, Eye, Hourglass, PhoneCall, Repeat, RotateCcw, XCircle } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
@@ -156,13 +156,35 @@ export default function RecallsTable() {
       : []),
   ];
 
+  const exportColumns: ExportColumn<Recall>[] = [
+    { header: vocab.client, value: (r) => r.customer?.name ?? '' },
+    { header: 'Teléfono', value: (r) => r.customer?.phone ?? '' },
+    { header: 'Correo', value: (r) => r.customer?.email ?? '' },
+    ...(usesDependents ? [{ header: vocab.dependent, value: (r: Recall) => r.dependent?.name ?? '' }] : []),
+    { header: 'Control', value: (r) => r.label },
+    { header: 'Servicio', value: (r) => r.service?.name ?? 'Sin servicio definido' },
+    { header: vocab.pro, value: (r) => r.professional?.display_name ?? '' },
+    { header: 'Notas', value: (r) => r.notes ?? '' },
+    { header: 'Para cuándo', type: 'date', value: (r) => r.due_date },
+    ...(view === 'open' ? [{ header: 'Cuánto falta', value: (r: Recall) => dueLabel(r.days_left) }] : []),
+    ...(view === 'booked' ? [
+      { header: 'Cita', value: (r: Recall) => r.appointment?.code ?? '' },
+      { header: 'Fecha de la cita', type: 'datetime' as const, value: (r: Recall) => r.appointment?.starts_at },
+      { header: 'Estado de la cita', value: (r: Recall) => r.appointment?.status_name ?? '' },
+    ] : []),
+    ...(view === 'closed' ? [{ header: 'Motivo de cierre', value: (r: Recall) => r.closed_reason ?? '' }] : []),
+    { header: 'Origen', value: (r) => ORIGIN_LABELS[r.origin] },
+    { header: 'Cita de origen', value: (r) => r.source_code ?? '' },
+    { header: 'Estado', value: (r) => r.status_name },
+  ];
+
   const columns: Column<Recall>[] = [
     {
       header: vocab.client,
       cell: (r) => (
         <div key={`customer-${r.id}`}>
           {r.customer ? (
-            <Link href={`/customers/${r.customer.id}`} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>
+            <Link href={`/customers/${r.customer.id}`} className={`${styles.customerName} hover:text-brand-accent transition-colors`}>
               {r.customer.name}
             </Link>
           ) : <span className={styles.customerName}>—</span>}
@@ -234,7 +256,7 @@ export default function RecallsTable() {
 
         if (view === 'closed') {
           return (
-            <button key={`actions-${r.id}`} data-reopen={r.id} title="Volver a dejarlo por agendar" disabled={busy || !can('recalls.edit')} onClick={() => changeStatus(r, 'pending')} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            <button key={`actions-${r.id}`} data-reopen={r.id} title="Volver a dejarlo por agendar" disabled={busy || !can('recalls.edit')} onClick={() => changeStatus(r, 'pending')} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
               <RotateCcw size={16} />
             </button>
           );
@@ -247,7 +269,7 @@ export default function RecallsTable() {
               data-book={r.id}
               disabled={busy}
               onClick={() => book(r)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50"
             >
               <CalendarPlus size={14} /> Agendar
             </button>)}
@@ -264,7 +286,7 @@ export default function RecallsTable() {
             {can('recalls.edit') && (<button data-done={r.id} title="Ya se atendió sin pasar por aquí" disabled={busy} onClick={() => changeStatus(r, 'done', 'Se dio por realizado sin cita')} className={`${iconButton} hover:text-emerald-600 hover:bg-emerald-50`}>
               <CheckCircle size={16} />
             </button>)}
-            {can('recalls.edit') && (<button title="Editar" onClick={() => { setEditing(r); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            {can('recalls.edit') && (<button title="Editar" onClick={() => { setEditing(r); setFormOpen(true); }} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
               <Edit2 size={16} />
             </button>)}
             {can('recalls.edit') && (<button data-discard={r.id} title="Descartar" onClick={() => { setDiscardReason(''); setDiscarding(r); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
@@ -294,6 +316,9 @@ export default function RecallsTable() {
           filterValues={filters}
           onFilterChange={(id, value) => setFilters((current) => ({ ...current, [id]: value }))}
           columns={columns}
+          exportTitle="Controles"
+          exportScreen="recalls"
+          exportColumns={exportColumns}
           dateFilters={[
             { id: 'due_date', label: 'Para cuándo', future: true, value: (r) => r.due_date },
           ]}
@@ -339,7 +364,7 @@ export default function RecallsTable() {
               placeholder="Motivo (opcional). Ej. Ya no lo necesita"
               value={discardReason}
               onChange={(e) => setDiscardReason(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white"
             />
           </div>
         }

@@ -24,10 +24,10 @@ export interface NotificationList {
 }
 
 const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
-  'appointment.booked': { icon: CalendarPlus, tone: 'bg-[#84D0D9]/25 text-[#022340]' },
+  'appointment.booked': { icon: CalendarPlus, tone: 'bg-brand-soft/25 text-brand-ink' },
   'appointment.moved': { icon: CalendarClock, tone: 'bg-amber-50 text-amber-600' },
   'appointment.cancelled': { icon: CalendarX2, tone: 'bg-rose-50 text-rose-600' },
-  'appointment.portal_booked': { icon: Globe, tone: 'bg-[#84D0D9]/25 text-[#022340]' },
+  'appointment.portal_booked': { icon: Globe, tone: 'bg-brand-soft/25 text-brand-ink' },
   'appointment.portal_moved': { icon: CalendarClock, tone: 'bg-amber-50 text-amber-600' },
   'appointment.portal_cancelled': { icon: CalendarX2, tone: 'bg-rose-50 text-rose-600' },
   'appointment.portal_confirmed': { icon: CalendarCheck, tone: 'bg-emerald-50 text-emerald-600' },

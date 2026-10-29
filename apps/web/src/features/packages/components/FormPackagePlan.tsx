@@ -50,7 +50,7 @@ interface Row {
 }
 
 const sectionClass = 'space-y-3 rounded-2xl border border-slate-200 p-4';
-const sectionTitle = 'text-sm font-black text-[#022340]';
+const sectionTitle = 'text-sm font-black text-brand-ink';
 
 let rowSeed = 0;
 const newRow = (serviceId = '', sessions = '5'): Row => ({ key: `row-${rowSeed++}`, serviceId, sessions });
@@ -251,7 +251,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
                 </div>
               ))}
               {!scheduled && rows.length < 10 && (
-                <button type="button" data-add-row onClick={() => setRows((current) => [...current, newRow('', '1')])} className="flex items-center gap-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <button type="button" data-add-row onClick={() => setRows((current) => [...current, newRow('', '1')])} className="flex items-center gap-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
                   <Plus size={14} /> Agregar otro servicio
                 </button>
               )}
@@ -283,7 +283,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
               {(options?.modes ?? []).map((option) => (
                 <OptionCard key={option.value} type="button" role="radio" aria-checked={form.bookingMode === option.value} data-mode={option.value}
                   onClick={() => { set({ bookingMode: option.value as BookingMode }); if (option.value === 'scheduled') setRows((current) => current.slice(0, 1)); }} selected={form.bookingMode === option.value} className="text-left rounded-xl border px-4 py-2.5 transition-colors">
-                  <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
+                  <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                   <span className="block text-xs text-slate-500 mt-0.5">{MODE_HINTS[option.value as BookingMode]}</span>
                 </OptionCard>
               ))}
@@ -322,7 +322,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
                       <div className="flex gap-1.5">
                         {[1, 2].map((weeks) => (
                           <button key={weeks} type="button" data-repeat={weeks} onClick={() => set({ repeatWeeks: weeks })}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${form.repeatWeeks === weeks ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${form.repeatWeeks === weeks ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                             {weeks === 1 ? 'Cada semana' : 'Cada 2 semanas'}
                           </button>
                         ))}
@@ -338,7 +338,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
                     {(options?.professional_modes ?? []).map((option) => (
                       <OptionCard key={option.value} type="button" role="radio" aria-checked={form.professionalMode === option.value} data-pro-mode={option.value}
                         onClick={() => set({ professionalMode: option.value as ProfessionalMode })} selected={form.professionalMode === option.value} className="text-left rounded-xl border px-4 py-2.5 transition-colors">
-                        <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
+                        <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                         <span className="block text-xs text-slate-500 mt-0.5">{PROFESSIONAL_HINTS[option.value as ProfessionalMode]}</span>
                       </OptionCard>
                     ))}
@@ -361,7 +361,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
               {(options?.late_policies ?? []).map((option) => (
                 <OptionCard key={option.value} type="button" role="radio" aria-checked={form.latePolicy === option.value} data-late={option.value}
                   onClick={() => set({ latePolicy: option.value as LatePolicy })} selected={form.latePolicy === option.value} className="text-left rounded-xl border px-4 py-2.5 transition-colors">
-                  <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
+                  <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                   <span className="block text-xs text-slate-500 mt-0.5">{LATE_HINTS[option.value as LatePolicy]}</span>
                 </OptionCard>
               ))}
@@ -375,7 +375,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
               {(options?.refund_policies ?? []).map((option) => (
                 <OptionCard key={option.value} type="button" role="radio" aria-checked={form.refundPolicy === option.value} data-refund={option.value}
                   onClick={() => set({ refundPolicy: option.value as RefundPolicy })} selected={form.refundPolicy === option.value} className="text-left rounded-xl border px-4 py-2.5 transition-colors">
-                  <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
+                  <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                   <span className="block text-xs text-slate-500 mt-0.5">{REFUND_HINTS[option.value as RefundPolicy]}</span>
                 </OptionCard>
               ))}

@@ -82,7 +82,7 @@ export default function TeamSchedules() {
   if (!data) {
     return error
       ? <p role="alert" className="text-sm text-red-600">{error}</p>
-      : <div className="min-h-[50vh] flex items-center justify-center"><Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" /></div>;
+      : <div className="min-h-[50vh] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-accent animate-spin" /></div>;
   }
 
   const stats = branch ? [
@@ -95,10 +95,10 @@ export default function TeamSchedules() {
     <div className="space-y-5 pb-8 font-sans" data-team-schedules>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#022340] tracking-tight">Horarios del equipo</h1>
+          <h1 className="text-2xl font-black text-brand-ink tracking-tight">Horarios del equipo</h1>
           <p className="text-sm text-slate-500 font-medium">Quién atiende cada día y a qué hora. Una persona atiende en una sede cuando tiene horario ahí.</p>
         </div>
-        <Link href="/professionals" className="text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">Ver {vocab.pros.toLowerCase()}</Link>
+        <Link href="/professionals" className="text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">Ver {vocab.pros.toLowerCase()}</Link>
       </div>
 
       <ErrorAlert message={error} />
@@ -112,7 +112,7 @@ export default function TeamSchedules() {
               data-branch={item.id}
               onClick={() => setBranchId(item.id)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                item.id === branchId ? 'bg-[#022340] border-[#022340] text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                item.id === branchId ? 'bg-brand border-brand text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
               {item.name}
@@ -145,7 +145,7 @@ export default function TeamSchedules() {
                   <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{stat.title}</span>
                   <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{stat.value}</div>
                 </div>
-                <span className="text-[#3F768C]">{stat.icon}</span>
+                <span className="text-brand-accent">{stat.icon}</span>
               </div>
             ))}
           </div>
@@ -160,8 +160,8 @@ export default function TeamSchedules() {
                     const limits = Object.keys(branch.hours).length > 0;
 
                     return (
-                      <div key={day.weekday} className={`px-2 py-3 text-center border-l border-slate-200/70 ${day.weekday === today ? 'bg-[#84D0D9]/15' : ''}`}>
-                        <span className={`block text-xs font-bold ${day.weekday === today ? 'text-[#022340]' : 'text-slate-700'}`}>{day.label}</span>
+                      <div key={day.weekday} className={`px-2 py-3 text-center border-l border-slate-200/70 ${day.weekday === today ? 'bg-brand-soft/15' : ''}`}>
+                        <span className={`block text-xs font-bold ${day.weekday === today ? 'text-brand-ink' : 'text-slate-700'}`}>{day.label}</span>
                         <span className="block text-[10px] text-slate-400 mt-0.5">
                           {!limits ? 'Sin horario de sede' : hours.length ? hours.map((h) => `${h.opens}–${h.closes}`).join(' · ') : 'Cerrada'}
                         </span>
@@ -190,7 +190,7 @@ export default function TeamSchedules() {
                           <span className="block text-[11px] text-slate-500">{hoursLabel(person.weekly_minutes)} a la semana</span>
                         </div>
                         {data.can_edit && (
-                          <button type="button" data-action="edit-schedule" title={`Cambiar el horario de ${person.display_name}`} onClick={() => setEditing(person)} className="p-1.5 text-slate-300 group-hover:text-slate-500 hover:!text-[#022340] hover:bg-slate-100 rounded-lg transition-colors shrink-0">
+                          <button type="button" data-action="edit-schedule" title={`Cambiar el horario de ${person.display_name}`} onClick={() => setEditing(person)} className="p-1.5 text-slate-300 group-hover:text-slate-500 hover:!text-brand-ink hover:bg-slate-100 rounded-lg transition-colors shrink-0">
                             <Pencil size={14} />
                           </button>
                         )}
@@ -201,7 +201,7 @@ export default function TeamSchedules() {
                         const sede = branch.hours[String(day.weekday)] ?? [];
 
                         return (
-                          <div key={day.weekday} data-day={day.weekday} className={`px-2 py-3 border-l border-slate-100 flex flex-col justify-center gap-1.5 ${day.weekday === today ? 'bg-[#84D0D9]/10' : ''}`}>
+                          <div key={day.weekday} data-day={day.weekday} className={`px-2 py-3 border-l border-slate-100 flex flex-col justify-center gap-1.5 ${day.weekday === today ? 'bg-brand-soft/10' : ''}`}>
                             {ranges.length === 0 ? (
                               <span className="block text-center text-xs text-slate-300">—</span>
                             ) : (

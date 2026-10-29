@@ -9,6 +9,7 @@ use App\Models\Holiday;
 use App\Models\Tenant;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
+use App\Support\Audit;
 use App\Support\Holidays;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -116,8 +117,10 @@ class HolidayController extends Controller
             'tenant_id'  => $tenant->id,
             'created_by' => $request->user()->id,
         ]);
+        $holiday = $holiday->fresh('branch:id,name');
+        $this->audit($request, 'holiday.created', $holiday, [], array_filter($this->auditable($holiday), fn ($value) => $value !== null));
 
-        return response()->json($this->present($holiday->fresh('branch:id,name'), $tenant, now($this->timezone($tenant))->startOfDay(), true), 201);
+        return response()->json($this->present($holiday, $tenant, now($this->timezone($tenant))->startOfDay(), true), 201);
     }
 
     public function update(Request $request, string $holiday)
@@ -127,9 +130,16 @@ class HolidayController extends Controller
         $holiday = Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday);
         Access::assertBranch($request->user(), $holiday->branch_id, true);
 
+        $auditBefore = $this->auditable($holiday->load('branch:id,name'));
         $holiday->update($this->validated($request, $tenant, $holiday->id));
+        $holiday = $holiday->fresh('branch:id,name');
+        [$from, $to] = Audit::changed($auditBefore, $this->auditable($holiday));
 
-        return response()->json($this->present($holiday->fresh('branch:id,name'), $tenant, now($this->timezone($tenant))->startOfDay(), true));
+        if ($from || $to) {
+            $this->audit($request, 'holiday.updated', $holiday, $from, $to);
+        }
+
+        return response()->json($this->present($holiday, $tenant, now($this->timezone($tenant))->startOfDay(), true));
     }
 
     public function destroy(Request $request, string $holiday)
@@ -139,6 +149,18 @@ class HolidayController extends Controller
         $holiday = Holiday::where('tenant_id', $tenant->id)->findOrFail($holiday);
         Access::assertBranch($request->user(), $holiday->branch_id, true);
         $holiday->delete();
+        Audit::log($request, 'holiday.deleted', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'holiday',
+            'entity_id'    => $holiday->id,
+            'entity_label' => $holiday->name,
+            'branch_id'    => $holiday->branch_id,
+            'before'       => array_filter([
+                'holiday_date' => $holiday->date?->format('Y-m-d'),
+                'closed'       => (bool) $holiday->closed,
+                'branch'       => $holiday->branch_id ? \App\Models\Branch::where('id', $holiday->branch_id)->value('name') : null,
+            ], fn ($value) => $value !== null),
+        ]);
 
         return response()->json(['message' => 'Feriado eliminado correctamente']);
     }
@@ -152,12 +174,44 @@ class HolidayController extends Controller
         Access::assertBranch($request->user(), null, true);
         $added = Holidays::loadNational($tenant, (int) $validated['year'], $request->user()->id);
 
+        if ($added > 0) {
+            Audit::log($request, 'holiday.imported', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'holiday',
+                'entity_label' => "Feriados nacionales {$validated['year']}",
+                'after'        => ['holiday_year' => (int) $validated['year'], 'holidays_added' => $added],
+            ]);
+        }
+
         return response()->json([
             'added'   => $added,
             'message' => $added === 0
                 ? "Los feriados nacionales de {$validated['year']} ya estaban cargados."
                 : "Se agregaron {$added} feriados nacionales de {$validated['year']}.",
         ]);
+    }
+
+    private function auditable(Holiday $holiday): array
+    {
+        return [
+            'name'         => $holiday->name,
+            'holiday_date' => $holiday->date?->format('Y-m-d'),
+            'closed'       => (bool) $holiday->closed,
+            'branch'       => $holiday->branch_id ? $holiday->branch?->name : 'Todas las sedes',
+        ];
+    }
+
+    private function audit(Request $request, string $action, Holiday $holiday, array $before = [], array $after = []): void
+    {
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $holiday->tenant_id,
+            'entity_type'  => 'holiday',
+            'entity_id'    => $holiday->id,
+            'entity_label' => $holiday->name,
+            'branch_id'    => $holiday->branch_id,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
     }
 
     private function validated(Request $request, Tenant $tenant, ?string $ignoreId = null): array

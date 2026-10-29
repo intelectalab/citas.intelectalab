@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ServiceCategory;
+use App\Support\Audit;
 use Illuminate\Support\Str;
 
 class ServiceCategoryController extends Controller
@@ -42,6 +43,14 @@ class ServiceCategoryController extends Controller
         $category = ServiceCategory::create([
             'tenant_id' => $currentUser->tenant_id,
             'name' => $validated['name'],
+        ]);
+
+        Audit::log($request, 'service_category.created', [
+            'tenant'       => $currentUser->tenant_id,
+            'entity_type'  => 'service_category',
+            'entity_id'    => $category->id,
+            'entity_label' => $category->name,
+            'after'        => ['name' => $category->name],
         ]);
 
         return response()->json([

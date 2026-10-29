@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, Eye, KeyRound, Pencil, ShieldCheck, SlidersHorizontal, Trash2, UserCheck, UserX, Users } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { ProfessionalLink, UserLink } from '@/app/components/common/PersonLink';
@@ -158,8 +158,8 @@ export default function UsersRolesBoard() {
       title: 'Con permisos cambiados',
       value: all.filter((u) => changedOf(u) > 0).length,
       icon: <SlidersHorizontal size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: filters.changed ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: filters.changed ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => toggleFilter('changed', '1'),
     },
     ...(all.some(lacksBranch) ? [{
@@ -185,6 +185,21 @@ export default function UsersRolesBoard() {
     { id: 'status', label: 'Estado', type: 'select', options: [{ label: 'Activo', value: 'active' }, { label: 'Desactivado', value: 'inactive' }] },
   ];
 
+  const userExportColumns: ExportColumn<StaffUser>[] = [
+    { header: 'Nombre', value: (u) => u.name },
+    { header: 'Correo', value: (u) => u.email },
+    { header: 'Teléfono', value: (u) => u.phone },
+    { header: 'Rol', value: (u) => u.role?.name ?? 'Sin rol' },
+    { header: 'Dueño', value: (u) => (u.is_owner ? 'Sí' : 'No') },
+    { header: 'Atiende citas', value: (u) => (u.professional_id ? 'Sí' : 'No') },
+    { header: 'Permisos agregados', type: 'number', value: (u) => u.granted ?? 0 },
+    { header: 'Permisos quitados', type: 'number', value: (u) => u.revoked ?? 0 },
+    { header: 'Sede', value: (u) => (lacksBranch(u) ? 'Falta su sede' : u.branch?.name ?? 'Sin sede fija') },
+    { header: 'Estado', value: (u) => (u.status === 'active' ? 'Activo' : 'Desactivado') },
+    { header: 'Último ingreso', type: 'datetime', value: (u) => u.last_login_at },
+    { header: 'Registrado', type: 'date', value: (u) => u.created_at },
+  ];
+
   const userColumns: Column<StaffUser>[] = [
     {
       header: 'Persona',
@@ -194,7 +209,7 @@ export default function UsersRolesBoard() {
           <div>
             <span className="flex items-center gap-1.5 flex-wrap">
               <UserLink id={user.id} className={styles.customerName}>{user.name}</UserLink>
-              {user.is_owner && <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-[#84D0D9]/25 text-[#022340]">Dueño</span>}
+              {user.is_owner && <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-brand-soft/25 text-brand-ink">Dueño</span>}
               {user.is_self && <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-600">Tú</span>}
             </span>
             <span className="block text-xs text-slate-400 font-mono">{user.email}</span>
@@ -256,14 +271,24 @@ export default function UsersRolesBoard() {
     },
   ];
 
+  const roleExportColumns: ExportColumn<RoleRow>[] = [
+    { header: 'Rol', value: (r) => r.name },
+    { header: 'Descripción', value: (r) => r.description ?? '' },
+    { header: 'Personas', type: 'number', value: (r) => r.users },
+    { header: 'Qué puede', value: (r) => (r.locked ? 'Todo' : `${r.permissions} de ${r.total}`) },
+    { header: 'Qué ve', value: (r) => scopeTitle(r.scope) },
+    { header: 'Tipo', value: (r) => (r.is_system ? 'De fábrica' : 'Propio') },
+    { header: 'Registrado', type: 'date', value: (r) => r.created_at },
+  ];
+
   const roleColumns: Column<RoleRow>[] = [
     {
       header: 'Rol',
       cell: (role) => (
         <div key={`role-${role.id}`} className="flex items-center gap-3">
-          <span className="p-2 rounded-lg shrink-0 bg-[#84D0D9]/20 text-[#022340]"><ShieldCheck size={16} /></span>
+          <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><ShieldCheck size={16} /></span>
           <div>
-            <Link href={`/users/roles/${role.id}`} data-role-link={role.slug} className={`${styles.customerName} hover:text-[#3F768C] hover:underline underline-offset-2`}>{role.name}</Link>
+            <Link href={`/users/roles/${role.id}`} data-role-link={role.slug} className={`${styles.customerName} hover:text-brand-accent hover:underline underline-offset-2`}>{role.name}</Link>
             <span className="block text-xs text-slate-400">{role.description || 'Sin descripción'}</span>
           </div>
         </div>
@@ -279,7 +304,7 @@ export default function UsersRolesBoard() {
         <div key={`perms-${role.id}`} className="min-w-32">
           <span className="block text-sm font-semibold text-slate-800 tabular-nums">{role.locked ? 'Todo' : `${role.permissions} de ${role.total}`}</span>
           <span className="block h-1.5 mt-1 rounded-full bg-slate-100 overflow-hidden">
-            <span className="block h-full rounded-full bg-[#3F768C]" style={{ width: `${role.total ? Math.round((role.permissions / role.total) * 100) : 0}%` }} />
+            <span className="block h-full rounded-full bg-brand-accent" style={{ width: `${role.total ? Math.round((role.permissions / role.total) * 100) : 0}%` }} />
           </span>
         </div>
       ),
@@ -318,8 +343,8 @@ export default function UsersRolesBoard() {
       title: 'Roles',
       value: roles.length,
       icon: <ShieldCheck size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: !roleFilters.kind ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: !roleFilters.kind ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => setRoleFilters({ kind: '' }),
     },
     {
@@ -371,6 +396,9 @@ export default function UsersRolesBoard() {
             { id: 'created_at', label: 'Fecha de registro', type: 'date', value: (u) => u.created_at },
           ]}
           columns={userColumns}
+          exportTitle="Usuarios"
+          exportScreen="users"
+          exportColumns={userExportColumns}
           data={userRows}
           getItemKey={(u) => u.id}
           entityLabel={userRows.length === 1 ? 'usuario' : 'usuarios'}
@@ -395,6 +423,9 @@ export default function UsersRolesBoard() {
             { id: 'permissions', label: 'Cuánto puede', type: 'number', value: (r) => r.permissions },
           ]}
           columns={roleColumns}
+          exportTitle="Roles"
+          exportScreen="roles"
+          exportColumns={roleExportColumns}
           data={roleRows}
           getItemKey={(r) => r.id}
           entityLabel={roleRows.length === 1 ? 'rol' : 'roles'}

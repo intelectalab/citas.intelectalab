@@ -74,7 +74,7 @@ export default function RecordTemplates() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -85,7 +85,7 @@ export default function RecordTemplates() {
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#022340] tracking-tight">Plantillas de ficha</h1>
+          <h1 className="text-2xl font-black text-brand-ink tracking-tight">Plantillas de ficha</h1>
           <p className="text-sm text-slate-500 font-medium">
             Lo que tu equipo llena al atender. {canEdit ? 'Edita la ficha directamente sobre la hoja de la derecha: las fichas ya llenadas no cambian.' : 'Las define el administrador de tu empresa.'}
           </p>
@@ -95,9 +95,9 @@ export default function RecordTemplates() {
             type="button"
             data-action="new-template"
             onClick={() => guard(() => { setEditing(null); setFormOpen(true); })}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
           >
-            <Plus size={16} className="text-[#84D0D9] stroke-[2.5]" /> Nueva ficha
+            <Plus size={16} className="text-brand-soft stroke-[2.5]" /> Nueva ficha
           </button>
         )}
       </div>
@@ -123,12 +123,12 @@ export default function RecordTemplates() {
                   data-template={template.name}
                   onClick={() => { if (template.id !== selectedId) guard(() => setSelectedId(template.id)); }}
                   className={`bg-white rounded-2xl border p-5 space-y-3 cursor-pointer transition-all ${
-                    isSelected ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20 shadow-sm' : 'border-slate-200/80 shadow-xs hover:border-slate-300'
+                    isSelected ? 'border-brand-accent ring-2 ring-brand-accent/20 shadow-sm' : 'border-slate-200/80 shadow-xs hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="text-base font-extrabold text-[#022340] truncate">{template.name}</h2>
+                      <h2 className="text-base font-extrabold text-brand-ink truncate">{template.name}</h2>
                       {template.description && <p className="text-xs text-slate-500 mt-0.5">{template.description}</p>}
                     </div>
                     {canEdit && (

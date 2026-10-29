@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -36,6 +37,16 @@ class LoginController extends Controller
         }
 
         if ($matches->isEmpty()) {
+            foreach ($staff->concat($customers) as $attempted) {
+                Audit::log($request, 'auth.failed', [
+                    'actor'       => $attempted,
+                    'tenant'      => $attempted->tenant_id,
+                    'impersonator' => null,
+                    'entity_type' => $attempted instanceof Customer ? 'customer' : 'user',
+                    'entity_id'   => $attempted->id,
+                ]);
+            }
+
             return response()->json([
                 'message' => 'Credenciales incorrectas'
             ], 401);
@@ -49,6 +60,16 @@ class LoginController extends Controller
             && (is_null($account->tenant_id) || $account->tenant?->isActive()))->values();
 
         if ($allowed->isEmpty()) {
+            foreach ($matches as $blocked) {
+                Audit::log($request, 'auth.blocked', [
+                    'actor'        => $blocked,
+                    'tenant'       => $blocked->tenant_id,
+                    'impersonator' => null,
+                    'entity_type'  => $blocked instanceof Customer ? 'customer' : 'user',
+                    'entity_id'    => $blocked->id,
+                ]);
+            }
+
             $accountDisabled = $matches->contains(fn (User|Customer $account) => !$enabled($account));
             $isCustomer = $matches->every(fn (User|Customer $account) => $account instanceof Customer);
 
@@ -82,6 +103,14 @@ class LoginController extends Controller
         $account = $matches->first();
         $token = $account->createToken('auth_token')->plainTextToken;
 
+        Audit::log($request, 'auth.login', [
+            'actor'        => $account,
+            'tenant'       => $account->tenant_id,
+            'impersonator' => null,
+            'entity_type'  => $account instanceof Customer ? 'customer' : 'user',
+            'entity_id'    => $account->id,
+        ]);
+
         if ($account instanceof Customer || \Illuminate\Support\Facades\Schema::hasColumn('users', 'last_login_at')) {
             $account->forceFill(['last_login_at' => now()])->saveQuietly();
         }
@@ -113,6 +142,14 @@ class LoginController extends Controller
 
     public function logout(Request $request)
     {
+        $account = $request->user();
+
+        Audit::log($request, $request->input('reason') === 'idle' ? 'auth.idle_logout' : 'auth.logout', [
+            'tenant'      => $account->tenant_id,
+            'entity_type' => $account instanceof Customer ? 'customer' : 'user',
+            'entity_id'   => $account->id,
+        ]);
+
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Sesión cerrada correctamente']);

@@ -118,7 +118,13 @@ class TenantController extends Controller
         ]);
 
         $previousStatus = $tenant->status;
+        [$was, $now] = \App\Support\Audit::changed($tenant->only(array_keys($validated)), $validated);
         $tenant->update($validated);
+        unset($was['status'], $now['status']);
+
+        if ($now) {
+            AuditEvent::record($request, 'tenant.updated', $tenant, $was, $now);
+        }
 
         if ($tenant->status !== $previousStatus) {
             $this->afterStatusChange($request, $tenant, $previousStatus);
@@ -130,10 +136,11 @@ class TenantController extends Controller
         ]);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
         $tenant->delete();
+        \App\Support\Audit::log($request, 'tenant.deleted', ['entity_type' => 'tenant', 'entity_id' => $tenant->id, 'entity_label' => $tenant->name]);
 
         return response()->json([
             'message' => 'Tenant eliminado correctamente'
@@ -219,6 +226,8 @@ class TenantController extends Controller
         $tenant->business_type_id = $validated['business_type_id'];
         $tenant->unsetRelation('businessType');
         $tenant->fillBusinessProfile()->save();
+        $tenant->settings()->updateOrCreate([], ['modules_off' => Tenant::startingModulesOff($tenant->businessType)]);
+        $tenant->unsetRelation('settings');
 
         $installed = !empty($validated['install_template'])
             ? DB::transaction(fn () => $tenant->installBusinessTemplate())
@@ -277,18 +286,16 @@ class TenantController extends Controller
         $isCurrent = (bool) $subscription?->isCurrent();
 
         $planKeys = $plan?->moduleKeys() ?? [];
-        $typeOff = $tenant->businessProfile('modules_off');
         $platformOff = $tenant->modules_off ?? [];
         $tenantOff = $tenant->settings?->modules_off ?? [];
         $active = $tenant->modules();
 
-        $modules = SaasModule::orderBy('sort_order')->get()->map(function (SaasModule $module) use ($isCurrent, $planKeys, $typeOff, $platformOff, $tenantOff, $active) {
+        $modules = SaasModule::orderBy('sort_order')->get()->map(function (SaasModule $module) use ($isCurrent, $planKeys, $platformOff, $tenantOff, $active) {
             $inPlan = $module->is_core || in_array($module->key, $planKeys, true);
 
             $reason = match (true) {
                 !$isCurrent                                  => 'no_subscription',
                 !$inPlan                                     => 'plan',
-                in_array($module->key, $typeOff, true)       => 'business_type',
                 in_array($module->key, $platformOff, true)   => 'platform',
                 in_array($module->key, $tenantOff, true)     => 'tenant',
                 default                                      => null,

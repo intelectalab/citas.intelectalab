@@ -26,7 +26,7 @@ interface CustomerDependentsProps {
 const EMPTY: CustomerDependent = { name: '', species: '', breed: '', birth_date: '', biological_sex: '', notes: '' };
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white';
+  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white';
 const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1';
 
 export default function CustomerDependents({ customerId, onPendingChange }: CustomerDependentsProps) {
@@ -129,7 +129,7 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
     <div className="space-y-3">
       {items.length === 0 && !showForm && (
         <p className="text-xs text-slate-400 italic">
-          Aún no hay {vocab.dependents.toLowerCase()} registrados.
+          Aún no hay {vocab.dependents.toLowerCase()} {vocab.pick('dependent', 'registrados', 'registradas')}.
         </p>
       )}
 
@@ -251,7 +251,7 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
               type="button"
               onClick={save}
               disabled={saving}
-              className="px-3 py-1.5 text-xs font-semibold text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-semibold text-white bg-brand hover:bg-brand/90 rounded-lg transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : editingIndex === null ? `Agregar ${dependentLower}` : 'Guardar cambios'}
             </button>

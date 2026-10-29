@@ -150,6 +150,19 @@ class CustomerStages
             }
         });
 
+        if ($from !== $to && $by) {
+            $person = DB::table('customers')->where('id', $customerId)->first(['first_name', 'last_name']);
+
+            Audit::log(request(), 'customer.stage_changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'customer',
+                'entity_id'    => $customerId,
+                'entity_label' => Person::name($person),
+                'before'       => ['stage' => $stages[$from]['name'] ?? null],
+                'after'        => ['stage' => $stages[$to]['name'] ?? null],
+            ]);
+        }
+
         return true;
     }
 

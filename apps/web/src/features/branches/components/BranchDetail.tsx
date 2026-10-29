@@ -108,16 +108,16 @@ export default function BranchDetail() {
         <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="branch">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-12 h-12 rounded-2xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><Store size={22} /></span>
+              <span className="w-12 h-12 rounded-2xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><Store size={22} /></span>
               <div className="min-w-0">
-                <h1 className="text-xl font-black text-[#022340] tracking-tight truncate">{branch.name}</h1>
+                <h1 className="text-xl font-black text-brand-ink tracking-tight truncate">{branch.name}</h1>
                 <span data-status={branch.status} className={`inline-block mt-1 px-2.5 py-0.5 text-xs rounded-full font-medium ${branch.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                   {branch.status === 'active' ? 'Activa' : 'Inactiva'}
                 </span>
               </div>
             </div>
             {canManage && (
-              <button type="button" data-action="edit-branch" title="Editar sucursal" onClick={() => setEditing(true)} className="p-2 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors shrink-0">
+              <button type="button" data-action="edit-branch" title="Editar sucursal" onClick={() => setEditing(true)} className="p-2 text-slate-400 hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors shrink-0">
                 <Pencil size={16} />
               </button>
             )}
@@ -153,9 +153,9 @@ export default function BranchDetail() {
 
         <section className={`${card} p-6 space-y-4`} data-card="hours">
           <div className="flex items-center justify-between gap-3">
-            <SectionTitle><Clock size={16} className="text-[#3F768C]" /> Horario de atención</SectionTitle>
+            <SectionTitle><Clock size={16} className="text-brand-accent" /> Horario de atención</SectionTitle>
             {canManage && (
-              <button type="button" data-action="edit-hours" onClick={() => setHoursOpen(true)} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <button type="button" data-action="edit-hours" onClick={() => setHoursOpen(true)} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 Cambiar
               </button>
             )}
@@ -183,8 +183,8 @@ export default function BranchDetail() {
 
         <section className={`${card} p-6 space-y-4`} data-card="team">
           <div className="flex items-center justify-between gap-3">
-            <SectionTitle><Users size={16} className="text-[#3F768C]" /> {vocab.pros} en esta sede</SectionTitle>
-            <Link href="/professionals" className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">Ver horarios</Link>
+            <SectionTitle><Users size={16} className="text-brand-accent" /> {vocab.pros} en esta sede</SectionTitle>
+            <Link href="/professionals" className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">Ver horarios</Link>
           </div>
 
           {outsideCount > 0 && (
@@ -228,9 +228,9 @@ export default function BranchDetail() {
         {branch.uses_rooms && (
           <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="rooms">
             <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
-              <SectionTitle><DoorOpen size={16} className="text-[#3F768C]" /> Salas y equipos</SectionTitle>
+              <SectionTitle><DoorOpen size={16} className="text-brand-accent" /> Salas y equipos</SectionTitle>
               {canManage && (
-                <button type="button" data-action="add-room" onClick={() => openRoom(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors">
+                <button type="button" data-action="add-room" onClick={() => openRoom(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors">
                   <Plus size={14} /> Agregar
                 </button>
               )}
@@ -260,7 +260,7 @@ export default function BranchDetail() {
                     </div>
                     {canManage && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <button title="Editar" onClick={() => openRoom(room)} className="p-1.5 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors"><Edit2 size={15} /></button>
+                        <button title="Editar" onClick={() => openRoom(room)} className="p-1.5 text-slate-400 hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors"><Edit2 size={15} /></button>
                         <button data-delete-room={room.id} title="Eliminar" onClick={() => setRoomDeleting(room)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={15} /></button>
                       </div>
                     )}

@@ -57,13 +57,15 @@ class ImpersonationController extends Controller
         $tenant = $request->user()->tenant;
         $token->delete();
 
-        AuditEvent::create([
-            'tenant_id'     => $tenant?->id,
-            'actor_user_id' => substr($token->name, strlen(self::TOKEN_PREFIX)),
-            'action'        => 'impersonation.ended',
-            'entity_type'   => 'tenant',
-            'entity_id'     => $tenant?->id,
-            'ip_address'    => $request->ip(),
+        $platformUser = \App\Models\User::find(substr($token->name, strlen(self::TOKEN_PREFIX)));
+
+        \App\Support\Audit::log($request, 'impersonation.ended', [
+            'actor'        => $platformUser,
+            'impersonator' => null,
+            'tenant'       => $tenant,
+            'entity_type'  => 'tenant',
+            'entity_id'    => $tenant?->id,
+            'entity_label' => $tenant?->name,
         ]);
 
         return response()->json(['message' => 'Sesión de soporte cerrada.']);

@@ -96,7 +96,7 @@ export const MESSAGE_BADGES: Record<MessageStatus, string> = {
   scheduled: 'bg-violet-50 text-violet-700',
   queued: 'bg-sky-50 text-sky-700',
   sent: 'bg-emerald-50 text-emerald-700',
-  simulated: 'bg-[#84D0D9]/25 text-[#022340]',
+  simulated: 'bg-brand-soft/25 text-brand-ink',
   failed: 'bg-rose-50 text-rose-700',
   not_sent: 'bg-amber-50 text-amber-800',
   cancelled: 'bg-slate-100 text-slate-500',
@@ -104,7 +104,7 @@ export const MESSAGE_BADGES: Record<MessageStatus, string> = {
 
 export const EMAIL_BADGES: Record<EmailState, string> = {
   none: 'bg-amber-50 text-amber-800 border-amber-200',
-  simulated: 'bg-[#84D0D9]/15 text-[#022340] border-[#84D0D9]/50',
+  simulated: 'bg-brand-soft/15 text-brand-ink border-brand-soft/50',
   untested: 'bg-sky-50 text-sky-800 border-sky-200',
   ok: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   error: 'bg-rose-50 text-rose-800 border-rose-200',

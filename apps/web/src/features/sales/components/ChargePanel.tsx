@@ -6,7 +6,7 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, Banknote, Boxes, Copy, Mail, CreditCard, ExternalLink, FileText, Landmark, Link2, Receipt, RefreshCw, Smartphone, TicketPercent, Wallet, X } from 'lucide-react';
+import { BadgeCheck, Banknote, Boxes, Copy, Gift, Mail, CreditCard, ExternalLink, FileText, Landmark, Link2, Receipt, RefreshCw, Smartphone, Sparkles, TicketPercent, Wallet, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -18,6 +18,7 @@ import { outcomeOf } from '@/features/messages/messages';
 interface ChargePanelProps {
   appointmentId: string | null;
   saleId?: string | null;
+  initialAmount?: number;
   appointmentCode?: string;
   onClose: () => void;
   onChanged?: (context: ChargeContext) => void;
@@ -31,6 +32,8 @@ const METHOD_ICONS: Record<string, React.ReactNode> = {
   transfer: <Landmark size={16} />,
   yape: <Smartphone size={16} />,
   plin: <Smartphone size={16} />,
+  gift_card: <Gift size={16} />,
+  points: <Sparkles size={16} />,
   link: <Link2 size={16} />,
   deposit: <Link2 size={16} />,
   gateway: <Link2 size={16} />,
@@ -44,12 +47,12 @@ const STATUS_BADGES: Record<string, string> = {
 
 const chip = (active: boolean) =>
   `flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg border transition-colors ${
-    active ? 'bg-[#022340] text-white border-[#022340]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+    active ? 'bg-brand text-white border-brand' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
   }`;
 
 const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
-export default function ChargePanel({ appointmentId, saleId = null, appointmentCode, onClose, onChanged }: ChargePanelProps) {
+export default function ChargePanel({ appointmentId, saleId = null, initialAmount, appointmentCode, onClose, onChanged }: ChargePanelProps) {
   const base = appointmentId ? `/appointments/${appointmentId}` : saleId ? `/sales/${saleId}` : null;
   const contextUrl = appointmentId ? `${base}/sale` : `${base}/charge`;
   const payUrl = appointmentId ? `${base}/charge` : `${base}/pay`;
@@ -79,7 +82,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
 
   const apply = (data: ChargeContext) => {
     setContext(data);
-    setAmount(balanceOf(data).toFixed(2));
+    setAmount((initialAmount && initialAmount > 0 ? Math.min(initialAmount, balanceOf(data)) : balanceOf(data)).toFixed(2));
     setReceived('');
     setReference('');
     setSessionId((current) => (data.cash.sessions.some((s) => s.id === current) ? current : ''));
@@ -117,9 +120,15 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
   const invoice = sale?.invoice ?? null;
   const canPay = !sale || sale.status === 'pending' || sale.status === 'partial';
   const isCash = method === 'cash';
-  const needsReference = context?.methods.find((m) => m.value === method)?.needs_reference ?? false;
+  const isGiftCard = method === 'gift_card';
+  const isPoints = method === 'points';
+  const loyalty = context?.loyalty ?? null;
+  const pointsInfo = loyalty?.points ?? null;
+  const needsReference = isGiftCard || (context?.methods.find((m) => m.value === method)?.needs_reference ?? false);
+  const allowPartial = Boolean(context?.partial_payments || isGiftCard || isPoints);
   const cashClosed = Boolean(context && isCash && context.cash.required && context.cash.sessions.length === 0);
   const amountNumber = Number(amount || 0);
+  const pointsNeeded = isPoints && pointsInfo && pointsInfo.point_value > 0 ? Math.ceil(amountNumber / pointsInfo.point_value) : 0;
   const change = isCash && received ? Math.max(0, Number(received) - amountNumber) : 0;
   const completes = amountNumber >= balance - 0.001;
   const appliedCoupon = sale ? sale.coupon : context?.coupon ?? null;
@@ -397,8 +406,8 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <span className="font-bold text-[#022340]">Total</span>
-                <span className="text-xl font-black text-[#022340] tabular-nums" data-total>{money(totals.total, context?.sale?.currency ?? context?.preview.currency)}</span>
+                <span className="font-bold text-brand-ink">Total</span>
+                <span className="text-xl font-black text-brand-ink tabular-nums" data-total>{money(totals.total, context?.sale?.currency ?? context?.preview.currency)}</span>
               </div>
 
               {sale && sale.paid > 0 && !isPaid && (
@@ -407,12 +416,19 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                   <span className="font-bold text-amber-700" data-balance>Saldo {money(sale.balance, context?.sale?.currency ?? context?.preview.currency)}</span>
                 </div>
               )}
+
+              {pointsInfo && pointsInfo.will_earn > 0 && !isPaid && (
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-brand-accent">
+                  <span className="flex items-center gap-1.5 font-semibold"><Sparkles size={13} /> Puntos que sumará al completar el pago</span>
+                  <span className="font-bold">+{pointsInfo.will_earn} pts (disp. {pointsInfo.balance} pts)</span>
+                </div>
+              )}
             </div>
           </section>
 
           {appointmentId && context.package?.current && (
-            <section className="rounded-2xl border border-[#84D0D9] bg-[#84D0D9]/10 px-5 py-4 space-y-2" data-package-current={context.package.current.code}>
-              <span className="flex items-center gap-2 text-sm font-bold text-[#022340]"><Boxes size={16} /> Se paga con el paquete {context.package.current.code}</span>
+            <section className="rounded-2xl border border-brand-soft bg-brand-soft/10 px-5 py-4 space-y-2" data-package-current={context.package.current.code}>
+              <span className="flex items-center gap-2 text-sm font-bold text-brand-ink"><Boxes size={16} /> Se paga con el paquete {context.package.current.code}</span>
               <span className="block text-sm text-slate-700">
                 {context.package.current.name}.{' '}
                 {context.package.current.consumed
@@ -425,7 +441,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 </span>
               )}
               <div className="flex flex-wrap items-center gap-3 pt-1">
-                <Link href={`/packages/${context.package.current.id}`} className="text-xs font-bold text-[#3F768C] underline underline-offset-2">Ver el paquete</Link>
+                <Link href={`/packages/${context.package.current.id}`} className="text-xs font-bold text-brand-accent underline underline-offset-2">Ver el paquete</Link>
                 {!context.package.current.consumed && context.package.can_use && (
                   <button type="button" data-package-release disabled={saving} onClick={() => applyPackage(null)} className="text-xs font-bold text-slate-600 hover:text-red-600 transition-colors">
                     Quitar del paquete y cobrar aparte
@@ -445,7 +461,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                     <span className="block text-xs text-slate-500">{pkg.code} · quedan {pkg.sessions_available} sin fecha de {pkg.sessions_total} · vence en {pkg.days_left} días</span>
                   </div>
                   {context.package!.can_use && (
-                    <button type="button" data-package-use={pkg.code} disabled={saving} onClick={() => applyPackage(pkg.id)} className="shrink-0 px-3.5 py-2 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50">
+                    <button type="button" data-package-use={pkg.code} disabled={saving} onClick={() => applyPackage(pkg.id)} className="shrink-0 px-3.5 py-2 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50">
                       Usar paquete
                     </button>
                   )}
@@ -472,10 +488,49 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 <span className={labelClass}>Medio de pago</span>
                 <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Medio de pago">
                   {context.methods.map((option) => (
-                    <button key={option.value} type="button" role="radio" aria-checked={method === option.value} data-method={option.value} onClick={() => { setMethod(option.value); setError(''); }} className={chip(method === option.value)}>
+                    <button key={option.value} type="button" role="radio" aria-checked={method === option.value} data-method={option.value} onClick={() => { setMethod(option.value); setAmount((initialAmount && initialAmount > 0 ? Math.min(initialAmount, balance) : balance).toFixed(2)); setError(''); }} className={chip(method === option.value)}>
                       {METHOD_ICONS[option.value]} {option.label}
                     </button>
                   ))}
+                  {loyalty?.gift_cards_enabled && (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isGiftCard}
+                      data-method="gift_card"
+                      onClick={() => {
+                        setMethod('gift_card');
+                        setError('');
+                        const firstCard = loyalty.customer_gift_cards[0];
+                        if (firstCard) {
+                          setReference(firstCard.code);
+                          setAmount(Math.min(balance, firstCard.balance).toFixed(2));
+                        } else {
+                          setReference('');
+                          setAmount(balance.toFixed(2));
+                        }
+                      }}
+                      className={chip(isGiftCard)}
+                    >
+                      <Gift size={16} /> Gift card
+                    </button>
+                  )}
+                  {loyalty?.points_enabled && pointsInfo?.can_redeem && (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isPoints}
+                      data-method="points"
+                      onClick={() => {
+                        setMethod('points');
+                        setError('');
+                        setAmount(Math.min(balance, pointsInfo.max_amount).toFixed(2));
+                      }}
+                      className={chip(isPoints)}
+                    >
+                      <Sparkles size={16} /> Puntos ({pointsInfo.balance} pts)
+                    </button>
+                  )}
                   {links?.ready && (
                     <button type="button" role="radio" aria-checked={isLink} data-method="link" onClick={() => { setMethod('link'); setError(''); }} className={chip(isLink)}>
                       <Link2 size={16} /> Link de pago
@@ -485,7 +540,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
               </div>
 
               {pendingLink && !isLink && (
-                <p data-link-pending-note className="text-sm text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-lg px-3 py-2">
+                <p data-link-pending-note className="text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-lg px-3 py-2">
                   Hay un link de pago esperando: si cobras aquí, ese link se anula para que no se pague dos veces.
                 </p>
               )}
@@ -493,14 +548,14 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
               {isLink && (
                 <div className="space-y-3" data-link-box>
                   {pendingLink ? (
-                    <div className="rounded-xl border border-[#84D0D9] bg-[#84D0D9]/10 p-4 space-y-3">
+                    <div className="rounded-xl border border-brand-soft bg-brand-soft/10 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-bold text-[#022340]">{pendingLink.status_label} · {money(pendingLink.amount, pendingLink.currency)}</span>
+                        <span className="text-sm font-bold text-brand-ink">{pendingLink.status_label} · {money(pendingLink.amount, pendingLink.currency)}</span>
                         <span className="text-xs text-slate-500">Vence {momentOf(pendingLink.expires_at)}</span>
                       </div>
                       <input readOnly aria-label="Link de pago" data-link-url value={pendingLink.url} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs`} />
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" data-link-copy onClick={copyLink} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors">
+                        <button type="button" data-link-copy onClick={copyLink} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors">
                           <Copy size={14} /> {copied ? '¡Copiado!' : 'Copiar'}
                         </button>
                         <Link href={new URL(pendingLink.url).pathname} target="_blank" rel="noreferrer" data-link-open className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
@@ -532,7 +587,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                         Se crea un link para pagar {money(balance, context?.sale?.currency ?? context?.preview.currency)} con tarjeta, Yape o Plin. Vence en {links?.hours ?? 24} horas.
                       </p>
                       {links?.simulated && <p className="text-xs text-amber-700">Tu empresa usa la pasarela simulada: el link sirve para probar, no cobra dinero.</p>}
-                      <button type="button" data-link-create disabled={saving} onClick={createLink} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+                      <button type="button" data-link-create disabled={saving} onClick={createLink} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
                         <Link2 size={15} /> {saving ? 'Creando...' : 'Crear link de pago'}
                       </button>
                     </div>
@@ -544,7 +599,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 <div className="flex items-start gap-4 rounded-xl border border-slate-200 p-4" data-qr={method}>
                   <img src={qr.image} alt={`QR de ${method === 'yape' ? 'Yape' : 'Plin'}`} className="w-32 h-32 object-contain rounded-lg border border-slate-100 bg-white" />
                   <div className="text-sm text-slate-600 space-y-1">
-                    <span className="block font-bold text-[#022340]">Que el cliente escanee este QR</span>
+                    <span className="block font-bold text-brand-ink">Que el cliente escanee este QR</span>
                     {qr.holder && <span className="block text-xs">A nombre de {qr.holder}</span>}
                     <span className="block text-xs">Debe pagar {money(amountNumber, context?.sale?.currency ?? context?.preview.currency)}. Luego escribe el número de operación que le aparece.</span>
                   </div>
@@ -554,8 +609,46 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
               {cashClosed && (
                 <p data-cash-closed className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   La caja de esta sede está cerrada: no se puede cobrar en efectivo.{' '}
-                  <Link href="/cash" className="font-semibold underline underline-offset-2 hover:text-[#022340]">Abrir caja</Link>
+                  <Link href="/cash" className="font-semibold underline underline-offset-2 hover:text-brand-ink">Abrir caja</Link>
                 </p>
+              )}
+
+              {isGiftCard && loyalty && loyalty.customer_gift_cards.length > 0 && (
+                <div className="rounded-xl border border-brand-soft bg-brand-soft/10 p-3.5 space-y-2">
+                  <span className="block text-xs font-bold text-brand-ink">Gift cards vigentes del cliente:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {loyalty.customer_gift_cards.map((gc) => {
+                      const activeCard = reference.toUpperCase() === gc.code.toUpperCase();
+                      return (
+                        <button
+                          key={gc.id}
+                          type="button"
+                          onClick={() => {
+                            setReference(gc.code);
+                            setAmount(Math.min(balance, gc.balance).toFixed(2));
+                          }}
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                            activeCard ? 'bg-brand text-white border-brand' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {gc.code} · saldo {money(gc.balance, context?.sale?.currency ?? context?.preview.currency)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {isPoints && pointsInfo && (
+                <div className="rounded-xl border border-brand-soft bg-brand-soft/10 p-3.5 space-y-1 text-xs text-slate-700">
+                  <div className="flex items-center justify-between font-bold text-brand-ink">
+                    <span>Canje de puntos de fidelización</span>
+                    <span>{pointsInfo.balance} pts disponibles ({money(pointsInfo.redeemable_value, context?.sale?.currency ?? context?.preview.currency)})</span>
+                  </div>
+                  <p className="text-slate-600">
+                    Se descontarán <strong className="text-brand-ink">{pointsNeeded} puntos</strong> ({money(pointsInfo.point_value, context?.sale?.currency ?? context?.preview.currency)} por punto). Si no cubre el total, podrás cobrar el resto con otro medio.
+                  </p>
+                </div>
               )}
 
               {!isLink && <div className="grid grid-cols-2 gap-3">
@@ -565,13 +658,13 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                     id="charge-amount"
                     inputMode="decimal"
                     required
-                    readOnly={!context.partial_payments}
-                    className={`${inputClass} ${context.partial_payments ? '' : 'bg-slate-50 text-slate-600'}`}
+                    readOnly={!allowPartial}
+                    className={`${inputClass} ${allowPartial ? '' : 'bg-slate-50 text-slate-600'}`}
                     value={amount}
                     onChange={(e) => setAmount(cleanAmount(e.target.value))}
                   />
                   <p className="text-xs text-slate-500 mt-1.5">
-                    {context.partial_payments ? `Saldo: ${money(balance, context?.sale?.currency ?? context?.preview.currency)}. Puedes cobrar una parte.` : 'Tu empresa cobra el total de una vez.'}
+                    {allowPartial ? `Saldo: ${money(balance, context?.sale?.currency ?? context?.preview.currency)}. Puedes cobrar una parte.` : 'Tu empresa cobra el total de una vez.'}
                   </p>
                 </div>
 
@@ -579,12 +672,28 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                   <div>
                     <label className={labelClass} htmlFor="charge-received">Recibido</label>
                     <input id="charge-received" inputMode="decimal" placeholder={amount || '0.00'} className={inputClass} value={received} onChange={(e) => setReceived(cleanAmount(e.target.value))} />
-                    <p className="text-xs mt-1.5 font-semibold text-[#3F768C]" data-change>Vuelto: {money(change, context?.sale?.currency ?? context?.preview.currency)}</p>
+                    <p className="text-xs mt-1.5 font-semibold text-brand-accent" data-change>Vuelto: {money(change, context?.sale?.currency ?? context?.preview.currency)}</p>
+                  </div>
+                ) : isPoints ? (
+                  <div>
+                    <span className={labelClass}>Puntos a descontar</span>
+                    <div className={`${inputClass} bg-slate-50 text-slate-700 font-semibold flex items-center justify-between`}>
+                      <span>{pointsNeeded} pts</span>
+                      <span className="text-xs text-slate-500">Quedan {Math.max(0, (pointsInfo?.balance ?? 0) - pointsNeeded)} pts</span>
+                    </div>
                   </div>
                 ) : (
                   <div>
-                    <label className={labelClass} htmlFor="charge-reference">N.º de operación *</label>
-                    <input id="charge-reference" required maxLength={190} placeholder={method === 'card' ? 'Voucher del POS' : 'Código de la operación'} className={inputClass} value={reference} onChange={(e) => setReference(e.target.value)} />
+                    <label className={labelClass} htmlFor="charge-reference">{isGiftCard ? 'Código de gift card *' : 'N.º de operación *'}</label>
+                    <input
+                      id="charge-reference"
+                      required
+                      maxLength={190}
+                      placeholder={isGiftCard ? 'Ej. GC-ABCD12' : method === 'card' ? 'Voucher del POS' : 'Código de la operación'}
+                      className={`${inputClass} ${isGiftCard ? 'uppercase font-mono' : ''}`}
+                      value={reference}
+                      onChange={(e) => setReference(isGiftCard ? e.target.value.toUpperCase().replace(/\s/g, '') : e.target.value)}
+                    />
                   </div>
                 )}
               </div>}
@@ -657,7 +766,7 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
                 empty="Sin pagos."
                 renderRow={(payment) => (
                   <li key={payment.id} className="flex items-center gap-3 px-5 py-3">
-                    <span className="p-2 rounded-lg bg-[#84D0D9]/20 text-[#022340] shrink-0">{METHOD_ICONS[payment.method] ?? <Wallet size={16} />}</span>
+                    <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0">{METHOD_ICONS[payment.method] ?? <Wallet size={16} />}</span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-semibold text-slate-800">{payment.method_label}{payment.reference ? ` · ${payment.reference}` : ''}</span>
                       <span className="block text-xs text-slate-500 truncate">
@@ -673,8 +782,8 @@ export default function ChargePanel({ appointmentId, saleId = null, appointmentC
 
           {invoice && (
             <section className="rounded-2xl border border-slate-200 overflow-hidden" data-invoice={invoice.number}>
-              <div className="flex items-center justify-between gap-3 px-5 py-3 bg-[#022340] text-white">
-                <span className="flex items-center gap-2 text-sm font-bold"><Receipt size={16} className="text-[#84D0D9]" /> {invoice.doc_type_label}</span>
+              <div className="flex items-center justify-between gap-3 px-5 py-3 bg-brand text-white">
+                <span className="flex items-center gap-2 text-sm font-bold"><Receipt size={16} className="text-brand-soft" /> {invoice.doc_type_label}</span>
                 <span className="text-sm font-black tabular-nums">{invoice.number}</span>
               </div>
 

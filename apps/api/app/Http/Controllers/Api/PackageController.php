@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Support\Access;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
+use App\Support\Audit;
 use App\Support\Cash;
 use App\Support\Currency;
 use App\Support\Packages;
@@ -280,6 +281,51 @@ class PackageController extends AppointmentController
         });
     }
 
+    private function planSnapshot(string $id): array
+    {
+        $plan = DB::table('package_plans')->where('id', $id)->first();
+
+        if (!$plan) {
+            return [];
+        }
+
+        return [
+            'name'              => $plan->name,
+            'description'       => $plan->description,
+            'price'             => round((float) $plan->price, 2),
+            'validity_days'     => (int) $plan->validity_days,
+            'status'            => $plan->status,
+            'booking_mode'      => Packages::MODES[$plan->booking_mode] ?? $plan->booking_mode,
+            'frequency'         => $plan->booking_mode === 'scheduled' ? (Packages::FREQUENCIES[$plan->frequency] ?? $plan->frequency) : null,
+            'professional_mode' => Packages::PROFESSIONAL_MODES[$plan->professional_mode] ?? $plan->professional_mode,
+            'late_policy'       => Packages::LATE_POLICIES[$plan->late_policy] ?? $plan->late_policy,
+            'refund_policy'     => Packages::REFUND_POLICIES[$plan->refund_policy] ?? $plan->refund_policy,
+            'terms'             => $plan->terms,
+            'services'          => (Packages::planItems([$id])[$id] ?? collect())->map(fn ($i) => "{$i->name} × {$i->sessions}")->values()->all(),
+        ];
+    }
+
+    private function auditPackage(Request $request, Tenant $tenant, string $action, string $packageId, array $after, array $before = []): void
+    {
+        $package = DB::table('customer_packages')->where('id', $packageId)->first();
+
+        if (!$package) {
+            return;
+        }
+
+        $customer = $package->customer_id ? DB::table('customers')->where('id', $package->customer_id)->first(['first_name', 'last_name']) : null;
+
+        Audit::log($request, $action, [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'customer_package',
+            'entity_id'    => $package->id,
+            'entity_label' => $package->code,
+            'branch_id'    => $package->branch_id,
+            'before'       => $before ?: null,
+            'after'        => $after + array_filter(['package' => $package->name, 'customer' => \App\Support\Person::name($customer) ?: null]),
+        ]);
+    }
+
     private function onePlan(Tenant $tenant, string $id): array
     {
         return collect($this->plans($tenant))->firstWhere('id', $id);
@@ -289,6 +335,8 @@ class PackageController extends AppointmentController
     {
         $tenant = $this->ready($request);
         $id = $this->savePlan($tenant, $this->planInput($request, $tenant));
+        $after = array_filter($this->planSnapshot($id), fn ($value) => $value !== null && $value !== []);
+        Audit::log($request, 'package_plan.created', ['tenant' => $tenant->id, 'entity_type' => 'package_plan', 'entity_id' => $id, 'entity_label' => $after['name'] ?? null, 'after' => $after]);
 
         return response()->json($this->onePlan($tenant, $id), 201);
     }
@@ -298,7 +346,13 @@ class PackageController extends AppointmentController
         $tenant = $this->ready($request);
         $row = DB::table('package_plans')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('id', $plan)->first();
         abort_unless($row, 404);
+        $old = $this->planSnapshot($row->id);
         $this->savePlan($tenant, $this->planInput($request, $tenant, $row->id), $row->id);
+        [$before, $after] = Audit::changed($old, $this->planSnapshot($row->id));
+
+        if ($after) {
+            Audit::log($request, 'package_plan.updated', ['tenant' => $tenant->id, 'entity_type' => 'package_plan', 'entity_id' => $row->id, 'entity_label' => $row->name, 'before' => $before, 'after' => $after]);
+        }
 
         return response()->json($this->onePlan($tenant, $row->id));
     }
@@ -316,11 +370,15 @@ class PackageController extends AppointmentController
             throw ValidationException::withMessages(['plan' => 'Este paquete está en una venta que quedó por cobrar. Cóbrala o anúlala antes de eliminarlo.']);
         }
 
+        $snapshot = array_filter($this->planSnapshot($row->id), fn ($value) => $value !== null && $value !== []);
+
         if ($sold) {
             DB::table('package_plans')->where('id', $row->id)->update(['deleted_at' => now(), 'status' => 'inactive', 'updated_at' => now()]);
         } else {
             DB::table('package_plans')->where('id', $row->id)->delete();
         }
+
+        Audit::log($request, 'package_plan.deleted', ['tenant' => $tenant->id, 'entity_type' => 'package_plan', 'entity_id' => $row->id, 'entity_label' => $row->name, 'before' => $snapshot]);
 
         return response()->json(['kept' => $sold]);
     }
@@ -338,6 +396,7 @@ class PackageController extends AppointmentController
         ]);
 
         DB::transaction(fn () => Packages::manualUse($tenant, $package, $validated['service_id'], trim($validated['note']), $request->user()));
+        $this->auditPackage($request, $tenant, 'package.used_manually', $package, ['service' => DB::table('services')->where('id', $validated['service_id'])->value('name'), 'reason' => trim($validated['note'])]);
 
         return response()->json($this->detail($request, $tenant, DB::table('customer_packages')->where('id', $package)->first()));
     }
@@ -353,7 +412,11 @@ class PackageController extends AppointmentController
             'reason.required' => 'Escribe el motivo. Ej. "estuvo con descanso médico".',
         ]);
 
+        $old = DB::table('customer_packages')->where('tenant_id', $tenant->id)->where('id', $package)->value('expires_at');
         $row = DB::transaction(fn () => Packages::extend($tenant, $package, (int) $validated['days'], trim($validated['reason']), $request->user()));
+        $this->auditPackage($request, $tenant, 'package.extended', $row->id, [
+            'days' => (int) $validated['days'], 'ends_at' => Carbon::parse($row->expires_at)->toIso8601String(), 'reason' => trim($validated['reason']),
+        ], $old ? ['ends_at' => Carbon::parse($old)->toIso8601String()] : []);
 
         return response()->json($this->detail($request, $tenant, $row));
     }
@@ -374,6 +437,12 @@ class PackageController extends AppointmentController
         ]);
 
         $result = DB::transaction(fn () => Packages::cancel($tenant, $package, $validated, $request->user()));
+        $this->auditPackage($request, $tenant, 'package.cancelled', $package, array_filter([
+            'reason'       => trim($validated['reason']),
+            'refund'       => $result['refunded'] > 0 ? $result['refunded'] : 'Sin devolución',
+            'method'       => $result['refunded'] > 0 ? (Sales::METHODS[$validated['method']] ?? $validated['method']) : null,
+            'appointments' => $result['cancelled_appointments'] ?: null,
+        ], fn ($value) => $value !== null));
 
         return response()->json($this->detail($request, $tenant, DB::table('customer_packages')->where('id', $package)->first()) + ['result' => $result]);
     }

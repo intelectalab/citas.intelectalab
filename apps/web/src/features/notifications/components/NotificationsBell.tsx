@@ -69,11 +69,11 @@ export default function NotificationsBell() {
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100" data-bell-panel>
           <div>
-            <h2 className="text-sm font-extrabold text-[#022340]">Notificaciones</h2>
+            <h2 className="text-sm font-extrabold text-brand-ink">Notificaciones</h2>
             <p className="text-xs text-slate-500">{unread ? `${unread} sin leer` : 'Estás al día'}</p>
           </div>
           {unread > 0 && (
-            <button type="button" data-action="read-all" onClick={markAllRead} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+            <button type="button" data-action="read-all" onClick={markAllRead} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
               <CheckCheck size={14} /> Marcar todo como leído
             </button>
           )}
@@ -91,7 +91,7 @@ export default function NotificationsBell() {
         </div>
 
         {total > 0 && (
-          <Link href="/notifications" data-action="see-all" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-center text-xs font-bold text-[#3F768C] hover:text-[#022340] hover:bg-slate-50 border-t border-slate-100 transition-colors">
+          <Link href="/notifications" data-action="see-all" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-center text-xs font-bold text-brand-accent hover:text-brand-ink hover:bg-slate-50 border-t border-slate-100 transition-colors">
             Ver todas ({total})
           </Link>
         )}

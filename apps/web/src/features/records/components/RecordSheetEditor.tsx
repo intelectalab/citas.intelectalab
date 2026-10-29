@@ -31,8 +31,8 @@ const toDraft = (template: RecordTemplate): Draft => ({
 });
 
 const inlineText =
-  'bg-transparent rounded-md border border-transparent hover:border-slate-200 focus:border-[#3F768C] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3F768C]/15 transition-colors';
-const tool = 'p-1 rounded-md text-slate-400 hover:text-[#022340] hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
+  'bg-transparent rounded-md border border-transparent hover:border-slate-200 focus:border-brand-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-accent/15 transition-colors';
+const tool = 'p-1 rounded-md text-slate-400 hover:text-brand-ink hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:hover:bg-transparent';
 
 export default function RecordSheetEditor({ template, color, companyName, onSaved, onDirtyChange }: RecordSheetEditorProps) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(template));
@@ -138,7 +138,7 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
           const hasOptions = ['select', 'multiselect'].includes(field.type);
 
           return (
-            <div key={field.key || `nuevo-${index}`} data-sheet-field={index} className="group/field rounded-xl border border-transparent hover:border-slate-200 focus-within:border-[#3F768C]/40 focus-within:bg-slate-50/50 px-3 py-2.5 -mx-3 space-y-2 transition-colors">
+            <div key={field.key || `nuevo-${index}`} data-sheet-field={index} className="group/field rounded-xl border border-transparent hover:border-slate-200 focus-within:border-brand-accent/40 focus-within:bg-slate-50/50 px-3 py-2.5 -mx-3 space-y-2 transition-colors">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-mono text-slate-300 shrink-0">{String(index + 1).padStart(2, '0')}</span>
                 <input
@@ -202,7 +202,7 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
                       </button>
                     </span>
                   ))}
-                  <button type="button" data-option-add onClick={() => setField(index, { options: [...(field.options ?? []), `Opción ${(field.options ?? []).length + 1}`] })} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-slate-300 text-[11px] font-semibold text-[#3F768C] hover:border-[#3F768C] transition-colors">
+                  <button type="button" data-option-add onClick={() => setField(index, { options: [...(field.options ?? []), `Opción ${(field.options ?? []).length + 1}`] })} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-slate-300 text-[11px] font-semibold text-brand-accent hover:border-brand-accent transition-colors">
                     <Plus size={11} /> opción
                   </button>
                 </div>
@@ -220,7 +220,7 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
                     data-field-days
                     value={field.days ?? ''}
                     onChange={(e) => setField(index, { days: e.target.value === '' ? '' : Number(e.target.value) })}
-                    className="w-16 text-xs text-slate-700 border border-slate-200 rounded-md px-2 py-0.5 focus:outline-none focus:border-[#3F768C]"
+                    className="w-16 text-xs text-slate-700 border border-slate-200 rounded-md px-2 py-0.5 focus:outline-none focus:border-brand-accent"
                   />
                   días
                 </label>
@@ -230,21 +230,21 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
         })}
 
         {adding ? (
-          <div className="rounded-xl border border-dashed border-[#3F768C]/50 bg-slate-50/60 p-3 space-y-2" data-add-types>
+          <div className="rounded-xl border border-dashed border-brand-accent/50 bg-slate-50/60 p-3 space-y-2" data-add-types>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">¿Qué tipo de campo?</span>
               <button type="button" onClick={() => setAdding(false)} className={tool} title="Cancelar"><X size={13} /></button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {FIELD_TYPES.map((type) => (
-                <button key={type.value} type="button" data-add-type={type.value} onClick={() => addField(type.value)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:border-[#3F768C] hover:text-[#022340] transition-colors">
+                <button key={type.value} type="button" data-add-type={type.value} onClick={() => addField(type.value)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:border-brand-accent hover:text-brand-ink transition-colors">
                   {type.label}
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <button type="button" data-action="add-field" onClick={() => setAdding(true)} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-slate-300 text-xs font-semibold text-[#3F768C] hover:border-[#3F768C] hover:bg-slate-50 transition-colors">
+          <button type="button" data-action="add-field" onClick={() => setAdding(true)} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-slate-300 text-xs font-semibold text-brand-accent hover:border-brand-accent hover:bg-slate-50 transition-colors">
             <Plus size={14} /> Agregar campo
           </button>
         )}
@@ -287,7 +287,7 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
         </div>
       ) : (
         <div className="mx-6 mb-6">
-          <button type="button" data-action="add-consent" onClick={() => setDraft((current) => ({ ...current, require_consent: true }))} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-[#3F768C] hover:text-[#3F768C] transition-colors">
+          <button type="button" data-action="add-consent" onClick={() => setDraft((current) => ({ ...current, require_consent: true }))} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-brand-accent hover:text-brand-accent transition-colors">
             <PenLine size={13} /> Agregar consentimiento informado
           </button>
         </div>
@@ -304,7 +304,7 @@ export default function RecordSheetEditor({ template, color, companyName, onSave
             <button type="button" data-action="discard" disabled={saving} onClick={() => { setDraft(toDraft(template)); setError(''); }} className="px-3 py-2 text-xs font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
               Descartar
             </button>
-            <button type="button" data-action="save-sheet" disabled={saving} onClick={save} className="px-4 py-2 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+            <button type="button" data-action="save-sheet" disabled={saving} onClick={save} className="px-4 py-2 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
               {saving ? 'Guardando...' : 'Guardar ficha'}
             </button>
           </div>

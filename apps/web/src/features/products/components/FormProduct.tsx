@@ -25,7 +25,17 @@ interface FormProductProps {
 }
 
 
-const empty = { name: '', sku: '', price: '', kind: 'retail' as Product['kind'], categoryId: '', active: true };
+const empty = {
+  name: '',
+  sku: '',
+  price: '',
+  cost: '',
+  minStock: '',
+  trackStock: false,
+  kind: 'retail' as Product['kind'],
+  categoryId: '',
+  active: true,
+};
 
 const KIND_HINTS: Record<Product['kind'], string> = {
   retail: 'Ej. un shampoo o un protector solar que el cliente se lleva',
@@ -51,6 +61,9 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
       name: initialData.name,
       sku: initialData.sku,
       price: String(initialData.price),
+      cost: initialData.cost !== undefined ? String(initialData.cost) : '',
+      minStock: initialData.min_stock !== undefined ? String(initialData.min_stock) : '',
+      trackStock: initialData.track_stock ?? false,
       kind: initialData.kind,
       categoryId: initialData.category_id ?? '',
       active: initialData.status === 'active',
@@ -80,6 +93,9 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
       name: form.name.trim(),
       sku: form.sku.trim() || null,
       price: Number(form.price || 0),
+      cost: form.cost !== '' ? Number(form.cost) : 0,
+      min_stock: form.minStock !== '' ? Number(form.minStock) : 0,
+      track_stock: form.trackStock,
       kind: form.kind,
       category_id: form.categoryId || null,
       status: form.active ? 'active' : 'inactive',
@@ -145,7 +161,7 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
                     data-product-kind={option.value}
                     onClick={() => set({ kind: option.value })} selected={chosen} className="text-left rounded-xl border px-4 py-2.5 transition-colors"
                   >
-                    <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
+                    <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                     <span className="block text-xs text-slate-500 mt-0.5">{KIND_HINTS[option.value]}</span>
                   </OptionCard>
                 );
@@ -166,7 +182,7 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
             {newCategory !== null && (
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5" data-new-category>
                 <input autoFocus maxLength={120} placeholder="Ej. Cuidado del cabello" className={inputClass} value={newCategory} onChange={(e) => setNewCategory(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createCategory(); } }} />
-                <button type="button" data-save-category disabled={!newCategory.trim()} onClick={createCategory} className="shrink-0 px-3.5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-lg disabled:opacity-50">Crear</button>
+                <button type="button" data-save-category disabled={!newCategory.trim()} onClick={createCategory} className="shrink-0 px-3.5 py-2.5 text-sm font-bold bg-brand text-white rounded-lg disabled:opacity-50">Crear</button>
                 <button type="button" onClick={() => setNewCategory(null)} className="shrink-0 px-3 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>
               </div>
             )}
@@ -180,9 +196,39 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
             <Switch checked={form.active} onChange={(active) => set({ active })} label="Producto activo" />
           </div>
 
-          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-            El stock (cuántas unidades quedan) llegará con el módulo de Inventario. Por ahora el producto se vende sin descontar unidades.
-          </p>
+          {catalog?.inventory_enabled ? (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <span className="block text-sm font-semibold text-brand-ink">Controlar existencias (stock)</span>
+                  <span className="block text-xs text-slate-500">
+                    {form.trackStock
+                      ? 'Descuenta unidades al vender o usar en las atenciones. Sin unidades en la sede, no se puede vender.'
+                      : 'Se vende sin descontar unidades. Se enciende solo al registrar su primera entrada de stock.'}
+                  </span>
+                </div>
+                <Switch checked={form.trackStock} onChange={(trackStock) => set({ trackStock })} label="Controlar existencias" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className={labelClass} htmlFor="product-cost">Costo de compra ({currencySymbol()})</label>
+                  <input id="product-cost" inputMode="decimal" placeholder="0.00" className={inputClass} value={form.cost} onChange={(e) => set({ cost: cleanAmount(e.target.value) })} />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="product-min-stock">Alerta de stock mínimo</label>
+                  <input id="product-min-stock" inputMode="decimal" placeholder="Ej. 5" className={inputClass} value={form.minStock} onChange={(e) => set({ minStock: cleanAmount(e.target.value) })} />
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Las entradas, salidas y conteos se registran con los botones de esta lista; lo que compras a un proveedor, en <a href="/inventory/purchases" className="font-semibold text-brand-accent hover:underline">Compras</a>.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              Con el módulo Inventario podrás llevar existencias, compras y traslados por sede.
+            </p>
+          )}
 
           <ErrorAlert message={error} />
         </form>

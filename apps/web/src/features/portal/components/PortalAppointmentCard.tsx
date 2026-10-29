@@ -24,10 +24,10 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
   return (
     <article
       data-appointment={appointment.code}
-      className={`bg-white rounded-3xl border shadow-xs overflow-hidden ${featured ? 'border-[#3F768C]/40' : 'border-slate-200/80'}`}
+      className={`bg-white rounded-3xl border shadow-xs overflow-hidden ${featured ? 'border-brand-accent/40' : 'border-slate-200/80'}`}
     >
       <div className="flex items-stretch">
-        <div className={`w-20 shrink-0 flex flex-col items-center justify-center py-4 ${featured ? 'bg-[#022340] text-white' : 'bg-slate-50 text-slate-700 border-r border-slate-100'}`}>
+        <div className={`w-20 shrink-0 flex flex-col items-center justify-center py-4 ${featured ? 'bg-brand text-white' : 'bg-slate-50 text-slate-700 border-r border-slate-100'}`}>
           <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">{formatDate(date, { month: 'short' }).replace('.', '')}</span>
           <span className="text-3xl font-black leading-none">{date.slice(8, 10)}</span>
           <span className="text-[11px] font-semibold opacity-80 first-letter:uppercase">{formatDate(date, { weekday: 'short' }).replace('.', '')}</span>
@@ -35,7 +35,7 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
 
         <div className="flex-1 min-w-0 p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-base font-extrabold text-[#022340] leading-tight">{appointment.service?.name}</h3>
+            <h3 className="text-base font-extrabold text-brand-ink leading-tight">{appointment.service?.name}</h3>
             <Badge data-status={appointment.status} tone={statusStyle(appointment.status).badge} bold nowrap>
               {appointment.status_name}
             </Badge>
@@ -57,7 +57,7 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
           )}
 
           {appointment.pay_on_arrival && (
-            <p data-pay-on-arrival className="flex items-start gap-1.5 text-xs font-medium text-[#3F768C]">
+            <p data-pay-on-arrival className="flex items-start gap-1.5 text-xs font-medium text-brand-accent">
               <Wallet size={14} className="shrink-0 mt-0.5" />
               {appointment.is_virtual
                 ? 'Esta atención es por videollamada y se paga antes de empezar: comunícate con la sede para coordinar el pago.'
@@ -77,7 +77,7 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
           )}
 
           {appointment.deposit && (
-            <p data-deposit className="flex items-start gap-1.5 text-xs font-medium text-[#022340]">
+            <p data-deposit className="flex items-start gap-1.5 text-xs font-medium text-brand-ink">
               <Wallet size={14} className="shrink-0 mt-0.5" />
               {appointment.deposit.outcome === 'refund_due'
                 ? `Cancelaste a tiempo: la sede te devolverá el adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)}.`
@@ -103,7 +103,7 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
               data-action="confirm"
               disabled={busy}
               onClick={() => onConfirm?.(appointment)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-50"
             >
               <Check size={15} /> Confirmar asistencia
             </button>

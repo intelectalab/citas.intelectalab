@@ -26,7 +26,7 @@ interface FormBlockProps {
 const ALL_BRANCHES = 'all';
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
+  'w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white';
 
 const emptyForm = () => ({
   scope: 'professional' as 'professional' | 'branch',
@@ -175,12 +175,12 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
         aria-pressed={isOn}
         onClick={() => changeScope(scope)}
         className={`flex items-start gap-3 p-3.5 text-left border rounded-xl transition-colors ${
-          isOn ? 'border-[#022340] bg-blue-50 ring-2 ring-[#022340]/10' : 'border-slate-200 bg-white hover:border-slate-300'
+          isOn ? 'border-brand bg-blue-50 ring-2 ring-brand/10' : 'border-slate-200 bg-white hover:border-slate-300'
         }`}
       >
-        <span className={`p-2 rounded-lg shrink-0 ${isOn ? 'bg-white text-[#022340]' : 'bg-slate-100 text-slate-500'}`}>{icon}</span>
+        <span className={`p-2 rounded-lg shrink-0 ${isOn ? 'bg-white text-brand-ink' : 'bg-slate-100 text-slate-500'}`}>{icon}</span>
         <span>
-          <span className={`block text-sm font-bold ${isOn ? 'text-[#022340]' : 'text-slate-700'}`}>{label}</span>
+          <span className={`block text-sm font-bold ${isOn ? 'text-brand-ink' : 'text-slate-700'}`}>{label}</span>
           <span className="block text-xs text-slate-500">{hint}</span>
         </span>
       </button>
@@ -245,7 +245,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
                   onClick={() => set({ kind: kind.key })}
                   className={`px-3.5 py-2 text-sm font-medium border rounded-full transition-colors ${
                     form.kind === kind.key
-                      ? 'border-[#022340] bg-[#022340] text-white'
+                      ? 'border-brand bg-brand text-white'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                   }`}
                 >
@@ -334,7 +334,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
                 {affected.slice(0, 8).map((a) => (
                   <li key={a.id} className="py-2 text-xs text-amber-800 flex items-center justify-between gap-3">
                     <span>
-                      <span className="font-mono font-bold">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#84D0D9]/25 text-[#022340]">Paquete {a.package}</span>}
+                      <span className="font-mono font-bold">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-brand-soft/25 text-brand-ink">Paquete {a.package}</span>}
                       <span className="block opacity-80">{a.service}{a.professional ? ` · ${a.professional}` : ''}</span>
                     </span>
                     <span className="whitespace-nowrap">{formatDateTime(a.starts_at)}</span>

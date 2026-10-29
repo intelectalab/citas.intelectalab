@@ -216,7 +216,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     disabled={busy !== ''}
                     onClick={() => changeStatus(status)}
                     className={index === 0
-                      ? 'px-4 py-2 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50'
+                      ? 'px-4 py-2 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50'
                       : 'px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50'}
                   >
                     {busy === status ? 'Guardando...' : actionLabel(status, appointment.status)}
@@ -308,9 +308,9 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                   data-action="charge"
                   disabled={Boolean(charge.blocked) && !charge.sale && !charge.package?.current}
                   onClick={() => setCharging(true)}
-                  className="w-full flex items-center gap-3 p-3 border border-slate-200 rounded-xl text-left hover:border-[#3F768C] hover:bg-slate-50 transition-colors disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                  className="w-full flex items-center gap-3 p-3 border border-slate-200 rounded-xl text-left hover:border-brand-accent hover:bg-slate-50 transition-colors disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 >
-                  <span className="p-2 bg-[#84D0D9]/20 text-[#022340] rounded-lg shrink-0">{charge.package?.current ? <Boxes size={18} /> : <Wallet size={18} />}</span>
+                  <span className="p-2 bg-brand-soft/20 text-brand-ink rounded-lg shrink-0">{charge.package?.current ? <Boxes size={18} /> : <Wallet size={18} />}</span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-bold text-slate-800">
                       {charge.package?.current ? `Paquete ${charge.package.current.code}` : charge.sale?.status === 'paid' ? `Cobrada · ${charge.sale.code}` : charge.sale ? `Cobro ${charge.sale.code}` : 'Cobrar'}
@@ -331,7 +331,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                   </span>
                   <Badge
                     data-charge-status={charge.sale?.status ?? 'none'} tone={
-                      charge.package?.current ? 'bg-[#84D0D9]/25 text-[#022340]' : charge.sale ? SALE_BADGES[charge.sale.status] : charge.blocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'
+                      charge.package?.current ? 'bg-brand-soft/25 text-brand-ink' : charge.sale ? SALE_BADGES[charge.sale.status] : charge.blocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'
                     } bold className="shrink-0"
                   >
                     {charge.package?.current ? 'Con paquete' : charge.sale?.status_label ?? (charge.blocked ? 'No se cobra' : 'Por cobrar')}
@@ -350,9 +350,9 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                 type="button"
                 data-action="open-record"
                 onClick={() => onOpenRecord(appointment)}
-                className="w-full flex items-center gap-3 p-3 border border-slate-200 rounded-xl text-left hover:border-[#3F768C] hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center gap-3 p-3 border border-slate-200 rounded-xl text-left hover:border-brand-accent hover:bg-slate-50 transition-colors"
               >
-                <span className="p-2 bg-blue-50 text-[#022340] rounded-lg shrink-0"><ClipboardList size={18} /></span>
+                <span className="p-2 bg-blue-50 text-brand-ink rounded-lg shrink-0"><ClipboardList size={18} /></span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-bold text-slate-800">Ficha de atención</span>
                   <span className="block text-xs text-slate-500">
@@ -428,7 +428,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
 
                 {customerTiming && customerTiming.measured > 0 && (
                   <div data-customer-time>
-                    <dt className={sectionTitle}>Promedio de este {vocab.client.toLowerCase()}</dt>
+                    <dt className={sectionTitle}>Promedio de {vocab.pick('client', 'este', 'esta')} {vocab.client.toLowerCase()}</dt>
                     <dd className="text-sm font-semibold text-slate-800">
                       {formatMinutes(customerTiming.avg_minutes)}
                       <span className="block text-xs font-medium text-slate-500">

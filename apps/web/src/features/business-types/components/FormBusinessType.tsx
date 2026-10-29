@@ -66,7 +66,7 @@ const EMPTY_FORM = {
 };
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none bg-white';
+  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white';
 
 export default function FormBusinessType({ isOpen, onClose, initialData, onSubmitSuccess }: FormBusinessTypeProps) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -77,7 +77,7 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
   const sections = [
     { id: 1, title: '1. Datos del rubro' },
     { id: 2, title: '2. Vocabulario' },
-    { id: 3, title: '3. Módulos del rubro' },
+    { id: 3, title: '3. Módulos al empezar' },
     { id: 4, title: '4. Dependientes' },
     { id: 5, title: '5. Reglas por defecto' },
     { id: 6, title: '6. Catálogo inicial' },
@@ -275,7 +275,7 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                       <div className="space-y-5">
                         <div className="flex items-start justify-between gap-4">
                           <p className="text-xs text-slate-500">
-                            Lo que usa una empresa de este rubro. Un módulo encendido lo recibe si su plan lo incluye; uno apagado no le aparece aunque su plan lo tenga.
+                            Con qué empieza una empresa nueva de este rubro. Un módulo apagado no le aparece en el menú, pero su administrador puede encenderlo en Configuración → Módulos si su plan lo incluye (por ejemplo, Inventario si un día vende productos).
                           </p>
                           <span className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-700">
                             {OPTIONAL_MODULE_KEYS.length - form.modules_off.length} de {OPTIONAL_MODULE_KEYS.length} encendidos
@@ -321,7 +321,7 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                             type="checkbox"
                             checked={form.dependents_enabled}
                             onChange={(e) => setForm({ ...form, dependents_enabled: e.target.checked })}
-                            className="mt-0.5 rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                            className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand"
                           />
                           <span>
                             <span className="block text-sm font-medium text-slate-800">El cliente tiene dependientes</span>
@@ -345,7 +345,7 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
                                 type="checkbox"
                                 checked={form.dependents_required}
                                 onChange={(e) => setForm({ ...form, dependents_required: e.target.checked })}
-                                className="mt-0.5 rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                                className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand"
                               />
                               <span>
                                 <span className="block text-sm font-medium text-slate-800">Obligatorio en la cita</span>
@@ -392,7 +392,7 @@ export default function FormBusinessType({ isOpen, onClose, initialData, onSubmi
           <button
             type="submit"
             disabled={loading}
-            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-brand hover:bg-brand/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
           >
             {loading ? 'Guardando...' : isEditing ? 'Actualizar rubro' : 'Crear rubro'}
           </button>

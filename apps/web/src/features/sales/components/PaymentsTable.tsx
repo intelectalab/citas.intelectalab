@@ -90,8 +90,8 @@ export default function PaymentsTable() {
       title: 'Neto de hoy',
       value: money(sum(todays)),
       icon: <Wallet size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: view === 'all' ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: view === 'all' ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => setView('all'),
     },
   ];
@@ -106,7 +106,7 @@ export default function PaymentsTable() {
     { header: 'Cliente', value: (p) => p.customer?.name ?? 'Sin cliente' },
     { header: 'Sede', value: (p) => p.branch_name },
     { header: 'Caja', value: (p) => p.register },
-    { header: 'Monto', type: 'money', value: (p) => (p.kind === 'refund' ? -Math.abs(p.amount) : p.amount) },
+    { header: 'Monto', type: 'money', total: true, value: (p) => (p.kind === 'refund' ? -Math.abs(p.amount) : p.amount) },
   ];
 
   const columns: Column<PaymentRow>[] = [
@@ -123,7 +123,7 @@ export default function PaymentsTable() {
       header: 'Medio',
       cell: (payment) => (
         <div key={`method-${payment.id}`} className="flex items-center gap-2.5">
-          <span className={`p-2 rounded-lg shrink-0 ${payment.kind === 'refund' ? 'bg-rose-50 text-rose-600' : 'bg-[#84D0D9]/20 text-[#022340]'}`}>
+          <span className={`p-2 rounded-lg shrink-0 ${payment.kind === 'refund' ? 'bg-rose-50 text-rose-600' : 'bg-brand-soft/20 text-brand-ink'}`}>
             {payment.kind === 'refund' ? <RotateCcw size={16} /> : METHOD_ICONS[payment.method] ?? <Wallet size={16} />}
           </span>
           <div>
@@ -136,7 +136,7 @@ export default function PaymentsTable() {
     {
       header: 'Venta',
       cell: (payment) => (payment.sale_id ? (
-        <button key={`sale-${payment.id}`} type="button" data-view={payment.sale_code} onClick={() => setViewing(payment.sale_id)} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left tabular-nums`}>
+        <button key={`sale-${payment.id}`} type="button" data-view={payment.sale_code} onClick={() => setViewing(payment.sale_id)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left tabular-nums`}>
           {payment.sale_code}
         </button>
       ) : <span key={`sale-${payment.id}`} className="text-sm text-slate-400">—</span>),

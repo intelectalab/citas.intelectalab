@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\SaaSPlanController;
 use App\Http\Controllers\Api\TenantContactController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ProfessionalScheduleController;
+use App\Http\Controllers\Api\ProfessionalSignatureController;
 use App\Http\Controllers\Api\AvailabilityBlockController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\RoomController;
@@ -26,8 +27,12 @@ use App\Http\Controllers\Api\SalesController;
 use App\Http\Controllers\Api\PosController;
 use App\Http\Controllers\Api\PackageController;
 use App\Http\Controllers\Api\MessageController;
+use App\Http\Controllers\Api\BrandingController;
 use App\Http\Controllers\Api\DataExportController;
 use App\Http\Controllers\Api\CampaignController;
+use App\Http\Controllers\Api\InventoryController;
+use App\Http\Controllers\Api\LoyaltyController;
+use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\HolidayController;
@@ -47,6 +52,7 @@ use App\Http\Controllers\Api\TenantSubscriptionController;
 use App\Http\Controllers\Api\ImpersonationController;
 use App\Http\Controllers\Api\BusinessTypeController;
 use App\Http\Controllers\Api\PlatformSettingController;
+use App\Http\Controllers\Api\PlatformLookController;
 
 use App\Models\BusinessType;
 use App\Models\SaaSPlan;
@@ -57,12 +63,14 @@ use App\Http\Controllers\Api\CurrencyController;
 
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/register-customer', [RegisterCustomerController::class, 'register'])->middleware('throttle:10,1');
+Route::get('/signup-info/{code}', [BrandingController::class, 'signupInfo'])->middleware('throttle:20,1');
 Route::post('/register-tenant', [RegisterTenantController::class, 'register']);
 
 Route::get('/platform', [PlatformSettingController::class, 'publicValues']);
+Route::get('/platform/files/{name}', [PlatformLookController::class, 'file'])->where('name', 'logo|logo-dark|landing|login')->middleware('throttle:120,1');
 
 Route::get('/pay/{token}', [PaymentController::class, 'show'])->middleware('throttle:60,1');
-Route::get('/branding/{tenant}/logo', [MessageController::class, 'logo'])->middleware('throttle:120,1');
+Route::get('/branding/{tenant}/{name}', [BrandingController::class, 'file'])->where('name', 'logo|logo-dark')->middleware('throttle:120,1');
 Route::post('/pay/{token}/simulate', [PaymentController::class, 'simulate'])->middleware('throttle:20,1');
 Route::post('/webhooks/payments/{provider}', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
 Route::get('/promotions/unsubscribe/{recipient}', [CampaignController::class, 'unsubscribeShow'])->middleware('throttle:60,1');
@@ -92,6 +100,8 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
     Route::post('/tenants/{tenant}/impersonate', [ImpersonationController::class, 'start']);
 
     Route::middleware('saas:admin')->group(function () {
+        Route::get('/admin/audit', [\App\Http\Controllers\Api\AuditController::class, 'platform']);
+        Route::post('/admin/data-exports', [DataExportController::class, 'platform'])->middleware('throttle:60,1');
         Route::post('/tenants', [TenantController::class, 'store']);
         Route::put('/tenants/{tenant}', [TenantController::class, 'update']);
         Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy']);
@@ -110,6 +120,11 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
         Route::get('/admin/currencies', [CurrencyController::class, 'platform']);
         Route::put('/admin/currencies/{code}', [CurrencyController::class, 'toggle']);
         Route::put('/admin/platform-settings', [PlatformSettingController::class, 'update']);
+        Route::get('/admin/personalization', [PlatformLookController::class, 'show']);
+        Route::put('/admin/personalization/{section}', [PlatformLookController::class, 'save']);
+        Route::post('/admin/personalization/{section}/reset', [PlatformLookController::class, 'reset']);
+        Route::post('/admin/personalization/files/{name}', [PlatformLookController::class, 'upload']);
+        Route::delete('/admin/personalization/files/{name}', [PlatformLookController::class, 'remove']);
         Route::apiResource('admin/business-types', BusinessTypeController::class);
         Route::get('/admin/business-types/{business_type}/tenants', [BusinessTypeController::class, 'tenants']);
         Route::post('/admin/business-types/{business_type}/apply', [BusinessTypeController::class, 'apply']);
@@ -119,11 +134,13 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(function () {
     Route::get('/overview', [PortalController::class, 'overview']);
+    Route::get('/privacy', [PortalController::class, 'privacy']);
+    Route::post('/privacy/accept', [PortalController::class, 'acceptPrivacyNow']);
     Route::put('/profile', [PortalController::class, 'updateProfile']);
     Route::put('/consents', [PortalController::class, 'updateConsents']);
     Route::put('/password', [PortalController::class, 'updatePassword']);
     Route::post('/dependents', [PortalController::class, 'storeDependent']);
-    Route::get('/packages', [PortalController::class, 'packages'])->middleware('module:packages');
+    Route::get('/packages', [PortalController::class, 'packages'])->middleware('module:packages|quotes');
 
     Route::middleware('module:booking')->group(function () {
         Route::get('/catalog', [PortalController::class, 'catalog']);
@@ -190,6 +207,9 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         $guarded('service-categories', ServiceCategoryController::class, 'services');
         $guarded('professionals', ProfessionalController::class, 'professionals');
         Route::get('/schedules', [ProfessionalScheduleController::class, 'index'])->middleware('perm:schedules.view');
+        Route::get('/professionals/{professional}/signature', [ProfessionalSignatureController::class, 'show'])->middleware('perm:professionals.view');
+        Route::post('/professionals/{professional}/signature', [ProfessionalSignatureController::class, 'store'])->middleware('perm:professionals.edit');
+        Route::delete('/professionals/{professional}/signature', [ProfessionalSignatureController::class, 'destroy'])->middleware('perm:professionals.edit');
         Route::get('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'show']);
         Route::put('/professionals/{professional}/schedule', [ProfessionalScheduleController::class, 'update'])->middleware('perm:schedules.edit');
         Route::get('/availability-blocks/options', [AvailabilityBlockController::class, 'options']);
@@ -265,9 +285,6 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/sales/{sale}/pay', [PosController::class, 'pay'])->middleware('perm:sales.create');
         Route::post('/sales/{sale}/invoice', [PosController::class, 'invoice'])->middleware('perm:sales.create');
 
-        $guarded('products', ProductController::class, 'products', true, ['show']);
-        Route::post('/product-categories', [ProductController::class, 'storeCategory'])->middleware('perm:products.create');
-
         Route::post('/appointments/{appointment}/link', [SaleController::class, 'link'])->middleware('perm:sales.create');
         Route::post('/sales/{sale}/links', [PaymentController::class, 'createForSale'])->middleware('perm:sales.create');
         Route::post('/payment-links/{link}/cancel', [PaymentController::class, 'cancel'])->middleware('perm:sales.create');
@@ -296,6 +313,17 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::post('/messaging/design/logo', [MessageController::class, 'uploadLogo']);
     Route::delete('/messaging/design/logo', [MessageController::class, 'removeLogo']);
     Route::post('/messaging/preview', [MessageController::class, 'preview']);
+    Route::get('/branding', [BrandingController::class, 'show']);
+    Route::put('/branding', [BrandingController::class, 'save']);
+    Route::put('/branding/portal', [BrandingController::class, 'savePortal']);
+    Route::put('/branding/privacy', [BrandingController::class, 'savePrivacy']);
+    Route::put('/branding/documents', [BrandingController::class, 'saveDocuments']);
+    Route::put('/branding/codes', [BrandingController::class, 'saveCodes']);
+    Route::get('/branding/signature', [BrandingController::class, 'signatureFile']);
+    Route::post('/branding/signature', [BrandingController::class, 'uploadSignature']);
+    Route::delete('/branding/signature', [BrandingController::class, 'removeSignature']);
+    Route::post('/branding/logo', [BrandingController::class, 'uploadLogo']);
+    Route::delete('/branding/logo/{variant}', [BrandingController::class, 'removeLogo']);
     Route::post('/payment-links/{link}/send', [MessageController::class, 'sendPaymentLink'])->middleware('perm:sales.create');
     Route::post('/sales/{sale}/receipt/send', [MessageController::class, 'sendReceipt'])->middleware('perm:sales.view|sales.create');
     Route::put('/customers/{customer}/consents', [MessageController::class, 'consents'])->middleware('perm:customers.edit');
@@ -322,8 +350,53 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/package-plans', [PackageController::class, 'storePlan'])->middleware('perm:packages.create');
         Route::put('/package-plans/{plan}', [PackageController::class, 'updatePlan'])->middleware('perm:packages.edit');
         Route::delete('/package-plans/{plan}', [PackageController::class, 'destroyPlan'])->middleware('perm:packages.delete');
+    });
+
+    Route::middleware('module:packages|quotes')->group(function () {
         Route::post('/appointments/{appointment}/package', [SaleController::class, 'usePackage'])->middleware('perm:sales.create');
         Route::delete('/appointments/{appointment}/package', [SaleController::class, 'releasePackage'])->middleware('perm:sales.create');
+    });
+
+    Route::middleware('module:inventory')->group(function () use ($guarded) {
+        $guarded('products', ProductController::class, 'products', true, ['show']);
+        Route::post('/product-categories', [ProductController::class, 'storeCategory'])->middleware('perm:products.create');
+    });
+
+    Route::middleware('module:inventory')->group(function () {
+        Route::get('/inventory', [InventoryController::class, 'index'])->middleware('perm:inventory.view');
+        Route::post('/inventory/movements', [InventoryController::class, 'storeMovement'])->middleware('perm:inventory.create|inventory.edit');
+        Route::get('/inventory/services/{service}/supplies', [InventoryController::class, 'serviceSupplies'])->middleware('perm:inventory.view|services.view');
+        Route::put('/inventory/services/{service}/supplies', [InventoryController::class, 'updateServiceSupplies'])->middleware('perm:inventory.edit');
+        Route::post('/inventory/transfers', [InventoryController::class, 'storeTransfer'])->middleware('perm:inventory.create');
+        Route::post('/inventory/transfers/{transfer}/receive', [InventoryController::class, 'receiveTransfer'])->middleware('perm:inventory.create|inventory.edit');
+        Route::post('/inventory/transfers/{transfer}/cancel', [InventoryController::class, 'cancelTransfer'])->middleware('perm:inventory.delete');
+        Route::post('/inventory/suppliers', [InventoryController::class, 'storeSupplier'])->middleware('perm:inventory.create');
+        Route::put('/inventory/suppliers/{supplier}', [InventoryController::class, 'updateSupplier'])->middleware('perm:inventory.edit');
+        Route::delete('/inventory/suppliers/{supplier}', [InventoryController::class, 'destroySupplier'])->middleware('perm:inventory.delete');
+        Route::post('/inventory/purchases', [InventoryController::class, 'storePurchase'])->middleware('perm:inventory.create');
+        Route::post('/inventory/purchases/{order}/receive', [InventoryController::class, 'receivePurchase'])->middleware('perm:inventory.edit');
+        Route::post('/inventory/purchases/{order}/cancel', [InventoryController::class, 'cancelPurchase'])->middleware('perm:inventory.delete');
+    });
+
+    Route::middleware('module:loyalty')->group(function () {
+        Route::get('/loyalty', [LoyaltyController::class, 'index'])->middleware('perm:loyalty.view');
+        Route::post('/loyalty/points/adjust', [LoyaltyController::class, 'adjustPoints'])->middleware('perm:loyalty.create|loyalty.edit');
+        Route::post('/loyalty/gift-cards', [LoyaltyController::class, 'storeGiftCard'])->middleware('perm:loyalty.create');
+        Route::post('/loyalty/gift-cards/{giftCard}/redeem', [LoyaltyController::class, 'redeemGiftCard'])->middleware('perm:loyalty.edit|loyalty.create');
+        Route::post('/loyalty/gift-cards/{giftCard}/extend', [LoyaltyController::class, 'extendGiftCard'])->middleware('perm:loyalty.edit');
+        Route::post('/loyalty/gift-cards/{giftCard}/cancel', [LoyaltyController::class, 'cancelGiftCard'])->middleware('perm:loyalty.delete');
+    });
+
+    Route::middleware('module:quotes')->group(function () {
+        Route::get('/quotes', [QuoteController::class, 'index'])->middleware('perm:quotes.view');
+        Route::post('/quotes', [QuoteController::class, 'store'])->middleware('perm:quotes.create');
+        Route::get('/quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->middleware('perm:quotes.view');
+        Route::put('/quotes/{quote}', [QuoteController::class, 'update'])->middleware('perm:quotes.edit');
+        Route::post('/quotes/{quote}/status', [QuoteController::class, 'changeStatus'])->middleware('perm:quotes.edit|quotes.delete');
+        Route::post('/quotes/{quote}/items/{item}/sessions', [QuoteController::class, 'recordSession'])->middleware('perm:quotes.edit');
+        Route::post('/quotes/{quote}/sale', [QuoteController::class, 'createSale'])->middleware('perm:quotes.edit|sales.create');
+        Route::get('/quotes/{quote}/cancel', [QuoteController::class, 'cancelPreview'])->middleware('perm:quotes.delete');
+        Route::post('/quotes/{quote}/cancel', [QuoteController::class, 'cancelAccepted'])->middleware('perm:quotes.delete');
     });
 
     Route::middleware('module:crm')->group(function () use ($guarded) {
@@ -350,6 +423,7 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::put('/company', [\App\Http\Controllers\Api\CompanyController::class, 'update'])->middleware('perm:company.edit');
 
     Route::get('/tenant-settings', [TenantSettingController::class, 'show'])->middleware('perm:settings.view');
+    Route::get('/audit', [\App\Http\Controllers\Api\AuditController::class, 'tenant'])->middleware('perm:audit.view');
 
     Route::get('/currency', [CurrencyController::class, 'show'])->middleware('perm:settings.view');
     Route::middleware('perm:settings.edit')->group(function () {

@@ -81,6 +81,7 @@ export interface CustomerPackage {
   pending_value: number;
   refunded_amount: number;
   sale_id: string | null;
+  quote?: { id: string; code: string } | null;
   professional_id: string | null;
   schedule_label: string;
   conditions: Conditions;

@@ -88,7 +88,7 @@ export default function CustomerPortalAccess({ customer, clientWord, onChanged }
               data-action="reset-portal"
               disabled={busy}
               onClick={() => setConfirmReset(true)}
-              className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors disabled:opacity-50"
+              className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors disabled:opacity-50"
             >
               Olvidó su contraseña
             </button>

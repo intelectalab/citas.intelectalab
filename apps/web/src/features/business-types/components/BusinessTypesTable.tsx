@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Layers, Pencil, Trash2, CheckCircle, XCircle, Eye, Building2, CircleDashed, RefreshCw, FolderX } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
@@ -175,7 +176,7 @@ export default function BusinessTypesTable() {
             <Layers size={16} />
           </div>
           <div>
-            <Link href={`/admin/business-types/${type.id}`} className={`${styles.customerName} hover:text-[#3F768C] hover:underline`}>
+            <Link href={`/admin/business-types/${type.id}`} className={`${styles.customerName} hover:text-brand-accent hover:underline`}>
               {type.name}
             </Link>
             <span className="block text-xs text-slate-400 font-mono">slug: {type.slug}</span>
@@ -274,6 +275,27 @@ export default function BusinessTypesTable() {
     },
   ];
 
+  const moduleLabels = new Map(MODULE_GROUPS.flatMap((group) => group.items.map((item) => [item.key, item.label] as const)));
+  const modulesOff = (type: BusinessType) => (type.modules_off ?? []).filter((key) => OPTIONAL_MODULE_KEYS.includes(key));
+  const servicesOf = (type: BusinessType) => (type.template?.categories ?? []).reduce((total: number, category: any) => total + (category.services?.length ?? 0), 0);
+
+  const exportColumns: ExportColumn<BusinessType>[] = [
+    { header: 'Rubro', value: (t) => t.name },
+    { header: 'Nombre corto', value: (t) => t.short_name },
+    { header: 'Identificador', value: (t) => t.slug },
+    { header: 'Clientes se llaman', value: (t) => t.vocabulary?.clients ?? 'Clientes' },
+    { header: 'Profesionales se llaman', value: (t) => t.vocabulary?.pros ?? 'Profesionales' },
+    { header: 'Atiende a dependientes', value: (t) => (t.dependents?.enabled ? 'Sí' : 'No') },
+    { header: 'Módulos encendidos', type: 'number', value: (t) => OPTIONAL_MODULE_KEYS.length - modulesOff(t).length },
+    { header: 'Módulos que empiezan apagados', value: (t) => modulesOff(t).map((key) => moduleLabels.get(key) ?? key).join(', ') },
+    { header: 'Categorías del catálogo', type: 'number', value: (t) => (servicesOf(t) > 0 ? (t.template?.categories ?? []).length : 0) },
+    { header: 'Servicios del catálogo', type: 'number', value: servicesOf },
+    { header: 'Ficha de atención', value: (t) => t.template?.record_template?.name },
+    { header: 'Empresas', type: 'number', value: (t) => t.tenants_count ?? 0 },
+    { header: 'Empresas sin los últimos cambios', type: 'number', value: (t) => t.outdated_tenants_count ?? 0 },
+    { header: 'Estado', value: (t) => (t.status === 'active' ? 'Activo' : 'Inactivo') },
+  ];
+
   return (
     <div className="space-y-6 mb-8">
       <DataTable<BusinessType>
@@ -295,10 +317,13 @@ export default function BusinessTypesTable() {
         sortOptions={[
           { id: 'name', label: 'Nombre', value: (t) => t.name },
           { id: 'tenants', label: 'Empresas', type: 'number', value: (t) => t.tenants_count ?? 0 },
-          { id: 'modules_off', label: 'Módulos que no usa', type: 'number', value: (t) => t.modules_off?.length ?? 0 },
+          { id: 'modules_off', label: 'Módulos que empiezan apagados', type: 'number', value: (t) => t.modules_off?.length ?? 0 },
           { id: 'status', label: 'Estado', value: (t) => t.status },
         ]}
         data={visibleTypes}
+        exportTitle="Rubros"
+        exportScreen="admin-business-types"
+        exportColumns={exportColumns}
         getItemKey={(type) => type.id}
         entityLabel="plantillas de rubro"
       />

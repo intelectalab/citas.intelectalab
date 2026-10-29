@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Support\Audit;
 use App\Support\Campaigns;
 use App\Support\Coupons;
 use App\Support\Currency;
@@ -212,11 +213,63 @@ class CampaignController extends Controller
             'updated_at' => now(),
         ]);
 
+        $created = DB::table('marketing_campaigns')->where('id', $id)->first();
+        $this->audit($request, 'campaign.created', $created, [], array_filter($this->auditable($created), fn ($value) => $value !== null));
+
         if ($request->input('send') === 'now') {
-            Campaigns::dispatch($tenant, DB::table('marketing_campaigns')->where('id', $id)->first());
+            Campaigns::dispatch($tenant, $created);
         }
 
+        $this->auditDelivery($request, $created);
+
         return response()->json($this->present($tenant, DB::table('marketing_campaigns')->where('id', $id)->first()), 201);
+    }
+
+    private function auditable(object $campaign): array
+    {
+        $coupon = $campaign->coupon_id ? DB::table('coupons')->where('id', $campaign->coupon_id)->value('code') : null;
+
+        return [
+            'name'     => $campaign->name,
+            'audience' => $campaign->audience_label,
+            'subject'  => $campaign->subject,
+            'body'     => mb_strimwidth(trim(preg_replace('/\s+/', ' ', strip_tags((string) $campaign->body))), 0, 160, '…'),
+            'coupon'   => $coupon,
+        ];
+    }
+
+    private function audit(Request $request, string $action, object $campaign, array $before, array $after): void
+    {
+        Audit::log($request, $action, [
+            'tenant'       => $request->user()->tenant_id,
+            'entity_type'  => 'campaign',
+            'entity_id'    => $campaign->id,
+            'entity_label' => $campaign->name,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ]);
+    }
+
+    private function auditDelivery(Request $request, object $campaign, ?object $previous = null): void
+    {
+        $fresh = DB::table('marketing_campaigns')->where('id', $campaign->id)->first();
+
+        if ($request->input('send') === 'now') {
+            $stats = is_string($fresh->stats) ? json_decode($fresh->stats, true) : (array) $fresh->stats;
+            $this->audit($request, 'campaign.sent', $fresh, [], array_filter([
+                'audience'   => $fresh->audience_label,
+                'recipients' => (int) ($stats['eligible'] ?? 0),
+            ], fn ($value) => $value !== null));
+
+            return;
+        }
+
+        $at = Carbon::parse($fresh->scheduled_at)->toIso8601String();
+        $before = $previous?->scheduled_at ? Carbon::parse($previous->scheduled_at)->toIso8601String() : null;
+
+        if ($before !== $at) {
+            $this->audit($request, 'campaign.scheduled', $fresh, array_filter(['scheduled_at' => $before]), ['scheduled_at' => $at]);
+        }
     }
 
     private function find(Tenant $tenant, string $id): object
@@ -295,10 +348,18 @@ class CampaignController extends Controller
 
         $data = $this->input($request, $tenant);
         DB::table('marketing_campaigns')->where('id', $row->id)->where('status', 'scheduled')->update($data + ['updated_at' => now()]);
+        $fresh = DB::table('marketing_campaigns')->where('id', $row->id)->first();
+        [$before, $after] = Audit::changed($this->auditable($row), $this->auditable($fresh));
+
+        if ($after) {
+            $this->audit($request, 'campaign.updated', $fresh, $before, $after);
+        }
 
         if ($request->input('send') === 'now') {
-            Campaigns::dispatch($tenant, DB::table('marketing_campaigns')->where('id', $row->id)->first());
+            Campaigns::dispatch($tenant, $fresh);
         }
+
+        $this->auditDelivery($request, $fresh, $row);
 
         return response()->json($this->present($tenant, DB::table('marketing_campaigns')->where('id', $row->id)->first()));
     }
@@ -310,6 +371,13 @@ class CampaignController extends Controller
         abort_unless($row->status === 'scheduled', 422, 'Solo se puede cancelar una campaña programada que aún no sale.');
 
         DB::table('marketing_campaigns')->where('id', $row->id)->where('status', 'scheduled')->update(['status' => 'cancelled', 'updated_at' => now()]);
+        Audit::log($request, 'campaign.cancelled', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'campaign',
+            'entity_id'    => $row->id,
+            'entity_label' => $row->name,
+            'before'       => array_filter(['scheduled_at' => $row->scheduled_at ? Carbon::parse($row->scheduled_at)->toIso8601String() : null]),
+        ]);
 
         return response()->json($this->present($tenant, DB::table('marketing_campaigns')->where('id', $row->id)->first()));
     }

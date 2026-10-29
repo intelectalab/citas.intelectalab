@@ -157,7 +157,7 @@ export default function BranchHoursPanel({ isOpen, onClose, branch, onSaved }: B
                     ))}
 
                     {isOn && (
-                      <button type="button" onClick={() => addRange(day.weekday)} className="flex items-center gap-1 text-xs font-semibold text-[#3F768C] hover:text-[#022340] transition-colors">
+                      <button type="button" onClick={() => addRange(day.weekday)} className="flex items-center gap-1 text-xs font-semibold text-brand-accent hover:text-brand-ink transition-colors">
                         <Plus size={13} /> Agregar tramo
                       </button>
                     )}

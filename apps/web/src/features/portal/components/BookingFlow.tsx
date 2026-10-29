@@ -36,11 +36,11 @@ const SEARCH_DAYS = 21;
 
 const optionClass = (active: boolean, disabled = false) =>
   `w-full flex items-center gap-3 p-4 rounded-2xl border text-left transition-colors ${
-    active ? 'border-[#022340] bg-[#022340]/5 ring-2 ring-[#022340]/15' : 'border-slate-200 bg-white'
-  } ${disabled ? 'opacity-60 cursor-not-allowed' : active ? '' : 'hover:border-[#3F768C]'}`;
+    active ? 'border-brand bg-brand/5 ring-2 ring-brand/15' : 'border-slate-200 bg-white'
+  } ${disabled ? 'opacity-60 cursor-not-allowed' : active ? '' : 'hover:border-brand-accent'}`;
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
+  'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white';
 
 export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded, onWaitlisted }: BookingFlowProps) {
   const vocab = useVocabulary();
@@ -238,7 +238,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
       <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 text-center space-y-4" data-booking-done>
         <span className="w-14 h-14 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><Check size={28} /></span>
         <div className="space-y-1">
-          <h2 className="text-xl font-black text-[#022340]">{isReschedule ? '¡Listo! Cambiamos tu cita' : '¡Tu cita está reservada!'}</h2>
+          <h2 className="text-xl font-black text-brand-ink">{isReschedule ? '¡Listo! Cambiamos tu cita' : '¡Tu cita está reservada!'}</h2>
           <p className="text-sm text-slate-600 first-letter:uppercase">
             {formatDate(dateOf(done.starts_at))}, a las {timeOf(done.starts_at)}
           </p>
@@ -256,7 +256,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
           type="button"
           data-action="done"
           onClick={onDone}
-          className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors"
+          className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors"
         >
           Ver mis citas
         </button>
@@ -281,16 +281,16 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             {isReschedule ? `Cambiar cita ${reschedule!.code}` : 'Reservar cita'} · Paso {stepIndex + 1} de {steps.length}
           </span>
-          <button type="button" onClick={onExit} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+          <button type="button" onClick={onExit} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
             Salir
           </button>
         </div>
         <div className="flex gap-1.5">
           {steps.map((item, index) => (
-            <span key={item} className={`h-1.5 flex-1 rounded-full ${index <= stepIndex ? 'bg-[#022340]' : 'bg-slate-200'}`} />
+            <span key={item} className={`h-1.5 flex-1 rounded-full ${index <= stepIndex ? 'bg-brand' : 'bg-slate-200'}`} />
           ))}
         </div>
-        <h2 className="text-lg font-black text-[#022340] tracking-tight">{STEP_TITLES[step]}</h2>
+        <h2 className="text-lg font-black text-brand-ink tracking-tight">{STEP_TITLES[step]}</h2>
       </header>
 
       <div className="px-5 sm:px-6 py-5 space-y-3">
@@ -329,14 +329,14 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                     data-action="save-dependent"
                     disabled={savingPet || !pet.name.trim()}
                     onClick={savePet}
-                    className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-50"
                   >
                     {savingPet ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </div>
             ) : (
-              <button type="button" data-action="add-dependent" onClick={() => setAddingPet(true)} className="inline-flex items-center gap-1.5 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <button type="button" data-action="add-dependent" onClick={() => setAddingPet(true)} className="inline-flex items-center gap-1.5 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 <Plus size={15} /> Registrar otro
               </button>
             )}
@@ -358,7 +358,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-2 text-sm font-bold text-slate-800">
                     {item.name}
-                    {item.is_virtual && <span title="Por videollamada"><Video size={14} className="text-[#3F768C]" /></span>}
+                    {item.is_virtual && <span title="Por videollamada"><Video size={14} className="text-brand-accent" /></span>}
                   </span>
                   <span className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
                     <Clock size={12} /> {item.duration_minutes} min{item.category ? ` · ${item.category}` : ''}
@@ -367,10 +367,10 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                     <span className="block text-xs font-semibold text-emerald-700 mt-1" data-service-package>Con tu paquete {item.package.name}: {item.package.available === 1 ? 'te queda 1 sesión por reservar' : `te quedan ${item.package.available} sesiones por reservar`}.</span>
                   )}
                   {item.needs_deposit && (
-                    <span className="block text-xs font-medium text-[#3F768C] mt-1">Se reserva pagando un adelanto de {money(item.deposit_amount ?? 0)}{item.deposit_label?.includes('%') ? ` (${item.deposit_label})` : ''}.</span>
+                    <span className="block text-xs font-medium text-brand-accent mt-1">Se reserva pagando un adelanto de {money(item.deposit_amount ?? 0)}{item.deposit_label?.includes('%') ? ` (${item.deposit_label})` : ''}.</span>
                   )}
                 </span>
-                <span className="text-sm font-extrabold text-[#022340] shrink-0">{money(item.price)}</span>
+                <span className="text-sm font-extrabold text-brand-ink shrink-0">{money(item.price)}</span>
               </button>
             ))
         )}
@@ -392,7 +392,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             </button>
             {professionals.map((item) => (
               <button key={item.id} type="button" data-professional={item.display_name} aria-pressed={professionalId === item.id} onClick={() => { setProfessionalId(item.id); setTime(''); }} className={optionClass(professionalId === item.id)}>
-                <span className="w-10 h-10 rounded-xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><UserRound size={18} /></span>
+                <span className="w-10 h-10 rounded-xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><UserRound size={18} /></span>
                 <span className="text-sm font-bold text-slate-800">{item.display_name}</span>
               </button>
             ))}
@@ -420,7 +420,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                     aria-pressed={date === day}
                     onClick={() => pickDate(day)}
                     className={`flex flex-col items-center py-2 rounded-xl border transition-colors ${
-                      date === day ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-[#3F768C]'
+                      date === day ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-brand-accent'
                     }`}
                   >
                     <span className="text-[10px] font-semibold uppercase opacity-80">{formatDate(day, { weekday: 'short' }).replace('.', '')}</span>
@@ -452,7 +452,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                   data-action="next-day"
                   disabled={searching}
                   onClick={findNextDay}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-50"
                 >
                   {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
                   {searching ? 'Buscando...' : 'Buscar el próximo día con horarios'}
@@ -472,7 +472,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                           aria-pressed={time === slot}
                           onClick={() => { setTime(slot); setError(''); }}
                           className={`py-2 text-sm font-semibold rounded-xl border transition-colors ${
-                            time === slot ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-[#3F768C]'
+                            time === slot ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-brand-accent'
                           }`}
                         >
                           {slot}
@@ -489,20 +489,20 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                 {!waitOpen ? (
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-slate-600">
-                      <span className="font-bold text-[#022340]">¿Ningún horario te sirve?</span> Anótate en la lista de espera y te mostraremos los horarios que se liberen.
+                      <span className="font-bold text-brand-ink">¿Ningún horario te sirve?</span> Anótate en la lista de espera y te mostraremos los horarios que se liberen.
                     </p>
                     <button
                       type="button"
                       data-action="open-waitlist"
                       onClick={() => setWaitOpen(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#022340] bg-white border border-slate-300 rounded-xl hover:border-[#3F768C] transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-brand-ink bg-white border border-slate-300 rounded-xl hover:border-brand-accent transition-colors"
                     >
-                      <Hourglass size={15} className="text-[#3F768C]" /> Anotarme en la lista de espera
+                      <Hourglass size={15} className="text-brand-accent" /> Anotarme en la lista de espera
                     </button>
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm font-bold text-[#022340]">Lista de espera para {service?.name}</p>
+                    <p className="text-sm font-bold text-brand-ink">Lista de espera para {service?.name}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Select
                         label="¿A qué hora te sirve?"
@@ -536,11 +536,11 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                         data-action="join-waitlist"
                         disabled={savingWait}
                         onClick={joinWaitlist}
-                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-50"
                       >
                         {savingWait ? <Loader2 size={15} className="animate-spin" /> : <Hourglass size={15} />} Anotarme
                       </button>
-                      <button type="button" onClick={() => setWaitOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-[#022340] transition-colors">
+                      <button type="button" onClick={() => setWaitOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-brand-ink transition-colors">
                         Mejor no
                       </button>
                     </div>
@@ -559,7 +559,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
                 [vocab.dependent, isReschedule ? reschedule?.dependent?.name : chosenDependent?.name],
                 ['Fecha', formatDate(date)],
                 ['Hora', time],
-                [vocab.pro, chosenProfessional?.display_name ?? 'El primero disponible'],
+                [vocab.pro, chosenProfessional?.display_name ?? vocab.pick('pro', 'El primero disponible', 'La primera disponible')],
                 ['Sede', catalog.branches.find((b) => b.id === branchId)?.name],
                 ['Precio', service ? money(service.price) : reschedule ? money(reschedule.price) : null],
               ] as [string, string | null | undefined][]).filter(([, value]) => value).map(([label, value]) => (
@@ -587,7 +587,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             )}
 
             {!isReschedule && service?.needs_deposit && (
-              <div data-deposit-notice className="text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3 space-y-1.5">
+              <div data-deposit-notice className="text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3 space-y-1.5">
                 <p>
                   <span className="font-bold">Para reservar pagas {money(service.deposit_amount ?? 0)} de adelanto ahora</span>; el resto ({money(Math.max(0, Number(service.price) - (service.deposit_amount ?? 0)))}) lo pagas en la sede.
                 </p>
@@ -605,7 +605,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             )}
 
             {policies.pay_before_service && !service?.needs_deposit && !service?.package && (
-              <p data-pay-notice className="text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3">
+              <p data-pay-notice className="text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3">
                 {service?.is_virtual ? (
                   <><span className="font-bold">Esta atención es por videollamada y se paga antes de empezar.</span> Comunícate con la sede para coordinar el pago.</>
                 ) : (
@@ -648,7 +648,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             data-action="submit"
             disabled={saving}
             onClick={submit}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-50"
           >
             <CalendarCheck size={16} /> {saving ? 'Guardando...' : isReschedule ? 'Cambiar mi cita' : service?.needs_deposit ? `Pagar adelanto de ${money(service.deposit_amount ?? 0)}` : 'Reservar cita'}
           </button>
@@ -658,7 +658,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             data-action="next"
             disabled={!canContinue}
             onClick={goNext}
-            className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-40"
           >
             Continuar <ArrowRight size={15} />
           </button>

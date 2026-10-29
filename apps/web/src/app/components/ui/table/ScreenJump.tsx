@@ -18,7 +18,7 @@ interface Section {
 export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<HTMLElement | null> }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { groups, settings, userId } = useMenu();
+  const { groups, footer, userId } = useMenu();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -26,7 +26,7 @@ export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<H
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const all = useMemo(() => [...groups.flatMap((g) => g.items), ...(settings ? [settings] : [])], [groups, settings]);
+  const all = useMemo(() => [...groups.flatMap((g) => g.items), ...footer], [groups, footer]);
 
   const sections: Section[] = useMemo(() => {
     const term = plain(query.trim());
@@ -41,9 +41,9 @@ export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<H
     return [
       ...(recentItems.length ? [{ title: 'Usadas recientemente', items: recentItems }] : []),
       ...groups.map(({ group, items }) => ({ title: group.groupName ?? 'Inicio', items })),
-      ...(settings ? [{ title: 'Configuración', items: [settings] }] : []),
+      ...(footer.length ? [{ title: 'Al pie del menú', items: footer }] : []),
     ];
-  }, [query, all, recent, groups, settings, pathname]);
+  }, [query, all, recent, groups, footer, pathname]);
 
   const flat = sections.flatMap((section) => section.items);
 
@@ -85,7 +85,7 @@ export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<H
         aria-haspopup="listbox"
         data-screen-jump
         onClick={() => setOpen((value) => !value)}
-        className="p-1 rounded-lg text-slate-400 hover:text-[#022340] hover:bg-slate-100 transition-colors"
+        className="p-1 rounded-lg text-slate-400 hover:text-brand-ink hover:bg-slate-100 transition-colors"
       >
         <ChevronDown size={20} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -98,8 +98,8 @@ export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<H
         className="w-72 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-150"
       >
         <div className="p-2.5 border-b border-slate-100">
-          <div className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg focus-within:border-[#022340] focus-within:ring-2 focus-within:ring-[#022340]/10">
-            <Search size={15} className="text-[#3F768C] shrink-0" />
+          <div className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
+            <Search size={15} className="text-brand-accent shrink-0" />
             <input
               ref={inputRef}
               value={query}
@@ -116,7 +116,7 @@ export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<H
           {flat.length === 0 && <p className="px-4 py-3 text-sm text-slate-400">No hay ninguna pantalla con ese nombre.</p>}
           {sections.map((section) => (
             <div key={section.title} data-screen-section={section.title}>
-              <span className="block px-4 pt-2.5 pb-1 text-xs font-bold text-[#022340]">{section.title}</span>
+              <span className="block px-4 pt-2.5 pb-1 text-xs font-bold text-brand-ink">{section.title}</span>
               {section.items.map((item) => {
                 index += 1;
                 const position = index;
@@ -132,10 +132,10 @@ export default function ScreenJump({ anchorRef }: { anchorRef: React.RefObject<H
                     onMouseEnter={() => setActive(position)}
                     onClick={() => go(item)}
                     className={`flex items-center gap-2.5 mx-1.5 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${
-                      position === active ? 'bg-slate-100 text-[#022340]' : 'text-slate-700'
+                      position === active ? 'bg-slate-100 text-brand-ink' : 'text-slate-700'
                     } ${current ? 'font-semibold' : ''}`}
                   >
-                    <Icon size={15} className={current ? 'text-[#3F768C]' : 'text-slate-400'} />
+                    <Icon size={15} className={current ? 'text-brand-accent' : 'text-slate-400'} />
                     <span className="truncate">{item.name}</span>
                     {current && <span className="ml-auto text-[11px] font-medium text-slate-400">Aquí estás</span>}
                   </div>

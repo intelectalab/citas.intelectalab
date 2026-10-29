@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Search, ChevronDown, LogOut, Moon, Sun, Users, LifeBuoy } from 'lucide-react';
+import { Search, ChevronDown, LogOut, Menu, Moon, Sun, Users, LifeBuoy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import NotificationsBell from '@/features/notifications/components/NotificationsBell';
+import HelpButton from '@/features/help/components/HelpButton';
 
 export const SWITCH_ACCOUNT_EMAIL_KEY = 'switch_account_email';
 
-export default function Navbar() {
+export default function Navbar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const { user, logout, stopImpersonation } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -57,9 +58,15 @@ export default function Navbar() {
     'w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors text-left cursor-pointer';
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between sticky top-0 z-20">
+    <header className="h-16 bg-white border-b border-gray-200 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-0 sticky top-0 z-20">
 
-      <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full w-96 border border-transparent focus-within:border-[#3F768C] focus-within:bg-white transition-all">
+      {onOpenMenu && (
+        <button type="button" aria-label="Abrir el menú" data-open-menu onClick={onOpenMenu} className="lg:hidden p-2 -ml-1 rounded-xl text-slate-600 hover:bg-gray-100">
+          <Menu size={22} />
+        </button>
+      )}
+
+      <div className="hidden md:flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full w-96 border border-transparent focus-within:border-brand-accent focus-within:bg-white transition-all">
         <Search size={18} className="text-gray-400" />
         <input
           type="text"
@@ -68,10 +75,11 @@ export default function Navbar() {
         />
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 ml-auto md:ml-0">
+        <HelpButton />
         <NotificationsBell />
 
-        <div ref={menuRef} className="relative border-l border-gray-200 pl-4">
+        <div ref={menuRef} className="relative border-l border-gray-200 pl-2 sm:pl-4">
           <button
             type="button"
             onClick={() => setIsOpen((open) => !open)}
@@ -79,10 +87,10 @@ export default function Navbar() {
             aria-expanded={isOpen}
             className="flex items-center gap-3 rounded-xl pl-1 pr-2 py-1 hover:bg-gray-100 transition-colors cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-full bg-[#022340] text-white flex items-center justify-center font-semibold text-sm">
+            <div className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center font-semibold text-sm">
               {initial}
             </div>
-            <span className="text-left leading-tight">
+            <span className="hidden sm:block text-left leading-tight">
               <span className="block text-sm font-semibold text-gray-700">{userName}</span>
               {context && <span className="block text-[11px] text-slate-400">{context}</span>}
             </span>
@@ -90,7 +98,7 @@ export default function Navbar() {
           </button>
 
           {isOpen && (
-            <div role="menu" className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-30">
+            <div role="menu" className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-30">
               <div className="px-4 py-3.5 border-b border-slate-100">
                 <span className="block text-sm font-bold text-slate-900">{userName}</span>
                 <span className="block text-xs text-slate-500 truncate">{user?.email}</span>

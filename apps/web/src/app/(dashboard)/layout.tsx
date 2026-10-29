@@ -6,8 +6,9 @@ import Navbar from '../components/layout/Navbar';
 import ScreenGate from '../components/layout/ScreenGate';
 import IdleLogout from '../components/layout/IdleLogout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
-import { PlatformProvider } from '@/hooks/usePlatform';
+import BrandStyle from '../components/layout/BrandStyle';
 import { useTheme } from '@/hooks/useTheme';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 function StaffOnly({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -29,7 +30,7 @@ function ImpersonationBanner() {
   if (!user?.impersonator) return null;
 
   return (
-    <div className="bg-amber-400 text-[#0B1B2B] px-6 py-2 flex items-center justify-between gap-4 text-xs font-semibold">
+    <div className="bg-amber-400 text-[#0B1B2B] px-3 sm:px-6 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-4 text-xs font-semibold">
       <span>
         Sesión de soporte: estás dentro de <strong>{user.tenant?.name}</strong> como su administrador
         {user.impersonator.name ? ` (${user.impersonator.name})` : ''}. Lo que hagas queda registrado.
@@ -37,7 +38,7 @@ function ImpersonationBanner() {
       <button
         type="button"
         onClick={stopImpersonation}
-        className="shrink-0 px-3 py-1 rounded-lg bg-[#022340] text-white font-bold hover:bg-[#03315a] transition-colors cursor-pointer"
+        className="shrink-0 px-3 py-1 rounded-lg bg-brand text-white font-bold hover:bg-brand-hover transition-colors cursor-pointer"
       >
         Salir y volver a la consola
       </button>
@@ -52,6 +53,8 @@ export default function DashboardLayout({
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   useEffect(() => {
     setMounted(true);
@@ -61,22 +64,24 @@ export default function DashboardLayout({
 
   return (
     <AuthProvider>
-      <PlatformProvider>
       <StaffOnly>
       <IdleLogout />
-      <div className={`flex h-screen overflow-hidden ${mounted ? 'bg-[#0B192C]' : 'bg-[#0B192C]'}`}>
-        <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+      <BrandStyle />
+      <div className={`flex h-screen overflow-hidden ${mounted ? 'bg-brand-menu' : 'bg-brand-menu'}`}>
+        {menuOpen && !isDesktop && (
+          <button type="button" aria-label="Cerrar el menú" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden" />
+        )}
+        <Sidebar isCollapsed={isCollapsed && isDesktop} setIsCollapsed={setIsCollapsed} mobileOpen={menuOpen} onClose={() => setMenuOpen(false)} />
 
-        <div className="theme-scope flex-1 flex flex-col min-w-0 bg-[#F2F2F2] rounded-tl-3xl overflow-hidden shadow-inner">
+        <div className="theme-scope flex-1 flex flex-col min-w-0 bg-[#F2F2F2] lg:rounded-tl-3xl overflow-hidden shadow-inner">
           <ImpersonationBanner />
-          <Navbar />
-          <main className="flex-1 overflow-y-auto p-6">
+          <Navbar onOpenMenu={() => setMenuOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-3 sm:p-6">
             <ScreenGate>{children}</ScreenGate>
           </main>
         </div>
       </div>
       </StaffOnly>
-      </PlatformProvider>
     </AuthProvider>
   );
 }

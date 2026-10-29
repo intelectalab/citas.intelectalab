@@ -85,7 +85,7 @@ export default function ProfessionalDetail() {
   const loadProfessional = useCallback(() => {
     api.get(`/professionals/${params.id}`)
       .then((res) => { setProfessional(res.data); setError(''); })
-      .catch((err) => setError(err?.response?.status === 404 ? `Este ${vocab.pro.toLowerCase()} no existe.` : 'No se pudo cargar la información.'))
+      .catch((err) => setError(err?.response?.status === 404 ? `${vocab.pick('pro', 'Este', 'Esta')} ${vocab.pro.toLowerCase()} no existe.` : 'No se pudo cargar la información.'))
       .finally(() => setLoading(false));
   }, [params.id, vocab.pro]);
 
@@ -124,7 +124,7 @@ export default function ProfessionalDetail() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -177,7 +177,7 @@ export default function ProfessionalDetail() {
   ];
 
   const stats: { id: string; title: string; value: string; note: string; icon: React.ReactNode; color: string }[] = [
-    { id: 'today', title: 'Citas de hoy', value: String(todayList.length), note: todayList.length ? `${todayList.filter((a) => a.status === 'completed').length} ya atendidas` : 'Sin citas hoy', icon: <CalendarDays size={18} />, color: 'text-[#3F768C]' },
+    { id: 'today', title: 'Citas de hoy', value: String(todayList.length), note: todayList.length ? `${todayList.filter((a) => a.status === 'completed').length} ya atendidas` : 'Sin citas hoy', icon: <CalendarDays size={18} />, color: 'text-brand-accent' },
     { id: 'upcoming', title: `Próximos ${WINDOW_DAYS} días`, value: String(upcoming.length), note: nextOne ? `Sigue: ${formatDate(dateOf(nextOne.starts_at), { weekday: 'short', day: 'numeric', month: 'short' })}, ${timeOf(nextOne.starts_at)}` : 'Sin citas agendadas', icon: <CalendarClock size={18} />, color: 'text-sky-600' },
     { id: 'completed', title: `Atenciones, ${WINDOW_DAYS} días`, value: String(completed.length), note: `${new Set(completed.map((a) => a.customer?.id)).size} ${vocab.clients.toLowerCase()} distintos`, icon: <CalendarCheck size={18} />, color: 'text-emerald-600' },
     { id: 'missed', title: 'Canceladas y ausencias', value: String(released.length), note: `${released.filter((a) => a.status === 'no_show').length} sin asistir`, icon: <CalendarX2 size={18} />, color: 'text-rose-700' },
@@ -208,9 +208,9 @@ export default function ProfessionalDetail() {
         <section className={`${card} p-6 space-y-5`} data-card="professional">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-12 h-12 rounded-2xl bg-[#022340] text-[#84D0D9] flex items-center justify-center text-base font-black shrink-0">{initials(professional.display_name)}</span>
+              <span className="w-12 h-12 rounded-2xl bg-brand text-brand-soft flex items-center justify-center text-base font-black shrink-0">{initials(professional.display_name)}</span>
               <div className="min-w-0">
-                <h1 className="text-xl font-black text-[#022340] tracking-tight truncate">{professional.display_name}</h1>
+                <h1 className="text-xl font-black text-brand-ink tracking-tight truncate">{professional.display_name}</h1>
                 <p className="text-xs text-slate-500">
                   {vocab.pro}{professional.created_at ? ` desde ${formatDate(professional.created_at.slice(0, 10), { month: 'long', year: 'numeric' })}` : ''}
                 </p>
@@ -252,7 +252,7 @@ export default function ProfessionalDetail() {
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {professional.specialties!.map((specialty) => (
-                  <span key={specialty.id} className="px-2.5 py-1 text-xs font-medium bg-[#84D0D9]/20 text-[#022340] rounded-lg">{specialty.name}</span>
+                  <span key={specialty.id} className="px-2.5 py-1 text-xs font-medium bg-brand-soft/20 text-brand-ink rounded-lg">{specialty.name}</span>
                 ))}
               </div>
             )}
@@ -285,7 +285,7 @@ export default function ProfessionalDetail() {
                 title={CLICKABLE.includes(stat.id) ? 'Ver cuáles son' : undefined}
                 onClick={() => pickStat(stat.id)}
                 className={`bg-white px-4 py-3 rounded-2xl border text-left shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 enabled:cursor-pointer enabled:hover:-translate-y-1 enabled:hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
-                  focus === stat.id ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'border-slate-100 enabled:hover:border-slate-200'
+                  focus === stat.id ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'border-slate-100 enabled:hover:border-slate-200'
                 }`}
               >
                 <span className="flex items-start justify-between gap-2">
@@ -304,7 +304,7 @@ export default function ProfessionalDetail() {
         <section className={`${card} overflow-hidden`} data-card="schedule">
           <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3">
             <div>
-              <SectionTitle><Clock className="w-4 h-4 text-[#3F768C]" /> Horario de la semana</SectionTitle>
+              <SectionTitle><Clock className="w-4 h-4 text-brand-accent" /> Horario de la semana</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 {weeklyMinutes > 0 ? `${hoursLabel(weeklyMinutes)} de atención a la semana.` : 'Sin horario definido: la agenda no le ofrece citas.'}
               </p>
@@ -314,7 +314,7 @@ export default function ProfessionalDetail() {
                 type="button"
                 data-action="edit-schedule"
                 onClick={() => setScheduleOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors shrink-0"
               >
                 <Pencil size={13} /> Horario y ausencias
               </button>
@@ -327,8 +327,8 @@ export default function ProfessionalDetail() {
               const isToday = new Date().getDay() === day.weekday;
 
               return (
-                <li key={day.weekday} data-day={day.weekday} className={`flex items-center gap-4 px-6 py-2.5 ${isToday ? 'bg-[#84D0D9]/10' : ''}`}>
-                  <span className={`w-24 shrink-0 text-sm ${isToday ? 'font-bold text-[#022340]' : 'font-medium text-slate-600'}`}>
+                <li key={day.weekday} data-day={day.weekday} className={`flex items-center gap-4 px-6 py-2.5 ${isToday ? 'bg-brand-soft/10' : ''}`}>
+                  <span className={`w-24 shrink-0 text-sm ${isToday ? 'font-bold text-brand-ink' : 'font-medium text-slate-600'}`}>
                     {day.label}{isToday ? ' · hoy' : ''}
                   </span>
                   {ranges.length === 0 ? (
@@ -378,7 +378,7 @@ export default function ProfessionalDetail() {
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">
-              <SectionTitle><CalendarDays className="w-4 h-4 text-[#3F768C]" /> Citas</SectionTitle>
+              <SectionTitle><CalendarDays className="w-4 h-4 text-brand-accent" /> Citas</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 Los últimos y los próximos {WINDOW_DAYS} días. La fecha y la fase abren la cita; el nombre lleva a la página de la persona. Las tarjetas de arriba filtran esta lista.
               </p>
@@ -389,7 +389,7 @@ export default function ProfessionalDetail() {
               <div className="border-t border-slate-100 flex flex-col" data-list="focus">
                 <div className="flex items-center justify-between gap-3 px-5 pt-3">
                   <span className={smallLabel}>{FOCUS_TITLES[focus]} ({focused.length})</span>
-                  <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                  <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
                     Ver todas las citas
                   </button>
                 </div>

@@ -58,7 +58,7 @@ export default function TimeField({
 
   const optionClass = (selected: boolean) =>
     `w-full px-3 py-1.5 text-sm text-center rounded-md transition-colors ${
-      selected ? 'bg-[#022340] text-white font-semibold' : 'text-slate-700 hover:bg-slate-100'
+      selected ? 'bg-brand text-white font-semibold' : 'text-slate-700 hover:bg-slate-100'
     }`;
 
   return (
@@ -76,7 +76,7 @@ export default function TimeField({
         className={`w-full flex items-center justify-between gap-2 text-sm border rounded-lg text-left transition-all select-none ${
           size === 'compact' ? 'px-2.5 py-2' : 'px-3.5 py-2.5'
         } ${disabled ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : 'bg-white cursor-pointer'} ${
-          open ? 'border-[#022340] ring-2 ring-[#022340]/20' : 'border-slate-200 hover:border-slate-300'
+          open ? 'border-brand ring-2 ring-brand/20' : 'border-slate-200 hover:border-slate-300'
         }`}
       >
         <span className={`tabular-nums ${current ? 'text-slate-800' : 'text-slate-400'}`}>{current || placeholder}</span>

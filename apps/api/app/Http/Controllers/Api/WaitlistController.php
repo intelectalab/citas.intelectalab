@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\WaitlistEntry;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
+use App\Support\Audit;
 use App\Support\Search;
 use App\Support\Waitlist;
 use Illuminate\Http\Request;
@@ -192,10 +193,23 @@ class WaitlistController extends Controller
             ], 422);
         }
 
+        $wasOpen = $entry->isOpen();
+
         $entry->update([
             'status'      => $to,
             'notified_at' => $to === WaitlistEntry::NOTIFIED ? now() : ($to === WaitlistEntry::WAITING ? null : $entry->notified_at),
         ]);
+
+        if ($to === WaitlistEntry::CANCELLED && $wasOpen) {
+            Audit::log($request, 'waitlist.withdrawn', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'waitlist_entry',
+                'entity_id'    => $entry->id,
+                'entity_label' => \App\Support\Person::name($entry->customer),
+                'branch_id'    => $entry->branch_id,
+                'after'        => array_filter(['service' => $entry->service?->name, 'branch' => $entry->branch?->name, 'professional' => $entry->professional?->display_name]),
+            ]);
+        }
 
         return response()->json($this->present($entry->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
     }

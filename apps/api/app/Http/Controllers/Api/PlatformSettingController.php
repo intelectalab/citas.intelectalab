@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\PlatformSetting;
+use App\Support\PlatformLook;
 use Illuminate\Http\Request;
 
 class PlatformSettingController extends Controller
 {
     public function publicValues()
     {
-        return response()->json(PlatformSetting::publicValues());
+        return response()->json(PlatformLook::publicPayload());
     }
 
     public function show()
@@ -47,6 +48,7 @@ class PlatformSettingController extends Controller
         }
 
         $after = PlatformSetting::put($validated);
+        PlatformLook::forget();
 
         AuditEvent::record($request, 'platform.settings_changed', null, array_intersect_key($before, $validated), $validated);
 

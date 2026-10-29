@@ -9,6 +9,7 @@ use App\Support\Rooms;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Support\Access;
+use App\Support\Audit;
 
 class RoomController extends Controller
 {
@@ -17,6 +18,46 @@ class RoomController extends Controller
         abort_unless($request->user()->tenant_id, 403);
         $user = $request->user();
         abort_unless($user->allows('rooms.create') || $user->allows('rooms.edit') || $user->allows('rooms.delete'), 403, 'Tu cuenta no tiene permiso para cambiar las salas y equipos.');
+    }
+
+    private function auditRoom(Request $request, string $action, object $room): void
+    {
+        Audit::log($request, $action, [
+            'tenant'       => $request->user()->tenant_id,
+            'entity_type'  => 'room',
+            'entity_id'    => $room->id,
+            'entity_label' => $room->name,
+            'branch_id'    => $room->branch_id,
+            'before'       => array_filter([
+                'room_kind' => ($room->kind ?? null) === 'equipment' ? 'Equipo' : 'Sala',
+                'branch'    => $room->branch_id ? DB::table('branches')->where('id', $room->branch_id)->value('name') : null,
+            ]),
+        ]);
+    }
+
+    private function auditable(object $room): array
+    {
+        return [
+            'name'        => $room->name,
+            'description' => $room->description ?? null,
+            'room_kind'   => ($room->kind ?? null) === 'equipment' ? 'Equipo' : 'Sala',
+            'branch'      => $room->branch_id ? DB::table('branches')->where('id', $room->branch_id)->value('name') : null,
+            'parent_room' => !empty($room->parent_id) ? DB::table('rooms')->where('id', $room->parent_id)->value('name') : null,
+            'in_use'      => ($room->status ?? 'active') === 'active',
+        ];
+    }
+
+    private function auditChange(Request $request, string $action, object $room, array $before, array $after): void
+    {
+        Audit::log($request, $action, [
+            'tenant'       => $request->user()->tenant_id,
+            'entity_type'  => 'room',
+            'entity_id'    => $room->id,
+            'entity_label' => $room->name,
+            'branch_id'    => $room->branch_id,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ]);
     }
 
     private function find(Request $request, string $id): object
@@ -102,6 +143,9 @@ class RoomController extends Controller
             'created_at' => now(),
         ]);
 
+        $created = DB::table('rooms')->where('id', $id)->first();
+        $this->auditChange($request, 'room.created', $created, [], array_filter($this->auditable($created), fn ($value) => $value !== null));
+
         return response()->json($this->present($id), 201);
     }
 
@@ -114,6 +158,13 @@ class RoomController extends Controller
 
         $this->notifyIfEquipmentChanged($request, $room);
 
+        $fresh = DB::table('rooms')->where('id', $room->id)->first();
+        [$before, $after] = Audit::changed($this->auditable($room), $this->auditable($fresh));
+
+        if ($after) {
+            $this->auditChange($request, 'room.updated', $fresh, $before, $after);
+        }
+
         return response()->json($this->present($room->id));
     }
 
@@ -125,11 +176,13 @@ class RoomController extends Controller
         if (DB::table('appointments')->where('room_id', $room->id)->exists()) {
             DB::table('rooms')->where('id', $room->id)->update(['status' => 'inactive', 'updated_at' => now()]);
             $this->notifyIfEquipmentChanged($request, $room);
+            $this->auditRoom($request, 'room.deactivated', $room);
 
             return response()->json(['message' => 'Tiene citas registradas: se desactivó en lugar de eliminarse.', 'deactivated' => true]);
         }
 
         DB::table('rooms')->where('id', $room->id)->delete();
+        $this->auditRoom($request, 'room.deleted', $room);
 
         return response()->json(['message' => 'Eliminado correctamente', 'deactivated' => false]);
     }

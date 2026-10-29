@@ -5,7 +5,7 @@ interface OptionCardProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export default function OptionCard({ selected, className = '', ...rest }: OptionCardProps) {
-  const state = selected ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 hover:bg-slate-50';
+  const state = selected ? 'border-brand bg-brand-soft/15 ring-2 ring-brand/10' : 'border-slate-200 hover:bg-slate-50';
 
   return <button {...rest} className={className ? `${className} ${state}` : state} />;
 }

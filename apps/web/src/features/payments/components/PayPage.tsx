@@ -94,7 +94,7 @@ export default function PayPage() {
             ? <img src={link.company.logo} alt="" className="w-11 h-11 rounded-xl object-cover" />
             : <span className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-black" style={{ background: accent }}>{link.company.name.slice(0, 1)}</span>}
           <div>
-            <span className="block text-base font-black text-[#022340]">{link.company.name}</span>
+            <span className="block text-base font-black text-brand-ink">{link.company.name}</span>
             <span className="block text-xs text-slate-500">{isDeposit ? 'Adelanto para reservar tu cita' : 'Link de pago'}</span>
           </div>
         </header>
@@ -109,7 +109,7 @@ export default function PayPage() {
         <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100">
             <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">{isDeposit ? 'Adelanto' : 'Total a pagar'}</span>
-            <span className="block text-4xl font-black text-[#022340] tabular-nums" data-pay-amount>{money(link.amount, link.currency)}</span>
+            <span className="block text-4xl font-black text-brand-ink tabular-nums" data-pay-amount>{money(link.amount, link.currency)}</span>
             <span className="block text-sm text-slate-600 mt-1">{link.description}</span>
           </div>
 
@@ -135,7 +135,7 @@ export default function PayPage() {
             {link.status === 'pending' && (
               <>
                 {isDeposit && (
-                  <p className="flex items-start gap-2 text-xs text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-xl px-4 py-3" data-hold-warning>
+                  <p className="flex items-start gap-2 text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3" data-hold-warning>
                     <Clock size={15} className="shrink-0 mt-0.5" />
                     <span>Tu horario se reserva recién al pagar el adelanto. Si demoras, otra persona puede tomarlo: en ese caso este link se anula y no se te cobra nada.</span>
                   </p>
@@ -164,7 +164,7 @@ export default function PayPage() {
             {link.status === 'paid' && (
               <div className="text-center space-y-2" data-pay-done>
                 <span className="w-14 h-14 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><CheckCircle2 size={28} /></span>
-                <h1 className="text-lg font-black text-[#022340]">{isDeposit ? '¡Pagaste tu adelanto!' : '¡Pago recibido!'}</h1>
+                <h1 className="text-lg font-black text-brand-ink">{isDeposit ? '¡Pagaste tu adelanto!' : '¡Pago recibido!'}</h1>
                 <p className="text-sm text-slate-600">
                   {isDeposit
                     ? `Tu cita${link.appointment ? ` ${link.appointment}` : ''} quedó reservada y confirmada. El resto se paga en la sede.`
@@ -176,7 +176,7 @@ export default function PayPage() {
             {['expired', 'cancelled', 'failed'].includes(link.status) && (
               <div className="text-center space-y-2" data-pay-closed>
                 <span className="w-14 h-14 mx-auto rounded-full bg-slate-100 text-slate-500 flex items-center justify-center"><XCircle size={28} /></span>
-                <h1 className="text-lg font-black text-[#022340]">{link.status === 'expired' ? 'Este link venció' : 'Este link ya no está disponible'}</h1>
+                <h1 className="text-lg font-black text-brand-ink">{link.status === 'expired' ? 'Este link venció' : 'Este link ya no está disponible'}</h1>
                 <p className="text-sm text-slate-600">
                   {link.reason ?? (link.status === 'expired'
                     ? isDeposit ? 'Pasó el tiempo para pagar el adelanto. Si el horario sigue libre, vuelve a reservarlo.' : 'Pídele a la empresa un link nuevo.'
@@ -189,7 +189,7 @@ export default function PayPage() {
             {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
 
             {isDeposit && link.status !== 'pending' && (
-              <Link href="/portal" data-back-portal className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors">
+              <Link href="/portal" data-back-portal className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
                 <CalendarCheck size={16} /> {link.status === 'paid' ? 'Ver mis citas' : 'Elegir otro horario'}
               </Link>
             )}

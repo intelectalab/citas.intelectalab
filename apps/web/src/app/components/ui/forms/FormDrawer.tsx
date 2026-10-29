@@ -34,10 +34,10 @@ export default function FormDrawer({ isOpen, onClose, title, subtitle, icon, chi
       <div className="absolute inset-y-0 right-0 max-w-full flex">
         <div className={`w-screen ${maxWidth} bg-white shadow-2xl border-l border-slate-200 flex flex-col transform transition-transform duration-300 ease-in-out`}>
           
-          <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/85">
+          <div className="flex items-center justify-between gap-3 sm:gap-0 px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 bg-slate-50/85">
             <div className="flex items-center gap-3">
               {icon && (
-                <div className="p-2 bg-blue-50 text-[#022340] rounded-lg">
+                <div className="p-2 bg-blue-50 text-brand-ink rounded-lg">
                   {icon}
                 </div>
               )}
@@ -54,7 +54,7 @@ export default function FormDrawer({ isOpen, onClose, title, subtitle, icon, chi
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             {children}
           </div>
         </div>

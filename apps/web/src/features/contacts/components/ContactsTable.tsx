@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Mail, Phone, Pencil, Trash2, Briefcase } from 'lucide-react';
-import { DataTable, type Column } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormContact from './FormContact';
 import { api } from '@/lib/axios';
@@ -15,6 +15,7 @@ interface TenantContact {
     phone: string | null;
     position: string | null;
     user_id: string | null;
+    tenant?: { name?: string; company_name?: string } | null;
 }
 
 export default function ContactsTable() {
@@ -110,7 +111,7 @@ export default function ContactsTable() {
         {
             header: 'Correo Electrónico',
             cell: (contact) => contact.email ? (
-                <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-[#022340]">
+                <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-brand-ink">
                     <Mail size={14} className="text-slate-400" />
                     <span>{contact.email}</span>
                 </a>
@@ -156,6 +157,15 @@ export default function ContactsTable() {
         },
     ];
 
+    const exportColumns: ExportColumn<TenantContact>[] = [
+        { header: 'Nombre', value: (c) => c.first_name },
+        { header: 'Apellido', value: (c) => c.last_name },
+        { header: 'Cargo', value: (c) => c.position },
+        { header: 'Correo', value: (c) => c.email },
+        { header: 'Teléfono', value: (c) => c.phone },
+        { header: 'Empresa', value: (c) => c.tenant?.name || c.tenant?.company_name },
+    ];
+
     return (
         <div>
             <DataTable<TenantContact>
@@ -176,6 +186,9 @@ export default function ContactsTable() {
                   { id: 'email', label: 'Correo', value: (c) => c.email },
                 ]}
                 data={contacts}
+                exportTitle="Contactos"
+                exportScreen="admin-contacts"
+                exportColumns={exportColumns}
                 getItemKey={(contact) => contact.id}
                 entityLabel="contactos registrados"
             />

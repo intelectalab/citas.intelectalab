@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Access;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -34,6 +35,31 @@ class AccessController extends Controller
     private function findRole(Tenant $tenant, string $id): Role
     {
         return Role::where('tenant_id', $tenant->id)->findOrFail($id);
+    }
+
+    private function auditUser(User $user, ?string $roleName): array
+    {
+        return [
+            'name'           => trim("{$user->first_name} {$user->last_name}"),
+            'email'          => $user->email,
+            'phone'          => $user->phone,
+            'role'           => $roleName,
+            'branch'         => $user->branch_id ? DB::table('branches')->where('id', $user->branch_id)->value('name') : null,
+            'account_active' => $user->status === 'active',
+        ];
+    }
+
+    private function audit(Request $request, Tenant $tenant, string $action, string $type, string $id, ?string $label, array $before = [], array $after = [], ?string $branchId = null): void
+    {
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $tenant->id,
+            'entity_type'  => $type,
+            'entity_id'    => $id,
+            'entity_label' => $label,
+            'branch_id'    => $branchId,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
     }
 
     private function usage(Tenant $tenant): array
@@ -309,6 +335,7 @@ class AccessController extends Controller
         });
 
         Access::logChange($request, $tenant, 'user', $user->id, "Creó la cuenta con el rol {$role->name}.");
+        $this->audit($request, $tenant, 'user.created', 'user', $user->id, trim("{$user->first_name} {$user->last_name}"), [], array_filter($this->auditUser($user, $role->name), fn ($value) => $value !== null && $value !== ''), $user->branch_id);
 
         return response()->json(['id' => $user->id, 'email' => $user->email, 'temporary_password' => $password], 201);
     }
@@ -357,6 +384,9 @@ class AccessController extends Controller
             return response()->json(['message' => $blocked, 'code' => 'PLAN_LIMIT'], 422);
         }
 
+        $auditBefore = $this->auditUser($target, $current?->name);
+        $branchBefore = $target->branch_id;
+
         DB::transaction(function () use ($target, $validated, $role, $roleChanges, $status) {
             $target->update([
                 'first_name' => $validated['first_name'],
@@ -388,6 +418,17 @@ class AccessController extends Controller
             Access::logChange($request, $tenant, 'user', $target->id, $branchName ? "Le cambió la sede a {$branchName}." : 'Le quitó la sede.');
         }
 
+        $auditAfter = $this->auditUser($target, $role->name);
+        $label = $auditAfter['name'];
+        if ($statusChanges) {
+            $this->audit($request, $tenant, $status === 'active' ? 'user.activated' : 'user.deactivated', 'user', $target->id, $label, [], [], $target->branch_id);
+            unset($auditBefore['account_active'], $auditAfter['account_active']);
+        }
+        [$from, $to] = Audit::changed($auditBefore, $auditAfter);
+        if ($to) {
+            $this->audit($request, $tenant, 'user.updated', 'user', $target->id, $label, $from, $to, $target->branch_id ?? $branchBefore);
+        }
+
         return response()->json(['id' => $target->id]);
     }
 
@@ -406,6 +447,7 @@ class AccessController extends Controller
         $target->update(['password_hash' => Hash::make($password)]);
         $target->tokens()->delete();
         Access::logChange($request, $tenant, 'user', $target->id, 'Le dio una contraseña nueva.');
+        $this->audit($request, $tenant, 'user.password_reset', 'user', $target->id, trim("{$target->first_name} {$target->last_name}"), [], [], $target->branch_id);
 
         return response()->json(['email' => $target->email, 'temporary_password' => $password]);
     }
@@ -579,6 +621,11 @@ class AccessController extends Controller
         });
 
         Access::logChange($request, $tenant, 'role', $role->id, $source ? "Creó el rol copiando a {$source->name}." : 'Creó el rol, sin permisos.');
+        $this->audit($request, $tenant, 'role.created', 'role', $role->id, $role->name, [], array_filter([
+            'name'        => $role->name,
+            'description' => $role->description,
+            'copied_from' => $source?->name,
+        ]));
 
         return response()->json(['id' => $role->id], 201);
     }
@@ -600,7 +647,13 @@ class AccessController extends Controller
         ]);
 
         $oldName = $role->name;
+        $roleBefore = ['name' => $role->name, 'description' => $role->description];
         $role->update(['name' => $validated['name'], 'description' => $validated['description'] ?? null]);
+
+        [$from, $to] = Audit::changed($roleBefore, ['name' => $role->name, 'description' => $role->description]);
+        if ($to) {
+            $this->audit($request, $tenant, 'role.updated', 'role', $role->id, $role->name, $from, $to);
+        }
 
         if ($oldName !== $role->name) {
             Access::logChange($request, $tenant, 'role', $role->id, "Le cambió el nombre de {$oldName} a {$role->name}.");
@@ -719,6 +772,7 @@ class AccessController extends Controller
             : "{$people} personas tienen este rol. Cámbiales el rol antes de eliminarlo.");
 
         $role->delete();
+        $this->audit($request, $tenant, 'role.deleted', 'role', $role->id, $role->name, array_filter(['name' => $role->name, 'description' => $role->description]));
 
         return response()->json(['deleted' => true]);
     }

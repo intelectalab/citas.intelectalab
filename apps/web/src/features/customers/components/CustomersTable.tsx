@@ -202,7 +202,7 @@ export default function CustomersTable() {
 
   const metricCards: MetricCardItem[] = [
     {
-      title: `${vocab.clients}: hombres`,
+      title: 'Hombres',
       value: totalMale,
       icon: <Mars size={18} />,
       iconColorClass: 'text-blue-500',
@@ -210,7 +210,7 @@ export default function CustomersTable() {
       onClick: () => handleMetricCardClick('M'),
     },
     {
-      title: `${vocab.clients}: mujeres`,
+      title: 'Mujeres',
       value: totalFemale,
       icon: <Venus size={18} />,
       iconColorClass: 'text-pink-500',
@@ -250,7 +250,7 @@ export default function CustomersTable() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Link href={`/customers/${pat.id}`} data-customer-link={pat.id} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>
+              <Link href={`/customers/${pat.id}`} data-customer-link={pat.id} className={`${styles.customerName} hover:text-brand-accent transition-colors`}>
                 {`${pat.first_name} ${pat.last_name}`}
               </Link>
             </div>
@@ -371,9 +371,9 @@ export default function CustomersTable() {
       <div className="mb-6">
         <DataTable<Customer>
           title={`Gestión de ${vocab.clients}`}
-          primaryActionLabel={`Nuevo ${vocab.client}`}
+          primaryActionLabel={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client}`}
           onPrimaryAction={can('customers.create') ? () => { setEditingCustomer(null); setShowFormModal(true); } : undefined}
-          tabs={[{ id: 'all', label: `Todos los ${vocab.clients.toLowerCase()}`, count: safeCustomers.length }]}
+          tabs={[{ id: 'all', label: `${vocab.pick('client', 'Todos los', 'Todas las')} ${vocab.clients.toLowerCase()}`, count: safeCustomers.length }]}
           activeTab={activeTab}
           onTabChange={setActiveTab}
           searchTerm={searchTerm}
@@ -399,7 +399,7 @@ export default function CustomersTable() {
           exportColumns={exportColumns}
           exportNotice={total > safeCustomers.length ? `Se exportan ${safeCustomers.length} de ${total} ${vocab.clients.toLowerCase()}: la lista carga hasta 500. Filtra más para exportar el resto.` : undefined}
           getItemKey={(p) => p.id}
-          entityLabel={`${vocab.clients.toLowerCase()} registrados`}
+          entityLabel={`${vocab.clients.toLowerCase()} ${vocab.pick('client', 'registrados', 'registradas')}`}
           metricCards={metricCards}
           view={view}
           onViewChange={changeView}

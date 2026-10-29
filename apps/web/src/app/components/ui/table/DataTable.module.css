@@ -310,7 +310,7 @@
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background-color: #84d0d9;
+  background-color: var(--brand-soft, #84d0d9);
 }
 
 .exportBtn {
@@ -469,7 +469,7 @@
 
 .countPillOnDark {
   color: var(--brand-ink, #022340);
-  background-color: #84d0d9;
+  background-color: var(--brand-soft, #84d0d9);
 }
 
 
@@ -590,7 +590,7 @@
   font-weight: 700;
   font-size: 0.75rem;
   background-color: var(--brand-solid, #022340);
-  color: #84d0d9;
+  color: var(--brand-soft, #84d0d9);
 }
 
 .customerName {
@@ -745,6 +745,86 @@
 @media (max-width: 768px) {
   .btnText {
     display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .header {
+    padding: 0.875rem;
+    gap: 0.75rem;
+  }
+
+  .headerTop {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .titleGroup {
+    min-width: 0;
+  }
+
+  .actionsGroup {
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+
+  .tabsContainer {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabsContainer::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabBtn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .filterSection {
+    padding: 0.75rem 0.875rem;
+  }
+
+  .filterTopRow {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .filterLeftGroup,
+  .filterRightGroup {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .filterLeftGroup:has(.searchInputWrapper) {
+    flex: 1 1 100%;
+  }
+
+  .searchInputWrapper {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .filterDrawer {
+    flex-wrap: wrap;
+  }
+
+  .table {
+    min-width: 40rem;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.75rem 0.875rem;
   }
 }
 

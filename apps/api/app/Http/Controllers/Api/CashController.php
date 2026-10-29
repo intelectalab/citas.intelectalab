@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
+use App\Support\Audit;
 use App\Support\Currency;
 
 class CashController extends Controller
@@ -118,6 +119,11 @@ class CashController extends Controller
             'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        Audit::log($request, 'cash_register.created', [
+            'tenant' => $tenant->id, 'entity_type' => 'cash_register', 'entity_id' => $id, 'entity_label' => trim($validated['name']),
+            'branch_id' => $validated['branch_id'], 'after' => ['name' => trim($validated['name']), 'status' => 'active'],
+        ]);
+
         return response()->json(['id' => $id], 201);
     }
 
@@ -144,6 +150,15 @@ class CashController extends Controller
 
         DB::table('cash_registers')->where('id', $row->id)->update(['name' => trim($validated['name']), 'status' => $validated['status'], 'updated_at' => now()]);
 
+        [$before, $after] = Audit::changed(['name' => $row->name, 'status' => $row->status], ['name' => trim($validated['name']), 'status' => $validated['status']]);
+
+        if ($after) {
+            Audit::log($request, 'cash_register.updated', [
+                'tenant' => $tenant->id, 'entity_type' => 'cash_register', 'entity_id' => $row->id, 'entity_label' => trim($validated['name']),
+                'branch_id' => $row->branch_id, 'before' => $before, 'after' => $after,
+            ]);
+        }
+
         return response()->json(['id' => $row->id]);
     }
 
@@ -168,6 +183,11 @@ class CashController extends Controller
                 'id' => $id, 'tenant_id' => $tenant->id, 'branch_id' => $row->branch_id, 'cash_register_id' => $row->id,
                 'status' => 'open', 'opened_by' => $request->user()->id, 'opening_amount' => round((float) $validated['opening_amount'], 2), 'opened_at' => now(),
             ] + Currency::column($tenant));
+
+            Audit::log($request, 'cash.opened', [
+                'tenant' => $tenant->id, 'entity_type' => 'cash_session', 'entity_id' => $id, 'entity_label' => $row->name,
+                'branch_id' => $row->branch_id, 'after' => ['amount' => round((float) $validated['opening_amount'], 2)],
+            ]);
 
             return response()->json(Cash::present($this->session($tenant, $id)), 201);
         });
@@ -204,6 +224,12 @@ class CashController extends Controller
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'cash_session_id' => $row->id,
                 'type' => $validated['type'], 'amount' => $amount, 'description' => trim($validated['description']),
                 'created_by' => $request->user()->id, 'created_at' => now(),
+            ]);
+
+            Audit::log($request, 'cash.movement', [
+                'tenant' => $tenant->id, 'entity_type' => 'cash_session', 'entity_id' => $row->id,
+                'entity_label' => DB::table('cash_registers')->where('id', $row->cash_register_id)->value('name'), 'branch_id' => $row->branch_id,
+                'after' => ['type' => Cash::MANUAL[$validated['type']], 'amount' => $amount, 'reason' => trim($validated['description'])],
             ]);
 
             return response()->json(Cash::present($row, true), 201);
@@ -243,6 +269,12 @@ class CashController extends Controller
             DB::table('cash_sessions')->where('id', $row->id)->update([
                 'status' => 'closed', 'closed_by' => $request->user()->id, 'closed_at' => now(),
                 'expected_amount' => $expected, 'closing_amount' => $counted, 'difference' => $difference, 'closing_notes' => $notes,
+            ]);
+
+            Audit::log($request, 'cash.closed', [
+                'tenant' => $tenant->id, 'entity_type' => 'cash_session', 'entity_id' => $row->id,
+                'entity_label' => DB::table('cash_registers')->where('id', $row->cash_register_id)->value('name'), 'branch_id' => $row->branch_id,
+                'after' => ['counted' => $counted, 'expected' => $expected, 'difference' => $difference, 'notes' => $notes],
             ]);
 
             if ($overTolerance) {

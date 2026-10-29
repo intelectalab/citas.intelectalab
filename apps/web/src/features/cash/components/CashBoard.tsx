@@ -13,7 +13,7 @@ import { money, momentOf, type CashBoardData, type CashRegister, type CashSessio
 import { CashMovementPanel, CashSessionPanel, CloseCashPanel, OpenCashPanel, RegisterPanel } from './CashPanels';
 
 const ghostButton = 'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors';
-const iconButton = 'p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:bg-slate-100 transition-colors';
+const iconButton = 'p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors';
 
 const squared = (session: CashSession) => (session.difference ?? 0) === 0;
 
@@ -67,8 +67,8 @@ export default function CashBoard() {
       title: 'Turnos cerrados',
       value: sessions.length,
       icon: <Lock size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: !activeCard ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: !activeCard ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => setActiveCard(''),
     },
     {
@@ -94,12 +94,12 @@ export default function CashBoard() {
     { header: 'Sede', value: (c) => c.branch_name },
     { header: 'Apertura', type: 'datetime', value: (c) => c.opened_at },
     { header: 'Abrió', value: (c) => c.opened_by },
-    { header: 'Monto inicial', type: 'money', value: (c) => c.opening_amount },
+    { header: 'Monto inicial', type: 'money', total: true, value: (c) => c.opening_amount },
     { header: 'Cierre', type: 'datetime', value: (c) => c.closed_at },
     { header: 'Cerró', value: (c) => c.closed_by },
-    { header: 'Debía haber', type: 'money', value: (c) => c.expected_amount },
-    { header: 'Contado', type: 'money', value: (c) => c.closing_amount },
-    { header: 'Diferencia', type: 'money', value: (c) => c.difference ?? 0 },
+    { header: 'Debía haber', type: 'money', total: true, value: (c) => c.expected_amount },
+    { header: 'Contado', type: 'money', total: true, value: (c) => c.closing_amount },
+    { header: 'Diferencia', type: 'money', total: true, value: (c) => c.difference ?? 0 },
     { header: 'Resultado', value: (c) => (squared(c) ? 'Cuadró' : (c.difference ?? 0) < 0 ? 'Faltó' : 'Sobró') },
     { header: 'Nota del cierre', value: (c) => c.closing_notes },
   ];
@@ -109,10 +109,10 @@ export default function CashBoard() {
       header: 'Caja',
       cell: (session) => (
         <div key={`register-${session.id}`}>
-          <button type="button" data-view={session.id} onClick={() => setViewing(session.id)} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left`}>
+          <button type="button" data-view={session.id} onClick={() => setViewing(session.id)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}>
             {session.register_name ?? 'Caja'}
           </button>
-          <Link href={`/branches/${session.branch_id}`} className="block text-xs text-slate-400 hover:text-[#3F768C] hover:underline underline-offset-2 transition-colors">
+          <Link href={`/branches/${session.branch_id}`} className="block text-xs text-slate-400 hover:text-brand-accent hover:underline underline-offset-2 transition-colors">
             {session.branch_name ?? '—'}
           </Link>
         </div>
@@ -172,7 +172,7 @@ export default function CashBoard() {
     <div className="space-y-6 mb-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#022340]">Caja</h1>
+          <h1 className="text-2xl font-bold text-brand-ink">Caja</h1>
           <p className="text-sm text-slate-500 mt-1">
             {registers.length === 0
               ? 'El efectivo de cada turno: apertura, cobros, gastos y cierre con arqueo.'
@@ -180,7 +180,7 @@ export default function CashBoard() {
           </p>
         </div>
         {canManage && (
-          <button type="button" data-new-register onClick={() => { setEditing(null); setRegisterOpen(true); }} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors">
+          <button type="button" data-new-register onClick={() => { setEditing(null); setRegisterOpen(true); }} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors">
             <Plus size={16} className="stroke-[2.5]" /> Nueva caja
           </button>
         )}
@@ -198,14 +198,14 @@ export default function CashBoard() {
               key={register.id}
               data-register={register.name}
               data-register-state={session ? 'open' : inactive ? 'inactive' : 'closed'}
-              className={`rounded-2xl rounded-tr-[2rem] border p-5 flex flex-col gap-4 ${session ? 'bg-[#022340] border-[#022340] text-white' : 'bg-white border-slate-200/80'} ${inactive ? 'opacity-60' : ''}`}
+              className={`rounded-2xl rounded-tr-[2rem] border p-5 flex flex-col gap-4 ${session ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200/80'} ${inactive ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className={`p-2.5 rounded-xl shrink-0 ${session ? 'bg-white/10 text-[#84D0D9]' : 'bg-[#84D0D9]/20 text-[#022340]'}`}><Wallet size={18} /></span>
+                  <span className={`p-2.5 rounded-xl shrink-0 ${session ? 'bg-white/10 text-brand-soft' : 'bg-brand-soft/20 text-brand-ink'}`}><Wallet size={18} /></span>
                   <div className="min-w-0">
-                    <span className={`block text-sm font-bold truncate ${session ? 'text-white' : 'text-[#022340]'}`}>{register.name}</span>
-                    <Link href={`/branches/${register.branch_id}`} className={`block text-xs truncate hover:underline underline-offset-2 ${session ? 'text-[#84D0D9]' : 'text-slate-500 hover:text-[#3F768C]'}`}>
+                    <span className={`block text-sm font-bold truncate ${session ? 'text-white' : 'text-brand-ink'}`}>{register.name}</span>
+                    <Link href={`/branches/${register.branch_id}`} className={`block text-xs truncate hover:underline underline-offset-2 ${session ? 'text-brand-soft' : 'text-slate-500 hover:text-brand-accent'}`}>
                       {register.branch_name ?? '—'}
                     </Link>
                   </div>
@@ -225,7 +225,7 @@ export default function CashBoard() {
               {session ? (
                 <>
                   <div>
-                    <span className="block text-[11px] font-bold text-[#84D0D9] uppercase tracking-wider">Debe haber en efectivo</span>
+                    <span className="block text-[11px] font-bold text-brand-soft uppercase tracking-wider">Debe haber en efectivo</span>
                     <span className="block text-3xl font-black tabular-nums" data-expected>{money(session.expected_amount, session?.currency)}</span>
                     <span className="block text-xs text-slate-300 mt-1">Abrió {session.opened_by ?? '—'} · {momentOf(session.opened_at)}</span>
                   </div>
@@ -246,7 +246,7 @@ export default function CashBoard() {
                     <button type="button" data-action="view" onClick={() => setViewing(session.id)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
                       <Eye size={15} /> Ver turno
                     </button>
-                    {canOperate && (<button type="button" data-action="close" onClick={() => setClosing(register)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold rounded-lg bg-[#84D0D9] text-[#022340] hover:bg-white transition-colors ml-auto">
+                    {canOperate && (<button type="button" data-action="close" onClick={() => setClosing(register)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold rounded-lg bg-brand-soft text-brand-ink hover:bg-white transition-colors ml-auto">
                       <Lock size={15} /> Cerrar caja
                     </button>)}
                   </div>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Specialty;
+use App\Support\Audit;
 use Illuminate\Support\Str;
 
 class SpecialtyController extends Controller
@@ -85,6 +86,12 @@ class SpecialtyController extends Controller
             ->findOrFail($id);
 
         $specialty->delete();
+        Audit::log($request, 'specialty.deleted', [
+            'tenant'       => $currentUser->tenant_id,
+            'entity_type'  => 'specialty',
+            'entity_id'    => $specialty->id,
+            'entity_label' => $specialty->name,
+        ]);
 
         return response()->json(['message' => 'Specialty deleted successfully']);
     }

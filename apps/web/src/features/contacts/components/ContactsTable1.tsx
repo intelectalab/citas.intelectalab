@@ -172,7 +172,7 @@ export default function ContactsTable() {
     {
       header: 'Correo Electrónico',
       cell: (contact) => contact.email ? (
-        <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-[#022340]">
+        <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-brand-ink">
           <Mail size={14} className="text-slate-400" />
           <span>{contact.email}</span>
         </a>

@@ -146,6 +146,11 @@ class Refunds
         $fresh = DB::table('sales')->where('id', $sale->id)->first();
         Packages::afterSaleRefunded($tenant, $fresh, $user);
 
+        if ($fresh && $fresh->status === 'refunded') {
+            Inventory::returnForSale($tenant, $fresh, $user, $data['reason'] ?? null);
+            Loyalty::afterSaleRefunded($tenant, $fresh, $user);
+        }
+
         return $fresh;
     }
 }

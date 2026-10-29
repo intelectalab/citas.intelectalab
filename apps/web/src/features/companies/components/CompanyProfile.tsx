@@ -87,16 +87,16 @@ export default function CompanyProfile() {
         <section className={`${card} p-6 space-y-5 xl:row-span-2`} data-card="company">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-12 h-12 rounded-2xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><Building2 size={22} /></span>
+              <span className="w-12 h-12 rounded-2xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><Building2 size={22} /></span>
               <div className="min-w-0">
-                <h1 className="text-xl font-black text-[#022340] tracking-tight" data-company-name>{tenant.name}</h1>
+                <h1 className="text-xl font-black text-brand-ink tracking-tight" data-company-name>{tenant.name}</h1>
                 {tenant.business_type && (
                   <span className="inline-block mt-1 px-2.5 py-0.5 text-xs rounded-full font-medium bg-slate-100 text-slate-600">{tenant.business_type}</span>
                 )}
               </div>
             </div>
             {data.can_edit && (
-              <button type="button" data-action="edit-company" title="Editar los datos de la empresa" onClick={() => setEditing(true)} className="p-2 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors shrink-0">
+              <button type="button" data-action="edit-company" title="Editar los datos de la empresa" onClick={() => setEditing(true)} className="p-2 text-slate-400 hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors shrink-0">
                 <Pencil size={16} />
               </button>
             )}
@@ -119,7 +119,7 @@ export default function CompanyProfile() {
           {data.usage.map((item) => {
             const meta = usageLabels[item.key];
             const percent = item.limit ? Math.min(100, Math.round((item.used * 100) / item.limit)) : null;
-            const tone = percent === null ? 'bg-[#3F768C]' : percent >= 100 ? 'bg-rose-500' : percent >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
+            const tone = percent === null ? 'bg-brand-accent' : percent >= 100 ? 'bg-rose-500' : percent >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
             const body = (
               <>
                 <div className="flex items-start justify-between gap-2">
@@ -130,7 +130,7 @@ export default function CompanyProfile() {
                       {item.limit !== null && <span className="text-sm font-semibold text-slate-400"> de {item.limit.toLocaleString('es-PE')}</span>}
                     </div>
                   </div>
-                  <span className="text-[#3F768C]">{meta?.icon}</span>
+                  <span className="text-brand-accent">{meta?.icon}</span>
                 </div>
                 <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
                   <div className={`h-full rounded-full ${tone}`} style={{ width: `${percent ?? 100}%` }} />
@@ -143,17 +143,17 @@ export default function CompanyProfile() {
             const className = 'block bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]';
 
             return meta?.href
-              ? <Link key={item.key} href={meta.href} data-usage={item.key} className={`${className} hover:border-[#84D0D9]/60 transition-colors`}>{body}</Link>
+              ? <Link key={item.key} href={meta.href} data-usage={item.key} className={`${className} hover:border-brand-soft/60 transition-colors`}>{body}</Link>
               : <div key={item.key} data-usage={item.key} className={className}>{body}</div>;
           })}
         </div>
 
         <section className={`${card} p-6 space-y-4`} data-card="plan">
-          <SectionTitle><CreditCard size={16} className="text-[#3F768C]" /> Tu plan</SectionTitle>
+          <SectionTitle><CreditCard size={16} className="text-brand-accent" /> Tu plan</SectionTitle>
           {subscription ? (
             <>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-2xl font-black text-[#022340] tracking-tight">{subscription.plan ?? 'Plan a medida'}</span>
+                <span className="text-2xl font-black text-brand-ink tracking-tight">{subscription.plan ?? 'Plan a medida'}</span>
                 <span data-status={subscription.status} className={`px-2.5 py-0.5 text-xs rounded-full font-medium ${status!.badge}`}>{status!.label}</span>
               </div>
               <p className="text-sm text-slate-600">
@@ -169,9 +169,9 @@ export default function CompanyProfile() {
         </section>
 
         <section className={`${card} p-6 space-y-4`} data-card="code">
-          <SectionTitle><KeyRound size={16} className="text-[#3F768C]" /> Código de empresa</SectionTitle>
+          <SectionTitle><KeyRound size={16} className="text-brand-accent" /> Código de empresa</SectionTitle>
           <div className="flex items-center justify-between gap-3">
-            <span className="font-mono text-2xl font-black text-[#022340] tracking-[0.25em]" data-code>{tenant.code}</span>
+            <span className="font-mono text-2xl font-black text-brand-ink tracking-[0.25em]" data-code>{tenant.code}</span>
             <button type="button" data-action="copy-code" onClick={copyCode} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
               {copied ? <><Check size={13} className="text-emerald-600" /> Copiado</> : <><Copy size={13} /> Copiar</>}
             </button>
@@ -182,22 +182,22 @@ export default function CompanyProfile() {
         </section>
 
         <section className={`${card} p-6 space-y-3 xl:col-span-3`} data-card="links">
-          <SectionTitle><Settings size={16} className="text-[#3F768C]" /> Lo demás de tu empresa</SectionTitle>
+          <SectionTitle><Settings size={16} className="text-brand-accent" /> Lo demás de tu empresa</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Sucursales', detail: 'Direcciones, horarios y salas', href: '/branches', icon: Store },
               { label: vocab.pros, detail: 'Tu equipo y sus horarios', href: '/professionals', icon: Users },
               { label: 'Configuración', detail: 'Módulos y nombres que usa tu equipo', href: '/settings', icon: Settings },
             ].map((item) => (
-              <Link key={item.href} href={item.href} className="flex items-center justify-between gap-3 p-3.5 bg-slate-50 hover:bg-[#84D0D9]/10 rounded-xl border border-slate-200/60 hover:border-[#84D0D9]/50 transition-colors group">
+              <Link key={item.href} href={item.href} className="flex items-center justify-between gap-3 p-3.5 bg-slate-50 hover:bg-brand-soft/10 rounded-xl border border-slate-200/60 hover:border-brand-soft/50 transition-colors group">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="p-2 bg-white rounded-lg text-[#3F768C] border border-slate-100"><item.icon size={16} /></span>
+                  <span className="p-2 bg-white rounded-lg text-brand-accent border border-slate-100"><item.icon size={16} /></span>
                   <div className="min-w-0">
                     <span className="block text-sm font-semibold text-slate-800">{item.label}</span>
                     <span className="block text-xs text-slate-500 truncate">{item.detail}</span>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-slate-400 group-hover:text-[#022340] shrink-0" />
+                <ChevronRight size={16} className="text-slate-400 group-hover:text-brand-ink shrink-0" />
               </Link>
             ))}
           </div>

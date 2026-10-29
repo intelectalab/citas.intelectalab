@@ -90,7 +90,7 @@ export default function Select({
             onClick={() => handleSelect(opt.value)}
             className={`px-3.5 py-2 text-sm cursor-pointer transition-colors truncate ${
               isSelected
-                ? 'bg-blue-50 text-[#022340] font-medium'
+                ? 'bg-blue-50 text-brand-ink font-medium'
                 : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -148,7 +148,7 @@ export default function Select({
             icon ? 'pl-9 pr-3' : 'px-3.5'
           } ${
             isOpen
-              ? 'border-[#022340] ring-2 ring-[#022340]/20'
+              ? 'border-brand ring-2 ring-brand/20'
               : 'border-slate-200 hover:border-slate-300'
           } ${error ? 'border-red-500 ring-red-200' : ''}`}
         >
@@ -175,7 +175,7 @@ export default function Select({
             title={addLabel ?? 'Agregar'}
             aria-label={addLabel ?? 'Agregar'}
             onClick={() => { setIsOpen(false); onAdd(); }}
-            className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+            className="shrink-0 p-2.5 bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
           >
             <Plus size={18} className="stroke-[2.5]" />
           </button>

@@ -59,7 +59,7 @@ export default function DateFilter({ label, value, onChange, future = false }: D
   const selectedTo = mode === 'range' ? (rangeStart ? null : value?.kind === 'range' ? value.to : null) : selectedFrom;
 
   const rowClass = (active: boolean) =>
-    `w-full text-left px-3.5 py-2 transition-colors ${active ? 'bg-[#84D0D9]/20' : 'hover:bg-slate-50'}`;
+    `w-full text-left px-3.5 py-2 transition-colors ${active ? 'bg-brand-soft/20' : 'hover:bg-slate-50'}`;
 
   return (
     <>
@@ -85,7 +85,7 @@ export default function DateFilter({ label, value, onChange, future = false }: D
         {mode === 'list' ? (
           <>
             <div className="p-2.5 border-b border-slate-100">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 focus-within:border-[#3F768C] transition-colors">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 focus-within:border-brand-accent transition-colors">
                 <input
                   autoFocus
                   value={query}
@@ -111,7 +111,7 @@ export default function DateFilter({ label, value, onChange, future = false }: D
                   onClick={() => apply({ kind: 'preset', id: preset.id })}
                   className={rowClass(value?.kind === 'preset' && value.id === preset.id)}
                 >
-                  <span className="block text-sm font-medium text-[#022340]">{preset.label}</span>
+                  <span className="block text-sm font-medium text-brand-ink">{preset.label}</span>
                   <span className="block text-xs text-slate-500 mt-0.5">{preset.hint}</span>
                 </button>
               ))}
@@ -121,16 +121,16 @@ export default function DateFilter({ label, value, onChange, future = false }: D
 
             <div className="border-t border-slate-100 py-1">
               <button type="button" data-date-option="day" onClick={() => setMode('day')} className={`${rowClass(value?.kind === 'day')} flex items-center gap-2.5`}>
-                <CalendarDays size={15} className="text-[#3F768C] shrink-0" />
+                <CalendarDays size={15} className="text-brand-accent shrink-0" />
                 <span>
-                  <span className="block text-sm font-medium text-[#022340]">Una fecha específica</span>
+                  <span className="block text-sm font-medium text-brand-ink">Una fecha específica</span>
                   {value?.kind === 'day' && <span className="block text-xs text-slate-500 mt-0.5">{formatDay(value.date)}</span>}
                 </span>
               </button>
               <button type="button" data-date-option="range" onClick={() => setMode('range')} className={`${rowClass(value?.kind === 'range')} flex items-center gap-2.5`}>
-                <CalendarRange size={15} className="text-[#3F768C] shrink-0" />
+                <CalendarRange size={15} className="text-brand-accent shrink-0" />
                 <span>
-                  <span className="block text-sm font-medium text-[#022340]">Entre dos fechas</span>
+                  <span className="block text-sm font-medium text-brand-ink">Entre dos fechas</span>
                   {value?.kind === 'range' && <span className="block text-xs text-slate-500 mt-0.5">{describeDateFilter(value)}</span>}
                 </span>
               </button>
@@ -138,7 +138,7 @@ export default function DateFilter({ label, value, onChange, future = false }: D
           </>
         ) : (
           <div className="p-3 min-h-0 overflow-y-auto select-scroll" data-date-calendar={mode}>
-            <button type="button" onClick={() => { setMode('list'); setRangeStart(null); }} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#3F768C] hover:text-[#022340] transition-colors">
+            <button type="button" onClick={() => { setMode('list'); setRangeStart(null); }} className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-accent hover:text-brand-ink transition-colors">
               <ArrowLeft size={13} /> Periodos
             </button>
 
@@ -154,7 +154,7 @@ export default function DateFilter({ label, value, onChange, future = false }: D
               <button type="button" aria-label="Mes anterior" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
                 <ChevronLeft size={15} />
               </button>
-              <span className="text-sm font-semibold text-[#022340] first-letter:uppercase" data-date-month>
+              <span className="text-sm font-semibold text-brand-ink first-letter:uppercase" data-date-month>
                 {cursor.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })}
               </span>
               <button type="button" aria-label="Mes siguiente" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
@@ -182,11 +182,11 @@ export default function DateFilter({ label, value, onChange, future = false }: D
                     onClick={() => pickDay(iso)}
                     className={`h-8 text-sm rounded-lg transition-colors ${
                       isEdge
-                        ? 'bg-[#022340] text-white font-semibold'
+                        ? 'bg-brand text-white font-semibold'
                         : inside
-                          ? 'bg-[#84D0D9]/25 text-[#022340]'
+                          ? 'bg-brand-soft/25 text-brand-ink'
                           : `${outside ? 'text-slate-300' : 'text-slate-700'} hover:bg-slate-100`
-                    } ${iso === today && !isEdge ? 'ring-1 ring-inset ring-[#3F768C]' : ''}`}
+                    } ${iso === today && !isEdge ? 'ring-1 ring-inset ring-brand-accent' : ''}`}
                   >
                     {date.getDate()}
                   </button>

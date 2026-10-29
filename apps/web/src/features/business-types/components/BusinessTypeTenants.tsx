@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Building2, Check, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
-import { MODULE_LABELS } from '@/lib/modules';
 
 interface TypeTenant {
   id: string;
@@ -12,8 +11,6 @@ interface TypeTenant {
   status: string;
   synced_at: string | null;
   outdated: string[];
-  modules_gained: string[];
-  modules_lost: string[];
 }
 
 interface BusinessTypeTenantsProps {
@@ -25,7 +22,6 @@ interface BusinessTypeTenantsProps {
 
 const PART_LABELS: Record<string, string> = {
   vocabulary: 'Vocabulario',
-  modules_off: 'Módulos',
   default_rules: 'Reglas',
   dependents: 'Dependientes',
 };
@@ -81,7 +77,7 @@ export default function BusinessTypeTenants({ businessTypeId, businessTypeName, 
             {outdated.length > 0 ? <RefreshCw size={18} /> : <ShieldCheck size={18} />}
           </span>
           <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-[#022340]">
+            <h2 className="text-sm font-extrabold text-brand-ink">
               {outdated.length > 0
                 ? `${outdated.length} de ${tenants.length} ${tenants.length === 1 ? 'empresa tiene' : 'empresas tienen'} cambios del rubro sin aplicar`
                 : `${tenants.length === 1 ? 'La empresa de este rubro está' : `Las ${tenants.length} empresas de este rubro están`} al día`}
@@ -97,7 +93,7 @@ export default function BusinessTypeTenants({ businessTypeId, businessTypeName, 
             type="button"
             disabled={selected.length === 0}
             onClick={() => setConfirming(true)}
-            className="px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer shrink-0"
+            className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer shrink-0"
           >
             Aplicar a {selected.length} {selected.length === 1 ? 'empresa' : 'empresas'} <ArrowRight size={15} />
           </button>
@@ -123,7 +119,7 @@ export default function BusinessTypeTenants({ businessTypeId, businessTypeName, 
                   checked={isSelected}
                   onChange={() => setSelected((prev) => (isSelected ? prev.filter((id) => id !== tenant.id) : [...prev, tenant.id]))}
                   aria-label={`Aplicar el rubro a ${tenant.name}`}
-                  className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                  className="rounded border-slate-300 text-brand-ink focus:ring-brand"
                 />
               ) : (
                 <Check size={16} className="text-emerald-500" />
@@ -147,16 +143,6 @@ export default function BusinessTypeTenants({ businessTypeId, businessTypeName, 
                       {PART_LABELS[part] ?? part}
                     </span>
                   ))}
-                  {tenant.modules_gained.map((key) => (
-                    <span key={`g-${key}`} className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-700" title="Lo recibiría si su plan lo incluye">
-                      + {MODULE_LABELS[key] ?? key}
-                    </span>
-                  ))}
-                  {tenant.modules_lost.map((key) => (
-                    <span key={`l-${key}`} className="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-[11px] font-medium text-rose-600" title="Dejaría de tenerlo">
-                      − {MODULE_LABELS[key] ?? key}
-                    </span>
-                  ))}
                 </div>
               ) : (
                 <span className="text-xs font-medium text-emerald-600">Al día</span>
@@ -173,15 +159,10 @@ export default function BusinessTypeTenants({ businessTypeId, businessTypeName, 
         message={
           <span className="block space-y-2 text-sm text-slate-600">
             <span className="block">
-              Recibirán el vocabulario, los módulos, las reglas y los dependientes del rubro tal como están ahora.
+              Recibirán el vocabulario, las reglas y los dependientes del rubro tal como están ahora. Sus módulos no cambian: los que empiezan apagados valen solo para las empresas nuevas.
             </span>
-            {tenants.some((tenant) => selected.includes(tenant.id) && tenant.modules_lost.length > 0) && (
-              <span className="block p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
-                Algunas dejarán de tener módulos que hoy usan. Revisa la lista antes de continuar.
-              </span>
-            )}
             <span className="block text-xs text-slate-500">
-              Lo que cada empresa cambió por su cuenta (su vocabulario propio, los módulos que apagó) se conserva. Queda registrado en la bitácora.
+              Lo que cada empresa cambió por su cuenta (su vocabulario propio, los módulos que encendió o apagó) se conserva. Queda registrado en la bitácora.
             </span>
           </span>
         }

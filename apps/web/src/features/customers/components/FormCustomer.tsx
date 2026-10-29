@@ -151,7 +151,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
     <FormDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? `Editar ${vocab.client}` : `Nuevo ${vocab.client}`}
+      title={isEditing ? `Editar ${vocab.client}` : `${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client}`}
       subtitle={`Complete la información personal y de contacto del ${clientLower}.`}
       icon={<User size={20} />}
     >
@@ -193,7 +193,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.code}
                             onChange={(e) => setForm({ ...form, code: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Ej. PAT-001"
                           />
                         </div>
@@ -204,7 +204,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             required
                             value={form.first_name}
                             onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Ej. Juliana"
                           />
                         </div>
@@ -215,7 +215,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             required
                             value={form.last_name}
                             onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Ej. Díaz"
                           />
                         </div>
@@ -271,7 +271,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.document_number}
                             onChange={(e) => setForm({ ...form, document_number: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Número de documento..."
                           />
                         </div>
@@ -286,7 +286,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="email"
                             value={form.email}
                             onChange={(e) => setForm({ ...form, email: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="correo@ejemplo.com"
                           />
                           <p className="text-xs text-slate-500 mt-1.5" data-hint="portal">
@@ -299,7 +299,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.phone}
                             onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="+51 ..."
                           />
                         </div>
@@ -309,7 +309,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.address}
                             onChange={(e) => setForm({ ...form, address: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Av. Principal 123"
                           />
                         </div>
@@ -319,7 +319,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.district}
                             onChange={(e) => setForm({ ...form, district: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Distrito"
                           />
                         </div>
@@ -329,7 +329,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.department}
                             onChange={(e) => setForm({ ...form, department: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Departamento"
                           />
                         </div>
@@ -339,7 +339,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.emergency_contact_name}
                             onChange={(e) => setForm({ ...form, emergency_contact_name: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="Nombre del contacto"
                           />
                         </div>
@@ -349,7 +349,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             type="text"
                             value={form.emergency_contact_phone}
                             onChange={(e) => setForm({ ...form, emergency_contact_phone: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder="+51 ..."
                           />
                         </div>
@@ -364,7 +364,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             rows={3}
                             value={form.medical_notes}
                             onChange={(e) => setForm({ ...form, medical_notes: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#030336]/20 focus:border-[#030336] outline-none"
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                             placeholder={clinical ? 'Alergias, antecedentes y otros datos relevantes...' : 'Preferencias o datos a tener en cuenta...'}
                           />
                         </div>
@@ -408,7 +408,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
           <button
             type="submit"
             disabled={loading}
-            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#030336] hover:bg-[#030336]/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+            className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-brand hover:bg-brand/90 rounded-lg transition-colors shadow-sm disabled:opacity-50"
           >
             {loading ? 'Guardando...' : isEditing ? `Actualizar ${clientLower}` : `Crear ${clientLower}`}
           </button>

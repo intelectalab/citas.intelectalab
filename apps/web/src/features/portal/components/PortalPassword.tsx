@@ -13,7 +13,7 @@ interface PortalPasswordProps {
 }
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
+  'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white';
 const labelClass = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
 
 export default function PortalPassword({ forced = false, onDone, onCancel }: PortalPasswordProps) {
@@ -47,9 +47,9 @@ export default function PortalPassword({ forced = false, onDone, onCancel }: Por
     <form onSubmit={submit} data-form="password" className={forced ? 'bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-5' : 'space-y-4 pt-1'}>
       {forced && (
         <div className="flex items-start gap-4">
-          <span className="p-2.5 bg-[#84D0D9]/20 text-[#022340] rounded-xl shrink-0"><KeyRound className="w-5 h-5" /></span>
+          <span className="p-2.5 bg-brand-soft/20 text-brand-ink rounded-xl shrink-0"><KeyRound className="w-5 h-5" /></span>
           <div className="space-y-1">
-            <h1 className="text-xl font-black text-[#022340] tracking-tight">Crea tu contraseña</h1>
+            <h1 className="text-xl font-black text-brand-ink tracking-tight">Crea tu contraseña</h1>
             <p className="text-sm text-slate-500 font-medium leading-relaxed">
               Entraste con tu número de documento. Antes de continuar, elige una contraseña que solo tú conozcas.
             </p>

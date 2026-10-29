@@ -9,7 +9,7 @@ export default function AccessHistory({ history, empty, note = 'Quién cambió s
   return (
     <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden" data-card="history">
       <div className="px-6 pt-5 pb-3">
-        <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340]"><History className="w-4 h-4 text-[#3F768C]" /> Historial de cambios</h2>
+        <h2 className="flex items-center gap-2 text-sm font-extrabold text-brand-ink"><History className="w-4 h-4 text-brand-accent" /> Historial de cambios</h2>
         <p className="text-xs text-slate-500 mt-1">{note}</p>
       </div>
       <PagedList

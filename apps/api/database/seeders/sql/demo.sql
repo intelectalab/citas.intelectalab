@@ -27,14 +27,13 @@ INSERT INTO tenants (id, name, slug, code, business_type_id, timezone, status) V
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380abb', 'Veterinaria Huellitas', 'veterinaria-huellitas', '69205784', 'b7000000-0000-0000-0000-000000000009', 'America/Lima', 'active')
 ON CONFLICT (slug) DO NOTHING;
 
-INSERT INTO tenant_settings (tenant_id)
-SELECT id FROM tenants
+INSERT INTO tenant_settings (tenant_id, modules_off)
+SELECT t.id, COALESCE(b.modules_off, '[]'::jsonb) FROM tenants AS t LEFT JOIN business_types AS b ON b.id = t.business_type_id
 ON CONFLICT (tenant_id) DO NOTHING;
 
 UPDATE tenants AS t SET
     business_profile = jsonb_build_object(
         'vocabulary', b.vocabulary,
-        'modules_off', b.modules_off,
         'default_rules', b.default_rules,
         'dependents', b.dependents
     ),

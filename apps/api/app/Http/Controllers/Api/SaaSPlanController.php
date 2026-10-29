@@ -75,6 +75,7 @@ class SaaSPlanController extends Controller
         }
 
         $plan = SaaSPlan::create($validated);
+        \App\Support\Audit::log($request, 'plan.created', ['entity_type' => 'plan', 'entity_id' => $plan->id, 'entity_label' => $plan->name]);
 
         return response()->json([
             'message' => 'Plan SaaS creado correctamente',
@@ -84,9 +85,25 @@ class SaaSPlanController extends Controller
 
     public function show($id)
     {
-        $plan = SaaSPlan::with('subscriptions')->findOrFail($id);
+        $plan = SaaSPlan::findOrFail($id);
 
-        return response()->json($plan);
+        $tenants = \Illuminate\Support\Facades\DB::table('subscriptions as s')
+            ->join('tenants as t', 't.id', '=', 's.tenant_id')
+            ->where('s.plan_id', $plan->id)
+            ->whereIn('s.status', ['active', 'trialing'])
+            ->whereNull('t.deleted_at')
+            ->orderBy('t.name')
+            ->get(['t.id', 't.name', 't.status', 's.status as subscription_status', 's.billing_cycle'])
+            ->map(fn ($row) => [
+                'id'                  => $row->id,
+                'name'                => $row->name,
+                'status'              => $row->status,
+                'subscription_status' => $row->subscription_status,
+                'billing_cycle'       => $row->billing_cycle,
+            ])
+            ->values();
+
+        return response()->json($plan->toArray() + ['tenants' => $tenants]);
     }
 
     public function update(Request $request, $id)
@@ -117,7 +134,12 @@ class SaaSPlanController extends Controller
             $validated['slug'] = Str::slug($validated['name']);
         }
 
+        [$was, $now] = \App\Support\Audit::changed($plan->only(array_keys($validated)), $validated);
         $plan->update($validated);
+
+        if ($now) {
+            \App\Support\Audit::log($request, 'plan.updated', ['entity_type' => 'plan', 'entity_id' => $plan->id, 'entity_label' => $plan->name, 'before' => $was, 'after' => $now]);
+        }
 
         return response()->json([
             'message' => 'Plan SaaS actualizado correctamente',
@@ -125,7 +147,7 @@ class SaaSPlanController extends Controller
         ]);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $plan = SaaSPlan::findOrFail($id);
         
@@ -136,6 +158,7 @@ class SaaSPlanController extends Controller
         }
 
         $plan->delete();
+        \App\Support\Audit::log($request, 'plan.deleted', ['entity_type' => 'plan', 'entity_id' => $plan->id, 'entity_label' => $plan->name]);
 
         return response()->json([
             'message' => 'Plan SaaS eliminado correctamente'

@@ -45,15 +45,15 @@ export default function Unsubscribe() {
         {error && !data && (
           <>
             <span className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center"><MailX size={26} /></span>
-            <h1 className="text-xl font-extrabold text-[#022340] mb-2">Enlace no válido</h1>
+            <h1 className="text-xl font-extrabold text-brand-ink mb-2">Enlace no válido</h1>
             <p className="text-sm text-slate-500">{error}</p>
           </>
         )}
 
         {data && !data.unsubscribed && (
           <>
-            <span className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-[#84D0D9]/25 text-[#3F768C] flex items-center justify-center"><MailX size={26} /></span>
-            <h1 className="text-xl font-extrabold text-[#022340] mb-2">¿Dejar de recibir promociones?</h1>
+            <span className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-brand-soft/25 text-brand-accent flex items-center justify-center"><MailX size={26} /></span>
+            <h1 className="text-xl font-extrabold text-brand-ink mb-2">¿Dejar de recibir promociones?</h1>
             <p className="text-sm text-slate-500 leading-relaxed mb-6">
               Hola {data.name}: si confirmas, {data.company} ya no te enviará promociones por correo. Seguirás recibiendo los avisos de tus citas y tus comprobantes.
             </p>
@@ -67,7 +67,7 @@ export default function Unsubscribe() {
         {data && data.unsubscribed && (
           <>
             <span className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><CheckCircle2 size={26} /></span>
-            <h1 className="text-xl font-extrabold text-[#022340] mb-2" data-done>Listo, {data.name}</h1>
+            <h1 className="text-xl font-extrabold text-brand-ink mb-2" data-done>Listo, {data.name}</h1>
             <p className="text-sm text-slate-500 leading-relaxed">
               {data.company} ya no te enviará promociones por correo. Si cambias de opinión, puedes volver a aceptarlas desde tu portal o pidiéndolo en la sede.
             </p>

@@ -15,6 +15,8 @@ import PermissionGrid from './PermissionGrid';
 import CredentialsNote from './CredentialsNote';
 import AccessSummary from './AccessSummary';
 import AccessHistory from './AccessHistory';
+import RecentAuditCard from '@/features/audit/components/RecentAuditCard';
+import { useAuth } from '@/hooks/useAuth';
 import { momentOf } from '@/features/sales/sales';
 import { NO_BRANCH_NOTE, countOverride, entersModule, initialsOf, type AccessChange, type AdminOnlyScreen, type BranchOption, type GridAction, type GridModule, type RoleOption, type StaffUser } from '../access';
 
@@ -33,7 +35,7 @@ interface Detail {
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340]';
+const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-brand-ink';
 const smallLabel = 'text-[11px] font-bold text-slate-400';
 
 const FOCUS_TITLES: Record<string, string> = {
@@ -45,6 +47,7 @@ const FOCUS_TITLES: Record<string, string> = {
 
 export default function UserAccessDetail() {
   const params = useParams<{ id: string }>();
+  const { can } = useAuth();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -107,7 +110,7 @@ export default function UserAccessDetail() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -167,9 +170,9 @@ export default function UserAccessDetail() {
         <section className={`${card} p-6 space-y-5`} data-card="user">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-12 h-12 rounded-2xl bg-[#022340] text-[#84D0D9] flex items-center justify-center text-base font-black shrink-0">{initialsOf(user.name)}</span>
+              <span className="w-12 h-12 rounded-2xl bg-brand text-brand-soft flex items-center justify-center text-base font-black shrink-0">{initialsOf(user.name)}</span>
               <div className="min-w-0">
-                <h1 className="text-xl font-black text-[#022340] tracking-tight truncate">{user.name}</h1>
+                <h1 className="text-xl font-black text-brand-ink tracking-tight truncate">{user.name}</h1>
                 <p className="text-xs text-slate-500">
                   {user.role?.name ?? 'Sin rol'}{user.created_at ? ` · desde ${formatDate(user.created_at.slice(0, 10), { month: 'long', year: 'numeric' })}` : ''}
                 </p>
@@ -186,7 +189,7 @@ export default function UserAccessDetail() {
             <Badge data-status={user.status} tone={inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} className="inline-flex">
               {inactive ? 'Desactivado' : 'Activo'}
             </Badge>
-            {user.is_owner && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-[#84D0D9]/25 text-[#022340]">Dueño de la empresa</span>}
+            {user.is_owner && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-brand-soft/25 text-brand-ink">Dueño de la empresa</span>}
             {user.is_self && <span className="inline-flex px-2.5 py-1 text-xs rounded-full font-medium bg-slate-100 text-slate-600">Tu cuenta</span>}
           </div>
 
@@ -208,17 +211,17 @@ export default function UserAccessDetail() {
 
           <div className="pt-4 border-t border-slate-100 space-y-2">
             {user.role && (
-              <Link href={`/users/roles/${user.role.id}`} data-action="open-role" className="flex items-center gap-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <Link href={`/users/roles/${user.role.id}`} data-action="open-role" className="flex items-center gap-2 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 <ShieldCheck size={15} /> Ver el rol {user.role.name}
               </Link>
             )}
             {user.professional_id && (
-              <Link href={`/professionals/${user.professional_id}`} className="flex items-center gap-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <Link href={`/professionals/${user.professional_id}`} className="flex items-center gap-2 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 <Contact size={15} /> Atiende citas: ver su horario y sus citas
               </Link>
             )}
             {detail.can_edit && !user.is_owner && !user.is_self && (
-              <button type="button" data-action="new-password" onClick={() => { setError(''); setNotice(''); setConfirm('password'); }} className="flex items-center gap-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+              <button type="button" data-action="new-password" onClick={() => { setError(''); setNotice(''); setConfirm('password'); }} className="flex items-center gap-2 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 <KeyRound size={15} /> Darle una contraseña nueva
               </button>
             )}
@@ -236,7 +239,7 @@ export default function UserAccessDetail() {
                 title="Ver cuáles son"
                 onClick={() => setFocus((current) => (current === stat.id ? '' : stat.id))}
                 className={`bg-white px-4 py-3 rounded-2xl border text-left shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
-                  focus === stat.id ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'border-slate-100 hover:border-slate-200'
+                  focus === stat.id ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'border-slate-100 hover:border-slate-200'
                 }`}
               >
                 <span className="flex items-start justify-between gap-2">
@@ -257,7 +260,7 @@ export default function UserAccessDetail() {
         <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="permissions">
           <div className="px-6 pt-5 pb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-[#3F768C]" /> {focus ? FOCUS_TITLES[focus] : 'Qué puede hacer, pantalla por pantalla'}</h2>
+              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-brand-accent" /> {focus ? FOCUS_TITLES[focus] : 'Qué puede hacer, pantalla por pantalla'}</h2>
               <p className="text-xs text-slate-500 font-medium mt-1 max-w-3xl">
                 {detail.locked
                   ? detail.locked
@@ -266,12 +269,12 @@ export default function UserAccessDetail() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {focus && (
-                <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
                   Ver todas las pantallas
                 </button>
               )}
               {canChange && granted + revoked > 0 && (
-                <button type="button" data-action="reset-permissions" onClick={() => { setError(''); setNotice(''); setConfirm('reset'); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors">
+                <button type="button" data-action="reset-permissions" onClick={() => { setError(''); setNotice(''); setConfirm('reset'); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors">
                   <RotateCcw size={13} /> Volver a lo de su rol
                 </button>
               )}
@@ -293,6 +296,19 @@ export default function UserAccessDetail() {
         <div className="xl:col-span-3">
           <AccessHistory history={detail.history ?? []} empty={`Todavía no hay cambios registrados para ${user.first_name}.`} />
         </div>
+
+        {can('audit.view') && (
+          <RecentAuditCard
+            endpoint="/audit"
+            params={{ actor_id: String(user.id) }}
+            title={`Últimas acciones de ${user.first_name}`}
+            allHref={`/audit?actor_id=${user.id}`}
+            empty={`${user.first_name} todavía no tiene acciones registradas.`}
+            className={`${card} p-6 xl:col-span-3`}
+            showActor={false}
+            refreshKey={detail}
+          />
+        )}
       </div>
 
       <FormUser

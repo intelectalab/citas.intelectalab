@@ -5,7 +5,7 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarSearch, Edit2, Eye, Hourglass, PhoneCall, RotateCcw, Star, UserRound, XCircle } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -173,11 +173,36 @@ export default function WaitlistTable() {
       : []),
   ];
 
+  const exportColumns: ExportColumn<WaitlistEntry>[] = [
+    ...(view === 'open' ? [{ header: 'Puesto', type: 'number' as const, value: (e: WaitlistEntry) => position(e) }] : []),
+    { header: 'Prioritario', value: (e) => (e.priority ? 'Sí' : 'No') },
+    { header: vocab.client, value: (e) => e.customer?.name ?? '' },
+    { header: 'Teléfono', value: (e) => e.customer?.phone ?? '' },
+    { header: 'Correo', value: (e) => e.customer?.email ?? '' },
+    ...(usesDependents ? [{ header: vocab.dependent, value: (e: WaitlistEntry) => e.dependent?.name ?? '' }] : []),
+    { header: 'Servicio', value: (e) => e.service?.name ?? '' },
+    { header: vocab.pro, value: (e) => e.professional?.display_name ?? `Cualquier ${vocab.pro.toLowerCase()}` },
+    ...((context?.branches.length ?? 0) > 1 ? [{ header: 'Sede', value: (e: WaitlistEntry) => e.branch?.name ?? '' }] : []),
+    { header: 'Le sirve desde', type: 'date', value: (e) => e.date_from },
+    { header: 'Le sirve hasta', type: 'date', value: (e) => e.date_to },
+    { header: 'Horario que le sirve', value: (e) => timeRangeLabel(e) },
+    { header: 'Notas', value: (e) => e.notes ?? '' },
+    { header: 'Anotado el', type: 'date', value: (e) => e.created_at },
+    { header: 'Días en espera', type: 'number', value: (e) => e.days_waiting },
+    ...(view === 'open' ? [{ header: 'Días que le quedan', type: 'number' as const, value: (e: WaitlistEntry) => e.days_left }] : []),
+    { header: 'Estado', value: (e) => e.status_name },
+    ...(view === 'booked' ? [
+      { header: 'Cita', value: (e: WaitlistEntry) => e.appointment?.code ?? '' },
+      { header: 'Fecha de la cita', type: 'datetime' as const, value: (e: WaitlistEntry) => e.appointment?.starts_at },
+      { header: 'Estado de la cita', value: (e: WaitlistEntry) => e.appointment?.status_name ?? '' },
+    ] : []),
+  ];
+
   const columns: Column<WaitlistEntry>[] = [
     ...(view === 'open' ? [{
       header: 'Puesto',
       cell: (e: WaitlistEntry) => (
-        <span key={`pos-${e.id}`} className="inline-flex items-center gap-1.5 text-sm font-bold font-mono text-[#022340]" data-position={position(e)}>
+        <span key={`pos-${e.id}`} className="inline-flex items-center gap-1.5 text-sm font-bold font-mono text-brand-ink" data-position={position(e)}>
           {position(e)}
           {e.priority && <Star size={14} className="text-amber-500 fill-amber-400" aria-label="Prioritario" />}
         </span>
@@ -188,7 +213,7 @@ export default function WaitlistTable() {
       cell: (e) => (
         <div key={`customer-${e.id}`}>
           {e.customer ? (
-            <Link href={`/customers/${e.customer.id}`} className={`${styles.customerName} hover:text-[#3F768C] transition-colors`}>
+            <Link href={`/customers/${e.customer.id}`} className={`${styles.customerName} hover:text-brand-accent transition-colors`}>
               {e.customer.name}
             </Link>
           ) : <span className={styles.customerName}>—</span>}
@@ -257,7 +282,7 @@ export default function WaitlistTable() {
 
         if (view === 'closed') {
           return e.status === 'cancelled' && can('waitlist.edit') ? (
-            <button key={`actions-${e.id}`} data-reopen={e.id} title="Volver a ponerlo en espera" disabled={busy} onClick={() => changeStatus(e, 'waiting')} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            <button key={`actions-${e.id}`} data-reopen={e.id} title="Volver a ponerlo en espera" disabled={busy} onClick={() => changeStatus(e, 'waiting')} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
               <RotateCcw size={16} />
             </button>
           ) : <span key={`actions-${e.id}`} className="text-sm text-slate-300">—</span>;
@@ -270,7 +295,7 @@ export default function WaitlistTable() {
               data-find={e.id}
               disabled={busy}
               onClick={() => findSlots(e)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               <CalendarSearch size={14} /> Buscar horario
             </button>)}
@@ -284,7 +309,7 @@ export default function WaitlistTable() {
             >
               <PhoneCall size={16} />
             </button>)}
-            {can('waitlist.edit') && (<button title="Editar" onClick={() => { setEditing(e); setFormOpen(true); }} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+            {can('waitlist.edit') && (<button title="Editar" onClick={() => { setEditing(e); setFormOpen(true); }} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
               <Edit2 size={16} />
             </button>)}
             {can('waitlist.edit') && (<button data-remove={e.id} title="Retirar de la lista" onClick={() => setRemoving(e)} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
@@ -314,6 +339,9 @@ export default function WaitlistTable() {
           filterValues={filters}
           onFilterChange={(id, value) => setFilters((current) => ({ ...current, [id]: value }))}
           columns={columns}
+          exportTitle="Lista de espera"
+          exportScreen="waitlist"
+          exportColumns={exportColumns}
           dateFilters={[
             { id: 'created_at', label: 'Anotado el', value: (e) => e.created_at },
             { id: 'date_from', label: 'Le sirve desde', future: true, value: (e) => e.date_from, end: (e) => e.date_to ?? '9999-12-31' },
@@ -368,7 +396,7 @@ export default function WaitlistTable() {
                 <p className="text-sm text-slate-600">Elige un horario para abrir la cita con sus datos ya puestos.</p>
                 {slotDays.map((day) => (
                   <section key={day.date} className="space-y-2" data-slot-day={day.date}>
-                    <h4 className="text-sm font-extrabold text-[#022340] first-letter:uppercase">
+                    <h4 className="text-sm font-extrabold text-brand-ink first-letter:uppercase">
                       {formatDate(day.date, { weekday: 'long', day: 'numeric', month: 'long' })}
                     </h4>
                     {day.groups.map((group) => (
@@ -381,7 +409,7 @@ export default function WaitlistTable() {
                               type="button"
                               data-slot={`${day.date}T${slot}`}
                               onClick={() => book(finding, day.date, slot, group.professional.id)}
-                              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border bg-white text-slate-700 border-slate-200 hover:border-[#3F768C] hover:text-[#022340] transition-colors"
+                              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border bg-white text-slate-700 border-slate-200 hover:border-brand-accent hover:text-brand-ink transition-colors"
                             >
                               {slot}
                             </button>

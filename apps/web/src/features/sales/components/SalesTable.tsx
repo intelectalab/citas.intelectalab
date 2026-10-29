@@ -95,8 +95,8 @@ export default function SalesTable() {
       title: `Vendido hoy · ${todays.length} ${todays.length === 1 ? 'venta' : 'ventas'}`,
       value: money(todays.reduce((sum, s) => sum + s.total - s.refunded, 0)),
       icon: <Receipt size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: card('all', 'border-[#3F768C] ring-2 ring-[#3F768C]/20'),
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: card('all', 'border-brand-accent ring-2 ring-brand-accent/20'),
       onClick: () => setView('all'),
     },
     {
@@ -124,10 +124,10 @@ export default function SalesTable() {
     { header: 'Sede', value: (s) => s.branch_name },
     { header: 'Detalle', value: (s) => s.detail },
     { header: 'Cita', value: (s) => s.appointment_code },
-    { header: 'Total', type: 'money', value: (s) => s.total },
-    { header: 'Pagado', type: 'money', value: (s) => s.paid },
-    { header: 'Falta', type: 'money', value: (s) => (s.status === 'void' ? 0 : s.balance) },
-    { header: 'Devuelto', type: 'money', value: (s) => s.refunded },
+    { header: 'Total', type: 'money', total: true, value: (s) => s.total },
+    { header: 'Pagado', type: 'money', total: true, value: (s) => s.paid },
+    { header: 'Falta', type: 'money', total: true, value: (s) => (s.status === 'void' ? 0 : s.balance) },
+    { header: 'Devuelto', type: 'money', total: true, value: (s) => s.refunded },
     { header: 'Comprobante', value: (s) => s.invoice_number },
     { header: 'Tipo de comprobante', value: (s) => s.invoice_label },
     { header: 'Estado', value: (s) => s.status_label },
@@ -138,7 +138,7 @@ export default function SalesTable() {
       header: 'Venta',
       cell: (sale) => (
         <div key={`code-${sale.id}`}>
-          <button type="button" data-view={sale.unbilled ? sale.appointment_code ?? '' : sale.code} onClick={() => (sale.unbilled ? setCharging(sale) : setViewing(sale.id))} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left tabular-nums`}>
+          <button type="button" data-view={sale.unbilled ? sale.appointment_code ?? '' : sale.code} onClick={() => (sale.unbilled ? setCharging(sale) : setViewing(sale.id))} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left tabular-nums`}>
             {sale.unbilled ? `Cobrar ${sale.appointment_code ?? 'cita'}` : sale.code}
           </button>
           <span className="block text-xs text-slate-400">{momentOf(sale.created_at)}</span>
@@ -195,7 +195,7 @@ export default function SalesTable() {
     {
       header: 'Acciones',
       cell: (sale) => (
-        <button key={`actions-${sale.id}`} title={sale.unbilled ? 'Cobrar la cita' : `Ver la venta ${sale.code}`} onClick={() => (sale.unbilled ? setCharging(sale) : setViewing(sale.id))} className="p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:bg-slate-100 transition-colors">
+        <button key={`actions-${sale.id}`} title={sale.unbilled ? 'Cobrar la cita' : `Ver la venta ${sale.code}`} onClick={() => (sale.unbilled ? setCharging(sale) : setViewing(sale.id))} className="p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors">
           <Eye size={16} />
         </button>
       ),

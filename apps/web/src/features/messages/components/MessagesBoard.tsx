@@ -6,7 +6,7 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarClock, Eye, Mail, MailCheck, RefreshCw, Send } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { CustomerLink } from '@/app/components/common/PersonLink';
@@ -66,7 +66,7 @@ export function MessageDetail({ message, can, onClose, onChanged, onEdit }: {
           </dl>
 
           <div className="rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-[#022340]">{message.subject}</div>
+            <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-brand-ink">{message.subject}</div>
             <RichTextView body={message.body} className="px-5 py-4 text-sm text-slate-700" data-message-body />
           </div>
 
@@ -81,7 +81,7 @@ export function MessageDetail({ message, can, onClose, onChanged, onEdit }: {
                 <button type="button" data-action="cancel-message" disabled={busy} onClick={() => act('cancel', () => 'El mensaje se canceló: ya no saldrá.')} className="px-4 py-2 text-sm font-semibold border border-rose-200 rounded-lg text-rose-700 hover:bg-rose-50 disabled:opacity-50">Cancelar envío</button>
               )}
               {message.retryable && (
-                <button type="button" data-action="retry-message" disabled={busy} onClick={() => act('retry', (m) => (m.status === 'failed' || m.status === 'not_sent' ? m.error ?? 'Volvió a fallar.' : `Reintento: ${m.status_label.toLowerCase()}.`))} className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] disabled:opacity-50">
+                <button type="button" data-action="retry-message" disabled={busy} onClick={() => act('retry', (m) => (m.status === 'failed' || m.status === 'not_sent' ? m.error ?? 'Volvió a fallar.' : `Reintento: ${m.status_label.toLowerCase()}.`))} className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover disabled:opacity-50">
                   <RefreshCw size={14} /> Reintentar
                 </button>
               )}
@@ -183,7 +183,7 @@ export default function MessagesBoard() {
       header: 'Mensaje',
       cell: (m) => (
         <div key={`subject-${m.id}`} className="min-w-0 max-w-md">
-          <button type="button" data-open-message={m.subject ?? ''} onClick={() => setDetail(m)} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left truncate block max-w-full`}>{m.subject ?? '(sin asunto)'}</button>
+          <button type="button" data-open-message={m.subject ?? ''} onClick={() => setDetail(m)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left truncate block max-w-full`}>{m.subject ?? '(sin asunto)'}</button>
           <span className="block text-xs text-slate-400">{m.kind_label}</span>
         </div>
       ),
@@ -200,11 +200,25 @@ export default function MessagesBoard() {
     {
       header: 'Acciones',
       cell: (m) => (
-        <button key={`actions-${m.id}`} type="button" title="Ver el mensaje" onClick={() => setDetail(m)} className="p-1.5 text-slate-400 rounded-lg hover:text-[#022340] hover:bg-slate-100 transition-colors">
+        <button key={`actions-${m.id}`} type="button" title="Ver el mensaje" onClick={() => setDetail(m)} className="p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors">
           <Eye size={16} />
         </button>
       ),
     },
+  ];
+
+  const exportColumns: ExportColumn<Message>[] = [
+    { header: 'Creado', type: 'datetime', value: (m) => m.created_at },
+    { header: 'Programado para', type: 'datetime', value: (m) => m.scheduled_at },
+    { header: 'Enviado', type: 'datetime', value: (m) => m.sent_at },
+    { header: 'Cliente', value: (m) => m.customer?.name ?? m.to_name },
+    { header: 'Correo', value: (m) => m.to },
+    { header: 'Asunto', value: (m) => m.subject },
+    { header: 'Tipo', value: (m) => m.kind_label },
+    { header: 'Estado', value: (m) => m.status_label },
+    { header: 'Motivo del problema', value: (m) => (PROBLEMS.includes(m.status) ? m.error : null) },
+    { header: 'Intentos', type: 'number', value: (m) => m.attempts },
+    { header: 'Escrito por', value: (m) => m.by },
   ];
 
   const filterConfigs: FilterConfig[] = [
@@ -248,6 +262,9 @@ export default function MessagesBoard() {
         ]}
         columns={columns}
         data={rows}
+        exportTitle="Mensajes"
+        exportScreen="messages"
+        exportColumns={exportColumns}
         getItemKey={(m) => m.id}
         entityLabel={rows.length === 1 ? 'mensaje' : 'mensajes'}
         metricCards={metricCards}

@@ -21,7 +21,15 @@ class Sales
         'plin'     => 'Plin',
     ];
 
-    public const OTHER_METHODS = ['link' => 'Link de pago', 'deposit' => 'Adelanto en línea', 'gateway' => 'Devolución por la pasarela'];
+    public const OTHER_METHODS = [
+        'link'      => 'Link de pago',
+        'deposit'   => 'Adelanto en línea',
+        'gateway'   => 'Devolución por la pasarela',
+        'gift_card' => 'Gift card',
+        'points'    => 'Puntos',
+    ];
+
+    public const LOYALTY_METHODS = ['gift_card', 'points'];
 
     public const NEEDS_REFERENCE = ['card', 'transfer', 'yape', 'plin'];
 
@@ -125,7 +133,7 @@ class Sales
             'branch_id'          => $appointment->branch_id,
             'customer_id'        => $appointment->customer_id,
             'appointment_id'     => $appointment->id,
-            'code'               => sprintf('V-%06d', self::nextNumber($tenant->id, 'sale')),
+            'code'               => Codes::next($tenant->id, 'sale'),
             'status'             => 'pending',
             'subtotal'           => $totals['subtotal'],
             'discount'           => $totals['discount'],
@@ -186,14 +194,29 @@ class Sales
             throw ValidationException::withMessages(['amount' => 'El monto debe ser mayor que cero y no pasar el saldo de ' . Currency::format($balance, $sale->currency ?? null) . '.']);
         }
 
-        if (!$rules['partial_payments'] && $amount < $balance) {
+        if (!$rules['partial_payments'] && $amount < $balance && !in_array($method, self::LOYALTY_METHODS, true) && !Quotes::isQuoteSale($sale)) {
             throw ValidationException::withMessages(['amount' => 'Tu empresa no admite pagos parciales: cobra el total de ' . Currency::format($balance, $sale->currency ?? null) . '.']);
+        }
+
+        if ($sale->branch_id && round((float) $sale->paid + $amount, 2) >= round((float) $sale->total - 0.001, 2)) {
+            Inventory::assertStockForItems(
+                $tenant,
+                $sale->branch_id,
+                DB::table('sale_items')->where('sale_id', $sale->id)->get(['item_type', 'reference_id', 'quantity']),
+                'amount',
+            );
         }
 
         $reference = trim((string) ($data['reference'] ?? '')) ?: null;
 
         if (in_array($method, self::NEEDS_REFERENCE, true) && !$reference) {
             throw ValidationException::withMessages(['reference' => 'Escribe el número de operación o voucher.']);
+        }
+
+        if ($method === 'gift_card') {
+            $reference = Loyalty::payWithGiftCard($tenant, $sale, $amount, $reference, $user);
+        } elseif ($method === 'points') {
+            $reference = Loyalty::payWithPoints($tenant, $sale, $amount, $user);
         }
 
         $session = null;
@@ -263,15 +286,38 @@ class Sales
         ]);
 
         $sale = DB::table('sales')->where('id', $sale->id)->first();
+        self::auditPayment($tenant->id, $sale, $method, $amount, $reference);
         PaymentLinks::cancelForSale($sale->id, 'Se cobró en la sede.');
         $packages = [];
 
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, $doc, $user);
             $packages = Packages::issueForSale($tenant, $sale, $user);
+            Inventory::deductForSale($tenant, $sale, $user);
+            Loyalty::earnForSale($tenant, $sale, $user);
         }
 
         return ['sale' => $sale, 'duplicate' => false, 'change' => $change, 'packages' => $packages];
+    }
+
+    public static function auditPayment(string $tenantId, object $sale, string $method, float $amount, ?string $reference = null, array $options = []): void
+    {
+        $customer = $sale->customer_id ? DB::table('customers')->where('id', $sale->customer_id)->first(['first_name', 'last_name']) : null;
+
+        Audit::log(request(), 'payment.registered', $options + [
+            'tenant'       => $tenantId,
+            'entity_type'  => 'sale',
+            'entity_id'    => $sale->id,
+            'entity_label' => $sale->code,
+            'branch_id'    => $sale->branch_id,
+            'after'        => array_filter([
+                'amount'    => $amount,
+                'method'    => (self::METHODS + self::OTHER_METHODS)[$method] ?? $method,
+                'customer'  => Person::name($customer) ?: null,
+                'reference' => $reference,
+                'balance'   => round((float) $sale->balance, 2),
+            ], fn ($value) => $value !== null),
+        ]);
     }
 
     public static function label(object $sale): string

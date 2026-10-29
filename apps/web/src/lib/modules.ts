@@ -18,6 +18,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
     key: 'care',
     title: 'Atención',
     items: [
+      { key: 'quotes', label: 'Presupuestos', hint: 'Preparar presupuestos para que el cliente los apruebe antes de atenderse' },
       { key: 'records', label: 'Fichas de atención', hint: 'Llenar la ficha de cada atención y ver la historia del cliente' },
     ],
   },
@@ -32,20 +33,31 @@ export const MODULE_GROUPS: ModuleGroup[] = [
     key: 'sales',
     title: 'Ventas',
     items: [
-      { key: 'pos', label: 'Punto de venta y caja', hint: 'Cobrar citas y productos, abrir y cerrar caja, y usar cupones' },
+      { key: 'pos', label: 'Punto de venta y caja', hint: 'Cobrar citas, servicios y paquetes, abrir y cerrar caja, y usar cupones. Para vender productos hace falta Inventario' },
       { key: 'invoicing', label: 'Facturación electrónica', hint: 'Emitir boletas y facturas en cada venta' },
-      { key: 'quotes', label: 'Presupuestos', hint: 'Preparar presupuestos para que el cliente los apruebe antes de atenderse' },
       { key: 'commissions', label: 'Comisiones', hint: 'Calcular lo que gana cada profesional por sus atenciones o ventas' },
-      { key: 'inventory', label: 'Inventario', hint: 'Controlar el stock de productos e insumos' },
+    ],
+  },
+  {
+    key: 'inventory',
+    title: 'Inventario',
+    items: [
+      { key: 'inventory', label: 'Inventario', hint: 'Registrar y vender productos, y llevar su stock por sede, con kárdex, compras a proveedores y traslados entre sedes' },
     ],
   },
   {
     key: 'loyalty',
     title: 'Fidelización',
     items: [
-      { key: 'packages', label: 'Paquetes', hint: 'Vender varias sesiones juntas, por ejemplo 10 sesiones de fisioterapia, y descontar cada visita' },
       { key: 'memberships', label: 'Membresías', hint: 'Cobrar un pago mensual que da beneficios al cliente' },
+      { key: 'packages', label: 'Paquetes', hint: 'Vender varias sesiones juntas, por ejemplo 10 sesiones de fisioterapia, y descontar cada visita' },
       { key: 'loyalty', label: 'Puntos y gift cards', hint: 'Premiar con puntos a los clientes que vuelven y vender tarjetas de regalo' },
+    ],
+  },
+  {
+    key: 'marketing',
+    title: 'Marketing',
+    items: [
       { key: 'marketing', label: 'Campañas', hint: 'Enviar correos de promoción a un grupo de clientes' },
       { key: 'automations', label: 'Automatizaciones', hint: 'Mensajes que salen solos, por ejemplo en el cumpleaños o cuando un cliente deja de venir' },
     ],

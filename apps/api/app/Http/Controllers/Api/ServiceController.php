@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Service;
 use App\Models\Status;
+use App\Support\Audit;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -143,6 +144,7 @@ class ServiceController extends Controller
         $validated['buffer_after_minutes'] = $validated['buffer_after_minutes'] ?? 0;
 
         $service = Service::create($validated);
+        $this->audit($request, 'service.created', $service, [], array_filter($this->auditable($service->fresh()), fn ($value) => $value !== null && $value !== false));
 
         return response()->json($service->load('category'), 201);
     }
@@ -160,7 +162,13 @@ class ServiceController extends Controller
             return $this->classesDisabled();
         }
 
+        $previous = $this->auditable($service);
         $service->update($this->normalize($validated, $service));
+        [$before, $after] = Audit::changed($previous, $this->auditable($service->fresh()));
+
+        if ($after) {
+            $this->audit($request, 'service.updated', $service, $before, $after);
+        }
 
         return response()->json($service->load(['category', 'status']));
     }
@@ -171,8 +179,56 @@ class ServiceController extends Controller
 
         $service = Service::where('tenant_id', $currentUser->tenant_id)->findOrFail($id);
         $service->delete();
+        Audit::log($request, 'service.deleted', [
+            'tenant'       => $currentUser->tenant_id,
+            'entity_type'  => 'service',
+            'entity_id'    => $service->id,
+            'entity_label' => $service->name,
+        ]);
 
         return response()->json(['message' => 'Servicio eliminado correctamente']);
+    }
+
+    private function auditable(Service $service): array
+    {
+        $deposit = null;
+
+        if ($service->requires_deposit) {
+            $deposit = ($service->deposit_type ?? 'percent') === 'amount'
+                ? (float) $service->deposit_value
+                : rtrim(rtrim(number_format((float) ($service->deposit_value ?? 0), 2, '.', ''), '0'), '.') . ' %';
+        }
+
+        return [
+            'name'                  => $service->name,
+            'code'                  => $service->code,
+            'category'              => $service->category_id ? \App\Models\ServiceCategory::where('id', $service->category_id)->value('name') : null,
+            'duration_minutes'      => (int) $service->duration_minutes,
+            'buffer_before_minutes' => (int) $service->buffer_before_minutes,
+            'buffer_after_minutes'  => (int) $service->buffer_after_minutes,
+            'price'                 => (float) $service->price,
+            'status'                => $service->status_id ? Status::where('id', $service->status_id)->value('name') : null,
+            'online_booking'        => (bool) $service->online_booking,
+            'is_virtual'            => (bool) $service->is_virtual,
+            'service_kind'          => $service->kind === Service::KIND_GROUP ? 'Grupal' : 'Individual',
+            'capacity'              => (int) $service->capacity,
+            'deposit'               => $deposit,
+            'recall_label'          => $service->recall_label,
+            'recall_days'           => $service->recall_days,
+            'recall_service'        => $service->recall_service_id ? Service::where('id', $service->recall_service_id)->value('name') : null,
+        ];
+    }
+
+    private function audit(Request $request, string $action, Service $service, array $before, array $after): void
+    {
+        Audit::log($request, $action, [
+            'tenant'       => $request->user()->tenant_id,
+            'entity_type'  => 'service',
+            'entity_id'    => $service->id,
+            'entity_label' => $service->name,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ]);
     }
 
     private function canUseClasses(Request $request): bool

@@ -60,6 +60,7 @@ class AuthController extends Controller
             ] : null,
             'account_type' => 'staff',
             'idle_minutes' => $tenant ? (int) \App\Support\AppointmentFlow::rule($tenant, 'session.idle_minutes') : \App\Support\AppointmentFlow::RULE_DEFAULTS['session.idle_minutes'],
+            'help_enabled' => $tenant ? (bool) \App\Support\AppointmentFlow::rule($tenant, 'help.enabled') : false,
             'roles' => $user->roles ? $user->roles->pluck('slug') : [],
             'permissions' => \App\Support\Access::of($user),
             'role_name' => $user->tenant_id ? $user->roles->first()?->name : null,
@@ -78,6 +79,7 @@ class AuthController extends Controller
                 'dependents' => $tenant->dependents(),
                 'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
                 'currency' => \App\Support\Currency::present(\App\Support\Currency::of($tenant)),
+                'branding' => \App\Support\Branding::present($tenant),
             ] : null,
             'currencies' => \App\Support\Currency::catalog(),
             'customer' => null,
@@ -119,6 +121,7 @@ class AuthController extends Controller
                 'dependents' => $tenant->dependents(),
                 'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
                 'currency' => \App\Support\Currency::present(\App\Support\Currency::of($tenant)),
+                'branding' => \App\Support\Branding::present($tenant),
             ] : null,
             'currencies' => \App\Support\Currency::catalog(),
             'customer' => [

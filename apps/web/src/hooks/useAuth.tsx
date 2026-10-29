@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from '@/lib/axios';
 import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
+import type { TenantBranding } from '@/lib/brand';
 
 export interface UserFeatures {
   crm?: boolean;
@@ -36,6 +37,7 @@ export interface UserTenant {
   dependents?: { enabled: boolean; kind: string | null; required: boolean };
   appointment_statuses?: AppointmentStatus[];
   currency?: CurrencyInfo;
+  branding?: TenantBranding | null;
 }
 
 export interface AppointmentStatus {
@@ -57,6 +59,7 @@ export interface User {
   is_tenant_admin?: boolean;
   account_type?: 'staff' | 'customer';
   idle_minutes?: number;
+  help_enabled?: boolean;
   must_change_password?: boolean;
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
@@ -182,7 +185,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const token = localStorage.getItem('auth_token');
     try {
       if (token) {
-        await api.post('/logout', {});
+        const idle = (localStorage.getItem('logout_reason') ?? '').startsWith('idle');
+        await api.post('/logout', idle ? { reason: 'idle' } : {});
       }
     } catch (error) {
       console.error('[useAuth] Error cerrando sesión en servidor:', error);
@@ -229,7 +233,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const hasModule = (moduleKey: string): boolean => {
     if (user?.is_saas_admin) return true;
-    return user?.tenant?.modules?.includes(moduleKey) ?? false;
+    return moduleKey.split('|').some((key) => user?.tenant?.modules?.includes(key) ?? false);
   };
 
   const hasRole = (roleSlug: string): boolean => {

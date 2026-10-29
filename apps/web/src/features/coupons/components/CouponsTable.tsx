@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { BadgeCheck, CalendarX2, Edit2, TicketPercent, Trash2 } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
@@ -98,8 +98,8 @@ export default function CouponsTable() {
       title: 'Veces usados',
       value: all.reduce((sum, c) => sum + c.used_count, 0),
       icon: <TicketPercent size={18} />,
-      iconColorClass: 'text-[#3F768C]',
-      borderColorClass: view === 'all' ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'hover:border-slate-300',
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: view === 'all' ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => setView('all'),
     },
     {
@@ -117,9 +117,9 @@ export default function CouponsTable() {
       header: 'Cupón',
       cell: (coupon) => (
         <div key={`code-${coupon.id}`} className="flex items-center gap-3">
-          <span className="p-2 rounded-lg shrink-0 bg-[#84D0D9]/20 text-[#022340]"><TicketPercent size={16} /></span>
+          <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><TicketPercent size={16} /></span>
           <div>
-            <button type="button" data-edit={coupon.code} onClick={() => open(coupon)} className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left tracking-wide`}>
+            <button type="button" data-edit={coupon.code} onClick={() => open(coupon)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left tracking-wide`}>
               {coupon.code}
             </button>
             <span className="block text-xs text-slate-400">{coupon.description || 'Sin descripción'}</span>
@@ -166,7 +166,7 @@ export default function CouponsTable() {
       header: 'Acciones',
       cell: (coupon) => (
         <div key={`actions-${coupon.id}`} className="flex items-center gap-1">
-          {can('coupons.edit') && (<button title={`Editar ${coupon.code}`} onClick={() => open(coupon)} className={`${iconButton} hover:text-[#022340] hover:bg-slate-100`}>
+          {can('coupons.edit') && (<button title={`Editar ${coupon.code}`} onClick={() => open(coupon)} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
             <Edit2 size={16} />
           </button>)}
           {can('coupons.delete') && (<button data-delete={coupon.code} title={`Eliminar ${coupon.code}`} onClick={() => { setError(''); setNotice(''); setDeleting(coupon); }} className={`${iconButton} hover:text-red-600 hover:bg-red-50`}>
@@ -175,6 +175,21 @@ export default function CouponsTable() {
         </div>
       ),
     },
+  ];
+
+  const exportColumns: ExportColumn<Coupon>[] = [
+    { header: 'Código', value: (c) => c.code },
+    { header: 'Descripción', value: (c) => c.description },
+    { header: 'Tipo de descuento', value: (c) => (c.discount_type === 'percent' ? 'Porcentaje' : 'Monto fijo') },
+    { header: 'Descuento (%)', type: 'number', value: (c) => (c.discount_type === 'percent' ? c.discount_value : null) },
+    { header: 'Descuento (monto)', type: 'money', value: (c) => (c.discount_type === 'amount' ? c.discount_value : null) },
+    { header: 'Compra mínima', type: 'money', value: (c) => c.min_purchase },
+    { header: 'Desde', type: 'date', value: (c) => c.starts_on },
+    { header: 'Hasta', type: 'date', value: (c) => c.ends_on },
+    { header: 'Veces usado', type: 'number', value: (c) => c.used_count },
+    { header: 'Usos permitidos', value: (c) => c.max_uses ?? 'Sin límite' },
+    { header: 'Estado', value: (c) => STATES[c.state].label },
+    { header: 'Registrado', type: 'date', value: (c) => c.created_at },
   ];
 
   return (
@@ -203,6 +218,9 @@ export default function CouponsTable() {
         ]}
         columns={columns}
         data={rows}
+        exportTitle="Cupones"
+        exportScreen="coupons"
+        exportColumns={exportColumns}
         getItemKey={(c) => c.id}
         entityLabel={rows.length === 1 ? 'cupón' : 'cupones'}
         metricCards={metricCards}

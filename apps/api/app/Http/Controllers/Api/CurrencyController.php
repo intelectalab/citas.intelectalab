@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Support\Audit;
 use App\Support\Currency;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,7 +54,18 @@ class CurrencyController extends Controller
             return response()->json(['message' => implode(' ', $blockers), 'code' => 'CURRENCY_BLOCKED', 'blockers' => $blockers], 422);
         }
 
+        $from = Currency::of($tenant);
         Currency::setTenantCurrency($tenant, $validated['code'], $request->user());
+
+        if ($from !== $validated['code']) {
+            Audit::log($request, 'settings.changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'settings',
+                'entity_label' => 'Moneda',
+                'before'       => ['currency' => Currency::present($from)['name']],
+                'after'        => ['currency' => Currency::present($validated['code'])['name']],
+            ]);
+        }
 
         return response()->json($this->payload($request, $tenant->fresh('settings')));
     }
@@ -119,6 +131,22 @@ class CurrencyController extends Controller
         abort_if($scope['sales'] + $scope['appointments'] + $scope['sessions'] === 0, 422, 'No hay registros que cambiar con lo que elegiste.');
 
         $counts = Currency::apply($tenant, $data['kind'], $data['from'], $data['to'], $data['factor'], $data['starts_on'] ?? null, $data['ends_on'] ?? null, $request->user());
+
+        Audit::log($request, 'currency.records_changed', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'settings',
+            'entity_label' => 'Moneda',
+            'after'        => array_filter([
+                'currency_kind'     => $data['kind'] === 'convert' ? 'Convertir con tipo de cambio' : 'Solo cambiar la moneda',
+                'currency_from'     => Currency::present($data['from'])['name'],
+                'currency_to'       => Currency::present($data['to'])['name'],
+                'exchange_rate'     => $data['kind'] === 'convert' ? (float) $data['rate'] : null,
+                'starts_on'         => $data['starts_on'] ?? null,
+                'ends_on'           => $data['ends_on'] ?? null,
+                'sales_count'       => $counts['sales'] ?? null,
+                'appointments_count' => $counts['appointments'] ?? null,
+            ], fn ($value) => $value !== null),
+        ]);
 
         return response()->json($this->payload($request, $tenant) + ['applied' => $counts]);
     }

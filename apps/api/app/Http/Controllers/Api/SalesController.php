@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Support\Access;
+use App\Support\Audit;
 use App\Support\Currency;
 
 class SalesController extends Controller
@@ -142,7 +143,7 @@ class SalesController extends Controller
                 'name'    => $company->legal_name ?? $company->trade_name ?? $tenant->name,
                 'tax_id'  => $company->tax_id ?? null,
                 'address' => $company->address ?? null,
-            ],
+            ] + \App\Support\Documents::forReceipt($tenant),
             'refunds'          => $refunds->map(fn ($r) => [
                 'id'           => $r->id,
                 'amount'       => round((float) $r->amount, 2),
@@ -161,6 +162,13 @@ class SalesController extends Controller
         ];
     }
 
+    private function customerName(object $sale): ?string
+    {
+        $customer = $sale->customer_id ? DB::table('customers')->where('id', $sale->customer_id)->first(['first_name', 'last_name']) : null;
+
+        return \App\Support\Person::name($customer) ?: null;
+    }
+
     public function show(Request $request, string $sale)
     {
         $tenant = $this->tenant($request);
@@ -175,12 +183,20 @@ class SalesController extends Controller
 
         $validated = $request->validate(['reason' => 'required|string|max:255'], ['reason.required' => 'Escribe por qué se anula la venta.']);
 
-        DB::transaction(function () use ($tenant, $sale, $validated) {
+        $row = DB::transaction(function () use ($tenant, $sale, $validated) {
             $row = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $sale)->lockForUpdate()->first();
             abort_unless($row, 404);
             Access::assertBranch(request()->user(), $row->branch_id, true);
             Refunds::void($row, trim($validated['reason']));
+
+            return $row;
         });
+
+        Audit::log($request, 'sale.voided', [
+            'tenant' => $tenant->id, 'entity_type' => 'sale', 'entity_id' => $row->id, 'entity_label' => $row->code, 'branch_id' => $row->branch_id,
+            'before' => ['status' => Sales::STATUS_LABELS[$row->status] ?? $row->status],
+            'after'  => ['status' => Sales::STATUS_LABELS['void'], 'reason' => trim($validated['reason']), 'total' => round((float) $row->total, 2), 'customer' => $this->customerName($row)],
+        ]);
 
         return response()->json($this->detail($tenant, $this->find($tenant, $sale), $request->user()));
     }
@@ -206,7 +222,18 @@ class SalesController extends Controller
         $validated['reason'] = trim($validated['reason']);
         $this->find($tenant, $sale);
 
-        DB::transaction(fn () => Refunds::refund($tenant, $sale, $validated, $request->user()));
+        $fresh = DB::transaction(fn () => Refunds::refund($tenant, $sale, $validated, $request->user()));
+
+        Audit::log($request, 'sale.refunded', [
+            'tenant' => $tenant->id, 'entity_type' => 'sale', 'entity_id' => $fresh->id, 'entity_label' => $fresh->code, 'branch_id' => $fresh->branch_id,
+            'after'  => [
+                'amount'   => round((float) $validated['amount'], 2),
+                'method'   => (Sales::METHODS + Sales::OTHER_METHODS)[$validated['method']] ?? $validated['method'],
+                'reason'   => $validated['reason'],
+                'status'   => Sales::STATUS_LABELS[$fresh->status] ?? $fresh->status,
+                'customer' => $this->customerName($fresh),
+            ],
+        ]);
 
         return response()->json($this->detail($tenant, $this->find($tenant, $sale), $request->user()));
     }

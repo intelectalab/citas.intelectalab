@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock, CalendarDays, ChevronRight, DoorOpen, Edit2, PartyPopper, Trash2 } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem, type TabOption } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem, type TabOption } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -138,6 +138,15 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
     { id: 'year', label: 'Año completo', type: 'select', options: years.map((y) => ({ label: String(y), value: String(y) })) },
   ];
 
+  const exportColumns: ExportColumn<Holiday>[] = [
+    { header: 'Fecha', type: 'date', value: (h) => h.date },
+    { header: 'Cuánto falta', value: (h) => holidayDueLabel(h.days_left) },
+    { header: 'Feriado', value: (h) => h.name },
+    ...(branches.length > 1 ? [{ header: 'Sedes', value: (h: Holiday) => h.branch?.name ?? 'Todas las sedes' }] : []),
+    { header: 'Ese día', value: (h) => (h.closed ? 'La sede cierra' : 'Se atiende') },
+    { header: 'Citas ese día', type: 'number', value: (h) => h.affected_count },
+  ];
+
   const columns: Column<Holiday>[] = [
     {
       header: 'Fecha',
@@ -163,7 +172,7 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
           type="button"
           data-edit={h.id}
           onClick={() => { setEditing(h); setFormOpen(true); }}
-          className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left`}
+          className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}
         >
           {h.name}
         </button>
@@ -200,7 +209,7 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
       header: 'Acciones',
       cell: (h) => h.can_manage ? (
         <div key={`actions-${h.id}`} className="flex items-center gap-1">
-          <button onClick={() => { setEditing(h); setFormOpen(true); }} title="Editar" className="p-1.5 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors">
+          <button onClick={() => { setEditing(h); setFormOpen(true); }} title="Editar" className="p-1.5 text-slate-400 hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors">
             <Edit2 size={16} />
           </button>
           <button data-delete={h.id} onClick={() => setDeleting(h)} title="Eliminar" className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
@@ -252,6 +261,9 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
           filterValues={filters}
           onFilterChange={(id, value) => { setFilters((current) => ({ ...current, [id]: value })); setActiveCard(''); }}
           columns={columns}
+          exportTitle="Feriados"
+          exportScreen="holidays"
+          exportColumns={exportColumns}
           dateFilters={[
             { id: 'date', label: 'Fecha', future: true, value: (h) => h.date },
           ]}
@@ -299,7 +311,7 @@ export default function HolidaysTable({ tabs, activeTab, onTabChange, branches, 
                       >
                         <span>
                           <span className="block text-sm font-semibold text-slate-800">
-                            <span className="font-mono text-[#022340]">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#84D0D9]/25 text-[#022340]">Paquete {a.package}</span>}
+                            <span className="font-mono text-brand-ink">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-brand-soft/25 text-brand-ink">Paquete {a.package}</span>}
                           </span>
                           <span className="block text-xs text-slate-500">
                             {formatDateTime(a.starts_at)} · {a.service}{a.professional ? ` · ${a.professional}` : ''}

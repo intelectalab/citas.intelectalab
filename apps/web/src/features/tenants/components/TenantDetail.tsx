@@ -1,6 +1,7 @@
 'use client';
 
 import SectionTitle from '@/app/components/common/SectionTitle';
+import TenantAuditCard from '@/features/audit/components/TenantAuditCard';
 import React, { useEffect, useState } from 'react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
@@ -24,7 +25,7 @@ interface TenantModule {
   is_core: boolean;
   in_plan: boolean;
   enabled: boolean;
-  off_reason: 'no_subscription' | 'plan' | 'business_type' | 'platform' | 'tenant' | null;
+  off_reason: 'no_subscription' | 'plan' | 'platform' | 'tenant' | null;
   platform_off: boolean;
 }
 
@@ -72,7 +73,6 @@ interface TenantDetailData {
 const OFF_REASONS: Record<string, string> = {
   no_subscription: 'Sin suscripción vigente',
   plan: 'Fuera de su plan',
-  business_type: 'Lo apaga su rubro',
   platform: 'Apagado por la plataforma',
   tenant: 'Apagado por la empresa',
 };
@@ -90,9 +90,9 @@ const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleD
 const card = 'bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6';
 const labelClass = 'block text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1';
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340]';
+  'w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand';
 const primaryButton =
-  'px-4 py-2 bg-[#022340] text-white text-xs font-bold rounded-xl hover:bg-[#03315a] transition-colors shadow-sm disabled:opacity-50 cursor-pointer';
+  'px-4 py-2 bg-brand text-white text-xs font-bold rounded-xl hover:bg-brand-hover transition-colors shadow-sm disabled:opacity-50 cursor-pointer';
 const ghostButton =
   'px-4 py-2 border border-slate-200 bg-white text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer';
 
@@ -100,7 +100,7 @@ function CardTitle({ icon, title, aside }: { icon: React.ReactNode; title: strin
   return (
     <div className="flex items-center justify-between gap-3 mb-4">
       <SectionTitle>
-        <span className="text-[#3F768C]">{icon}</span> {title}
+        <span className="text-brand-accent">{icon}</span> {title}
       </SectionTitle>
       {aside}
     </div>
@@ -134,7 +134,7 @@ function UsageTile({ item }: { item: { key: string; used: number; limit: number 
         <span className={`inline-flex p-2 rounded-xl ${meta.iconColor}`}>{meta.icon}</span>
         <div>
           <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">{meta.label}</span>
-          <span className="block text-2xl font-black text-[#022340] leading-tight">
+          <span className="block text-2xl font-black text-brand-ink leading-tight">
             {item.used.toLocaleString('es-PE')}
             <span className="text-sm font-semibold text-slate-400"> / {hasLimit ? (item.limit as number).toLocaleString('es-PE') : '∞'}</span>
           </span>
@@ -149,7 +149,7 @@ function UsageTile({ item }: { item: { key: string; used: number; limit: number 
           strokeDashoffset={circumference * (1 - Math.min(1, ratio))}
           transform="rotate(-90 34 34)"
         />
-        <text x="34" y="38" textAnchor="middle" className="fill-[#022340] text-[13px] font-extrabold">{hasLimit ? `${percent}%` : '—'}</text>
+        <text x="34" y="38" textAnchor="middle" className="fill-brand-ink text-[13px] font-extrabold">{hasLimit ? `${percent}%` : '—'}</text>
       </svg>
     </div>
   );
@@ -228,7 +228,7 @@ export default function TenantDetail() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -237,7 +237,7 @@ export default function TenantDetail() {
     return (
       <div className="max-w-2xl mx-auto pt-10 text-center space-y-3">
         <p className="text-sm text-slate-500 font-medium">{notice?.text}</p>
-        <Link href="/admin/tenants" className="inline-block text-xs font-bold text-[#3F768C] hover:text-[#022340]">Volver a Tenants</Link>
+        <Link href="/admin/tenants" className="inline-block text-xs font-bold text-brand-accent hover:text-brand-ink">Volver a Tenants</Link>
       </div>
     );
   }
@@ -261,7 +261,7 @@ export default function TenantDetail() {
   const renderModule = (key: string, label: string) => {
     const module = moduleByKey[key];
     if (!module) return null;
-    const canToggle = canManage && module.in_plan && !module.is_core && module.off_reason !== 'business_type';
+    const canToggle = canManage && module.in_plan && !module.is_core;
     const isPlatformOff = platformOff.includes(key);
 
     return (
@@ -289,7 +289,7 @@ export default function TenantDetail() {
       <nav className="flex items-center gap-2 text-sm">
         <Link
           href="/admin/tenants"
-          className="inline-flex items-center gap-2 pl-2.5 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 font-bold text-[#022340] hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors"
+          className="inline-flex items-center gap-2 pl-2.5 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 font-bold text-brand-ink hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors"
         >
           <ArrowLeft size={16} /> Tenants
         </Link>
@@ -313,7 +313,7 @@ export default function TenantDetail() {
               </span>
               <div className="min-w-0 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-black text-[#022340] tracking-tight">{detail.name}</h1>
+                  <h1 className="text-2xl font-black text-brand-ink tracking-tight">{detail.name}</h1>
                   <span className={`px-2.5 py-0.5 text-xs rounded-full font-semibold ${status.className}`}>{status.label}</span>
                 </div>
                 <p className="text-xs text-slate-400 font-mono">slug: {detail.slug}</p>
@@ -357,10 +357,10 @@ export default function TenantDetail() {
           </div>
         </section>
 
-        <section className="xl:col-span-4 rounded-3xl p-6 text-white bg-gradient-to-br from-[#022340] via-[#06375f] to-[#3F768C] shadow-lg flex flex-col justify-between gap-5">
+        <section className="xl:col-span-4 rounded-3xl p-6 text-white bg-gradient-to-br from-brand via-[#06375f] to-brand-accent shadow-lg flex flex-col justify-between gap-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#84D0D9]">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-brand-soft">
                 <CreditCard size={14} /> Plan
               </span>
               <h2 className="text-2xl font-black tracking-tight mt-1">{subscription?.plan?.name ?? 'Sin plan'}</h2>
@@ -369,7 +369,7 @@ export default function TenantDetail() {
               )}
             </div>
             {subscription && (
-              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase ${subscription.is_current ? 'bg-emerald-400 text-[#022340]' : 'bg-rose-500 text-white'}`}>
+              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase ${subscription.is_current ? 'bg-emerald-400 text-brand-ink' : 'bg-rose-500 text-white'}`}>
                 {SUBSCRIPTION_STATUS[subscription.status] ?? subscription.status}
                 {!subscription.is_current && ['active', 'trialing'].includes(subscription.status) ? ' · vencida' : ''}
               </span>
@@ -420,7 +420,7 @@ export default function TenantDetail() {
 
           <div className="flex flex-wrap gap-2 mb-4">
             {Object.entries(CORE_MODULE_LABELS).map(([key, label]) => (
-              <span key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#022340]/5 text-xs font-semibold text-[#022340]">
+              <span key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand/5 text-xs font-semibold text-brand-ink">
                 <span className={`w-2 h-2 rounded-full ${moduleByKey[key]?.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`} /> {label} · base
               </span>
             ))}
@@ -595,7 +595,7 @@ export default function TenantDetail() {
             </div>
 
             <div className="pt-4 border-t border-slate-100">
-              <span className={labelClass}>Módulos que ella apagó</span>
+              <span className={labelClass}>Módulos que tiene apagados</span>
               {settings && settings.modules_off.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {settings.modules_off.map((key) => (
@@ -603,13 +603,13 @@ export default function TenantDetail() {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-slate-500">Ninguno: usa todo lo que su plan y su rubro le dan.</p>
+                <p className="text-xs text-slate-500">Ninguno: usa todo lo que su plan le da.</p>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
               <div className="rounded-2xl bg-slate-50 border border-slate-100 px-3.5 py-3">
-                <span className="block text-xl font-black text-[#022340]">{rulesOverrides}</span>
+                <span className="block text-xl font-black text-brand-ink">{rulesOverrides}</span>
                 <span className="block text-[11px] font-semibold text-slate-500">reglas que cambió</span>
               </div>
               <div className="rounded-2xl bg-slate-50 border border-slate-100 px-3.5 py-3">
@@ -627,9 +627,9 @@ export default function TenantDetail() {
               <Layers size={20} />
             </span>
             <div>
-              <span className="block text-base font-black text-[#022340]">{detail.business_type?.name ?? 'Sin rubro'}</span>
+              <span className="block text-base font-black text-brand-ink">{detail.business_type?.name ?? 'Sin rubro'}</span>
               {detail.business_type && canManage && (
-                <Link href={`/admin/business-types/${detail.business_type.id}`} className="text-xs font-bold text-[#3F768C] hover:underline">Ver la plantilla del rubro</Link>
+                <Link href={`/admin/business-types/${detail.business_type.id}`} className="text-xs font-bold text-brand-accent hover:underline">Ver la plantilla del rubro</Link>
               )}
             </div>
           </div>
@@ -666,10 +666,10 @@ export default function TenantDetail() {
                 </button>
               </div>
               <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
-                <input type="checkbox" checked={installTemplate} onChange={(e) => setInstallTemplate(e.target.checked)} className="mt-0.5 rounded border-slate-300 text-[#022340] focus:ring-[#022340]" />
+                <input type="checkbox" checked={installTemplate} onChange={(e) => setInstallTemplate(e.target.checked)} className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand" />
                 Copiar el catálogo inicial del rubro nuevo (solo si aún no tiene servicios)
               </label>
-              <p className="text-[11px] text-slate-400">Cambian sus nombres, los módulos del rubro y sus reglas. Sus servicios y fichas no se tocan.</p>
+              <p className="text-[11px] text-slate-400">Cambian sus nombres y sus reglas, y sus módulos vuelven a empezar como los del rubro nuevo (los que ese rubro deja apagados quedan apagados). Sus servicios y fichas no se tocan.</p>
             </div>
           ) : (
             <p className="text-xs text-slate-500">El rubro lo cambia el administrador SaaS.</p>
@@ -728,7 +728,7 @@ export default function TenantDetail() {
                 return (
                   <div key={member.id} className="flex items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-[#022340]/10 text-[#022340] font-bold text-sm flex items-center justify-center shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-brand/10 text-brand-ink font-bold text-sm flex items-center justify-center shrink-0">
                         {(fullName || 'U').charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -748,6 +748,8 @@ export default function TenantDetail() {
             <p className="text-xs text-slate-500">No hay usuarios vinculados a esta empresa.</p>
           )}
         </section>
+
+        {canManage && <TenantAuditCard tenantId={detail.id} className={`xl:col-span-12 ${card}`} refreshKey={detail} />}
       </div>
     </div>
   );

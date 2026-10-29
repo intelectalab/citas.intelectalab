@@ -130,7 +130,7 @@ export default function FormCoupon({ isOpen, onClose, initialData, onSaved }: Fo
                     data-coupon-type={option.id}
                     onClick={() => set({ type: option.id })} selected={chosen} className="text-left rounded-xl border px-4 py-3 transition-colors"
                   >
-                    <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                    <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5">{option.hint}</span>
                   </OptionCard>
                 );

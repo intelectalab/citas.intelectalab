@@ -142,13 +142,13 @@ function NoticePanel({ notice, canSave, onClose, onSaved }: { notice: NoticeSett
           {canSave && (
             <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
               {notice.custom ? (
-                <button type="button" data-reset-notice disabled={saving} onClick={() => save(true)} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#022340]">
+                <button type="button" data-reset-notice disabled={saving} onClick={() => save(true)} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-brand-ink">
                   <RotateCcw size={13} /> Volver al texto original
                 </button>
               ) : <span />}
               <div className="flex gap-3">
                 <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-                <button type="button" data-submit disabled={saving || !subject.trim() || !body.trim()} onClick={() => save()} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button>
+                <button type="button" data-submit disabled={saving || !subject.trim() || !body.trim()} onClick={() => save()} className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button>
               </div>
             </div>
           )}
@@ -165,11 +165,12 @@ interface MessagingSettingsProps {
   company: string;
   part: Part;
   onDirtyChange?: (dirty: boolean) => void;
+  onOpenBrand?: () => void;
 }
 
 const emailState = (mode: Mode, form: Record<string, string>) => JSON.stringify({ mode, ...form, password: '' });
 
-export default function MessagingSettings({ canSave, company, part, onDirtyChange }: MessagingSettingsProps) {
+export default function MessagingSettings({ canSave, company, part, onDirtyChange, onOpenBrand }: MessagingSettingsProps) {
   const [data, setData] = useState<MessagingSettingsData | null>(null);
   const [mode, setMode] = useState<Mode>('none');
   const [form, setForm] = useState({ preset: '', host: '', port: '587', security: 'tls', username: '', password: '', from_address: '', from_name: '', reply_to: '' });
@@ -251,7 +252,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
       <section className={cardClass} id="correo-config" data-card="email-settings">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <SectionTitle><Mail className="w-4 h-4 text-[#3F768C]" /> Correo de tu empresa</SectionTitle>
+            <SectionTitle><Mail className="w-4 h-4 text-brand-accent" /> Correo de tu empresa</SectionTitle>
             <p className="text-xs text-slate-500 mt-1">Los avisos y mensajes a tus clientes salen desde el correo que configures aquí. Mientras no lo configures, no sale ningún correo.</p>
           </div>
           <span className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${EMAIL_BADGES[status.state]}`} data-email-state={status.state}>{status.label}</span>
@@ -267,7 +268,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
             return (
               <OptionCard key={value} type="button" role="radio" aria-checked={mode === value} data-email-mode={value} data-building={building || undefined} disabled={!canSave || building} onClick={() => { setMode(value); setNotice(''); setError(''); }} selected={mode === value} className="text-left rounded-xl border px-4 py-3 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
                 <span className="flex items-center justify-between gap-2">
-                  <span className="block text-sm font-bold text-[#022340]">{title}</span>
+                  <span className="block text-sm font-bold text-brand-ink">{title}</span>
                   {building && <span className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800 shrink-0"><Construction size={12} /> En construcción</span>}
                 </span>
                 <span className="block text-xs text-slate-500 mt-0.5">{building ? 'Estamos trabajando en esto. Muy pronto tus correos saldrán desde el correo de tu empresa.' : hint}</span>
@@ -290,20 +291,20 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
               <div className="flex flex-wrap gap-2">
                 {data.presets.map((p) => (
                   <button key={p.key} type="button" data-preset={p.key} disabled={!canSave} onClick={() => set({ preset: p.key, host: p.host, port: String(p.port), security: p.security })}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${form.preset === p.key ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${form.preset === p.key ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                     {p.label}
                   </button>
                 ))}
                 <button type="button" data-preset="other" disabled={!canSave} onClick={() => { set({ preset: '' }); setAdvanced(true); }}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${!form.preset ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${!form.preset ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                   Otro (correo de mi dominio)
                 </button>
               </div>
             </div>
 
             {preset && STEPS[preset.key] && (
-              <div className="rounded-xl bg-[#84D0D9]/15 border border-[#84D0D9]/50 px-4 py-3" data-steps={preset.key}>
-                <span className="block text-xs font-bold text-[#022340] mb-1.5">{STEPS[preset.key].title}</span>
+              <div className="rounded-xl bg-brand-soft/15 border border-brand-soft/50 px-4 py-3" data-steps={preset.key}>
+                <span className="block text-xs font-bold text-brand-ink mb-1.5">{STEPS[preset.key].title}</span>
                 <ol className="list-decimal pl-4 space-y-1 text-xs text-slate-700">
                   {STEPS[preset.key].steps.map((step) => <li key={step}>{step}</li>)}
                 </ol>
@@ -356,7 +357,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
 
             <div className="border-t border-slate-100 pt-3">
               {form.preset && (
-                <button type="button" data-advanced onClick={() => setAdvanced(!advanced)} className="flex items-center gap-1.5 text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                <button type="button" data-advanced onClick={() => setAdvanced(!advanced)} className="flex items-center gap-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink">
                   <ChevronDown size={14} className={`transition-transform ${advanced ? 'rotate-180' : ''}`} /> Opciones avanzadas
                 </button>
               )}
@@ -418,7 +419,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
         {canSave && (
           <div className="flex flex-wrap items-center gap-3">
             {mode !== 'none' && (
-              <button type="button" data-save-email disabled={busy} onClick={save} className="px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] disabled:opacity-50">
+              <button type="button" data-save-email disabled={busy} onClick={save} className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">
                 {busy ? 'Guardando...' : 'Guardar'}
               </button>
             )}
@@ -436,7 +437,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
             <div className="flex flex-wrap items-center gap-2">
               <input aria-label="Correo para la prueba" className={`${inputClass} max-w-xs`} placeholder="tu.correo@gmail.com" value={testTo} onChange={(e) => setTestTo(e.target.value.trim())} />
               <button type="button" data-send-test disabled={busy || !testTo} onClick={() => run(() => api.post('/messaging/email/test', { to: testTo }), (res) => { if (res.ok) setNotice(res.message ?? ''); else setError(res.message ?? 'Falló la prueba.'); })}
-                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border border-[#022340] text-[#022340] rounded-xl hover:bg-[#84D0D9]/15 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border border-brand text-brand-ink rounded-xl hover:bg-brand-soft/15 disabled:opacity-50">
                 <Send size={14} /> Enviar prueba
               </button>
             </div>
@@ -445,9 +446,9 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
         )}
 
         <div className="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3">
-          <span className="p-2 rounded-lg bg-[#84D0D9]/20 text-[#022340] shrink-0"><MessageCircle size={16} /></span>
+          <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0"><MessageCircle size={16} /></span>
           <span>
-            <span className="block text-sm font-bold text-[#022340]">WhatsApp</span>
+            <span className="block text-sm font-bold text-brand-ink">WhatsApp</span>
             <span className="block text-xs text-slate-500 mt-0.5">{data.whatsapp.label}. Siempre necesita un proveedor (Meta u otro), con costo por mensaje y plantillas aprobadas.</span>
           </span>
         </div>
@@ -456,13 +457,13 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
       )}
 
       {part === 'design' && (data.design
-        ? <EmailDesignCard design={data.design} canSave={canSave} onSaved={apply} onDirtyChange={onDirtyChange} />
+        ? <EmailDesignCard design={data.design} canSave={canSave} onSaved={apply} onDirtyChange={onDirtyChange} onOpenBrand={onOpenBrand} />
         : <section className={cardClass}><p className="text-sm text-slate-500">Falta actualizar la base de datos para usar el diseño del correo: ejecuta php artisan migrate.</p></section>)}
 
       {part === 'notices' && (
       <section className={cardClass} data-card="notices">
         <div>
-          <SectionTitle><BellRing className="w-4 h-4 text-[#3F768C]" /> Mensajes al cliente</SectionTitle>
+          <SectionTitle><BellRing className="w-4 h-4 text-brand-accent" /> Mensajes al cliente</SectionTitle>
           <p className="text-xs text-slate-500 mt-1">Los avisos que salen solos. Cada uno ya viene escrito: revísalo y cámbialo si quieres. Los avisos de su cita no necesitan que el cliente acepte promociones.</p>
         </div>
         <div className="rounded-2xl border border-slate-200 overflow-hidden">
@@ -486,7 +487,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
                       .then((res) => setData((current) => current && { ...current, notices: current.notices.map((x) => (x.kind === n.kind ? res.data : x)) }))
                       .catch((err) => setError(apiError(err, 'No se pudo cambiar el aviso.')))} />
                 )}
-                <button type="button" data-edit-notice={n.kind} title={`Ver y cambiar ${n.label}`} onClick={() => setEditing(n)} className="p-1.5 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors shrink-0">
+                <button type="button" data-edit-notice={n.kind} title={`Ver y cambiar ${n.label}`} onClick={() => setEditing(n)} className="p-1.5 text-slate-400 hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors shrink-0">
                   <Pencil size={15} />
                 </button>
               </li>

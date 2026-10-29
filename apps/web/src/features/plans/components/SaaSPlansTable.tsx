@@ -3,12 +3,13 @@
 import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import { Ticket, Pencil, Trash2, Users, Store, Contact, CalendarDays, CheckCircle, Clock, XCircle, Infinity, Eye } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormSaaSPlan from './FormSaaSPlan';
-import PlanDetailsModal from './PlanDetailsModal';
+import Link from 'next/link';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
+import { money } from '@/features/sales/sales';
 
 interface SaaSPlan {
   id: string;
@@ -16,6 +17,7 @@ interface SaaSPlan {
   slug: string;
   price_monthly: number;
   price_yearly: number;
+  currency?: string;
   modules?: Record<string, any>;
   limits?: {
     usuarios?: number;
@@ -47,7 +49,6 @@ export default function SaaSPlansTable() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SaaSPlan | null>(null);
 
-  const [viewingPlan, setViewingPlan] = useState<SaaSPlan | null>(null);
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -221,7 +222,9 @@ export default function SaaSPlansTable() {
             <Ticket size={16} />
           </div>
           <div>
-            <span className={styles.customerName}>{plan.name}</span>
+            <Link href={`/admin/plans/${plan.id}`} className={`${styles.customerName} hover:text-brand-accent hover:underline`}>
+              {plan.name}
+            </Link>
             <span className="block text-xs text-slate-400 font-mono">slug: {plan.slug}</span>
           </div>
         </div>
@@ -231,7 +234,7 @@ export default function SaaSPlansTable() {
       header: 'Precio mensual',
       cell: (plan) => (
         <div key={`price-monthly-${plan.id}`} className="text-sm font-semibold text-slate-900">
-          ${Number(plan.price_monthly).toFixed(2)}
+          {money(Number(plan.price_monthly), plan.currency || 'PEN')}
         </div>
       ),
     },
@@ -239,7 +242,7 @@ export default function SaaSPlansTable() {
       header: 'Precio anual',
       cell: (plan) => (
         <div key={`price-yearly-${plan.id}`} className="text-sm text-slate-600">
-          ${Number(plan.price_yearly).toFixed(2)}
+          {money(Number(plan.price_yearly), plan.currency || 'PEN')}
         </div>
       ),
     },
@@ -336,13 +339,13 @@ export default function SaaSPlansTable() {
       header: 'Acciones',
       cell: (plan) => (
         <div key={`actions-${plan.id}`} className="flex items-center gap-1">
-          <button 
-            onClick={() => setViewingPlan(plan)}
+          <Link
+            href={`/admin/plans/${plan.id}`}
             title="Ver detalles"
             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           >
             <Eye size={16} />
-          </button>
+          </Link>
           <button 
             onClick={() => { setEditingPlan(plan); setShowFormModal(true); }}
             title="Editar plan"
@@ -360,6 +363,26 @@ export default function SaaSPlansTable() {
         </div>
       ),
     },
+  ];
+
+  const limitOf = (value: number | undefined) => (value === -1 ? 'Sin límite' : value ?? 0);
+  const modulesOf = (plan: SaaSPlan) => Object.values(plan.modules ?? {}).reduce((sum: number, items) => sum + (Array.isArray(items) ? items.length : 0), 0);
+
+  const exportColumns: ExportColumn<SaaSPlan>[] = [
+    { header: 'Plan', value: (p) => p.name },
+    { header: 'Identificador', value: (p) => p.slug },
+    { header: 'Precio mensual', type: 'number', value: (p) => Number(p.price_monthly) },
+    { header: 'Precio anual', type: 'number', value: (p) => Number(p.price_yearly) },
+    { header: 'Moneda', value: (p) => p.currency || 'PEN' },
+    { header: 'Módulos', type: 'number', value: modulesOf },
+    { header: 'Usuarios', value: (p) => limitOf(p.limits?.users ?? p.limits?.usuarios) },
+    { header: 'Profesionales', value: (p) => limitOf(p.limits?.professionals) },
+    { header: 'Sedes', value: (p) => limitOf(p.limits?.branches ?? p.limits?.sucursales ?? p.limits?.sedes) },
+    { header: 'Citas al mes', value: (p) => limitOf(p.limits?.appointments_month) },
+    { header: 'Días de prueba', value: (p) => (p.trial_config?.has_trial ? p.trial_config.trial_days : 'No') },
+    { header: 'Empresas suscritas', type: 'number', value: (p) => p.active_subscriptions_count ?? p.subscriptions_count ?? 0 },
+    { header: 'Estado', value: (p) => (p.status === 'active' ? 'Activo' : 'Inactivo') },
+    { header: 'Fecha de creación', type: 'date', value: (p) => p.created_at },
   ];
 
   return (
@@ -392,6 +415,9 @@ export default function SaaSPlansTable() {
             { id: 'created_at', label: 'Fecha de creación', type: 'date', value: (p) => p.created_at },
           ]}
           data={safePlans}
+          exportTitle="Planes"
+          exportScreen="admin-plans"
+          exportColumns={exportColumns}
           getItemKey={(p) => p.id}
           entityLabel="planes registrados"
           metricCards={metricCards}
@@ -404,12 +430,6 @@ export default function SaaSPlansTable() {
         onSubmit={handleFormSubmit}
         initialData={editingPlan}
         totalPlansCount={safePlans.length}
-      />
-
-      <PlanDetailsModal
-        isOpen={Boolean(viewingPlan)}
-        onClose={() => setViewingPlan(null)}
-        plan={viewingPlan}
       />
 
       <AppModal

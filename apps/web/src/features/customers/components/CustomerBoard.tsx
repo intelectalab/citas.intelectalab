@@ -57,9 +57,9 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
             type="button"
             data-action="edit-columns"
             onClick={onEditColumns}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#022340] bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
-            <Columns3 size={14} className="text-[#3F768C]" />
+            <Columns3 size={14} className="text-brand-accent" />
             Editar columnas
           </button>
         )}
@@ -80,13 +80,13 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                 onDragOver={(e) => { if (!info.can_move) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== stage.id) setOver(stage.id); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver((current) => (current === stage.id ? null : current)); }}
                 onDrop={(e) => { e.preventDefault(); drop(stage.id, e.dataTransfer.getData('text/plain') || dragging); }}
-                className={`w-72 shrink-0 flex flex-col rounded-2xl border p-3 transition-colors ${isOver ? 'bg-[#84D0D9]/15 border-[#3F768C]' : 'bg-slate-50 border-slate-200/80'}`}
+                className={`w-72 shrink-0 flex flex-col rounded-2xl border p-3 transition-colors ${isOver ? 'bg-brand-soft/15 border-brand-accent' : 'bg-slate-50 border-slate-200/80'}`}
               >
                 <header className="mb-3 space-y-1" style={{ borderTop: `3px solid ${stage.color}` }}>
                   <div className="flex items-center justify-between gap-2 pt-2">
                     <span className="flex items-center gap-2 min-w-0">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                      <span className="text-sm font-bold text-[#022340] truncate">{stage.name}</span>
+                      <span className="text-sm font-bold text-brand-ink truncate">{stage.name}</span>
                     </span>
                     <span className="px-2 py-0.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-full" data-column-count>{cards.length}</span>
                   </div>
@@ -107,9 +107,9 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                       draggable={info.can_move}
                       onDragStart={(e) => { e.dataTransfer.setData('text/plain', row.id); e.dataTransfer.effectAllowed = 'move'; setDragging(row.id); }}
                       onDragEnd={() => { setDragging(null); setOver(null); }}
-                      className={`bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-xs transition-all ${info.can_move ? 'cursor-grab active:cursor-grabbing hover:border-[#3F768C]' : ''} ${dragging === row.id ? 'opacity-50' : ''}`}
+                      className={`bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-xs transition-all ${info.can_move ? 'cursor-grab active:cursor-grabbing hover:border-brand-accent' : ''} ${dragging === row.id ? 'opacity-50' : ''}`}
                     >
-                      <CustomerLink id={row.id} className="block text-sm font-bold text-[#022340] truncate">{`${row.first_name} ${row.last_name}`}</CustomerLink>
+                      <CustomerLink id={row.id} className="block text-sm font-bold text-brand-ink truncate">{`${row.first_name} ${row.last_name}`}</CustomerLink>
                       <div className="space-y-1 text-xs text-slate-500">
                         <span className="flex items-center gap-1.5"><Phone size={12} className="text-slate-400 shrink-0" />{row.phone || 'Sin teléfono'}</span>
                         <span className="flex items-center gap-1.5"><CalendarCheck size={12} className="text-emerald-600 shrink-0" />{row.last_visit ? `Última visita: ${shortDate(row.last_visit)}` : 'Aún sin atenciones'}</span>
@@ -138,7 +138,7 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                       type="button"
                       data-action="show-more"
                       onClick={() => setShown((current) => ({ ...current, [stage.id]: limit + PAGE_SIZE }))}
-                      className="text-xs font-bold text-[#3F768C] hover:text-[#022340] py-1.5 transition-colors"
+                      className="text-xs font-bold text-brand-accent hover:text-brand-ink py-1.5 transition-colors"
                     >
                       Ver {Math.min(PAGE_SIZE, cards.length - limit)} más (quedan {cards.length - limit})
                     </button>

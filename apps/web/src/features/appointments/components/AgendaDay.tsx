@@ -14,6 +14,7 @@ import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import { useAuth } from '@/hooks/useAuth';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   RELEASED, addDays, apiError, formatDate, fromMinutes, statusStyle, timeOf, toMinutes, todayISO,
   type Appointment,
@@ -38,8 +39,21 @@ interface DayPayload {
   now: string;
   holidays?: { name: string; closed: boolean }[];
   professionals: DayProfessional[];
+  my_professional_id?: string | null;
   appointments: Appointment[];
 }
+
+type PhoneView = 'pro' | 'list';
+
+const VIEW_KEY = 'agenda.phone-view';
+
+const readView = (): PhoneView => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'pro';
+  } catch {
+    return 'pro';
+  }
+};
 
 const PX = 1.5;
 const DEFAULT_RANGE = { start: 8 * 60, end: 20 * 60 };
@@ -93,6 +107,17 @@ export default function AgendaDay() {
   const [error, setError] = useState('');
   const [activeCard, setActiveCard] = useState('');
   const [updatedAt, setUpdatedAt] = useState('');
+
+  const isPhone = useMediaQuery('(max-width: 639px)', false);
+  const [phoneView, setPhoneView] = useState<PhoneView>(() => (typeof window === 'undefined' ? 'pro' : readView()));
+  const [focusPro, setFocusPro] = useState('');
+  const nowLine = useRef<HTMLDivElement>(null);
+  const scrolledFor = useRef('');
+
+  const choosePhoneView = (view: PhoneView) => {
+    setPhoneView(view);
+    try { localStorage.setItem(VIEW_KEY, view); } catch {}
+  };
 
   const dragging = useRef<{ appointment: Appointment; grabOffset: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -157,11 +182,29 @@ export default function AgendaDay() {
     };
   }, [day, appointments]);
 
+  const professionals = day?.professionals ?? [];
+  const countFor = (professionalId: string) => visible.filter((a) => a.professional?.id === professionalId).length;
+  const focused = professionals.find((p) => p.id === focusPro)
+    ?? professionals.find((p) => p.id === day?.my_professional_id)
+    ?? professionals.find((p) => countFor(p.id) > 0)
+    ?? professionals[0];
+  const phoneList = isPhone && phoneView === 'list';
+  const columns = isPhone && focused ? [focused] : professionals;
+  const listed = useMemo(() => [...visible].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), [visible]);
+
   const hours = Array.from({ length: (range.end - range.start) / 60 }, (_, i) => range.start + i * 60);
   const height = (range.end - range.start) * PX;
   const top = (minutes: number) => (Math.max(range.start, Math.min(range.end, minutes)) - range.start) * PX;
   const isToday = day?.date === day?.now.slice(0, 10);
   const nowMinutes = day ? toMinutes(timeOf(day.now)) : 0;
+
+  useEffect(() => {
+    if (!isPhone || phoneList || !isToday || !day) return;
+    const key = `${day.date}:${branchId}`;
+    if (scrolledFor.current === key) return;
+    scrolledFor.current = key;
+    nowLine.current?.scrollIntoView({ block: 'center' });
+  }, [isPhone, phoneList, isToday, day, branchId]);
 
   const newAt = (professionalId: string, event: React.MouseEvent<HTMLDivElement>) => {
     if (!can('agenda.create')) return;
@@ -224,14 +267,14 @@ export default function AgendaDay() {
     <div className="space-y-5 pb-8 font-sans">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#022340] tracking-tight">Agenda</h1>
+          <h1 className="text-2xl font-black text-brand-ink tracking-tight">Agenda</h1>
           <p className="text-sm text-slate-500 font-medium first-letter:uppercase" data-agenda-date={date}>{formatDate(date)}</p>
           <p className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
-            <button type="button" title="Actualizar ahora" data-refresh onClick={load} className="hover:text-[#3F768C] transition-colors">
+            <button type="button" title="Actualizar ahora" data-refresh onClick={load} className="hover:text-brand-accent transition-colors">
               <RefreshCw size={12} />
             </button>
             <span data-updated-at>{updatedAt ? `Se actualiza sola · última vez a las ${updatedAt}` : 'Se actualiza sola'}</span>
-            <span>· Arrastra una cita para moverla</span>
+            <span className="hidden sm:inline">· Arrastra una cita para moverla</span>
           </p>
         </div>
 
@@ -273,14 +316,14 @@ export default function AgendaDay() {
           {can('agenda.create') && (<button
             type="button"
             onClick={() => openNew({ date, branch_id: branchId })}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
           >
-            <Plus size={16} className="text-[#84D0D9] stroke-[2.5]" /> Nueva cita
+            <Plus size={16} className="text-brand-soft stroke-[2.5]" /> Nueva cita
           </button>)}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-4" data-agenda-cards>
         {[{ id: '', title: 'Citas del día', statuses: [] as string[], icon: <CalendarDays size={18} />, color: 'text-slate-500', active: 'border-slate-400 ring-2 ring-slate-400/20' }, ...CARDS].map((item) => {
           const count = item.id === ''
             ? appointments.filter((a) => !RELEASED.includes(a.status)).length
@@ -294,16 +337,16 @@ export default function AgendaDay() {
               data-card={item.id || 'all'}
               aria-pressed={isActive}
               onClick={() => setActiveCard(isActive ? '' : item.id)}
-              className={`text-left bg-white px-4 py-3 rounded-2xl border shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
+              className={`text-left bg-white px-2.5 sm:px-4 py-2 sm:py-3 rounded-2xl border shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
                 isActive ? item.active : 'border-slate-100 hover:border-slate-200'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{item.title}</span>
-                  <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{count}</div>
+                <div className="min-w-0">
+                  <span className="block sm:inline text-[9px] sm:text-[10px] leading-tight font-semibold tracking-wider text-slate-400 uppercase">{item.title}</span>
+                  <div className="mt-0.5 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900">{count}</div>
                 </div>
-                <div className={`p-2 rounded-xl bg-slate-50 border border-slate-100 ${item.color}`}>{item.icon}</div>
+                <div className={`hidden sm:block p-2 rounded-xl bg-slate-50 border border-slate-100 ${item.color}`}>{item.icon}</div>
               </div>
             </button>
           );
@@ -334,15 +377,78 @@ export default function AgendaDay() {
             <p className="text-sm font-semibold text-slate-700">Nadie atiende este día en esta sede.</p>
             <p className="text-sm text-slate-500">
               Define el horario de cada {vocab.pro.toLowerCase()} en{' '}
-              <Link href="/professionals" className="font-semibold text-[#3F768C] hover:text-[#022340]">{vocab.pros}</Link>.
+              <Link href="/professionals" className="font-semibold text-brand-accent hover:text-brand-ink">{vocab.pros}</Link>.
             </p>
           </div>
         ) : (
+          <>
+          {isPhone && (
+            <div className="border-b border-slate-200 bg-slate-50 p-2.5 space-y-2.5" data-phone-controls>
+              <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-white p-0.5" role="radiogroup" aria-label="Cómo ver el día">
+                {([['pro', `Por ${vocab.pro.toLowerCase()}`], ['list', 'Lista']] as [PhoneView, string][]).map(([view, label]) => (
+                  <button
+                    key={view}
+                    type="button"
+                    role="radio"
+                    aria-checked={phoneView === view}
+                    data-phone-view={view}
+                    onClick={() => choosePhoneView(view)}
+                    className={`py-1.5 rounded-lg text-sm font-semibold truncate ${phoneView === view ? 'bg-brand text-white' : 'text-slate-600'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {!phoneList && (
+                <div className="flex gap-1.5 overflow-x-auto -mx-2.5 px-2.5 pb-0.5" data-phone-pros>
+                  {professionals.map((professional) => {
+                    const selected = focused?.id === professional.id;
+                    return (
+                      <button
+                        key={professional.id}
+                        type="button"
+                        data-phone-pro={professional.id}
+                        aria-pressed={selected}
+                        onClick={() => setFocusPro(professional.id)}
+                        className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap ${selected ? 'border-brand bg-brand-soft/20 text-brand-ink' : 'border-slate-200 bg-white text-slate-600'}`}
+                      >
+                        {professional.display_name}
+                        <span className={`px-1.5 rounded-full text-[11px] ${selected ? 'bg-brand text-white' : 'bg-slate-100 text-slate-500'}`}>{countFor(professional.id)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {phoneList ? (
+            <ul className="divide-y divide-slate-100" data-phone-list>
+              {listed.length === 0 && <li className="p-6 text-center text-sm text-slate-500">No hay citas este día.</li>}
+              {listed.map((appointment) => {
+                const style = statusStyle(appointment.status);
+                return (
+                  <li key={appointment.id}>
+                    <button type="button" data-list-appointment={appointment.id} onClick={() => openDetail(appointment.id)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-50">
+                      <span className="w-12 shrink-0 text-sm font-bold text-brand-ink tabular-nums">{timeOf(appointment.starts_at)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-800 truncate">{appointment.dependent?.name ?? appointment.customer?.name}</span>
+                        <span className="block text-xs text-slate-500 truncate">{appointment.service?.name}{appointment.professional ? ` · ${appointment.professional.display_name}` : ''}</span>
+                      </span>
+                      <span className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${style.block}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />{appointment.status_name}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
           <div className="overflow-x-auto">
-            <div className="min-w-max">
+            <div className={isPhone ? '' : 'min-w-max'}>
               <div className="flex border-b border-slate-200 bg-slate-50">
-                <div className="w-16 shrink-0" />
-                {day.professionals.map((professional) => (
+                <div className="w-11 sm:w-16 shrink-0" />
+                {columns.map((professional) => (
                   <div key={professional.id} className="flex-1 min-w-[200px] px-3 py-3 border-l border-slate-200">
                     <ProfessionalLink id={professional.id} className="block text-sm font-bold text-slate-800 truncate">{professional.display_name}</ProfessionalLink>
                     <span className="block text-xs text-slate-500">
@@ -355,15 +461,15 @@ export default function AgendaDay() {
               </div>
 
               <div className="flex">
-                <div className="w-16 shrink-0 relative" style={{ height }}>
+                <div className="w-11 sm:w-16 shrink-0 relative" style={{ height }}>
                   {hours.map((minutes) => (
-                    <span key={minutes} className="absolute right-2 -translate-y-1/2 text-[11px] font-medium text-slate-400" style={{ top: top(minutes) || 8 }}>
+                    <span key={minutes} className="absolute right-1.5 sm:right-2 -translate-y-1/2 text-[11px] font-medium text-slate-400" style={{ top: top(minutes) || 8 }}>
                       {fromMinutes(minutes)}
                     </span>
                   ))}
                 </div>
 
-                {day.professionals.map((professional) => (
+                {columns.map((professional) => (
                   <div
                     key={professional.id}
                     data-column={professional.id}
@@ -413,10 +519,10 @@ export default function AgendaDay() {
                     {dropTarget?.professionalId === professional.id && dragging.current && (
                       <div
                         data-drop-target
-                        className="absolute inset-x-1 rounded-lg border-2 border-dashed border-[#3F768C] bg-sky-50/70 px-2 py-0.5 pointer-events-none z-20"
+                        className="absolute inset-x-1 rounded-lg border-2 border-dashed border-brand-accent bg-sky-50/70 px-2 py-0.5 pointer-events-none z-20"
                         style={{ top: top(dropTarget.minutes), height: dragging.current.appointment.duration_minutes * PX }}
                       >
-                        <span className="text-xs font-bold text-[#022340]">{fromMinutes(dropTarget.minutes)}</span>
+                        <span className="text-xs font-bold text-brand-ink">{fromMinutes(dropTarget.minutes)}</span>
                       </div>
                     )}
 
@@ -480,13 +586,15 @@ export default function AgendaDay() {
                     })}
 
                     {isToday && nowMinutes >= range.start && nowMinutes <= range.end && (
-                      <div className="absolute inset-x-0 border-t-2 border-rose-500 pointer-events-none z-10" style={{ top: top(nowMinutes) }} />
+                      <div ref={professional.id === columns[0]?.id ? nowLine : undefined} className="absolute inset-x-0 border-t-2 border-rose-500 pointer-events-none z-10" style={{ top: top(nowMinutes) }} />
                     )}
                   </div>
                 ))}
               </div>
             </div>
           </div>
+          )}
+          </>
         )}
       </div>
 

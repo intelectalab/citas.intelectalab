@@ -108,7 +108,7 @@ export const CAMPAIGN_BADGES: Record<CampaignStatus, string> = {
 
 export const RECIPIENT_BADGES: Record<Recipient['state'], string> = {
   sent: 'bg-emerald-50 text-emerald-700',
-  simulated: 'bg-[#84D0D9]/25 text-[#022340]',
+  simulated: 'bg-brand-soft/25 text-brand-ink',
   pending: 'bg-sky-50 text-sky-700',
   failed: 'bg-rose-50 text-rose-700',
   skipped: 'bg-slate-100 text-slate-500',
@@ -116,6 +116,6 @@ export const RECIPIENT_BADGES: Record<Recipient['state'], string> = {
 
 export const EMAIL_NOTICE: Record<EmailState, string> = {
   none: 'bg-amber-50 text-amber-800 border-amber-200',
-  simulated: 'bg-[#84D0D9]/15 text-[#022340] border-[#84D0D9]/50',
+  simulated: 'bg-brand-soft/15 text-brand-ink border-brand-soft/50',
   ok: 'bg-emerald-50 text-emerald-800 border-emerald-200',
 };

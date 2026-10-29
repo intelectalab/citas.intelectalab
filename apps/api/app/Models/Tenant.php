@@ -51,7 +51,7 @@ class Tenant extends Model
         'business_profile_synced_at' => 'datetime',
     ];
 
-    public const PROFILE_PARTS = ['vocabulary', 'modules_off', 'default_rules', 'dependents'];
+    public const PROFILE_PARTS = ['vocabulary', 'default_rules', 'dependents'];
 
     protected static function booted(): void
     {
@@ -79,10 +79,14 @@ class Tenant extends Model
     {
         return [
             'vocabulary'    => $type?->vocabulary ?? [],
-            'modules_off'   => array_values($type?->modules_off ?? []),
             'default_rules' => $type?->default_rules ?? [],
             'dependents'    => $type?->dependents ?? [],
         ];
+    }
+
+    public static function startingModulesOff(?BusinessType $type): array
+    {
+        return array_values($type?->modules_off ?? []);
     }
 
     public function businessProfile(string $part): array
@@ -114,28 +118,57 @@ class Tenant extends Model
     public function outdatedProfileParts(?BusinessType $type = null): array
     {
         $current = static::profileFromType($type ?? $this->businessType);
-        $normalize = function (array $value, string $part) {
-            if ($part === 'modules_off') {
-                sort($value);
-                return array_values($value);
-            }
+        $normalize = function (array $value) {
             ksort($value);
             return $value;
         };
 
         return array_values(array_filter(
             static::PROFILE_PARTS,
-            fn ($part) => $normalize($this->businessProfile($part), $part) != $normalize($current[$part], $part),
+            fn ($part) => $normalize($this->businessProfile($part)) != $normalize($current[$part]),
         ));
+    }
+
+    public const GENDERED = ['client', 'pro', 'dependent'];
+
+    public static function suggestGender(string $word): string
+    {
+        $first = mb_strtolower(trim(explode(' ', trim($word))[0] ?? ''));
+
+        if (preg_match('/(ista|iatra|euta|cida)$/u', $first)) {
+            return 'm';
+        }
+
+        return preg_match('/(a|ión|dad|triz)$/u', $first) ? 'f' : 'm';
+    }
+
+    public static function withGenders(array $words, array $genders = []): array
+    {
+        foreach (static::GENDERED as $key) {
+            $gender = $genders["{$key}_gender"] ?? null;
+            $words["{$key}_gender"] = in_array($gender, ['m', 'f'], true) ? $gender : static::suggestGender((string) ($words[$key] ?? ''));
+        }
+
+        return $words;
     }
 
     public function vocabulary(): array
     {
-        return array_merge(
+        $profile = $this->businessProfile('vocabulary');
+        $own = $this->settings?->vocabulary ?? [];
+        $words = array_merge(
             static::DEFAULT_VOCABULARY,
-            $this->businessProfile('vocabulary'),
-            $this->settings?->vocabulary ?? [],
+            array_intersect_key($profile, static::DEFAULT_VOCABULARY),
+            array_intersect_key($own, static::DEFAULT_VOCABULARY),
         );
+        $genders = [];
+
+        foreach (static::GENDERED as $key) {
+            $field = "{$key}_gender";
+            $genders[$field] = $own[$field] ?? (isset($own[$key]) ? null : ($profile[$field] ?? null));
+        }
+
+        return static::withGenders($words, $genders);
     }
 
     public function modules(): array
@@ -151,7 +184,6 @@ class Tenant extends Model
         }
 
         $off = array_merge(
-            $this->businessProfile('modules_off'),
             $this->modules_off ?? [],
             $this->settings?->modules_off ?? [],
         );
@@ -169,7 +201,7 @@ class Tenant extends Model
 
     public function hasModule(string $key): bool
     {
-        return in_array($key, $this->modules(), true);
+        return (bool) array_intersect(explode('|', $key), $this->modules());
     }
 
     public function toggleableModules(): array
@@ -182,7 +214,6 @@ class Tenant extends Model
 
         return array_values(array_diff(
             $plan->moduleKeys(),
-            $this->businessProfile('modules_off'),
             $this->modules_off ?? [],
             SaasModule::coreKeys(),
         ));

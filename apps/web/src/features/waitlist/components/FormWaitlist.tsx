@@ -147,7 +147,7 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
             <div>
               <Select
                 label={`${vocab.dependent}${dependents.required ? ' *' : ''}`}
-                placeholder={dependentOptions.length === 0 ? `Aún no tiene ${vocab.dependents.toLowerCase()}: agrégalo con +` : dependents.required ? 'Seleccione...' : 'Ninguno'}
+                placeholder={dependentOptions.length === 0 ? `Aún no tiene ${vocab.dependents.toLowerCase()}: ${vocab.pick('dependent', 'agrégalo', 'agrégala')} con +` : dependents.required ? 'Seleccione...' : vocab.pick('dependent', 'Ninguno', 'Ninguna')}
                 value={dependentId}
                 onChange={(e) => setDependentId(String(e.target.value))}
                 options={dependentOptions.map((d) => ({ value: d.id, label: d.species ? `${d.name} (${d.species})` : d.name }))}
@@ -226,7 +226,7 @@ export default function FormWaitlist({ isOpen, onClose, initialData, context, on
                   aria-pressed={preset === option.id}
                   onClick={() => { setTimeFrom(option.from); setTimeTo(option.to); }}
                   className={`px-3.5 py-2 text-sm font-medium border rounded-full transition-colors ${
-                    preset === option.id ? 'border-[#022340] bg-[#022340] text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    preset === option.id ? 'border-brand bg-brand text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                   }`}
                 >
                   {option.label}

@@ -6,7 +6,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
-import { BellRing, Building2, CalendarCheck, CalendarX2, Check, ClipboardCheck, DoorOpen, Eye, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, Type, Unlock, Users, Wallet } from 'lucide-react';
+import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
@@ -25,7 +25,7 @@ interface SettingsModule {
   is_core: boolean;
   enabled: boolean;
   can_toggle: boolean;
-  locked: 'core' | 'plan' | 'business_type' | 'platform' | 'no_subscription' | null;
+  locked: 'core' | 'plan' | 'platform' | 'no_subscription' | null;
 }
 
 interface SettingsPayload {
@@ -37,14 +37,25 @@ interface SettingsPayload {
   booking_rules?: BookingRules & { uses_confirmation: boolean };
   resources?: { equipment_down: EquipmentDown } | null;
   sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
+  inventory_rules?: { allow_negative: boolean; consume_on_service: boolean; transfer_two_step: boolean; cost_method: CostMethod; alert_min_stock: boolean } | null;
+  loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number } | null;
+  quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy } | null;
   booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
   payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
   session_idle_minutes?: number;
+  help_enabled?: boolean;
   session_portal_idle_minutes?: number;
   customer_groups?: { inactive_days: number; frequent_visits: number; vip_spend: number } | null;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
+type CostMethod = 'last' | 'average' | 'none';
+
+const COST_METHOD_OPTIONS: { id: CostMethod; title: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'last', title: 'Último costo de compra', hint: 'El costo del producto pasa a ser el de la última recepción de compra.', icon: <TrendingUp size={18} /> },
+  { id: 'average', title: 'Costo promedio ponderado', hint: 'Promedia el stock actual con las nuevas unidades recibidas.', icon: <Calculator size={18} /> },
+  { id: 'none', title: 'No cambiar automáticamente', hint: 'El costo del producto solo cambia cuando lo editas a mano.', icon: <Minus size={18} /> },
+];
 
 const EQUIPMENT_DOWN_OPTIONS: { id: EquipmentDown; title: string; hint: string; icon: React.ReactNode }[] = [
   { id: 'none', title: 'No pasa nada', hint: 'La sala sigue en uso y no se muestra ningún aviso.', icon: <Minus size={18} /> },
@@ -75,6 +86,14 @@ const ON_MISS_OPTIONS: { id: OnMiss; title: string; hint: string; icon: React.Re
   { id: 'release', title: 'Liberar de inmediato', hint: 'Al vencer el plazo la cita se cancela y el horario queda libre.', icon: <Unlock size={18} /> },
 ];
 
+type QuoteCancelPolicy = 'unused_quote' | 'unused_normal' | 'none';
+
+const QUOTE_CANCEL_OPTIONS: { id: QuoteCancelPolicy; title: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'unused_quote', title: 'Lo usado al precio del presupuesto', hint: 'Respeta el descuento del plan. Ej.: 10 sesiones por S/ 800 y usó 4: lo usado vale S/ 320 y se devuelve lo que pagó de más.', icon: <FileText size={18} /> },
+  { id: 'unused_normal', title: 'Lo usado a precio normal', hint: 'El cliente pierde el descuento del plan. Ej.: usó 4 sesiones de S/ 100: lo usado vale S/ 400.', icon: <Calculator size={18} /> },
+  { id: 'none', title: 'No se devuelve dinero', hint: 'Lo pagado se queda y se anulan las cuotas que faltaban.', icon: <Lock size={18} /> },
+];
+
 const IDLE_OPTIONS = [
   { value: '15', label: '15 minutos' },
   { value: '30', label: '30 minutos' },
@@ -94,16 +113,7 @@ const toIdle = (minutes: number): IdleValue => {
 
 const fromIdle = (idle: IdleValue) => (idle.choice === 'custom' ? Number(idle.custom || 0) : Number(idle.choice));
 
-const hoursInput = 'w-24 text-sm text-center border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] outline-none';
-
-const VOCABULARY_FIELDS: { key: string; label: string }[] = [
-  { key: 'client', label: 'Cliente (singular)' },
-  { key: 'clients', label: 'Clientes (plural)' },
-  { key: 'pro', label: 'Profesional (singular)' },
-  { key: 'pros', label: 'Profesionales (plural)' },
-  { key: 'dependent', label: 'Dependiente (singular)' },
-  { key: 'dependents', label: 'Dependientes (plural)' },
-];
+const hoursInput = 'w-24 text-sm text-center border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none';
 
 const LOCK_REASONS: Record<string, string> = {
   plan: 'No incluido en tu plan',
@@ -113,13 +123,13 @@ const LOCK_REASONS: Record<string, string> = {
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
-type SectionId = 'empresa' | 'modulos' | 'vocabulario' | 'moneda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'ventas' | 'adelantos' | 'integraciones' | 'correo' | 'diseno-correo' | 'mensajes-al-cliente' | 'grupos' | 'seguridad' | 'descargas';
+type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'ventas' | 'presupuestos' | 'inventario' | 'fidelizacion' | 'adelantos' | 'integraciones' | 'correo' | 'grupos' | 'seguridad' | 'descargas';
 
 const SECTION_GROUPS: { title: string; sections: { id: SectionId; label: string }[] }[] = [
-  { title: 'Tu empresa', sections: [{ id: 'empresa', label: 'Datos y código' }, { id: 'modulos', label: 'Módulos' }, { id: 'vocabulario', label: 'Vocabulario' }, { id: 'moneda', label: 'Moneda' }] },
+  { title: 'Tu empresa', sections: [{ id: 'empresa', label: 'Datos y código' }, { id: 'modulos', label: 'Módulos' }, { id: 'moneda', label: 'Moneda' }, { id: 'ayuda', label: 'Autoayuda' }] },
   { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'salas', label: 'Salas y equipos' }] },
-  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
-  { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }, { id: 'diseno-correo', label: 'Diseño del correo' }, { id: 'mensajes-al-cliente', label: 'Mensajes al cliente' }] },
+  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'presupuestos', label: 'Presupuestos y planes' }, { id: 'inventario', label: 'Inventario y almacenes' }, { id: 'fidelizacion', label: 'Puntos y gift cards' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
+  { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }] },
   { title: 'Clientes', sections: [{ id: 'grupos', label: 'Grupos de clientes' }] },
   { title: 'Seguridad y registros', sections: [{ id: 'seguridad', label: 'Cierre de sesión' }, { id: 'descargas', label: 'Descargas de datos' }] },
 ];
@@ -130,14 +140,17 @@ export default function TenantSettings() {
   const { user, loading: authLoading, refetchUser, can } = useAuth();
   const [data, setData] = useState<SettingsPayload | null>(null);
   const [modulesOff, setModulesOff] = useState<string[]>([]);
-  const [vocabulary, setVocabulary] = useState<Record<string, string>>({});
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
   const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
+  const [inventoryRules, setInventoryRules] = useState<{ allowNegative: boolean; consumeOnService: boolean; transferTwoStep: boolean; costMethod: CostMethod; alertMinStock: boolean } | null>(null);
+  const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string } | null>(null);
+  const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy } | null>(null);
   const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
   const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
   const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
+  const [helpOn, setHelpOn] = useState(true);
   const [portalIdle, setPortalIdle] = useState<{ on: boolean } & IdleValue>({ on: false, choice: '30', custom: '' });
   const [groups, setGroups] = useState<{ inactive: string; frequent: string; vip: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,7 +168,6 @@ export default function TenantSettings() {
   const apply = (payload: SettingsPayload) => {
     setData(payload);
     setModulesOff(payload.modules.filter((m) => m.can_toggle && !m.enabled).map((m) => m.key));
-    setVocabulary({ ...payload.vocabulary.overrides });
     setStatusNames(Object.fromEntries(
       (payload.appointment_statuses ?? []).filter((s) => s.name !== s.default_name).map((s) => [s.key, s.name]),
     ));
@@ -177,6 +189,30 @@ export default function TenantSettings() {
       payFirst: payload.sales_rules.pay_before_service ?? true,
       arriveMinutes: String(payload.sales_rules.arrive_minutes ?? 15),
     } : null);
+    setInventoryRules(payload.inventory_rules ? {
+      allowNegative: payload.inventory_rules.allow_negative,
+      consumeOnService: payload.inventory_rules.consume_on_service,
+      transferTwoStep: payload.inventory_rules.transfer_two_step,
+      costMethod: payload.inventory_rules.cost_method,
+      alertMinStock: payload.inventory_rules.alert_min_stock,
+    } : null);
+    setLoyaltyRules(payload.loyalty_rules ? {
+      pointsEnabled: payload.loyalty_rules.points_enabled,
+      amountPerPoint: String(payload.loyalty_rules.amount_per_point),
+      pointValue: String(payload.loyalty_rules.point_value),
+      minRedeemPoints: String(payload.loyalty_rules.min_redeem_points),
+      pointsValidityDays: String(payload.loyalty_rules.points_validity_days),
+      giftCardsEnabled: payload.loyalty_rules.gift_cards_enabled,
+      giftCardValidityDays: String(payload.loyalty_rules.gift_card_validity_days),
+    } : null);
+    setQuoteRules(payload.quote_rules ? {
+      validityDays: String(payload.quote_rules.validity_days),
+      allowInstallments: payload.quote_rules.allow_installments,
+      autoCreateSale: payload.quote_rules.auto_create_sale,
+      trackClinicalZones: payload.quote_rules.track_clinical_zones,
+      planValidityDays: String(payload.quote_rules.plan_validity_days ?? 365),
+      cancelPolicy: payload.quote_rules.cancel_policy ?? 'unused_quote',
+    } : null);
     setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days) } : null);
     setPaymentRules(payload.payment_rules ? {
       requireDeposit: payload.payment_rules.require_deposit,
@@ -186,6 +222,7 @@ export default function TenantSettings() {
     } : null);
     setGroups(payload.customer_groups ? { inactive: String(payload.customer_groups.inactive_days), frequent: String(payload.customer_groups.frequent_visits), vip: String(payload.customer_groups.vip_spend) } : null);
     setIdle(toIdle(payload.session_idle_minutes ?? 30));
+    setHelpOn(payload.help_enabled ?? true);
     const portalMinutes = payload.session_portal_idle_minutes ?? 0;
     setPortalIdle(portalMinutes > 0 ? { on: true, ...toIdle(portalMinutes) } : { on: false, choice: '30', custom: '' });
   };
@@ -217,8 +254,8 @@ export default function TenantSettings() {
   const payloadOf = (id: SectionId): Record<string, unknown> | null => {
     switch (id) {
       case 'modulos': return { modules_off: [...modulesOff].sort() };
-      case 'vocabulario': return { vocabulary };
       case 'fases': return { appointment_statuses: statusNames };
+      case 'ayuda': return { help_enabled: helpOn };
       case 'seguridad': return { session_idle_minutes: fromIdle(idle), session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0 };
       case 'grupos': return groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0) } } : null;
       case 'salas': return equipmentDown ? { equipment_down: equipmentDown } : null;
@@ -233,6 +270,36 @@ export default function TenantSettings() {
             refund_days: Number(salesRules.refundDays || 0),
             pay_before_service: salesRules.payFirst,
             arrive_minutes: Number(salesRules.arriveMinutes || 0),
+          },
+        } : null;
+      case 'inventario': return inventoryRules ? {
+          inventory_rules: {
+            allow_negative: inventoryRules.allowNegative,
+            consume_on_service: inventoryRules.consumeOnService,
+            transfer_two_step: inventoryRules.transferTwoStep,
+            cost_method: inventoryRules.costMethod,
+            alert_min_stock: inventoryRules.alertMinStock,
+          },
+        } : null;
+      case 'fidelizacion': return loyaltyRules ? {
+          loyalty_rules: {
+            points_enabled: loyaltyRules.pointsEnabled,
+            amount_per_point: Number(loyaltyRules.amountPerPoint || 10),
+            point_value: Number(loyaltyRules.pointValue || 0.5),
+            min_redeem_points: Number(loyaltyRules.minRedeemPoints || 1),
+            points_validity_days: Number(loyaltyRules.pointsValidityDays || 0),
+            gift_cards_enabled: loyaltyRules.giftCardsEnabled,
+            gift_card_validity_days: Number(loyaltyRules.giftCardValidityDays || 0),
+          },
+        } : null;
+      case 'presupuestos': return quoteRules ? {
+          quote_rules: {
+            validity_days: Number(quoteRules.validityDays || 0),
+            allow_installments: quoteRules.allowInstallments,
+            auto_create_sale: quoteRules.autoCreateSale,
+            track_clinical_zones: quoteRules.trackClinicalZones,
+            plan_validity_days: Number(quoteRules.planValidityDays || 0),
+            cancel_policy: quoteRules.cancelPolicy,
           },
         } : null;
       case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : null;
@@ -300,6 +367,7 @@ export default function TenantSettings() {
   useEffect(() => {
     const fromHash = () => {
       const hash = window.location.hash.replace('#', '') as SectionId;
+      if ((hash as string) === 'vocabulario') { router.replace('/personalization#vocabulario'); return; }
       if (ALL_IDS.includes(hash)) setActive(hash);
     };
     fromHash();
@@ -351,7 +419,7 @@ export default function TenantSettings() {
   if (authLoading || loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -360,11 +428,11 @@ export default function TenantSettings() {
     return (
       <div className="max-w-2xl mx-auto pt-10 font-sans text-[#1F2937]">
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 flex items-start gap-4">
-          <span className="p-3 bg-[#84D0D9]/20 text-[#022340] rounded-2xl shrink-0">
+          <span className="p-3 bg-brand-soft/20 text-brand-ink rounded-2xl shrink-0">
             <Lock className="w-6 h-6" />
           </span>
           <div className="space-y-2">
-            <h1 className="text-xl font-black text-[#022340] tracking-tight">Configuración de la empresa</h1>
+            <h1 className="text-xl font-black text-brand-ink tracking-tight">Configuración de la empresa</h1>
             <p className="text-sm text-slate-500 font-medium leading-relaxed">
               {message?.text ?? 'Solo el administrador de la empresa puede ver y cambiar esta configuración.'}
             </p>
@@ -399,23 +467,24 @@ export default function TenantSettings() {
 
   const toggleable = data.modules.filter((m) => m.can_toggle);
   const core = data.modules.filter((m) => m.locked === 'core');
-  const unavailable = data.modules.filter((m) => !m.can_toggle && m.locked !== 'core' && m.locked !== 'business_type');
+  const unavailable = data.modules.filter((m) => !m.can_toggle && m.locked !== 'core');
 
   const available: Record<SectionId, boolean> = {
     empresa: true,
     modulos: true,
-    vocabulario: true,
     moneda: true,
+    ayuda: Boolean(user?.is_tenant_admin),
     fases: (data.appointment_statuses?.length ?? 0) > 0,
     reservas: Boolean(bookingRules),
     inasistencias: Boolean(misses),
     salas: Boolean(equipmentDown),
     ventas: Boolean(salesRules),
+    presupuestos: Boolean(quoteRules),
+    inventario: Boolean(inventoryRules),
+    fidelizacion: Boolean(loyaltyRules),
     adelantos: Boolean(paymentRules),
     integraciones: Boolean(paymentRules),
     correo: true,
-    'diseno-correo': true,
-    'mensajes-al-cliente': true,
     grupos: Boolean(groups),
     seguridad: true,
     descargas: can('users.view'),
@@ -449,7 +518,7 @@ export default function TenantSettings() {
   return (
     <div className="space-y-6 pb-10 font-sans text-[#1F2937]">
       <div>
-        <h1 className="text-2xl font-black text-[#022340] tracking-tight">Configuración de la empresa</h1>
+        <h1 className="text-2xl font-black text-brand-ink tracking-tight">Configuración de la empresa</h1>
         <p className="text-sm text-slate-500 font-medium">Elige una sección a la izquierda. Cada sección se guarda con su propio botón.</p>
       </div>
 
@@ -467,7 +536,7 @@ export default function TenantSettings() {
         <nav className="hidden lg:block sticky top-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3 space-y-3" aria-label="Secciones de la configuración" data-settings-index>
           {index.map((group) => (
             <div key={group.title}>
-              <span className="block px-3 pb-1 text-xs font-bold text-[#022340]">{group.title}</span>
+              <span className="block px-3 pb-1 text-xs font-bold text-brand-ink">{group.title}</span>
               {group.sections.map((s) => {
                 const selected = current === s.id;
                 return (
@@ -478,7 +547,7 @@ export default function TenantSettings() {
                     aria-current={selected ? 'page' : undefined}
                     onClick={() => openSection(s.id)}
                     className={`w-full flex items-center justify-between gap-2 text-left px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                      selected ? 'bg-[#84D0D9]/20 text-[#022340] font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-[#022340]'
+                      selected ? 'bg-brand-soft/20 text-brand-ink font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-brand-ink'
                     }`}
                   >
                     <span className="truncate">{s.label}</span>
@@ -494,7 +563,7 @@ export default function TenantSettings() {
       {show('empresa') && (
       <section className={cardClass}>
         <SectionTitle>
-          <Building2 className="w-4 h-4 text-[#3F768C]" /> Datos y código
+          <Building2 className="w-4 h-4 text-brand-accent" /> Datos y código
         </SectionTitle>
         <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {[
@@ -519,7 +588,7 @@ export default function TenantSettings() {
       <section className={cardClass}>
         <div>
           <SectionTitle>
-            <Puzzle className="w-4 h-4 text-[#3F768C]" /> Módulos
+            <Puzzle className="w-4 h-4 text-brand-accent" /> Módulos
           </SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Puedes apagar los módulos que no uses y volver a encenderlos cuando quieras. Al apagar uno deja de verse en el menú de todo tu equipo.
@@ -569,40 +638,12 @@ export default function TenantSettings() {
       </section>
       )}
 
-      {show('vocabulario') && (
-      <section className={cardClass}>
-        <div>
-          <SectionTitle>
-            <Type className="w-4 h-4 text-[#3F768C]" /> Vocabulario
-          </SectionTitle>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            Cómo se nombra a tus clientes y a tu equipo en el menú y en las pantallas. Deja un campo vacío para usar el término de tu rubro.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {VOCABULARY_FIELDS.filter((field) => data.dependents?.enabled || !field.key.startsWith('dependent')).map((field) => (
-            <div key={field.key}>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">{field.label}</label>
-              <input
-                type="text"
-                maxLength={40}
-                value={vocabulary[field.key] ?? ''}
-                onChange={(e) => { setMessage(null); setVocabulary({ ...vocabulary, [field.key]: e.target.value }); }}
-                placeholder={data.vocabulary.defaults[field.key]}
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] outline-none"
-              />
-            </div>
-          ))}
-        </div>
-        {saveBar('vocabulario')}
-      </section>
-      )}
 
       {show('fases') && (data.appointment_statuses?.length ?? 0) > 0 && (
         <section className={cardClass}>
           <div>
             <SectionTitle>
-              <CalendarCheck className="w-4 h-4 text-[#3F768C]" /> Fases de la cita
+              <CalendarCheck className="w-4 h-4 text-brand-accent" /> Fases de la cita
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Las fases por las que pasa una cita son fijas. Puedes cambiar el nombre con que las ve tu equipo; deja un campo vacío para usar el nombre de siempre.
@@ -621,7 +662,7 @@ export default function TenantSettings() {
                   value={statusNames[status.key] ?? ''}
                   onChange={(e) => { setMessage(null); setStatusNames({ ...statusNames, [status.key]: e.target.value }); }}
                   placeholder={status.default_name}
-                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] outline-none"
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                 />
               </div>
             ))}
@@ -634,7 +675,7 @@ export default function TenantSettings() {
         <section className={cardClass} data-card="booking-rules">
           <div>
             <SectionTitle>
-              <ClipboardCheck className="w-4 h-4 text-[#3F768C]" /> Reglas de reserva
+              <ClipboardCheck className="w-4 h-4 text-brand-accent" /> Reglas de reserva
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Cuánto tiempo tienen tus clientes para confirmar y para cancelar, y qué hace el sistema con una cita que nadie confirmó.
@@ -678,9 +719,9 @@ export default function TenantSettings() {
                           data-on-miss={option.id}
                           onClick={() => { setMessage(null); setBookingRules({ ...bookingRules, onMiss: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                         >
-                          <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                          <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                           <span>
-                            <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                            <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
                             <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
                           </span>
                         </OptionCard>
@@ -729,7 +770,7 @@ export default function TenantSettings() {
         <section className={cardClass} data-card="resources-rules">
           <div>
             <SectionTitle>
-              <DoorOpen className="w-4 h-4 text-[#3F768C]" /> Salas y equipos
+              <DoorOpen className="w-4 h-4 text-brand-accent" /> Salas y equipos
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Qué pasa con una sala cuando un equipo instalado en ella queda fuera de uso. La sala de cada equipo se indica al registrarlo.
@@ -747,9 +788,9 @@ export default function TenantSettings() {
                   data-equipment-down={option.id}
                   onClick={() => { setMessage(null); setEquipmentDown(option.id); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                 >
-                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
-                    <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                    <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
                   </span>
                 </OptionCard>
@@ -762,11 +803,33 @@ export default function TenantSettings() {
 
       {show('moneda') && <CurrencySettings />}
 
+      {show('ayuda') && (
+      <section className={cardClass} data-card="help">
+        <div>
+          <SectionTitle>
+            <CircleHelp className="w-4 h-4 text-brand-accent" /> Autoayuda
+          </SectionTitle>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Un botón <span className="font-semibold text-slate-700">?</span> arriba, junto a la campana, explica la pantalla donde está cada persona: para qué sirve, qué hace cada botón y cómo se hacen las tareas de todos los días. En el menú aparece además <span className="font-semibold text-slate-700">Autoayuda</span>, con la guía de todas sus pantallas. Cada persona ve solo lo que su cuenta le permite hacer.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4" data-row="help-switch">
+          <span>
+            <span className="block text-sm font-semibold text-slate-800">Mostrar la ayuda a mi equipo</span>
+            <span className="block text-xs text-slate-500 mt-0.5">Apagada, el botón ? y Autoayuda dejan de verse para todos. Solo el administrador puede cambiarlo.</span>
+          </span>
+          <Switch checked={helpOn} onChange={(on) => { setMessage(null); setHelpOn(on); }} label="Mostrar la ayuda a mi equipo" />
+        </div>
+        {saveBar('ayuda')}
+      </section>
+      )}
+
       {show('ventas') && salesRules && (
         <section className={cardClass} data-card="sales-rules">
           <div>
             <SectionTitle>
-              <Wallet className="w-4 h-4 text-[#3F768C]" /> Ventas y caja
+              <Wallet className="w-4 h-4 text-brand-accent" /> Ventas y caja
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Cómo se calcula el impuesto al cobrar y cómo se maneja el efectivo. Lo que cambies rige para las ventas nuevas; las ya creadas conservan su cálculo.
@@ -852,11 +915,349 @@ export default function TenantSettings() {
         </section>
       )}
 
+      {show('inventario') && inventoryRules && (
+        <section className={cardClass} data-card="inventory-rules">
+          <div>
+            <SectionTitle>
+              <Boxes className="w-4 h-4 text-brand-accent" /> Inventario y almacenes
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cómo se descuentan las existencias al vender o atender, cómo viaja la mercadería entre sedes y cómo se actualiza el costo al comprar.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Descontar insumos al completar una cita</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Cuando una cita pasa a &quot;Completada&quot;, el sistema descuenta automáticamente los insumos asignados a ese servicio en el almacén de la sede.
+              </span>
+            </div>
+            <Switch
+              checked={inventoryRules.consumeOnService}
+              onChange={(on) => { setMessage(null); setInventoryRules({ ...inventoryRules, consumeOnService: on }); }}
+              label="Descontar insumos al completar una cita"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Permitir vender sin stock registrado</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Si lo activas, el punto de venta permite cobrar productos aunque su existencia llegue a cero o quede en negativo. Si lo apagas, solo permite vender lo disponible en la sede.
+              </span>
+            </div>
+            <Switch
+              checked={inventoryRules.allowNegative}
+              onChange={(on) => { setMessage(null); setInventoryRules({ ...inventoryRules, allowNegative: on }); }}
+              label="Permitir vender sin stock registrado"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Traslados entre sedes en dos pasos</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Al enviar mercadería a otra sede queda &quot;En tránsito&quot; hasta que la sede de destino confirme la recepción. Si lo apagas, el stock se mueve en un solo paso.
+              </span>
+            </div>
+            <Switch
+              checked={inventoryRules.transferTwoStep}
+              onChange={(on) => { setMessage(null); setInventoryRules({ ...inventoryRules, transferTwoStep: on }); }}
+              label="Traslados entre sedes en dos pasos"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Avisar cuando un producto baje del stock mínimo</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Envía una notificación interna a la administración y al gerente de sede cuando un producto llega a su alerta mínima o se agota.
+              </span>
+            </div>
+            <Switch
+              checked={inventoryRules.alertMinStock}
+              onChange={(on) => { setMessage(null); setInventoryRules({ ...inventoryRules, alertMinStock: on }); }}
+              label="Avisar cuando un producto baje del stock mínimo"
+            />
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 space-y-2.5">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Al recibir una compra, cómo actualizar el costo del producto</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Define cómo se calcula el costo unitario cuando ingresas mercadería con un nuevo precio de compra.</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Método de costo">
+              {COST_METHOD_OPTIONS.map((option) => {
+                const chosen = inventoryRules.costMethod === option.id;
+                return (
+                  <OptionCard
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={chosen}
+                    data-cost-method={option.id}
+                    onClick={() => { setMessage(null); setInventoryRules({ ...inventoryRules, costMethod: option.id }); }}
+                    selected={chosen}
+                    className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
+                  >
+                    <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                    <span>
+                      <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
+                      <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                    </span>
+                  </OptionCard>
+                );
+              })}
+            </div>
+          </div>
+
+          {saveBar('inventario')}
+        </section>
+      )}
+
+      {show('fidelizacion') && loyaltyRules && (
+        <section className={cardClass} data-card="loyalty-rules">
+          <div>
+            <SectionTitle>
+              <Gift className="w-4 h-4 text-brand-accent" /> Puntos y gift cards
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cómo acumulan y canjean puntos tus clientes al pagar, y cuál es la vigencia por defecto de las tarjetas de regalo.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Acumular y canjear puntos por compras</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Cada vez que una venta con cliente asignado queda pagada, el cliente suma puntos automáticamente y puede usarlos como medio de pago en sus próximas compras.
+              </span>
+            </div>
+            <Switch
+              checked={loyaltyRules.pointsEnabled}
+              onChange={(on) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, pointsEnabled: on }); }}
+              label="Acumular y canjear puntos por compras"
+            />
+          </div>
+
+          {loyaltyRules.pointsEnabled && (
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="loyalty-amount-per-point" className="text-sm font-semibold text-slate-800">El cliente gana 1 punto por cada</label>
+                <span className="text-sm font-semibold text-slate-600">{currencySymbol()}</span>
+                <input
+                  id="loyalty-amount-per-point"
+                  inputMode="decimal"
+                  data-rule="amount_per_point"
+                  value={loyaltyRules.amountPerPoint}
+                  onChange={(e) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, amountPerPoint: e.target.value.replace(/[^\d.]/g, '').slice(0, 7) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">pagados.</span>
+                <span className="w-full text-xs text-slate-500">
+                  No suma puntos la parte pagada con puntos o con gift card, para no duplicar beneficios.
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="loyalty-point-value" className="text-sm font-semibold text-slate-800">Al canjear, cada punto equivale a</label>
+                <span className="text-sm font-semibold text-slate-600">{currencySymbol()}</span>
+                <input
+                  id="loyalty-point-value"
+                  inputMode="decimal"
+                  data-rule="point_value"
+                  value={loyaltyRules.pointValue}
+                  onChange={(e) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, pointValue: e.target.value.replace(/[^\d.]/g, '').slice(0, 7) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">de descuento en el cobro.</span>
+                <span className="w-full text-xs text-slate-500">
+                  Ejemplo: con 1 punto cada {currencySymbol()} {loyaltyRules.amountPerPoint || '10'} y valor de {currencySymbol()} {loyaltyRules.pointValue || '0.50'}, una compra de {currencySymbol()} 100 genera {Math.floor(100 / Math.max(0.1, Number(loyaltyRules.amountPerPoint || 10)))} puntos ({currencySymbol()} {(Math.floor(100 / Math.max(0.1, Number(loyaltyRules.amountPerPoint || 10))) * Number(loyaltyRules.pointValue || 0.5)).toFixed(2)} para su próxima visita).
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="loyalty-min-redeem" className="text-sm font-semibold text-slate-800">Mínimo acumulado para poder canjear:</label>
+                <input
+                  id="loyalty-min-redeem"
+                  inputMode="numeric"
+                  data-rule="min_redeem_points"
+                  value={loyaltyRules.minRedeemPoints}
+                  onChange={(e) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, minRedeemPoints: e.target.value.replace(/\D/g, '').slice(0, 6) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">puntos.</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="loyalty-points-validity" className="text-sm font-semibold text-slate-800">Los puntos vencen a los</label>
+                <input
+                  id="loyalty-points-validity"
+                  inputMode="numeric"
+                  data-rule="points_validity_days"
+                  value={loyaltyRules.pointsValidityDays}
+                  onChange={(e) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, pointsValidityDays: e.target.value.replace(/\D/g, '').slice(0, 4) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">días de ganarse.</span>
+                <span className="w-full text-xs text-slate-500">Con 0 días, los puntos no vencen.</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Emitir y cobrar con gift cards</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Permite crear tarjetas de regalo con código único y saldo recargable o descontable parcial y totalmente al cobrar citas o ventas.
+              </span>
+            </div>
+            <Switch
+              checked={loyaltyRules.giftCardsEnabled}
+              onChange={(on) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, giftCardsEnabled: on }); }}
+              label="Emitir y cobrar con gift cards"
+            />
+          </div>
+
+          {loyaltyRules.giftCardsEnabled && (
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <label htmlFor="loyalty-gc-validity" className="text-sm font-semibold text-slate-800">Vigencia por defecto al emitir una gift card:</label>
+              <input
+                id="loyalty-gc-validity"
+                inputMode="numeric"
+                data-rule="gift_card_validity_days"
+                value={loyaltyRules.giftCardValidityDays}
+                onChange={(e) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, giftCardValidityDays: e.target.value.replace(/\D/g, '').slice(0, 4) }); }}
+                className={hoursInput}
+              />
+              <span className="text-sm text-slate-600">días.</span>
+              <span className="w-full text-xs text-slate-500">Con 0 días, las gift cards se emiten sin fecha de vencimiento por defecto.</span>
+            </div>
+          )}
+
+          {saveBar('fidelizacion')}
+        </section>
+      )}
+
+      {show('presupuestos') && quoteRules && (
+        <section className={cardClass} data-card="quote-rules">
+          <div>
+            <SectionTitle>
+              <FileText className="w-4 h-4 text-brand-accent" /> Presupuestos y planes de tratamiento
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cómo se arman, cuánto duran y qué ocurre cuando un cliente aprueba un presupuesto o plan de tratamiento.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="quote-validity-days" className="text-sm font-semibold text-slate-800">Un presupuesto vence a los</label>
+            <input
+              id="quote-validity-days"
+              inputMode="numeric"
+              data-rule="validity_days"
+              value={quoteRules.validityDays}
+              onChange={(e) => { setMessage(null); setQuoteRules({ ...quoteRules, validityDays: e.target.value.replace(/\D/g, '').slice(0, 4) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">días de haberse creado.</span>
+            <span className="w-full text-xs text-slate-500">Con 0 días, los presupuestos nacen sin fecha de vencimiento por defecto.</span>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Permitir planes de pago en cuotas</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Habilita armar un cronograma de cuotas con fechas de vencimiento dentro del presupuesto y llevar el control de qué cuotas están al día o vencidas.
+              </span>
+            </div>
+            <Switch
+              checked={quoteRules.allowInstallments}
+              onChange={(on) => { setMessage(null); setQuoteRules({ ...quoteRules, allowInstallments: on }); }}
+              label="Permitir planes de pago en cuotas"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Generar la venta por cobrar automáticamente al aprobar</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Cuando el presupuesto pasa a &quot;Aprobado&quot;, se crea sola su cuenta por cobrar en Ventas para poder recibir pagos totales o por cuotas de inmediato.
+              </span>
+            </div>
+            <Switch
+              checked={quoteRules.autoCreateSale}
+              onChange={(on) => { setMessage(null); setQuoteRules({ ...quoteRules, autoCreateSale: on }); }}
+              label="Generar la venta por cobrar automáticamente al aprobar"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Registrar pieza dental, zona o etapa en cada línea</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Muestra un campo adicional en cada servicio del plan para anotar la pieza dental, zona corporal o etapa del tratamiento.
+              </span>
+            </div>
+            <Switch
+              checked={quoteRules.trackClinicalZones}
+              onChange={(on) => { setMessage(null); setQuoteRules({ ...quoteRules, trackClinicalZones: on }); }}
+              label="Registrar pieza dental, zona o etapa en cada línea"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+            <label htmlFor="quote-plan-validity" className="text-sm font-semibold text-slate-800">Al aprobarse, el plan de tratamiento dura</label>
+            <input
+              id="quote-plan-validity"
+              inputMode="numeric"
+              data-rule="plan_validity_days"
+              value={quoteRules.planValidityDays}
+              onChange={(e) => { setMessage(null); setQuoteRules({ ...quoteRules, planValidityDays: e.target.value.replace(/\D/g, '').slice(0, 4) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">días.</span>
+            <span className="w-full text-xs text-slate-500">
+              El presupuesto aprobado se convierte en un paquete con sus sesiones, que se descuentan solas al atender cada cita. Si el cliente no asiste o cancela tarde, la sesión no se pierde.
+            </span>
+          </div>
+
+          <div className="space-y-2 pt-4 border-t border-slate-100">
+            <span className="block text-sm font-semibold text-slate-800">Si se anula un presupuesto ya aprobado</span>
+            <span className="block text-xs text-slate-500">Cómo se cobra lo que el cliente ya usó. Los productos y otros cargos del presupuesto se cobran completos.</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Si se anula un presupuesto ya aprobado">
+              {QUOTE_CANCEL_OPTIONS.map((option) => {
+                const chosen = quoteRules.cancelPolicy === option.id;
+                return (
+                  <OptionCard
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={chosen}
+                    data-cancel-policy={option.id}
+                    onClick={() => { setMessage(null); setQuoteRules({ ...quoteRules, cancelPolicy: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
+                  >
+                    <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                    <span>
+                      <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
+                      <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                    </span>
+                  </OptionCard>
+                );
+              })}
+            </div>
+          </div>
+
+          {saveBar('presupuestos')}
+        </section>
+      )}
+
       {show('adelantos') && paymentRules && (
         <section className={cardClass} data-card="payment-rules">
           <div>
             <SectionTitle>
-              <Link2 className="w-4 h-4 text-[#3F768C]" /> Adelantos y links de pago
+              <Link2 className="w-4 h-4 text-brand-accent" /> Adelantos y links de pago
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Cuánto dura un link de pago y qué pasa con el adelanto de quien reserva en línea. Cuánto es el adelanto se elige en cada servicio.
@@ -910,14 +1311,12 @@ export default function TenantSettings() {
       {show('integraciones') && paymentRules && <IntegrationsSettings canSave={canSave} onDirtyChange={markExternal('integraciones')} />}
 
       {show('correo') && <MessagingSettings part="email" canSave={canSave} company={user?.tenant?.name ?? ''} onDirtyChange={markExternal('correo')} />}
-      {show('diseno-correo') && <MessagingSettings part="design" canSave={canSave} company={user?.tenant?.name ?? ''} onDirtyChange={markExternal('diseno-correo')} />}
-      {show('mensajes-al-cliente') && <MessagingSettings part="notices" canSave={canSave} company={user?.tenant?.name ?? ''} />}
 
       {show('inasistencias') && misses && (
         <section className={cardClass} data-card="booking-misses">
           <div>
             <SectionTitle>
-              <CalendarX2 className="w-4 h-4 text-[#3F768C]" /> Si reserva en línea y no asiste
+              <CalendarX2 className="w-4 h-4 text-brand-accent" /> Si reserva en línea y no asiste
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Qué pasa con un cliente que reservó desde el portal y su cita terminó en "No asistió". Las citas que agenda tu equipo no cuentan aquí.
@@ -936,9 +1335,9 @@ export default function TenantSettings() {
                   data-miss-action={option.id}
                   onClick={() => { setMessage(null); setMisses({ ...misses, action: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                 >
-                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
-                    <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                    <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
                   </span>
                 </OptionCard>
@@ -968,7 +1367,7 @@ export default function TenantSettings() {
         <section className={cardClass} data-card="customer-groups">
           <div>
             <SectionTitle>
-              <Users className="w-4 h-4 text-[#3F768C]" /> Grupos de clientes
+              <Users className="w-4 h-4 text-brand-accent" /> Grupos de clientes
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Definen a quiénes les llega una campaña cuando eliges un grupo. Se recalculan solos con cada visita y cada pago.
@@ -1004,7 +1403,7 @@ export default function TenantSettings() {
       <section className={cardClass} data-card="session-idle">
         <div>
           <SectionTitle>
-            <Timer className="w-4 h-4 text-[#3F768C]" /> Cierre de sesión
+            <Timer className="w-4 h-4 text-brand-accent" /> Cierre de sesión
           </SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Si nadie mueve el mouse, escribe ni toca la pantalla durante ese tiempo, la sesión se cierra sola. Un minuto antes aparece un aviso para seguir conectado.

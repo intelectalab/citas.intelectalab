@@ -247,7 +247,7 @@ export default function SchedulePanel({ isOpen, onClose, source, branchId, custo
                   <div className="flex gap-1.5">
                     {[1, 2].map((weeks) => (
                       <button key={weeks} type="button" onClick={() => setRepeatWeeks(weeks)}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${repeatWeeks === weeks ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${repeatWeeks === weeks ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                         {weeks === 1 ? 'Cada semana' : 'Cada 2 semanas'}
                       </button>
                     ))}
@@ -270,7 +270,7 @@ export default function SchedulePanel({ isOpen, onClose, source, branchId, custo
             </div>
 
             <button type="button" data-generate disabled={!canGenerate || checking} onClick={generate}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border border-[#022340] text-[#022340] rounded-xl hover:bg-[#84D0D9]/15 transition-colors disabled:opacity-50">
+              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border border-brand text-brand-ink rounded-xl hover:bg-brand-soft/15 transition-colors disabled:opacity-50">
               {checking ? <Loader2 size={15} className="animate-spin" /> : <CalendarDays size={15} />} {slots.length ? 'Volver a armar las fechas' : 'Ver las fechas'}
             </button>
           </section>
@@ -278,7 +278,7 @@ export default function SchedulePanel({ isOpen, onClose, source, branchId, custo
           {slots.length > 0 && (
             <section className="space-y-2" data-slots>
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black text-[#022340]">Fechas</h3>
+                <h3 className="text-sm font-black text-brand-ink">Fechas</h3>
                 <span className={`text-xs font-semibold ${badCount ? 'text-amber-700' : 'text-emerald-700'}`} data-slots-summary>
                   {okCount} de {slots.length} libres{badCount ? ` · ${badCount} por cambiar` : ''}
                 </span>
@@ -298,7 +298,7 @@ export default function SchedulePanel({ isOpen, onClose, source, branchId, custo
                         </span>
                       </div>
                       <button type="button" data-slot-edit={index} onClick={() => (editing === index ? setEditing(null) : openEdit(index))}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors ${slot.ok ? 'text-slate-600 hover:bg-slate-100' : 'bg-[#022340] text-white hover:bg-[#03315a]'}`}>
+                        className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors ${slot.ok ? 'text-slate-600 hover:bg-slate-100' : 'bg-brand text-white hover:bg-brand-hover'}`}>
                         <Pencil size={12} /> Cambiar
                       </button>
                       <button type="button" title="Quitar esta fecha" onClick={() => removeSlot(index)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
@@ -322,7 +322,7 @@ export default function SchedulePanel({ isOpen, onClose, source, branchId, custo
                             <div className="flex flex-wrap gap-1.5">
                               {free.times.map((t) => (
                                 <button key={t.time} type="button" data-free-time={t.time} title={t.professionals.map((p) => p.name).join(', ')} onClick={() => pick(free.date, t)}
-                                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:border-[#022340] hover:bg-[#84D0D9]/15 transition-colors">
+                                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:border-brand hover:bg-brand-soft/15 transition-colors">
                                   {t.label}
                                 </button>
                               ))}
@@ -339,7 +339,7 @@ export default function SchedulePanel({ isOpen, onClose, source, branchId, custo
                             <div className="flex flex-wrap gap-1.5">
                               {free.next_days.map((day) => (
                                 <button key={day.date} type="button" data-next-day={day.date} onClick={() => loadFree(day.date)}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:border-[#022340] hover:bg-[#84D0D9]/15 transition-colors first-letter:uppercase">
+                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:border-brand hover:bg-brand-soft/15 transition-colors first-letter:uppercase">
                                   {dayLabel(day.date)} · {day.count} {day.count === 1 ? 'hora' : 'horas'}
                                 </button>
                               ))}

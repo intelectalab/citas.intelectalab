@@ -115,7 +115,7 @@ function QrCard({ method, label, qr, canSave, onSaved }: { method: 'yape' | 'pli
         {shown ? <img src={shown} alt={`QR de ${label}`} className="w-full h-full object-contain bg-white" /> : <QrCode size={32} className="text-slate-300" />}
       </div>
       <div className="flex-1 min-w-0 space-y-2">
-        <span className="block text-sm font-bold text-[#022340]">{label}</span>
+        <span className="block text-sm font-bold text-brand-ink">{label}</span>
         <input aria-label={`Titular de ${label}`} maxLength={150} placeholder="A nombre de (opcional)" disabled={!canSave} className={inputClass} value={holder} onChange={(e) => { setHolder(e.target.value); setNotice(''); }} />
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" data-qr-file={method} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
         {canSave && (
@@ -124,7 +124,7 @@ function QrCard({ method, label, qr, canSave, onSaved }: { method: 'yape' | 'pli
               <ImagePlus size={14} /> {shown ? 'Cambiar imagen' : 'Subir imagen'}
             </button>
             {shown && dirty && (
-              <button type="button" data-qr-save={method} disabled={busy} onClick={save} className="px-3 py-2 text-sm font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50">
+              <button type="button" data-qr-save={method} disabled={busy} onClick={save} className="px-3 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50">
                 {busy ? 'Guardando...' : 'Guardar'}
               </button>
             )}
@@ -209,7 +209,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
     <section className={cardClass} data-card="integrations">
       <div>
         <SectionTitle>
-          <Plug className="w-4 h-4 text-[#3F768C]" /> Integraciones
+          <Plug className="w-4 h-4 text-brand-accent" /> Integraciones
         </SectionTitle>
         <p className="text-xs text-slate-500 font-medium mt-1">
           Los servicios externos que usa tu empresa para cobrar y facturar. Las llaves se guardan cifradas y nunca se muestran completas.
@@ -232,7 +232,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
                 disabled={!canSave}
                 onClick={() => { setChosen(option.key); setNotice(''); setError(''); }} selected={active} className="text-left rounded-xl border px-3.5 py-3 transition-colors"
               >
-                <span className="block text-sm font-bold text-[#022340]">{option.label}</span>
+                <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                 <span className={`block text-xs mt-0.5 ${inUse ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>
                   {inUse ? 'En uso' : option.key === 'simulated' ? 'Para probar' : option.saved ? 'Llaves guardadas' : 'Lista para conectar'}
                 </span>
@@ -261,7 +261,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
 
         <div className="flex flex-wrap gap-2">
           {canSave && (
-            <button type="button" data-save-provider disabled={busy || (chosen === data.payments.chosen && !isReal)} onClick={save} className="px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50">
+            <button type="button" data-save-provider disabled={busy || (chosen === data.payments.chosen && !isReal)} onClick={save} className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
               {busy ? 'Guardando...' : 'Guardar pasarela'}
             </button>
           )}
@@ -275,17 +275,17 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-slate-100">
         <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
-          <span className="p-2 rounded-lg bg-[#84D0D9]/20 text-[#022340] shrink-0"><FileText size={16} /></span>
+          <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0"><FileText size={16} /></span>
           <span>
-            <span className="block text-sm font-bold text-[#022340]">Facturación electrónica</span>
+            <span className="block text-sm font-bold text-brand-ink">Facturación electrónica</span>
             <span className="block text-xs text-slate-500 mt-0.5">Simulación de SUNAT: las boletas y facturas aún no se envían. Lista para conectar un proveedor.</span>
           </span>
         </div>
         <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
-          <span className="p-2 rounded-lg bg-[#84D0D9]/20 text-[#022340] shrink-0"><MessageCircle size={16} /></span>
+          <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0"><MessageCircle size={16} /></span>
           <span>
-            <span className="block text-sm font-bold text-[#022340]">Correo y WhatsApp</span>
-            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura en Mensajes → <a href="#correo" data-link="correo" className="font-semibold text-[#3F768C] hover:underline">Correo de tu empresa</a>. WhatsApp queda listo para conectar cuando elijan un proveedor.</span>
+            <span className="block text-sm font-bold text-brand-ink">Correo y WhatsApp</span>
+            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura en Mensajes → <a href="#correo" data-link="correo" className="font-semibold text-brand-accent hover:underline">Correo de tu empresa</a>. WhatsApp queda listo para conectar cuando elijan un proveedor.</span>
           </span>
         </div>
       </div>

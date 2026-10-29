@@ -23,6 +23,13 @@ class Cart
 
     public const MAX_ITEMS = 50;
 
+    public const NO_PRODUCTS = 'Tu plan no incluye productos: se venden con el módulo Inventario.';
+
+    public static function productsEnabled(Tenant $tenant): bool
+    {
+        return self::productsReady() && $tenant->hasModule('inventory');
+    }
+
     public static function productsReady(): bool
     {
         static $ready = null;
@@ -201,6 +208,10 @@ class Cart
                 self::fail($field, Sales::NOT_READY);
             }
 
+            if (!self::productsEnabled($tenant) && !($sale && DB::table('sale_items')->where('sale_id', $sale->id)->where('item_type', 'product')->where('reference_id', $id)->exists())) {
+                self::fail($field, self::NO_PRODUCTS);
+            }
+
             $product = DB::table('products')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('id', $id)->first();
 
             if (!$product || $product->status !== 'active' || !in_array($product->kind, self::SELLABLE, true)) {
@@ -234,6 +245,8 @@ class Cart
         if (!$customer && collect($lines)->contains('type', 'package')) {
             self::fail('customer_id', 'Elige al cliente: el paquete queda a su nombre.');
         }
+
+        Inventory::assertStockForItems($tenant, $branch->id, $lines);
 
         $gross = round(array_sum(array_column($lines, 'total')), 2);
 
@@ -409,7 +422,7 @@ class Cart
                 DB::table('sales')->insert($values + [
                     'id'         => $id,
                     'tenant_id'  => $tenant->id,
-                    'code'       => sprintf('V-%06d', Sales::nextNumber($tenant->id, 'sale')),
+                    'code'       => Codes::next($tenant->id, 'sale'),
                     'status'     => 'pending',
                     'created_by' => $user->id,
                     'created_at' => now(),

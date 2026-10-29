@@ -17,7 +17,7 @@ export default function PortalPackages({ packages, onBook }: { packages: PortalP
   return (
     <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden" data-card="portal-packages">
       <div className="px-5 pt-5 pb-3">
-        <SectionTitle><Boxes size={16} className="text-[#3F768C]" /> Mis paquetes</SectionTitle>
+        <SectionTitle><Boxes size={16} className="text-brand-accent" /> Mis paquetes</SectionTitle>
         <p className="text-xs text-slate-500 mt-1">
           {active.length
             ? (() => {
@@ -45,7 +45,7 @@ export default function PortalPackages({ packages, onBook }: { packages: PortalP
               <span className={`block text-xs font-medium ${p.status === 'active' && p.days_left <= 15 ? 'text-amber-700' : 'text-slate-500'}`}>{daysLeftLabel(p)}</span>
               <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 leading-relaxed">{p.terms_text}</p>
               {p.status === 'active' && p.sessions_available > 0 && onBook && (
-                <button type="button" onClick={onBook} className="text-xs font-bold text-[#3F768C] underline underline-offset-2">Reservar una sesión</button>
+                <button type="button" onClick={onBook} className="text-xs font-bold text-brand-accent underline underline-offset-2">Reservar una sesión</button>
               )}
             </li>
           )}

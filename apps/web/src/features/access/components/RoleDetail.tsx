@@ -38,7 +38,7 @@ interface Detail {
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-[#022340]';
+const cardTitle = 'flex items-center gap-2 text-sm font-extrabold text-brand-ink';
 
 export default function RoleDetail() {
   const params = useParams<{ id: string }>();
@@ -133,7 +133,7 @@ export default function RoleDetail() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -159,7 +159,7 @@ export default function RoleDetail() {
   const stats = [
     { id: 'enters', title: 'Entra a', value: role.locked ? 'Todo' : String(screenCount), note: role.locked ? 'el menú completo' : screenCount === 1 ? 'pantalla del menú' : 'pantallas del menú', icon: <LayoutList size={18} />, color: 'text-emerald-600' },
     { id: 'specials', title: 'Permisos especiales', value: String(specialCount), note: 'encendidos', icon: <Sparkles size={18} />, color: 'text-amber-600' },
-    { id: 'people', title: 'Personas con este rol', value: String(users.length), note: users.length === 1 ? 'persona' : 'personas', icon: <Users size={18} />, color: 'text-[#3F768C]' },
+    { id: 'people', title: 'Personas con este rol', value: String(users.length), note: users.length === 1 ? 'persona' : 'personas', icon: <Users size={18} />, color: 'text-brand-accent' },
   ];
 
   const pickStat = (id: string) => {
@@ -182,9 +182,9 @@ export default function RoleDetail() {
           <div className="p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-12 h-12 rounded-2xl bg-[#022340] text-[#84D0D9] flex items-center justify-center shrink-0"><ShieldCheck size={22} /></span>
+                <span className="w-12 h-12 rounded-2xl bg-brand text-brand-soft flex items-center justify-center shrink-0"><ShieldCheck size={22} /></span>
                 <div className="min-w-0">
-                  <h1 className="text-xl font-black text-[#022340] tracking-tight truncate">{role.name}</h1>
+                  <h1 className="text-xl font-black text-brand-ink tracking-tight truncate">{role.name}</h1>
                   <p className="text-xs text-slate-500">{role.is_system ? 'Rol de fábrica' : 'Rol propio de tu empresa'}</p>
                 </div>
               </div>
@@ -215,9 +215,9 @@ export default function RoleDetail() {
                         data-scope={option.id}
                         disabled={!editable || busy === 'scope'}
                         onClick={() => { setNeedsBranch(null); changeScope(option.id); }}
-                        className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors disabled:cursor-default ${chosen ? 'border-[#022340] bg-[#84D0D9]/15 ring-2 ring-[#022340]/10' : 'border-slate-200 enabled:hover:bg-slate-50'}`}
+                        className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors disabled:cursor-default ${chosen ? 'border-brand bg-brand-soft/15 ring-2 ring-brand/10' : 'border-slate-200 enabled:hover:bg-slate-50'}`}
                       >
-                        <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                        <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
                         <span className="block text-xs text-slate-500 mt-0.5">{option.hint}</span>
                       </button>
                     );
@@ -250,7 +250,7 @@ export default function RoleDetail() {
                       data-action="assign-and-apply"
                       disabled={busy === 'scope' || needsBranch.people.some((p) => !assign[p.id])}
                       onClick={() => changeScope('branch', assign)}
-                      className="px-3 py-1.5 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50"
                     >
                       Asignar y aplicar
                     </button>
@@ -262,7 +262,7 @@ export default function RoleDetail() {
             {(detail.can_restore || detail.can_delete) && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {detail.can_restore && (
-                  <button type="button" data-action="restore-role" onClick={() => { setError(''); setNotice(''); setConfirm('restore'); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#3F768C] border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">
+                  <button type="button" data-action="restore-role" onClick={() => { setError(''); setNotice(''); setConfirm('restore'); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-accent border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">
                     <RotateCcw size={13} /> Volver a como nació
                   </button>
                 )}
@@ -282,12 +282,12 @@ export default function RoleDetail() {
               empty="Nadie tiene este rol todavía."
               renderRow={(person) => (
                 <li key={person.id} className="flex items-center gap-3 px-5 py-2.5">
-                  <span className="w-8 h-8 rounded-full bg-[#022340] text-[#84D0D9] flex items-center justify-center text-xs font-bold shrink-0">{initialsOf(person.name)}</span>
+                  <span className="w-8 h-8 rounded-full bg-brand text-brand-soft flex items-center justify-center text-xs font-bold shrink-0">{initialsOf(person.name)}</span>
                   <div className="min-w-0 flex-1">
                     <UserLink id={person.id} className="block text-sm font-semibold text-slate-800 truncate">{person.name}</UserLink>
                     <span className="block text-xs text-slate-400 truncate">{person.email}</span>
                   </div>
-                  {person.is_owner && <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-[#84D0D9]/25 text-[#022340]">Dueño</span>}
+                  {person.is_owner && <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-brand-soft/25 text-brand-ink">Dueño</span>}
                   {person.status !== 'active' && <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 text-rose-600">Desactivado</span>}
                 </li>
               )}
@@ -306,7 +306,7 @@ export default function RoleDetail() {
                 title={stat.id === 'people' ? 'Ver quiénes son' : 'Ver cuáles son'}
                 onClick={() => pickStat(stat.id)}
                 className={`bg-white px-4 py-3 rounded-2xl border text-left shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] ${
-                  focus === stat.id ? 'border-[#3F768C] ring-2 ring-[#3F768C]/20' : 'border-slate-100 hover:border-slate-200'
+                  focus === stat.id ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'border-slate-100 hover:border-slate-200'
                 }`}
               >
                 <span className="flex items-start justify-between gap-2">
@@ -327,7 +327,7 @@ export default function RoleDetail() {
         <section className={`${card} xl:col-span-3 overflow-hidden`} data-card="permissions">
           <div className="px-6 pt-5 pb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-[#3F768C]" /> {focus === 'enters' ? 'Las pantallas a las que entra' : focus === 'specials' ? 'Sus permisos especiales' : 'Qué permite, pantalla por pantalla'}</h2>
+              <h2 className={cardTitle}><ShieldCheck className="w-4 h-4 text-brand-accent" /> {focus === 'enters' ? 'Las pantallas a las que entra' : focus === 'specials' ? 'Sus permisos especiales' : 'Qué permite, pantalla por pantalla'}</h2>
               <p className="text-xs text-slate-500 font-medium mt-1 max-w-3xl">
                 {role.locked
                   ? 'El Administrador puede todo y no se le quitan permisos: así la empresa nunca se queda sin alguien que pueda arreglar las cosas.'
@@ -336,7 +336,7 @@ export default function RoleDetail() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {focus && (
-                <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+                <button type="button" data-action="clear-focus" onClick={() => setFocus('')} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
                   Ver todas las pantallas
                 </button>
               )}

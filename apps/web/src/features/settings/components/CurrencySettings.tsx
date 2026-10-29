@@ -54,7 +54,7 @@ interface Preview {
 }
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
-const chip = (on: boolean) => `px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${on ? 'border-[#022340] bg-[#84D0D9]/15 text-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`;
+const chip = (on: boolean) => `px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${on ? 'border-brand bg-brand-soft/15 text-brand-ink' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`;
 
 const label = (c: CurrencyInfo) => `${c.name} (${c.symbol})`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -191,7 +191,7 @@ export default function CurrencySettings() {
   if (error) {
     return (
       <section className={cardClass} data-card="currency">
-        <SectionTitle><Coins className="w-4 h-4 text-[#3F768C]" /> Moneda</SectionTitle>
+        <SectionTitle><Coins className="w-4 h-4 text-brand-accent" /> Moneda</SectionTitle>
         <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
       </section>
     );
@@ -200,7 +200,7 @@ export default function CurrencySettings() {
   if (!data || !current) {
     return (
       <section className={cardClass} data-card="currency">
-        <Loader2 className="w-5 h-5 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-5 h-5 text-brand-accent animate-spin" />
       </section>
     );
   }
@@ -214,7 +214,7 @@ export default function CurrencySettings() {
     <section className={cardClass} data-card="currency">
       <div>
         <SectionTitle>
-          <Coins className="w-4 h-4 text-[#3F768C]" /> Moneda
+          <Coins className="w-4 h-4 text-brand-accent" /> Moneda
         </SectionTitle>
         <p className="text-xs text-slate-500 font-medium mt-1">
           La moneda en que tu empresa cobra. Cada venta, pago, caja y cita guarda la moneda en que se hizo: cambiarla aquí no altera lo ya registrado.
@@ -226,15 +226,15 @@ export default function CurrencySettings() {
       <div className="flex flex-wrap items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3">
         <div>
           <span className="block text-xs text-slate-500">Tu empresa cobra en</span>
-          <span className="block text-lg font-black text-[#022340]" data-current-currency={current.code}>{label(current)}</span>
+          <span className="block text-lg font-black text-brand-ink" data-current-currency={current.code}>{label(current)}</span>
         </div>
         {data.can_edit && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" data-action="change-currency" onClick={openChange} className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors">
+            <button type="button" data-action="change-currency" onClick={openChange} className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
               Cambiar moneda
             </button>
             {others.length > 0 && (
-              <button type="button" data-action="change-records" onClick={() => openRecords()} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-[#3F768C] border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+              <button type="button" data-action="change-records" onClick={() => openRecords()} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-brand-accent border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
                 <RefreshCw size={14} /> Cambiar registros anteriores
               </button>
             )}
@@ -276,7 +276,7 @@ export default function CurrencySettings() {
                 <>
                   <p className="text-sm text-slate-700">¿Hay registros anteriores en {justChanged.symbol} que también quieras cambiar? Por ejemplo, citas ya agendadas que se cobrarán en {current.symbol}.</p>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" data-action="open-records" onClick={() => openRecords(justChanged.code)} className="px-4 py-2 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] transition-colors">
+                    <button type="button" data-action="open-records" onClick={() => openRecords(justChanged.code)} className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
                       Sí, cambiar registros anteriores
                     </button>
                     <button type="button" onClick={() => setChanging(false)} className="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
@@ -339,14 +339,14 @@ export default function CurrencySettings() {
               <span className={labelClass}>¿Qué pasó?</span>
               <div className="grid gap-2" role="radiogroup" aria-label="Qué pasó">
                 <OptionCard type="button" role="radio" aria-checked={kind === 'relabel'} data-kind="relabel" onClick={() => setKind('relabel')} selected={kind === 'relabel'} className="text-left rounded-xl border px-4 py-3 transition-colors">
-                  <span className="flex items-center gap-2 text-sm font-bold text-[#022340]">Me equivoqué de moneda <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700">Recomendado</span></span>
+                  <span className="flex items-center gap-2 text-sm font-bold text-brand-ink">Me equivoqué de moneda <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700">Recomendado</span></span>
                   <span className="block text-xs text-slate-600 mt-1">
                     Registraste en {fromSymbol || 'otra moneda'} cobros y precios que en realidad eran en {current.symbol}. Los montos se quedan igual; solo cambia la moneda.
                   </span>
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mt-1.5">Ejemplo: {fromSymbol || '—'} 100.00 <ArrowRight size={12} /> {current.symbol} 100.00</span>
                 </OptionCard>
                 <OptionCard type="button" role="radio" aria-checked={kind === 'convert'} data-kind="convert" onClick={() => setKind('convert')} selected={kind === 'convert'} className="text-left rounded-xl border px-4 py-3 transition-colors">
-                  <span className="block text-sm font-bold text-[#022340]">Quiero pasar los montos a la otra moneda</span>
+                  <span className="block text-sm font-bold text-brand-ink">Quiero pasar los montos a la otra moneda</span>
                   <span className="block text-xs text-slate-600 mt-1">
                     Los montos se recalculan con un tipo de cambio, como si siempre hubieran sido en {current.symbol}. Ojo: dejarán de decir lo que el cliente pagó en su momento.
                   </span>

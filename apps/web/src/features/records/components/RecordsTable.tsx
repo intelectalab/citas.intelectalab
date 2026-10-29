@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, Eye, EyeOff, FileCheck2, FilePen, Lock } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
@@ -87,6 +87,20 @@ export default function RecordsTable() {
     { id: 'status', label: 'Estado', type: 'select', options: Object.entries(RECORD_STATUS).map(([value, item]) => ({ value, label: item.label })) },
   ];
 
+  const exportColumns: ExportColumn<CareRecord>[] = [
+    { header: 'Fecha', type: 'datetime', value: (r) => r.appointment?.starts_at ?? r.created_at },
+    { header: 'Cita', value: (r) => r.appointment?.code ?? '' },
+    { header: vocab.client, value: (r) => r.customer?.name ?? '' },
+    { header: 'Código', value: (r) => r.customer?.code ?? '' },
+    ...(usesDependents ? [{ header: vocab.dependent, value: (r: CareRecord) => r.dependent?.name ?? '' }] : []),
+    { header: 'Ficha', value: (r) => r.template_name ?? '' },
+    { header: 'Servicio', value: (r) => r.appointment?.service ?? '' },
+    { header: 'Privada', value: (r) => (r.is_private ? 'Sí' : 'No') },
+    { header: vocab.pro, value: (r) => r.professional ?? r.author ?? '' },
+    { header: 'Estado', value: (r) => RECORD_STATUS[r.status]?.label ?? r.status },
+    { header: 'Firmada el', type: 'datetime', value: (r) => r.signed_at },
+  ];
+
   const columns: Column<CareRecord>[] = [
     {
       header: 'Fecha',
@@ -107,7 +121,7 @@ export default function RecordsTable() {
       cell: (r) => (
         <div key={`customer-${r.id}`}>
           <CustomerLink id={r.customer?.id} className={styles.customerName}>{r.customer?.name ?? '—'}</CustomerLink>
-          <button type="button" data-open={r.id} onClick={() => setOpenAppointmentId(r.appointment_id)} className="block text-left text-xs text-slate-400 hover:text-[#3F768C] transition-colors">
+          <button type="button" data-open={r.id} onClick={() => setOpenAppointmentId(r.appointment_id)} className="block text-left text-xs text-slate-400 hover:text-brand-accent transition-colors">
             {usesDependents && r.dependent ? `${vocab.dependent}: ${r.dependent.name}` : r.customer?.code} · ver ficha
           </button>
         </div>
@@ -169,6 +183,9 @@ export default function RecordsTable() {
           filterValues={{ status }}
           onFilterChange={(_, value) => setStatus(value)}
           columns={columns}
+          exportTitle="Fichas de atención"
+          exportScreen="records"
+          exportColumns={exportColumns}
           dateFilters={[
             { id: 'created_at', label: 'Fecha de la ficha', value: (r) => r.created_at, onRange: setDateRange, clearOnTab: true },
           ]}

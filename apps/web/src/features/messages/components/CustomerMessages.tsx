@@ -53,11 +53,11 @@ export default function CustomerMessages({ customer, consents: initial, canView,
     <section className={`${card} overflow-hidden flex flex-col`} data-card="messages">
       <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3">
         <div>
-          <SectionTitle><Mail className="w-4 h-4 text-[#3F768C]" /> Mensajes</SectionTitle>
+          <SectionTitle><Mail className="w-4 h-4 text-brand-accent" /> Mensajes</SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">{customer.email ? `Correo: ${customer.email}` : 'No tiene correo registrado: agrégalo en su ficha para escribirle.'}</p>
         </div>
         {board?.can.create && (
-          <button type="button" data-action="new-message" onClick={() => { setEditing(null); setComposing(true); setNotice(''); }} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shrink-0">
+          <button type="button" data-action="new-message" onClick={() => { setEditing(null); setComposing(true); setNotice(''); }} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover shrink-0">
             <Plus size={14} /> Nuevo mensaje
           </button>
         )}

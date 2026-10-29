@@ -134,7 +134,7 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
   if (authLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
         <p className="text-xs font-semibold text-slate-400">Verificando estado de la cuenta...</p>
       </div>
     );
@@ -143,11 +143,11 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
   return (
     <div className={`bg-slate-50/50 rounded-3xl p-6 md:p-10 border border-slate-200/80 shadow-xs ${isEmbedded ? 'w-full' : ''}`}>
       <div className="text-center max-w-2xl mx-auto space-y-3 mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#84D0D9]/20 text-[#022340] text-xs font-bold uppercase tracking-wider">
-          <Zap className="w-3.5 h-3.5 text-[#3F768C]" />
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-soft/20 text-brand-ink text-xs font-bold uppercase tracking-wider">
+          <Zap className="w-3.5 h-3.5 text-brand-accent" />
           Planes y Membresías
         </div>
-        <h2 className="text-3xl md:text-4xl font-extrabold text-[#022340] tracking-tight">
+        <h2 className="text-3xl md:text-4xl font-extrabold text-brand-ink tracking-tight">
           Selecciona un plan para activar tu cuenta
         </h2>
         <p className="text-xs md:text-sm text-slate-500 font-medium">
@@ -155,21 +155,21 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
         </p>
 
         <div className="pt-2 flex items-center justify-center gap-3 text-xs font-semibold">
-          <span className={billingCycle === 'monthly' ? 'text-[#022340]' : 'text-slate-400'}>Facturación Mensual</span>
+          <span className={billingCycle === 'monthly' ? 'text-brand-ink' : 'text-slate-400'}>Facturación Mensual</span>
           <button
             type="button"
             onClick={() => setBillingCycle(prev => prev === 'monthly' ? 'yearly' : 'monthly')}
             className="w-12 h-6 bg-slate-200 rounded-full p-1 transition-colors relative"
           >
-            <div className={`w-4 h-4 bg-[#022340] rounded-full transition-transform ${billingCycle === 'yearly' ? 'translate-x-6' : 'translate-x-0'}`} />
+            <div className={`w-4 h-4 bg-brand rounded-full transition-transform ${billingCycle === 'yearly' ? 'translate-x-6' : 'translate-x-0'}`} />
           </button>
-          <span className={billingCycle === 'yearly' ? 'text-[#022340]' : 'text-slate-400'}>Facturación Anual</span>
+          <span className={billingCycle === 'yearly' ? 'text-brand-ink' : 'text-slate-400'}>Facturación Anual</span>
         </div>
       </div>
 
       {loadingPlans ? (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
-          <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+          <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
           <p className="text-xs font-semibold text-slate-400">Cargando opciones de planes...</p>
         </div>
       ) : (
@@ -181,11 +181,11 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
             return (
               <div
                 key={plan.id}
-                className="bg-white rounded-2xl border border-slate-200/80 p-6 flex flex-col justify-between shadow-2xs hover:shadow-md transition-all duration-200 hover:border-[#3F768C]/50"
+                className="bg-white rounded-2xl border border-slate-200/80 p-6 flex flex-col justify-between shadow-2xs hover:shadow-md transition-all duration-200 hover:border-brand-accent/50"
               >
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-[#022340]">{plan.name}</h3>
+                    <h3 className="text-lg font-bold text-brand-ink">{plan.name}</h3>
                     <div className="p-2 bg-slate-100 rounded-xl text-slate-600">
                       <Building2 className="w-4 h-4" />
                     </div>
@@ -193,7 +193,7 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
 
                   <div className="mb-6">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-[#022340]">{plan.currency_symbol ?? 'S/'} {Math.floor(Number(price))}</span>
+                      <span className="text-3xl font-black text-brand-ink">{plan.currency_symbol ?? 'S/'} {Math.floor(Number(price))}</span>
                       <span className="text-xs text-slate-400 font-medium">
                         /{billingCycle === 'monthly' ? 'mes' : 'año'}
                       </span>
@@ -235,17 +235,17 @@ export default function PlanSelection({ isEmbedded = false }: PlanSelectionProps
                   type="button"
                   disabled={isLoading || submittingPlanId !== null}
                   onClick={() => handleSelectPlan(plan)}
-                  className="mt-8 w-full bg-[#022340] hover:bg-[#012840] text-white font-bold py-3 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
+                  className="mt-8 w-full bg-brand hover:bg-brand-hover text-white font-bold py-3 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-[#84D0D9]" />
+                      <Loader2 className="w-4 h-4 animate-spin text-brand-soft" />
                       <span>Procesando...</span>
                     </>
                   ) : (
                     <>
                       <span>Contratar Plan</span>
-                      <span className="text-[#84D0D9]">→</span>
+                      <span className="text-brand-soft">→</span>
                     </>
                   )}
                 </button>

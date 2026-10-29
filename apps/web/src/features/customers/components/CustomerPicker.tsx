@@ -96,10 +96,10 @@ export default function CustomerPicker({ value, onChange, active = true, require
             {can('customers.create') && <button
               type="button"
               data-new-customer
-              title={`Nuevo ${vocab.client.toLowerCase()}`}
-              aria-label={`Nuevo ${vocab.client.toLowerCase()}`}
+              title={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client.toLowerCase()}`}
+              aria-label={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client.toLowerCase()}`}
               onClick={() => setFormOpen(true)}
-              className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+              className="shrink-0 p-2.5 bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
             >
               <Plus size={18} className="stroke-[2.5]" />
             </button>}

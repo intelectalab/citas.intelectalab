@@ -1,0 +1,65 @@
+<?php
+
+namespace App\Support\AuditActions;
+
+class AgendaActions
+{
+    public const ACTIONS = [
+        'appointment.created'          => ['Agendó una cita', 'agenda'],
+        'appointment.rescheduled'      => ['Reprogramó la cita', 'agenda'],
+        'appointment.cancelled'        => ['Canceló la cita', 'agenda'],
+        'appointment.no_show'          => ['Marcó que no asistió a la cita', 'agenda'],
+        'appointment.forced'           => ['Agendó en un horario no disponible', 'agenda'],
+        'waitlist.withdrawn'           => ['Retiró a alguien de la lista de espera', 'agenda'],
+        'recall.discarded'             => ['Descartó un control', 'agenda'],
+        'availability_block.created'   => ['Creó un bloqueo de horario', 'agenda'],
+        'availability_block.updated'   => ['Cambió un bloqueo de horario', 'agenda'],
+        'holiday.created'              => ['Registró un feriado', 'agenda'],
+        'holiday.updated'              => ['Cambió un feriado', 'agenda'],
+        'holiday.imported'             => ['Cargó los feriados nacionales', 'agenda'],
+        'record.signed'                => ['Firmó una ficha', 'records'],
+        'record.corrected'             => ['Corrigió una ficha ya firmada', 'records'],
+        'record.note_added'            => ['Agregó una nota a una ficha', 'records'],
+        'record_template.created'      => ['Creó una plantilla de ficha', 'records'],
+        'record_template.updated'      => ['Cambió una plantilla de ficha', 'records'],
+        'customer.created'             => ['Registró un cliente', 'customers'],
+        'customer.updated'             => ['Cambió los datos de un cliente', 'customers'],
+        'customer.stage_changed'       => ['Movió a un cliente de etapa', 'customers'],
+        'customer_dependent.created'   => ['Registró un acompañante de un cliente', 'customers'],
+        'customer_dependent.updated'   => ['Cambió los datos de un acompañante', 'customers'],
+    ];
+
+    public const FIELDS = [
+        'professional'            => 'Profesional',
+        'appointment_at'          => 'Fecha y hora',
+        'dependent_name'          => 'Acompañante',
+        'late_cancel'             => 'Canceló tarde',
+        'override_reason'         => 'Motivo para agendar fuera de horario',
+        'recall_label'            => 'Control',
+        'due_date'                => 'Fecha sugerida',
+        'template_name'           => 'Plantilla',
+        'appointment_code'        => 'Cita',
+        'fields_count'            => 'Cantidad de campos',
+        'version'                 => 'Versión de los campos',
+        'require_consent'         => 'Consentimiento obligatorio',
+        'consent_text'            => 'Texto del consentimiento',
+        'document_type'           => 'Tipo de documento',
+        'document_number'         => 'Número de documento',
+        'birth_date'              => 'Fecha de nacimiento',
+        'biological_sex'          => 'Sexo',
+        'blood_type'              => 'Grupo sanguíneo',
+        'emergency_contact_name'  => 'Contacto de emergencia',
+        'emergency_contact_phone' => 'Teléfono de emergencia',
+        'manager'                 => 'Responsable',
+        'address'                 => 'Dirección',
+        'district'                => 'Distrito',
+        'department'              => 'Departamento',
+        'postal_code'             => 'Código postal',
+        'medical_notes'           => 'Notas médicas',
+        'stage'                   => 'Etapa',
+        'species'                 => 'Especie',
+        'breed'                   => 'Raza',
+        'holiday_year'            => 'Año',
+        'holidays_added'          => 'Feriados agregados',
+    ];
+}

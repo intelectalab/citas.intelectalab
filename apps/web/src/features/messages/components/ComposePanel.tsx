@@ -145,7 +145,7 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
             </p>
           )}
           {emailState === 'simulated' && (
-            <p className="text-sm text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/50 rounded-lg px-3 py-2">
+            <p className="text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-lg px-3 py-2">
               Tu empresa está en &quot;Probar sin enviar&quot;: el mensaje se arma y queda en la bandeja, pero no sale.
             </p>
           )}
@@ -156,7 +156,7 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Empezar desde">
                 {STARTERS.map((s) => (
                   <button key={s.id} type="button" role="radio" aria-checked={starter === s.id} data-starter={s.id} onClick={() => applyStarter(s.id)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${starter === s.id ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${starter === s.id ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -171,12 +171,12 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Cuándo sale">
               {!editing && (
                 <button type="button" role="radio" aria-checked={when === 'now'} data-when="now" onClick={() => setWhen('now')}
-                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'now' ? 'border-[#022340] bg-[#84D0D9]/15 text-[#022340] ring-2 ring-[#022340]/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'now' ? 'border-brand bg-brand-soft/15 text-brand-ink ring-2 ring-brand/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                   <Send size={15} /> Ahora
                 </button>
               )}
               <button type="button" role="radio" aria-checked={when === 'later'} data-when="later" onClick={() => setWhen('later')}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'later' ? 'border-[#022340] bg-[#84D0D9]/15 text-[#022340] ring-2 ring-[#022340]/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'later' ? 'border-brand bg-brand-soft/15 text-brand-ink ring-2 ring-brand/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                 <CalendarClock size={15} /> Programar
               </button>
             </div>

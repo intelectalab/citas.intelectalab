@@ -25,6 +25,12 @@ class AuditEvent extends Model
         'user_agent',
         'before_data',
         'after_data',
+        'actor_type',
+        'actor_customer_id',
+        'actor_name',
+        'impersonator_user_id',
+        'branch_id',
+        'entity_label',
     ];
 
     protected $casts = [
@@ -32,18 +38,15 @@ class AuditEvent extends Model
         'after_data'  => 'array',
     ];
 
-    public static function record(Request $request, string $action, ?Tenant $tenant = null, ?array $before = null, ?array $after = null): self
+    public static function record(Request $request, string $action, ?Tenant $tenant = null, ?array $before = null, ?array $after = null): ?self
     {
-        return static::create([
-            'tenant_id'     => $tenant?->id,
-            'actor_user_id' => $request->user()?->id,
-            'action'        => $action,
-            'entity_type'   => $tenant ? 'tenant' : null,
-            'entity_id'     => $tenant?->id,
-            'ip_address'    => $request->ip(),
-            'user_agent'    => substr((string) $request->userAgent(), 0, 500),
-            'before_data'   => $before,
-            'after_data'    => $after,
+        return \App\Support\Audit::log($request, $action, [
+            'tenant'       => $tenant,
+            'entity_type'  => $tenant ? 'tenant' : null,
+            'entity_id'    => $tenant?->id,
+            'entity_label' => $tenant?->name,
+            'before'       => $before,
+            'after'        => $after,
         ]);
     }
 

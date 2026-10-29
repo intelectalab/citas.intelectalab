@@ -208,9 +208,9 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
               </div>
             )}
 
-            <div className="flex items-start gap-3 rounded-xl bg-[#84D0D9]/15 px-3 py-2.5" data-audience-count>
-              <span className="p-1.5 rounded-lg bg-white text-[#3F768C] shrink-0">{counting ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} />}</span>
-              <span className="text-sm text-[#022340]">
+            <div className="flex items-start gap-3 rounded-xl bg-brand-soft/15 px-3 py-2.5" data-audience-count>
+              <span className="p-1.5 rounded-lg bg-white text-brand-accent shrink-0">{counting ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} />}</span>
+              <span className="text-sm text-brand-ink">
                 {!segmentReady && (chosen?.needs === 'service' ? 'Elige el servicio para ver a cuántos les llega.' : chosen?.needs === 'branch' ? 'Elige la sede para ver a cuántos les llega.' : 'Elige el grupo para ver a cuántos les llega.')}
                 {segmentReady && audience && (
                   <>
@@ -247,11 +247,11 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
             <span className={labelClass}>¿Cuándo sale?</span>
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Cuándo sale">
               <button type="button" role="radio" aria-checked={when === 'now'} data-when="now" onClick={() => setWhen('now')}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'now' ? 'border-[#022340] bg-[#84D0D9]/15 text-[#022340] ring-2 ring-[#022340]/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'now' ? 'border-brand bg-brand-soft/15 text-brand-ink ring-2 ring-brand/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                 <Send size={15} /> Ahora
               </button>
               <button type="button" role="radio" aria-checked={when === 'later'} data-when="later" onClick={() => setWhen('later')}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'later' ? 'border-[#022340] bg-[#84D0D9]/15 text-[#022340] ring-2 ring-[#022340]/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${when === 'later' ? 'border-brand bg-brand-soft/15 text-brand-ink ring-2 ring-brand/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                 <CalendarClock size={15} /> Programar
               </button>
             </div>

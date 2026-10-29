@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RecordTemplate;
 use App\Models\Service;
 use App\Models\Tenant;
+use App\Support\Audit;
 use App\Support\RecordFields;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,6 +79,14 @@ class RecordTemplateController extends Controller
             return $template;
         });
 
+        Audit::log($request, 'record_template.created', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'record_template',
+            'entity_id'    => $template->id,
+            'entity_label' => $template->name,
+            'after'        => array_filter($this->auditable($template->fresh()), fn ($value) => $value !== null && $value !== []),
+        ]);
+
         return response()->json($this->present($template->fresh()->load('services:id')->loadCount('records')), 201);
     }
 
@@ -86,6 +95,7 @@ class RecordTemplateController extends Controller
         $tenant = $this->tenant($request, true);
         $template = RecordTemplate::where('tenant_id', $tenant->id)->findOrFail($recordTemplate);
         $data = $this->validated($request, $tenant, $template);
+        $auditBefore = $this->auditable($template);
 
         DB::transaction(function () use ($template, $data) {
             $fieldsChanged = $template->fields != $data['fields'];
@@ -102,6 +112,19 @@ class RecordTemplateController extends Controller
             $this->syncServices($template, $data['service_ids']);
         });
 
+        [$from, $to] = Audit::changed($auditBefore, $this->auditable($template->fresh()));
+
+        if ($from || $to) {
+            Audit::log($request, 'record_template.updated', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'record_template',
+                'entity_id'    => $template->id,
+                'entity_label' => $template->name,
+                'before'       => $from,
+                'after'        => $to,
+            ]);
+        }
+
         return response()->json($this->present($template->fresh()->load('services:id')->loadCount('records')));
     }
 
@@ -111,6 +134,12 @@ class RecordTemplateController extends Controller
         $template = RecordTemplate::where('tenant_id', $tenant->id)->findOrFail($recordTemplate);
 
         $template->delete();
+        Audit::log($request, 'record_template.deleted', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'record_template',
+            'entity_id'    => $template->id,
+            'entity_label' => $template->name,
+        ]);
 
         return response()->json(['message' => 'Plantilla eliminada correctamente']);
     }
@@ -154,6 +183,24 @@ class RecordTemplateController extends Controller
             'consent_text'    => $consent ?: null,
             'require_consent' => !empty($validated['require_consent']),
             'service_ids'     => $serviceIds,
+        ];
+    }
+
+    private function auditable(RecordTemplate $template): array
+    {
+        return [
+            'name'            => $template->name,
+            'description'     => $template->description,
+            'fields_count'    => count($template->fields ?? []),
+            'version'         => $template->version,
+            'require_consent' => (bool) $template->require_consent,
+            'consent_text'    => $template->consent_text ? mb_strimwidth($template->consent_text, 0, 160, '…') : null,
+            'services'        => DB::table('record_template_services')
+                ->join('services', 'services.id', '=', 'record_template_services.service_id')
+                ->where('record_template_services.record_template_id', $template->id)
+                ->orderBy('services.name')
+                ->pluck('services.name')
+                ->all(),
         ];
     }
 

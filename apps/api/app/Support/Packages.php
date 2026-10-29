@@ -83,6 +83,11 @@ class Packages
         throw ValidationException::withMessages([$field => $message]);
     }
 
+    public static function linkable(Tenant $tenant): bool
+    {
+        return self::ready() && $tenant->hasModule('packages|quotes');
+    }
+
     public static function hour(?string $time): string
     {
         if (!$time) {
@@ -306,6 +311,7 @@ class Packages
             'pending_value'      => $package->status === 'active' && $total > 0 ? round($price * ($total - $used) / $total, 2) : 0.0,
             'refunded_amount'    => round((float) $package->refunded_amount, 2),
             'sale_id'            => $package->sale_id,
+            'quote'              => !empty($package->quote_id) ? ['id' => $package->quote_id, 'code' => DB::table('quotes')->where('id', $package->quote_id)->value('code')] : null,
             'professional_id'    => $package->professional_id,
             'schedule_label'     => self::scheduleLabel($c),
             'conditions'         => $c,
@@ -493,7 +499,24 @@ class Packages
             DB::table('customer_packages')->where('id', $package->id)->update(['status' => 'consumed', 'updated_at' => now()]);
         }
 
+        if (!empty($package->quote_id)) {
+            Quotes::syncPlanUsage($tenant, $package->quote_id);
+        }
+
         return true;
+    }
+
+    public static function cancelPlan(Tenant $tenant, object $package, string $reason, ?User $user): array
+    {
+        $codes = self::cancelAppointments($tenant, $package, "Se anuló el {$package->name}", $user);
+
+        DB::table('customer_packages')->where('id', $package->id)->update([
+            'status' => 'cancelled', 'cancelled_at' => now(), 'cancel_reason' => mb_substr($reason, 0, 255), 'updated_at' => now(),
+        ]);
+
+        self::event($package, 'cancelled', $reason . ($codes ? ' · Se cancelaron las citas ' . implode(', ', $codes) . '.' : ''), $user);
+
+        return $codes;
     }
 
     public static function appointmentChanged(Tenant $tenant, Appointment $appointment, ?string $from, string $to, User|Customer|null $actor): void
@@ -666,6 +689,10 @@ class Packages
     {
         $package = self::lock($tenant->id, $packageId);
 
+        if (!empty($package->quote_id)) {
+            self::fail('reason', "El {$package->name} se anula desde su presupuesto: ahí se calcula qué se devuelve o se cobra según la regla de tu empresa.");
+        }
+
         if (!in_array($package->status, ['active', 'expired'], true)) {
             self::fail('reason', "El paquete {$package->code} está " . mb_strtolower(self::STATUS_LABELS[$package->status] ?? $package->status) . ': no se anula.');
         }
@@ -747,7 +774,7 @@ class Packages
             DB::table('customer_packages')->insert([
                 'id'              => $id,
                 'tenant_id'       => $tenant->id,
-                'code'            => sprintf('PQ-%04d', Sales::nextNumber($tenant->id, 'package')),
+                'code'            => Codes::next($tenant->id, 'package'),
                 'package_plan_id' => $plan->id,
                 'customer_id'     => $sale->customer_id,
                 'branch_id'       => $sale->branch_id,

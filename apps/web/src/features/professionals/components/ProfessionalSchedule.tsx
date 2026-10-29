@@ -64,7 +64,7 @@ const emptyBlock = () => ({ starts_at: '', ends_at: '', reason: '', kind: 'vacat
 const DEFAULT_RANGE: Range = { starts: '09:00', ends: '18:00' };
 
 const inputClass =
-  'text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 bg-white';
+  'text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white';
 
 const MOMENTS: { key: 'starts_at' | 'ends_at'; label: string; time: string }[] = [
   { key: 'starts_at', label: 'Desde', time: '00:00' },
@@ -232,7 +232,7 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
         <div className="space-y-8 pb-4">
           <section className="space-y-4">
             <div className="flex items-end justify-between gap-4">
-              <h4 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">Horario semanal</h4>
+              <h4 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">Horario semanal</h4>
               {branches.length === 1 && (
                 <span className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">{branches[0].name}</span>
               )}
@@ -296,7 +296,7 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
                         <button
                           type="button"
                           onClick={() => addRange(day.weekday)}
-                          className="flex items-center gap-1 text-xs font-semibold text-[#3F768C] hover:text-[#022340] transition-colors"
+                          className="flex items-center gap-1 text-xs font-semibold text-brand-accent hover:text-brand-ink transition-colors"
                         >
                           <Plus size={13} /> Agregar tramo
                         </button>
@@ -323,8 +323,8 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
 
           <section className="space-y-4 pt-6 border-t border-slate-100">
             <div>
-              <h4 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
-                <CalendarOff size={16} className="text-[#3F768C]" /> Ausencias
+              <h4 className="flex items-center gap-2 text-sm font-extrabold text-brand-ink uppercase tracking-wider">
+                <CalendarOff size={16} className="text-brand-accent" /> Ausencias
               </h4>
               <p className="text-xs text-slate-500 mt-1">Vacaciones, permisos o cualquier rango en que no atiende aunque su horario lo indique.</p>
             </div>

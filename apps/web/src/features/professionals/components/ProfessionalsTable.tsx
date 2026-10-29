@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Contact, Pencil, Trash2, CheckCircle, XCircle, Award, FileBadge, UserCheck, Eye, CalendarClock, Users } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import FormProfessional from './FormProfessional';
@@ -216,9 +216,9 @@ export default function ProfessionalsTable() {
   const userUsage = planUsage.find((u) => u.key === 'users');
   const reached = (u?: PlanUsage) => typeof u?.limit === 'number' && u.used >= u.limit;
   const planBlocked = reached(proUsage)
-    ? `Tu plan permite hasta ${proUsage!.limit} ${vocab.pros.toLowerCase()} y ya tienes ${proUsage!.used}. Para agregar otro, cambia de plan.`
+    ? `Tu plan permite hasta ${proUsage!.limit} ${vocab.pros.toLowerCase()} y ya tienes ${proUsage!.used}. Para agregar ${vocab.pick('pro', 'otro', 'otra')}, cambia de plan.`
     : reached(userUsage)
-      ? `Tu plan permite hasta ${userUsage!.limit} cuentas de usuario además de la del dueño y ya tienes ${userUsage!.used}. Para agregar otro, cambia de plan.`
+      ? `Tu plan permite hasta ${userUsage!.limit} cuentas de usuario además de la del dueño y ya tienes ${userUsage!.used}. Para agregar ${vocab.pick('pro', 'otro', 'otra')}, cambia de plan.`
       : '';
   const shownUsage = [proUsage, userUsage]
     .filter((u): u is PlanUsage => typeof u?.limit === 'number')
@@ -347,6 +347,15 @@ export default function ProfessionalsTable() {
     },
   ];
 
+  const exportColumns: ExportColumn<Professional>[] = [
+    { header: vocab.pro, value: (p) => p.display_name },
+    { header: 'Correo', value: (p) => p.user?.email ?? 'Sin usuario vinculado' },
+    ...(usesLicense ? [{ header: 'Colegiatura', value: (p: Professional) => p.license_number ?? 'No registrada' }] : []),
+    { header: 'Especialidades', value: (p) => (p.specialties?.length ? p.specialties.map((spec) => spec.name).join(', ') : 'Sin especialidades') },
+    { header: 'Estado', value: (p) => p.status?.name || 'Activo' },
+    { header: 'Registrado', type: 'date', value: (p) => p.created_at },
+  ];
+
   const columns = allColumns.filter((column): column is Column<Professional> => column !== null);
 
   return (
@@ -354,7 +363,7 @@ export default function ProfessionalsTable() {
       <div className="mb-6">
         <DataTable<Professional>
           title={`Gestión de ${vocab.pros}`}
-          primaryActionLabel={`Nuevo ${vocab.pro}`}
+          primaryActionLabel={`${vocab.pick('pro', 'Nuevo', 'Nueva')} ${vocab.pro}`}
           onPrimaryAction={!can('professionals.create') ? undefined : () => { if (planBlocked) return; setEditingProfessional(null); setShowFormModal(true); }}
           primaryActionBlocked={planBlocked || undefined}
           tabs={[{ id: 'all', label: 'Todos', count: safeProfessionals.length }]}
@@ -366,6 +375,9 @@ export default function ProfessionalsTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          exportTitle={vocab.pros}
+          exportScreen="professionals"
+          exportColumns={exportColumns}
           dateFilters={[
             { id: 'created_at', label: 'Fecha de registro', value: (p) => p.created_at },
           ]}

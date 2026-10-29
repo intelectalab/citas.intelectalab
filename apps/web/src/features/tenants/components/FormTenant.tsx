@@ -62,7 +62,7 @@ const EMPTY_FORM: TenantFormData = {
 };
 
 const inputClass =
-  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800';
+  'w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800';
 const sectionClass = 'text-[11px] font-bold uppercase tracking-wider text-slate-400 pt-5 mt-2 border-t border-slate-100';
 
 export default function FormTenant({
@@ -203,7 +203,7 @@ export default function FormTenant({
                 type="checkbox"
                 checked={formData.start_trial}
                 onChange={(e) => set('start_trial', e.target.checked)}
-                className="mt-0.5 rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand"
               />
               <span>
                 <span className="block text-sm font-medium text-slate-800">Empezar en periodo de prueba</span>

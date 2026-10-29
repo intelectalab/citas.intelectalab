@@ -71,7 +71,7 @@ export default function PortalWaitlist({ entries, proWord, onChanged }: PortalWa
 
   return (
     <section className="space-y-3" data-list="waitlist">
-      <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">En lista de espera ({entries.length})</h2>
+      <h2 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">En lista de espera ({entries.length})</h2>
 
       {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
 
@@ -92,7 +92,7 @@ export default function PortalWaitlist({ entries, proWord, onChanged }: PortalWa
                     {hasSlots ? <BellRing size={18} /> : <Hourglass size={18} />}
                   </span>
                   <div className="min-w-0">
-                    <h3 className="text-base font-extrabold text-[#022340] leading-tight">{entry.service?.name}</h3>
+                    <h3 className="text-base font-extrabold text-brand-ink leading-tight">{entry.service?.name}</h3>
                     <ul className="mt-1 space-y-0.5 text-sm text-slate-600">
                       <li className="flex items-center gap-2"><UserRound size={14} className="text-slate-400 shrink-0" /> {entry.professional ? entry.professional.display_name : `Con cualquier ${proWord.toLowerCase()}`}</li>
                       {entry.branch && <li className="flex items-center gap-2"><MapPin size={14} className="text-slate-400 shrink-0" /> {entry.branch.name}</li>}
@@ -130,7 +130,7 @@ export default function PortalWaitlist({ entries, proWord, onChanged }: PortalWa
                                 type="button"
                                 data-slot={`${day.date}T${slot}`}
                                 onClick={() => setPicked({ entry, date: day.date, time: slot, professionalId: group.professional.id, professionalName: group.professional.display_name })}
-                                className="px-3 py-1.5 text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:border-[#022340] hover:bg-[#022340] hover:text-white transition-colors"
+                                className="px-3 py-1.5 text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:border-brand hover:bg-brand hover:text-white transition-colors"
                               >
                                 {slot}
                               </button>

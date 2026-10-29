@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Audit;
 use App\Support\Coupons;
 use App\Support\Sales;
 use Illuminate\Http\Request;
@@ -46,6 +47,30 @@ class CouponController extends Controller
             'state'          => Coupons::state($coupon),
             'created_at'     => Carbon::parse($coupon->created_at)->toIso8601String(),
         ];
+    }
+
+    private function auditable(object $coupon, string $timezone): array
+    {
+        $data = $this->present($coupon, $timezone);
+
+        return [
+            'code'         => $data['code'],
+            'description'  => $data['description'],
+            'discount'     => $data['discount_type'] === Coupons::PERCENT ? rtrim(rtrim(number_format($data['discount_value'], 2, '.', ''), '0'), '.') . ' %' : $data['discount_value'],
+            'min_purchase' => $data['min_purchase'],
+            'max_uses'     => $data['max_uses'],
+            'starts_on'    => $data['starts_on'],
+            'ends_on'      => $data['ends_on'],
+            'status'       => $data['status'],
+        ];
+    }
+
+    private function audit(Request $request, string $action, object $coupon, array $before, array $after): void
+    {
+        Audit::log($request, $action, [
+            'tenant' => $coupon->tenant_id, 'entity_type' => 'coupon', 'entity_id' => $coupon->id, 'entity_label' => $coupon->code,
+            'before' => $before ?: null, 'after' => $after ?: null,
+        ]);
     }
 
     private function validated(Request $request, string $tenantId, ?string $ignoreId = null): array
@@ -107,8 +132,10 @@ class CouponController extends Controller
         $id = (string) Str::uuid();
 
         DB::table('coupons')->insert($this->validated($request, $tenantId) + ['id' => $id, 'tenant_id' => $tenantId, 'created_at' => now()]);
+        $created = DB::table('coupons')->where('id', $id)->first();
+        $this->audit($request, 'coupon.created', $created, [], array_filter($this->auditable($created, $this->timezone($request)), fn ($value) => $value !== null));
 
-        return response()->json($this->present(DB::table('coupons')->where('id', $id)->first(), $this->timezone($request)), 201);
+        return response()->json($this->present($created, $this->timezone($request)), 201);
     }
 
     public function update(Request $request, string $coupon)
@@ -118,8 +145,15 @@ class CouponController extends Controller
         abort_unless($row, 404);
 
         DB::table('coupons')->where('id', $row->id)->update($this->validated($request, $tenantId, $row->id));
+        $fresh = DB::table('coupons')->where('id', $row->id)->first();
+        $timezone = $this->timezone($request);
+        [$before, $after] = Audit::changed($this->auditable($row, $timezone), $this->auditable($fresh, $timezone));
 
-        return response()->json($this->present(DB::table('coupons')->where('id', $row->id)->first(), $this->timezone($request)));
+        if ($after) {
+            $this->audit($request, 'coupon.updated', $fresh, $before, $after);
+        }
+
+        return response()->json($this->present($fresh, $timezone));
     }
 
     public function destroy(Request $request, string $coupon)
@@ -130,11 +164,13 @@ class CouponController extends Controller
 
         if (DB::table('coupon_redemptions')->where('coupon_id', $row->id)->exists()) {
             DB::table('coupons')->where('id', $row->id)->update(['status' => 'inactive', 'updated_at' => now()]);
+            $this->audit($request, 'coupon.deactivated', $row, ['status' => $row->status], ['status' => 'inactive']);
 
             return response()->json(['deactivated' => true]);
         }
 
         DB::table('coupons')->where('id', $row->id)->delete();
+        $this->audit($request, 'coupon.deleted', $row, array_filter($this->auditable($row, $this->timezone($request)), fn ($value) => $value !== null), []);
 
         return response()->json(['deactivated' => false]);
     }

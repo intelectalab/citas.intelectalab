@@ -41,7 +41,7 @@ function ToolButton({ active = false, disabled, label, onClick, children }: { ac
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`h-8 min-w-8 px-1.5 flex items-center justify-center rounded-md text-sm transition-colors disabled:opacity-40 ${active ? 'bg-[#022340] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+      className={`h-8 min-w-8 px-1.5 flex items-center justify-center rounded-md text-sm transition-colors disabled:opacity-40 ${active ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'}`}
     >
       {children}
     </button>
@@ -143,12 +143,12 @@ export default function RichTextEditor({ id, value, onChange, onFocus, disabled 
   ];
 
   return (
-    <div className={`rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-[#022340]/20 focus-within:border-[#022340] ${disabled ? 'opacity-70' : ''}`} data-rich-editor>
+    <div className={`rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-brand/20 focus-within:border-brand ${disabled ? 'opacity-70' : ''}`} data-rich-editor>
       <div className="flex flex-wrap items-center gap-0.5 px-1.5 py-1 border-b border-slate-100" role="toolbar" aria-label="Formato del texto">
         <div className="flex items-center rounded-md border border-slate-200 overflow-hidden mr-1" role="radiogroup" aria-label="Tamaño del texto">
           {sizes.map((s) => (
             <button key={s.key} type="button" role="radio" aria-checked={size === s.key} data-size={s.key} disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={s.apply}
-              className={`h-7 px-2 text-xs font-semibold transition-colors ${size === s.key ? 'bg-[#022340] text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+              className={`h-7 px-2 text-xs font-semibold transition-colors ${size === s.key ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
               {s.label}
             </button>
           ))}
@@ -172,12 +172,12 @@ export default function RichTextEditor({ id, value, onChange, onFocus, disabled 
               autoFocus
               aria-label="Dirección del enlace"
               placeholder="https://tuempresa.com/promocion"
-              className="flex-1 min-w-48 text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#022340] bg-white"
+              className="flex-1 min-w-48 text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand bg-white"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyLink(); } if (e.key === 'Escape') setLinking(false); }}
             />
-            <button type="button" data-apply-link onClick={() => applyLink()} className="px-3 py-1.5 text-xs font-bold bg-[#022340] text-white rounded-lg hover:bg-[#03315a]">Aplicar</button>
+            <button type="button" data-apply-link onClick={() => applyLink()} className="px-3 py-1.5 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover">Aplicar</button>
             <button type="button" onClick={() => setLinking(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-white">Cancelar</button>
           </div>
           {linkVariables.length > 0 && (
@@ -185,7 +185,7 @@ export default function RichTextEditor({ id, value, onChange, onFocus, disabled 
               <span className="text-xs text-slate-500">O que lleve a:</span>
               {linkVariables.map((v) => (
                 <button key={v.token} type="button" data-link-variable={v.token} onClick={() => applyLink(v.token)}
-                  className="px-2 py-0.5 text-xs font-semibold rounded-md border border-[#84D0D9] bg-[#84D0D9]/15 text-[#022340] hover:bg-[#84D0D9]/30">
+                  className="px-2 py-0.5 text-xs font-semibold rounded-md border border-brand-soft bg-brand-soft/15 text-brand-ink hover:bg-brand-soft/30">
                   {v.label}
                 </button>
               ))}

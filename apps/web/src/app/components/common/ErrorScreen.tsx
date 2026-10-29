@@ -42,11 +42,11 @@ export default function ErrorScreen({ kind, onRetry, fullPage = false }: ErrorSc
   return (
     <div data-error-screen={kind} className={`flex items-center justify-center px-4 ${fullPage ? 'min-h-screen bg-[#F2F2F2]' : 'min-h-[70vh]'}`}>
       <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-sm p-8 sm:p-10 text-center">
-        <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-[#84D0D9]/25 text-[#3F768C] flex items-center justify-center">
+        <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-brand-soft/25 text-brand-accent flex items-center justify-center">
           <Icon size={30} />
         </div>
-        <p className="text-sm font-bold text-[#3F768C] mb-2">{code}</p>
-        <h1 className="text-2xl font-extrabold text-[#022340] mb-3">{title}</h1>
+        <p className="text-sm font-bold text-brand-accent mb-2">{code}</p>
+        <h1 className="text-2xl font-extrabold text-brand-ink mb-3">{title}</h1>
         <p className="text-sm text-slate-500 leading-relaxed mb-8">{message}</p>
         <div className="flex flex-col-reverse sm:flex-row gap-3 justify-center">
           {onRetry ? (

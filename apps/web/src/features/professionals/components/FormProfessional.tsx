@@ -9,6 +9,7 @@ import { Plus, UserPlus } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import SignatureField, { saveSignature, type SignatureChange } from './SignatureField';
 
 interface Professional {
   id: string;
@@ -16,6 +17,7 @@ interface Professional {
   document_number?: string;
   type_document_id?: string;
   license_number?: string;
+  signature_url?: string | null;
   phone?: string;
   status_id?: string;
   first_name?: string;
@@ -66,6 +68,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
   const [specialtiesList, setSpecialtiesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [signature, setSignature] = useState<SignatureChange>(undefined);
   const [newSpecialty, setNewSpecialty] = useState('');
   const [addingSpecialty, setAddingSpecialty] = useState(false);
 
@@ -107,7 +110,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     }
   }, [isOpen]);
 
-  useEffect(() => { if (isOpen) setError(''); }, [isOpen]);
+  useEffect(() => { if (isOpen) { setError(''); setSignature(undefined); } }, [isOpen]);
 
   useEffect(() => {
     if (initialData) {
@@ -160,14 +163,17 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
 
       if (initialData) {
         await api.put(`/professionals/${initialData.id}`, payload);
+        await saveSignature(initialData.id, signature);
         onClose();
         onSubmitSuccess();
       } else {
         const res = await api.post('/professionals', payload);
-        
+
         console.log("Respuesta del servidor:", res.data);
 
         const responseData = res.data;
+        const createdId = responseData?.professional?.id ?? responseData?.id;
+        if (createdId) await saveSignature(createdId, signature);
         const tempPassword = responseData?.temporary_password;
         const userEmail = responseData?.professional?.user?.email || form.email;
         onClose();
@@ -189,7 +195,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     <FormDrawer
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? `Editar ${vocab.pro}` : `Nuevo ${vocab.pro}`}
+      title={isEditing ? `Editar ${vocab.pro}` : `${vocab.pick('pro', 'Nuevo', 'Nueva')} ${vocab.pro}`}
       subtitle={isEditing ? 'Actualiza sus datos' : 'Registra sus datos y crea su cuenta de acceso'}
       icon={<UserPlus size={20} />}
     >
@@ -215,7 +221,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             <input 
               type="text"
               placeholder="Ej. 45879632"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 font-mono"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 font-mono"
               value={form.document_number}
               onChange={e => setForm({...form, document_number: e.target.value})}
             />
@@ -228,19 +234,27 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
               <input
                 type="text"
                 placeholder="Ej. CMP-12345"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800 font-mono"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 font-mono"
                 value={form.license_number}
                 onChange={e => setForm({...form, license_number: e.target.value})}
               />
             </div>
           )}
 
+          <SignatureField
+            professionalId={initialData?.id ?? null}
+            hasSignature={Boolean(initialData?.signature_url)}
+            change={signature}
+            onChange={setSignature}
+            onError={setError}
+          />
+
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Nombre Público / Visual *</label>
             <input 
               type="text" required
               placeholder="Ej. Dr. Carlos Pérez"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
               value={form.display_name}
               onChange={e => setForm({...form, display_name: e.target.value})}
             />
@@ -251,7 +265,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             <input 
               type="text" required
               placeholder="Carlos Alberto"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
               value={form.first_name}
               onChange={e => setForm({...form, first_name: e.target.value})}
             />
@@ -262,7 +276,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             <input 
               type="text" required
               placeholder="Pérez Gómez"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
               value={form.last_name}
               onChange={e => setForm({...form, last_name: e.target.value})}
             />
@@ -273,7 +287,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             <input 
               type="email" required
               placeholder="carlos.perez@clinica.com"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
               value={form.email}
               onChange={e => setForm({...form, email: e.target.value})}
             />
@@ -284,7 +298,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             <input 
               type="text"
               placeholder="+51 999888777"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
               value={form.phone}
               onChange={e => setForm({...form, phone: e.target.value})}
             />
@@ -314,7 +328,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
                             : [...form.specialties, spec.id];
                           setForm({ ...form, specialties: updated });
                         }}
-                        className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                        className="rounded border-slate-300 text-brand-ink focus:ring-brand"
                       />
                       <span>{spec.name}</span>
                     </label>
@@ -328,7 +342,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
                 maxLength={150}
                 aria-label="Nueva especialidad"
                 placeholder="Nueva especialidad"
-                className="flex-1 text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="flex-1 text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={newSpecialty}
                 onChange={(e) => setNewSpecialty(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecialty(); } }}
@@ -340,7 +354,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
                 aria-label="Agregar especialidad"
                 disabled={addingSpecialty || !newSpecialty.trim()}
                 onClick={addSpecialty}
-                className="shrink-0 p-2.5 bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+                className="shrink-0 p-2.5 bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50"
               >
                 <Plus size={18} className="stroke-[2.5]" />
               </button>

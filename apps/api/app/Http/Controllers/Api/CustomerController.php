@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerDependent;
+use App\Support\Audit;
 use App\Support\CustomerStages;
 use App\Support\Search;
 use Illuminate\Http\Request;
@@ -21,6 +22,59 @@ class CustomerController extends Controller
     private function findForTenant(Request $request, string $id): Customer
     {
         return $this->tenantQuery($request)->findOrFail($id);
+    }
+
+    private function audit(Request $request, string $action, Customer $customer, array $before = [], array $after = []): void
+    {
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $request->user()->tenant_id,
+            'entity_type'  => 'customer',
+            'entity_id'    => $customer->id,
+            'entity_label' => trim("{$customer->first_name} {$customer->last_name}"),
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
+    }
+
+    private const HIDDEN = ['document_number', 'blood_type', 'medical_notes'];
+
+    public static function auditable(Customer $customer): array
+    {
+        $customer->loadMissing(['typeDocument', 'status', 'managerUser']);
+
+        return [
+            'name'                    => trim("{$customer->first_name} {$customer->last_name}"),
+            'document_type'           => $customer->typeDocument?->name,
+            'document_number'         => $customer->document_number,
+            'birth_date'              => $customer->birth_date?->format('Y-m-d'),
+            'biological_sex'          => ['M' => 'Masculino', 'F' => 'Femenino', 'O' => 'Otro'][$customer->biological_sex] ?? null,
+            'blood_type'              => $customer->blood_type,
+            'email'                   => $customer->email,
+            'phone'                   => $customer->phone,
+            'emergency_contact_name'  => $customer->emergency_contact_name,
+            'emergency_contact_phone' => $customer->emergency_contact_phone,
+            'status'                  => $customer->status?->name,
+            'manager'                 => $customer->managerUser ? \App\Support\Person::name($customer->managerUser) : null,
+            'address'                 => $customer->address,
+            'district'                => $customer->district,
+            'department'              => $customer->department,
+            'postal_code'             => $customer->postal_code,
+            'medical_notes'           => $customer->medical_notes,
+        ];
+    }
+
+    public static function auditChanges(array $before, array $after): array
+    {
+        [$from, $to] = Audit::changed($before, $after);
+
+        foreach (self::HIDDEN as $key) {
+            if (array_key_exists($key, $to)) {
+                unset($from[$key]);
+                $to[$key] = $after[$key] === null || $after[$key] === '' ? 'Se borró' : ($before === [] ? 'Registrado' : 'Cambió');
+            }
+        }
+
+        return [$from, $to];
     }
 
     private function relations(Request $request): array
@@ -168,6 +222,9 @@ class CustomerController extends Controller
 
             DB::commit();
 
+            [, $created] = self::auditChanges([], array_filter(self::auditable($customer), fn ($value) => $value !== null && $value !== ''));
+            $this->audit($request, 'customer.created', $customer, [], ['code' => $customer->code] + $created);
+
             return response()->json([
                 'message' => 'Cliente registrado con éxito',
                 'customer' => $customer->load($this->relations($request))
@@ -203,6 +260,7 @@ class CustomerController extends Controller
 
         $customer = $this->findForTenant($request, $customer);
         \Illuminate\Support\Facades\DB::table('customers')->where('id', $customer->id)->update(['booking_strikes_reset_at' => now()]);
+        $this->audit($request, 'customer.no_shows_forgiven', $customer);
 
         return response()->json(['online_booking' => null]);
     }
@@ -235,12 +293,19 @@ class CustomerController extends Controller
 
         $stage = array_intersect_key($validated, ['pipeline_stage_id' => true]);
         unset($validated['pipeline_stage_id']);
+        $auditBefore = self::auditable($customer);
 
         $customer->update($this->withoutClinicalFields($request, $validated));
 
         $customer->syncPortalPassword($customer->wasChanged('document_number'));
         $this->moveStage($request, $customer, $stage);
         $customer->refresh();
+
+        [$from, $to] = self::auditChanges($auditBefore, self::auditable($customer->unsetRelations()));
+
+        if ($from || $to) {
+            $this->audit($request, 'customer.updated', $customer, $from, $to);
+        }
 
         return response()->json([
             'message' => 'Cliente actualizado con éxito',
@@ -255,7 +320,12 @@ class CustomerController extends Controller
         $validated = $request->validate(['enabled' => 'required|boolean']);
 
         $turnedOn = $validated['enabled'] && $customer->portal_enabled !== true;
+        $wasEnabled = $customer->portal_enabled;
         $customer->forceFill(['portal_enabled' => $validated['enabled']])->save();
+
+        if ($wasEnabled !== (bool) $validated['enabled']) {
+            $this->audit($request, $validated['enabled'] ? 'customer.portal_enabled' : 'customer.portal_disabled', $customer);
+        }
 
         if (!$validated['enabled']) {
             $customer->tokens()->delete();
@@ -285,6 +355,7 @@ class CustomerController extends Controller
         }
 
         $customer->tokens()->delete();
+        $this->audit($request, 'customer.portal_password_reset', $customer);
 
         if ($request->user()->tenant) {
             \App\Support\Messaging::portalAccess($request->user()->tenant, $customer, $request->user());
@@ -301,6 +372,10 @@ class CustomerController extends Controller
         $customer = $this->findForTenant($request, $customer);
         $customer->tokens()->delete();
         $customer->delete();
+        $this->audit($request, 'customer.deleted', $customer, array_filter([
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+        ]));
 
         return response()->json([
             'message' => 'Cliente eliminado correctamente'

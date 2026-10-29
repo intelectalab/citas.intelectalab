@@ -31,6 +31,11 @@ const SCREENS: { path: string; perm: string; exact?: boolean }[] = [
   { path: '/companies', perm: 'company.view' },
   { path: '/users', perm: 'users.view' },
   { path: '/settings', perm: 'settings.view' },
+  { path: '/audit', perm: 'audit.view' },
+  { path: '/personalization', perm: 'settings.view' },
+  { path: '/inventory', perm: 'inventory.view' },
+  { path: '/loyalty', perm: 'loyalty.view' },
+  { path: '/quotes', perm: 'quotes.view' },
 ];
 
 export default function ScreenGate({ children }: { children: React.ReactNode }) {
@@ -47,13 +52,13 @@ export default function ScreenGate({ children }: { children: React.ReactNode }) 
   return (
     <div className="max-w-2xl mx-auto pt-10 font-sans" data-screen-denied={screen.perm}>
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 flex items-start gap-4">
-        <span className="p-3 bg-[#84D0D9]/20 text-[#022340] rounded-2xl shrink-0"><ShieldAlert size={24} /></span>
+        <span className="p-3 bg-brand-soft/20 text-brand-ink rounded-2xl shrink-0"><ShieldAlert size={24} /></span>
         <div className="space-y-2">
-          <h1 className="text-xl font-black text-[#022340] tracking-tight">Tu cuenta no tiene acceso a esta pantalla</h1>
+          <h1 className="text-xl font-black text-brand-ink tracking-tight">Tu cuenta no tiene acceso a esta pantalla</h1>
           <p className="text-sm text-slate-600">
             {user.role_name ? `Tu rol (${user.role_name}) no la incluye. ` : ''}Si la necesitas para tu trabajo, pídesela a quien administra tu empresa: puede encendértela desde Usuarios y roles.
           </p>
-          <Link href="/home" className="inline-flex items-center gap-2 pt-2 text-sm font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+          <Link href="/home" className="inline-flex items-center gap-2 pt-2 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
             Volver al inicio
           </Link>
         </div>

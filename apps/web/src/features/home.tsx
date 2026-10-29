@@ -111,7 +111,7 @@ export default function HomePage() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
         <p className="text-sm font-medium text-slate-500">Cargando información del sistema...</p>
       </div>
     );
@@ -144,7 +144,7 @@ export default function HomePage() {
   const quickActions = hasTenant
     ? [
         { label: 'Nueva cita', icon: CalendarDays, href: '/agenda' },
-        { label: `Nuevo ${vocab.client}`, icon: UserPlus, href: '/customers' },
+        { label: `${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client}`, icon: UserPlus, href: '/customers' },
         hasModule('walkin') ? { label: 'Cola sin cita', icon: ListOrdered, href: '/modules/walkin' }
           : hasModule('classes') ? { label: 'Clases', icon: CalendarClock, href: '/modules/classes' }
           : hasModule('records') ? { label: 'Fichas de atención', icon: ClipboardList, href: '/records' }
@@ -183,11 +183,11 @@ export default function HomePage() {
     <div className="max-w-7xl mx-auto space-y-8 pb-10 font-sans text-[#1F2937]" data-dashboard={data ? 'ready' : 'loading'}>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2 pb-2 border-b border-slate-200/60">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#3F768C] uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs font-semibold text-brand-accent uppercase tracking-wider">
             <CalendarIcon className="w-3.5 h-3.5" />
             <span>{formattedDate}</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-black text-[#022340] tracking-tight">
+          <h1 className="text-3xl md:text-4xl font-black text-brand-ink tracking-tight">
             {greeting()}, {currentUser?.first_name?.trim() ? `${currentUser.first_name} ${currentUser.last_name}` : 'Usuario'}
           </h1>
           <p className="text-slate-500 text-sm font-medium">
@@ -200,7 +200,7 @@ export default function HomePage() {
           {currentUser?.tenant?.code && !own && (
             <p className="text-xs text-slate-500 font-medium">
               Código de empresa para el registro de tus {clients}:{' '}
-              <span className="font-mono font-bold text-[#022340] tracking-widest">{currentUser.tenant.code}</span>
+              <span className="font-mono font-bold text-brand-ink tracking-widest">{currentUser.tenant.code}</span>
             </p>
           )}
         </div>
@@ -209,18 +209,18 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <Link
               href="/agenda"
-              className="bg-[#022340] hover:bg-[#012840] text-white font-bold px-5 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center gap-2 text-sm shadow-sm transition-all hover:shadow-md active:scale-95"
+              className="bg-brand hover:bg-brand-hover text-white font-bold px-5 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center gap-2 text-sm shadow-sm transition-all hover:shadow-md active:scale-95"
             >
-              <Plus className="w-4 h-4 text-[#84D0D9] stroke-[2.5]" />
+              <Plus className="w-4 h-4 text-brand-soft stroke-[2.5]" />
               Nueva cita
             </Link>
 
             <Link
               href="/appointments"
-              className="bg-white hover:bg-slate-50 text-[#022340] font-semibold px-4 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm text-sm transition-all border border-slate-200 flex items-center gap-2 shadow-2xs"
+              className="bg-white hover:bg-slate-50 text-brand-ink font-semibold px-4 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm text-sm transition-all border border-slate-200 flex items-center gap-2 shadow-2xs"
             >
               Ver citas
-              <ArrowRight className="w-4 h-4 text-[#3F768C]" />
+              <ArrowRight className="w-4 h-4 text-brand-accent" />
             </Link>
           </div>
         )}
@@ -232,7 +232,7 @@ export default function HomePage() {
 
       {showsDashboard && !data && !error && (
         <div className="min-h-[30vh] flex items-center justify-center gap-3 text-sm font-medium text-slate-500">
-          <Loader2 className="w-5 h-5 text-[#3F768C] animate-spin" /> Cargando el resumen de tu empresa...
+          <Loader2 className="w-5 h-5 text-brand-accent animate-spin" /> Cargando el resumen de tu empresa...
         </div>
       )}
 
@@ -241,10 +241,10 @@ export default function HomePage() {
           <div className="bg-white rounded-tr-[2rem] rounded-bl-[2rem] rounded-tl-md rounded-br-md border border-slate-200/80 shadow-xs p-6" data-card="upcoming">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-[#84D0D9]/20 text-[#022340] rounded-lg">
+                <div className="p-1.5 bg-brand-soft/20 text-brand-ink rounded-lg">
                   <CalendarDays className="w-4 h-4" />
                 </div>
-                <h2 className="text-xs font-bold text-[#022340] uppercase tracking-wider">
+                <h2 className="text-xs font-bold text-brand-ink uppercase tracking-wider">
                   {own ? 'Tus próximas citas de hoy' : 'Próximas citas de hoy'}
                 </h2>
               </div>
@@ -261,11 +261,11 @@ export default function HomePage() {
                 )}
 
                 {data.today.upcoming.map((item) => (
-                  <Link key={item.id} href="/agenda" data-upcoming={item.id} className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-[#84D0D9]/60 transition-colors">
+                  <Link key={item.id} href="/agenda" data-upcoming={item.id} className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-brand-soft/60 transition-colors">
                     <div className="text-xs font-bold text-slate-400 w-12 text-right">{timeOf(item.starts_at)}</div>
                     <div className={`w-1 h-8 rounded-full ${statusStyle(item.status).dot}`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-[#022340] truncate">{item.who ?? vocab.client}</p>
+                      <p className="text-xs font-bold text-brand-ink truncate">{item.who ?? vocab.client}</p>
                       <p className="text-[11px] text-slate-500 truncate">
                         {[item.service, own ? null : item.professional, data.today.branches.length > 1 ? item.branch : null].filter(Boolean).join(' • ')}
                       </p>
@@ -277,7 +277,7 @@ export default function HomePage() {
 
               <div className="lg:col-span-5 bg-slate-50 p-5 rounded-2xl border border-slate-200/60 flex flex-col justify-between space-y-4" data-card="now">
                 <div>
-                  <h3 className="text-sm font-bold text-[#022340]">Ahora mismo</h3>
+                  <h3 className="text-sm font-bold text-brand-ink">Ahora mismo</h3>
                   <div className="grid grid-cols-3 gap-3 mt-3">
                     {[
                       { id: 'waiting', label: 'En espera', value: data.today.waiting },
@@ -285,7 +285,7 @@ export default function HomePage() {
                       { id: 'to_confirm', label: 'Por confirmar', value: data.today.to_confirm },
                     ].map((item) => (
                       <div key={item.id} data-now={item.id} className="bg-white rounded-xl border border-slate-200/60 px-3 py-2.5">
-                        <span className="block text-2xl font-extrabold text-[#022340] tracking-tight">{item.value}</span>
+                        <span className="block text-2xl font-extrabold text-brand-ink tracking-tight">{item.value}</span>
                         <span className="block text-[11px] text-slate-500 font-medium">{item.label}</span>
                       </div>
                     ))}
@@ -296,7 +296,7 @@ export default function HomePage() {
                       {data.today.branches.map((branch) => (
                         <li key={branch.name} className="flex items-center justify-between text-xs text-slate-600">
                           <span className="truncate">{branch.name}</span>
-                          <span className="font-bold text-[#022340]">{branch.count} {branch.count === 1 ? 'cita' : 'citas'}</span>
+                          <span className="font-bold text-brand-ink">{branch.count} {branch.count === 1 ? 'cita' : 'citas'}</span>
                         </li>
                       ))}
                     </ul>
@@ -304,9 +304,9 @@ export default function HomePage() {
                 </div>
                 <Link
                   href="/agenda"
-                  className="self-start inline-flex items-center gap-2 px-4 py-2 bg-[#022340] hover:bg-[#012840] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                  className="self-start inline-flex items-center gap-2 px-4 py-2 bg-brand hover:bg-brand-hover text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
                 >
-                  <CalendarIcon className="w-3.5 h-3.5 text-[#84D0D9]" />
+                  <CalendarIcon className="w-3.5 h-3.5 text-brand-soft" />
                   Ir a la agenda
                 </Link>
               </div>
@@ -314,16 +314,16 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-4 bg-gradient-to-br from-[#022340] to-[#012840] text-white rounded-tl-[2rem] rounded-br-[2rem] rounded-tr-md rounded-bl-md p-7 flex flex-col justify-between shadow-lg relative overflow-hidden" data-card="today">
-              <div className="absolute right-0 top-0 w-32 h-32 bg-[#84D0D9]/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="lg:col-span-4 bg-gradient-to-br from-brand to-brand-hover text-white rounded-tl-[2rem] rounded-br-[2rem] rounded-tr-md rounded-bl-md p-7 flex flex-col justify-between shadow-lg relative overflow-hidden" data-card="today">
+              <div className="absolute right-0 top-0 w-32 h-32 bg-brand-soft/10 rounded-full blur-2xl pointer-events-none" />
 
               <div className="relative z-10">
                 <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <span className="text-xs font-bold text-[#84D0D9] uppercase tracking-wider flex items-center gap-2">
+                  <span className="text-xs font-bold text-brand-soft uppercase tracking-wider flex items-center gap-2">
                     <CalendarDays className="w-4 h-4" /> Citas de hoy
                   </span>
                   {change !== null && (
-                    <span title={`Frente al ${weekday} pasado (${data.today.last_week})`} className="px-2.5 py-0.5 rounded-full bg-[#84D0D9]/20 text-[#84D0D9] border border-[#84D0D9]/30 text-[11px] font-bold flex items-center gap-1">
+                    <span title={`Frente al ${weekday} pasado (${data.today.last_week})`} className="px-2.5 py-0.5 rounded-full bg-brand-soft/20 text-brand-soft border border-brand-soft/30 text-[11px] font-bold flex items-center gap-1">
                       {change >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />} {change >= 0 ? '+' : ''}{change}%
                     </span>
                   )}
@@ -340,16 +340,16 @@ export default function HomePage() {
 
               <div className="relative z-10 mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-slate-300">
                 <span>{data.today.occupancy === null ? 'Sin horario hoy' : `Agenda ocupada: ${data.today.occupancy}%`}</span>
-                <span className="font-bold text-[#84D0D9]">{money(data.today.value)} atendido</span>
+                <span className="font-bold text-brand-soft">{money(data.today.value)} atendido</span>
               </div>
             </div>
 
             <div className="lg:col-span-8 bg-white rounded-tr-[2rem] rounded-bl-[2rem] rounded-tl-md rounded-bl-md border border-slate-200/80 shadow-xs p-6 flex flex-col justify-between" data-card="month">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <h2 className="text-xs font-bold text-[#022340] uppercase tracking-wider flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-[#3F768C]" /> {own ? 'Tus últimos 30 días' : 'Últimos 30 días'}
+                <h2 className="text-xs font-bold text-brand-ink uppercase tracking-wider flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-brand-accent" /> {own ? 'Tus últimos 30 días' : 'Últimos 30 días'}
                 </h2>
-                <Link href="/attention-times" className="text-xs font-bold text-[#3F768C] hover:text-[#022340] flex items-center gap-1">
+                <Link href="/attention-times" className="text-xs font-bold text-brand-accent hover:text-brand-ink flex items-center gap-1">
                   Tiempos de atención <ExternalLink className="w-3 h-3" />
                 </Link>
               </div>
@@ -358,13 +358,13 @@ export default function HomePage() {
                 <div className="pt-4 sm:pt-0 sm:pr-4 space-y-3" data-metric="attendance">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-600">Asistencia</span>
-                    <div className="p-2 bg-[#84D0D9]/15 text-[#022340] rounded-xl border border-[#84D0D9]/30">
+                    <div className="p-2 bg-brand-soft/15 text-brand-ink rounded-xl border border-brand-soft/30">
                       <UserCheck className="w-4 h-4" />
                     </div>
                   </div>
                   <div>
-                    <span className="text-3xl font-extrabold text-[#022340] tracking-tight">{data.month.attendance === null ? '—' : `${data.month.attendance}%`}</span>
-                    <div className="mt-2 inline-flex items-center gap-1.5 text-[#022340] bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] font-semibold">
+                    <span className="text-3xl font-extrabold text-brand-ink tracking-tight">{data.month.attendance === null ? '—' : `${data.month.attendance}%`}</span>
+                    <div className="mt-2 inline-flex items-center gap-1.5 text-brand-ink bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] font-semibold">
                       <AlertCircle className="w-3 h-3 text-amber-500" /> {data.month.no_show} no asistieron · {data.month.cancelled} cancelaron
                     </div>
                   </div>
@@ -372,13 +372,13 @@ export default function HomePage() {
 
                 <div className="pt-4 sm:pt-0 sm:px-4 space-y-3" data-metric="new-customers">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-600">{vocab.clients} nuevos este mes</span>
-                    <div className="p-2 bg-[#84D0D9]/15 text-[#022340] rounded-xl border border-[#84D0D9]/30">
+                    <span className="text-xs font-bold text-slate-600">{vocab.clients} {vocab.pick('client', 'nuevos', 'nuevas')} este mes</span>
+                    <div className="p-2 bg-brand-soft/15 text-brand-ink rounded-xl border border-brand-soft/30">
                       <Users className="w-4 h-4" />
                     </div>
                   </div>
                   <div>
-                    <span className="text-3xl font-extrabold text-[#022340] tracking-tight">{data.month.new_customers}</span>
+                    <span className="text-3xl font-extrabold text-brand-ink tracking-tight">{data.month.new_customers}</span>
                     <div className="mt-2 inline-flex items-center gap-1.5 text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] font-semibold">
                       <Users className="w-3 h-3 text-slate-500" /> {data.month.new_customers_before} el mes pasado
                     </div>
@@ -393,7 +393,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div>
-                    <span className="text-3xl font-extrabold text-[#022340] tracking-tight">{money(data.month.value)}</span>
+                    <span className="text-3xl font-extrabold text-brand-ink tracking-tight">{money(data.month.value)}</span>
                     <div className="mt-2 inline-flex items-center gap-1.5 text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] font-semibold">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500" /> {data.month.attended} citas atendidas
                     </div>
@@ -403,7 +403,7 @@ export default function HomePage() {
 
               <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2" data-top-services>
                 <span>
-                  <span className="font-bold text-[#022340]">Lo más pedido:</span>{' '}
+                  <span className="font-bold text-brand-ink">Lo más pedido:</span>{' '}
                   {data.month.top_services.length ? data.month.top_services.map((service) => `${service.name} (${service.count})`).join(' · ') : 'aún no hay citas'}
                 </span>
                 <span className="text-slate-400">El valor suma el precio de las citas atendidas; no es lo cobrado.</span>
@@ -416,10 +416,10 @@ export default function HomePage() {
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4" data-card="quick">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-[#84D0D9]/20 text-[#022340] rounded-lg">
+            <div className="p-1.5 bg-brand-soft/20 text-brand-ink rounded-lg">
               <Zap className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold uppercase tracking-wider text-[#022340]">Acciones Rápidas</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-ink">Acciones Rápidas</span>
           </div>
           <span className="text-[11px] text-slate-400">Atajos frecuentes</span>
         </div>
@@ -431,15 +431,15 @@ export default function HomePage() {
               <Link
                 key={item.href + item.label}
                 href={item.href}
-                className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-[#84D0D9]/10 text-slate-700 hover:text-[#022340] text-xs font-semibold rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm border border-slate-200/60 hover:border-[#84D0D9]/50 transition-all duration-200 group"
+                className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-brand-soft/10 text-slate-700 hover:text-brand-ink text-xs font-semibold rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm border border-slate-200/60 hover:border-brand-soft/50 transition-all duration-200 group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-lg text-[#3F768C] shadow-2xs group-hover:scale-105 transition-transform border border-slate-100">
+                  <div className="p-2 bg-white rounded-lg text-brand-accent shadow-2xs group-hover:scale-105 transition-transform border border-slate-100">
                     <Icon className="w-4 h-4" />
                   </div>
                   <span>{item.label}</span>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#022340] group-hover:translate-x-1 transition-all" />
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-brand-ink group-hover:translate-x-1 transition-all" />
               </Link>
             );
           })}
@@ -452,8 +452,8 @@ export default function HomePage() {
             <div>
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <ListTodo className="w-4 h-4 text-[#3F768C]" />
-                  <h3 className="font-bold text-[#022340] text-sm">Por resolver</h3>
+                  <ListTodo className="w-4 h-4 text-brand-accent" />
+                  <h3 className="font-bold text-brand-ink text-sm">Por resolver</h3>
                 </div>
 
                 <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/60 text-xs font-semibold">
@@ -463,7 +463,7 @@ export default function HomePage() {
                     onClick={() => setTaskFilter('pending')}
                     className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
                       taskFilter === 'pending'
-                        ? 'bg-white text-[#022340] shadow-2xs'
+                        ? 'bg-white text-brand-ink shadow-2xs'
                         : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
@@ -475,7 +475,7 @@ export default function HomePage() {
                     onClick={() => setTaskFilter('completed')}
                     className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
                       taskFilter === 'completed'
-                        ? 'bg-white text-[#022340] shadow-2xs'
+                        ? 'bg-white text-brand-ink shadow-2xs'
                         : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
@@ -496,7 +496,7 @@ export default function HomePage() {
                 )}
 
                 {(taskFilter === 'pending' ? pendingItems : clearItems).map((item) => (
-                  <Link key={item.key} href={item.href} data-pending={item.key} className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 flex items-center justify-between gap-3 hover:border-[#84D0D9]/60 transition-colors">
+                  <Link key={item.key} href={item.href} data-pending={item.key} className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 flex items-center justify-between gap-3 hover:border-brand-soft/60 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
                       {item.count > 0
                         ? <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
@@ -517,8 +517,8 @@ export default function HomePage() {
             </div>
 
             <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
-              <Link href="/agenda" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#022340] hover:text-[#3F768C] transition-colors cursor-pointer">
-                <Plus className="w-3.5 h-3.5 text-[#3F768C]" /> Nueva cita
+              <Link href="/agenda" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-ink hover:text-brand-accent transition-colors cursor-pointer">
+                <Plus className="w-3.5 h-3.5 text-brand-accent" /> Nueva cita
               </Link>
               <span className="text-[11px] text-slate-400">{pendingItems.length} {pendingItems.length === 1 ? 'pendiente' : 'pendientes'}</span>
             </div>
@@ -528,10 +528,10 @@ export default function HomePage() {
             <div>
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <Rss className="w-4 h-4 text-[#3F768C]" />
-                  <h3 className="font-bold text-[#022340] text-sm">Actividad reciente</h3>
+                  <Rss className="w-4 h-4 text-brand-accent" />
+                  <h3 className="font-bold text-brand-ink text-sm">Actividad reciente</h3>
                 </div>
-                <Link href="/appointments" className="text-xs font-bold text-[#3F768C] hover:text-[#022340] flex items-center gap-1">
+                <Link href="/appointments" className="text-xs font-bold text-brand-accent hover:text-brand-ink flex items-center gap-1">
                   Ver citas <ExternalLink className="w-3 h-3" />
                 </Link>
               </div>
@@ -549,7 +549,7 @@ export default function HomePage() {
                     <div className="text-xs min-w-0">
                       <p className="text-slate-800">
                         <CustomerLink id={event.customer_id} className="font-bold">{event.who ?? `Un ${client}`}</CustomerLink> {activityText(event)}
-                        {event.code && <> · <span className="font-mono text-[#022340]">{event.code}</span></>}
+                        {event.code && <> · <span className="font-mono text-brand-ink">{event.code}</span></>}
                       </p>
                       <span className="text-[10px] text-slate-400">
                         {[formatDateTime(event.at), event.service, event.by_customer ? 'desde el portal' : event.by].filter(Boolean).join(' • ')}

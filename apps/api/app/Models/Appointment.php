@@ -12,8 +12,6 @@ class Appointment extends Model
 {
     use HasUuids;
 
-    public const CODE_PREFIX = 'C-';
-
     protected $table = 'appointments';
 
     protected $fillable = [
@@ -61,13 +59,7 @@ class Appointment extends Model
 
     public static function nextCode(string $tenantId): string
     {
-        $max = static::where('tenant_id', $tenantId)
-            ->where('code', 'like', static::CODE_PREFIX . '%')
-            ->pluck('code')
-            ->map(fn ($code) => (int) substr($code, strlen(static::CODE_PREFIX)))
-            ->max() ?? 0;
-
-        return static::CODE_PREFIX . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+        return \App\Support\Codes::next($tenantId, 'appointment');
     }
 
     public function customer(): BelongsTo

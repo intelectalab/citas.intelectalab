@@ -131,8 +131,8 @@ export default function BoardColumnsEditor({ isOpen, info, clientsWord, onClose,
             <div key={column.key} data-column-row={column.name} className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5" style={{ borderLeft: `4px solid ${column.color}` }}>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col">
-                  <button type="button" aria-label="Subir" data-action="up" disabled={index === 0} onClick={() => shift(index, -1)} className="p-0.5 text-slate-400 hover:text-[#022340] disabled:opacity-30"><ArrowUp size={14} /></button>
-                  <button type="button" aria-label="Bajar" data-action="down" disabled={index === columns.length - 1} onClick={() => shift(index, 1)} className="p-0.5 text-slate-400 hover:text-[#022340] disabled:opacity-30"><ArrowDown size={14} /></button>
+                  <button type="button" aria-label="Subir" data-action="up" disabled={index === 0} onClick={() => shift(index, -1)} className="p-0.5 text-slate-400 hover:text-brand-ink disabled:opacity-30"><ArrowUp size={14} /></button>
+                  <button type="button" aria-label="Bajar" data-action="down" disabled={index === columns.length - 1} onClick={() => shift(index, 1)} className="p-0.5 text-slate-400 hover:text-brand-ink disabled:opacity-30"><ArrowDown size={14} /></button>
                 </div>
                 <input
                   aria-label="Nombre de la columna"
@@ -176,7 +176,7 @@ export default function BoardColumnsEditor({ isOpen, info, clientsWord, onClose,
                       aria-label={`Color ${color}`}
                       data-color={color}
                       onClick={() => change(column.key, { color })}
-                      className={`w-5 h-5 rounded-full transition-transform ${column.color === color ? 'ring-2 ring-offset-2 ring-[#022340] scale-110' : 'hover:scale-110'}`}
+                      className={`w-5 h-5 rounded-full transition-transform ${column.color === color ? 'ring-2 ring-offset-2 ring-brand scale-110' : 'hover:scale-110'}`}
                       style={{ backgroundColor: color }}
                     />
                   ))}
@@ -191,7 +191,7 @@ export default function BoardColumnsEditor({ isOpen, info, clientsWord, onClose,
             data-action="add-column"
             disabled={columns.length >= info.max_columns}
             onClick={add}
-            className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold text-[#3F768C] border border-dashed border-slate-300 rounded-xl hover:bg-slate-50 hover:text-[#022340] transition-colors disabled:opacity-40"
+            className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold text-brand-accent border border-dashed border-slate-300 rounded-xl hover:bg-slate-50 hover:text-brand-ink transition-colors disabled:opacity-40"
           >
             <Plus size={16} />
             {columns.length >= info.max_columns ? `Máximo ${info.max_columns} columnas` : 'Agregar columna'}
@@ -204,7 +204,7 @@ export default function BoardColumnsEditor({ isOpen, info, clientsWord, onClose,
                 <div key={column.key} data-removed={column.name} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-amber-900">{column.name}{column.customers > 0 ? ` · ${cards(column.customers)}` : ''}</span>
-                    <button type="button" data-action="restore" onClick={() => restore(column)} className="inline-flex items-center gap-1 text-xs font-bold text-[#3F768C] hover:text-[#022340]">
+                    <button type="button" data-action="restore" onClick={() => restore(column)} className="inline-flex items-center gap-1 text-xs font-bold text-brand-accent hover:text-brand-ink">
                       <RotateCcw size={12} /> No borrar
                     </button>
                   </div>

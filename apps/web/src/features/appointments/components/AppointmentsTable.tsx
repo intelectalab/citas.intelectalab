@@ -125,7 +125,7 @@ export default function AppointmentsTable() {
     ...(usesDependents ? [{ header: vocab.dependent, value: (a: Appointment) => a.dependent?.name }] : []),
     { header: 'Servicio', value: (a) => a.service?.name },
     { header: 'Duración (min)', type: 'number', value: (a) => a.duration_minutes },
-    { header: 'Precio', type: 'money', value: (a) => a.price },
+    { header: 'Precio', type: 'money', total: true, value: (a) => a.price },
     { header: vocab.pro, value: (a) => a.professional?.display_name },
     { header: 'Fase', value: (a) => a.status_name },
     { header: 'Sin confirmar a tiempo', value: (a) => (a.confirmation_overdue ? 'Sí' : '') },
@@ -140,7 +140,7 @@ export default function AppointmentsTable() {
           type="button"
           data-open={a.id}
           onClick={() => openDetail(a.id)}
-          className="text-sm font-bold font-mono text-[#022340] hover:text-[#3F768C] transition-colors"
+          className="text-sm font-bold font-mono text-brand-ink hover:text-brand-accent transition-colors"
         >
           {a.code}
         </button>

@@ -453,6 +453,8 @@ class PaymentLinks
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, Invoicing::validated($tenant, ['doc_type' => Invoicing::FACTURA === Invoicing::defaultType($tenant) ? Invoicing::types($tenant)[0] : Invoicing::defaultType($tenant)]), null);
             Packages::issueForSale($tenant, $sale, null);
+            Inventory::deductForSale($tenant, $sale, null);
+            Loyalty::earnForSale($tenant, $sale, null);
         }
 
         return $sale;
@@ -470,6 +472,7 @@ class PaymentLinks
 
         $paymentId = self::gatewayPayment($tenant, $sale, $link, 'link', $event);
         $sale = self::applyPayment($tenant, $sale, (float) $link->amount);
+        Sales::auditPayment($tenant->id, $sale, 'link', round((float) $link->amount, 2), mb_substr((string) $event['reference'], 0, 190), ['actor' => null]);
 
         DB::table('payment_links')->where('id', $link->id)->update(['status' => 'paid', 'paid_at' => now(), 'payment_id' => $paymentId, 'updated_at' => now()]);
         self::log($link, $provider, $event, 'processed', "Pago confirmado de la venta {$sale->code}.");
@@ -528,7 +531,8 @@ class PaymentLinks
 
         $sale = Sales::createForAppointment($tenant, $appointment->load('service'), null);
         $paymentId = self::gatewayPayment($tenant, $sale, $link, 'deposit', $event);
-        self::applyPayment($tenant, $sale, (float) $link->amount);
+        $paidSale = self::applyPayment($tenant, $sale, (float) $link->amount);
+        Sales::auditPayment($tenant->id, $paidSale, 'deposit', round((float) $link->amount, 2), mb_substr((string) $event['reference'], 0, 190), ['actor' => null]);
 
         DB::table('payment_links')->where('id', $link->id)->update([
             'status' => 'paid', 'paid_at' => now(), 'payment_id' => $paymentId, 'sale_id' => $sale->id, 'appointment_id' => $appointment->id, 'updated_at' => now(),

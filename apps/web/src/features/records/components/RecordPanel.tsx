@@ -221,7 +221,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
           <p className="text-sm font-semibold text-slate-700">Este servicio no se atiende con ficha.</p>
           <p className="text-sm text-slate-500">
             {can('record_templates.edit') ? (
-              <>Puedes asignarle una en <Link href="/records/templates" className="font-semibold text-[#3F768C] hover:text-[#022340]">Plantillas de ficha</Link>.</>
+              <>Puedes asignarle una en <Link href="/records/templates" className="font-semibold text-brand-accent hover:text-brand-ink">Plantillas de ficha</Link>.</>
             ) : 'El administrador de tu empresa decide qué servicios llevan ficha.'}
           </p>
         </div>
@@ -321,7 +321,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                         data-action="update-confirm"
                         disabled={busy !== ''}
                         onClick={updateTemplate}
-                        className="px-3 py-2 text-xs font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] transition-colors disabled:opacity-50"
+                        className="px-3 py-2 text-xs font-medium bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50"
                       >
                         {busy === 'update' ? 'Actualizando...' : 'Sí, actualizar'}
                       </button>
@@ -402,9 +402,9 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                         checked={consent}
                         disabled={!editable}
                         onChange={(e) => { setConsent(e.target.checked); setErrors((current) => { const { consent: _removed, ...rest } = current; return rest; }); }}
-                        className="rounded border-slate-300 text-[#022340] focus:ring-[#022340]"
+                        className="rounded border-slate-300 text-brand-ink focus:ring-brand"
                       />
-                      {context.appointment.customer ?? `El ${vocab.client.toLowerCase()}`} acepta
+                      {context.appointment.customer ?? `${vocab.pick('client', 'El', 'La')} ${vocab.client.toLowerCase()}`} acepta
                     </label>
                     {errors.consent && <p role="alert" className="text-xs font-medium text-red-600">{errors.consent}</p>}
                   </section>
@@ -534,7 +534,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                   data-action={isSigned ? 'save-changes' : 'sign'}
                   disabled={busy !== ''}
                   onClick={() => save(!isSigned)}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50"
                 >
                   {!isSigned && <PenLine size={15} />}
                   {busy === 'sign' || (isSigned && busy === 'save') ? 'Guardando...' : isSigned ? 'Guardar cambios' : 'Firmar ficha'}

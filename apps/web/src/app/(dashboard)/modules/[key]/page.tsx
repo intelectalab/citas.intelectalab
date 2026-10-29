@@ -16,7 +16,7 @@ export default function ModulePage() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -28,11 +28,11 @@ export default function ModulePage() {
   return (
     <div className="max-w-2xl mx-auto pt-10 font-sans text-[#1F2937]">
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 flex items-start gap-4">
-        <span className="p-3 bg-[#84D0D9]/20 text-[#022340] rounded-2xl shrink-0">
+        <span className="p-3 bg-brand-soft/20 text-brand-ink rounded-2xl shrink-0">
           {isAvailable ? <Construction className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
         </span>
         <div className="space-y-2">
-          <h1 className="text-xl font-black text-[#022340] tracking-tight">
+          <h1 className="text-xl font-black text-brand-ink tracking-tight">
             {label ?? 'Módulo no encontrado'}
           </h1>
           <p className="text-sm text-slate-500 font-medium leading-relaxed">
@@ -42,7 +42,7 @@ export default function ModulePage() {
                 ? 'Tu cuenta no tiene permiso para entrar aquí. Pídeselo a quien administra tu empresa.'
                 : 'No está disponible para tu empresa. Depende de tu plan y del rubro de tu negocio.'}
           </p>
-          <Link href="/home" className="inline-block text-xs font-bold text-[#3F768C] hover:text-[#022340] transition-colors">
+          <Link href="/home" className="inline-block text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
             Volver al inicio
           </Link>
         </div>

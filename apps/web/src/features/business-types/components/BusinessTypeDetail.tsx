@@ -29,8 +29,8 @@ const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6
 function SectionTitle({ icon, title, aside }: { icon: React.ReactNode; title: string; aside?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#022340] uppercase tracking-wider">
-        <span className="text-[#3F768C]">{icon}</span> {title}
+      <h2 className="flex items-center gap-2 text-sm font-extrabold text-brand-ink uppercase tracking-wider">
+        <span className="text-brand-accent">{icon}</span> {title}
       </h2>
       {aside}
     </div>
@@ -79,7 +79,7 @@ export default function BusinessTypeDetail() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#3F768C] animate-spin" />
+        <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
       </div>
     );
   }
@@ -88,7 +88,7 @@ export default function BusinessTypeDetail() {
     return (
       <div className="max-w-2xl mx-auto pt-10 text-center space-y-3">
         <p className="text-sm text-slate-500 font-medium">{error}</p>
-        <Link href="/admin/business-types" className="inline-block text-xs font-bold text-[#3F768C] hover:text-[#022340]">Volver a Plantillas de rubros</Link>
+        <Link href="/admin/business-types" className="inline-block text-xs font-bold text-brand-accent hover:text-brand-ink">Volver a Plantillas de rubros</Link>
       </div>
     );
   }
@@ -109,7 +109,7 @@ export default function BusinessTypeDetail() {
       <nav className="flex items-center gap-2 text-sm">
         <Link
           href="/admin/business-types"
-          className="inline-flex items-center gap-2 pl-2.5 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 font-bold text-[#022340] hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors"
+          className="inline-flex items-center gap-2 pl-2.5 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 font-bold text-brand-ink hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors"
         >
           <ArrowLeft size={16} /> Plantillas de rubros
         </Link>
@@ -126,7 +126,7 @@ export default function BusinessTypeDetail() {
             </span>
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-black text-[#022340] tracking-tight">{type.name}</h1>
+                <h1 className="text-2xl font-black text-brand-ink tracking-tight">{type.name}</h1>
                 <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${type.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
                   {type.status === 'active' ? 'Activo' : 'Inactivo'}
                 </span>
@@ -138,7 +138,7 @@ export default function BusinessTypeDetail() {
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
           >
             <Pencil size={15} /> Editar rubro
           </button>
@@ -152,8 +152,8 @@ export default function BusinessTypeDetail() {
             { icon: <ClipboardList size={15} />, value: template.record_template ? template.record_template.fields.length : '—', label: template.record_template ? 'campos en la ficha' : 'sin ficha de atención' },
           ].map((stat) => (
             <div key={stat.label} className="px-6 py-4">
-              <span className="flex items-center gap-2 text-xl font-black text-[#022340]">
-                <span className="text-[#3F768C]">{stat.icon}</span> {stat.value}
+              <span className="flex items-center gap-2 text-xl font-black text-brand-ink">
+                <span className="text-brand-accent">{stat.icon}</span> {stat.value}
               </span>
               <span className="block text-xs text-slate-500 font-medium">{stat.label}</span>
             </div>
@@ -197,11 +197,11 @@ export default function BusinessTypeDetail() {
           <section className={cardClass}>
             <SectionTitle
               icon={<Puzzle size={16} />}
-              title="Módulos"
+              title="Módulos al empezar"
               aside={<span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-700">{enabledModules} de {OPTIONAL_MODULE_KEYS.length} encendidos</span>}
             />
             <p className="text-xs text-slate-500">
-              Una empresa recibe los módulos encendidos que su plan incluya. Siempre tiene {Object.values(CORE_MODULE_LABELS).join(', ')}.
+              Una empresa nueva empieza con los módulos encendidos que su plan incluya. Los apagados los puede encender después en su Configuración. Siempre tiene {Object.values(CORE_MODULE_LABELS).join(', ')}.
             </p>
             <div className="columns-1 md:columns-2 gap-x-8" data-module-columns>
               {MODULE_GROUPS.map((group) => (
@@ -243,7 +243,7 @@ export default function BusinessTypeDetail() {
                                 {current === true ? 'Sí' : 'No'}
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-md bg-[#022340]/5 text-xs font-bold text-[#022340] shrink-0">{String(current)} {rule.unit}</span>
+                              <span className="px-2 py-0.5 rounded-md bg-brand/5 text-xs font-bold text-brand-ink shrink-0">{String(current)} {rule.unit}</span>
                             )}
                           </li>
                         );

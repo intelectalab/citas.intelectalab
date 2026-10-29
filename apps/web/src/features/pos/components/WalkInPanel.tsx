@@ -39,7 +39,7 @@ interface WalkInPanelProps {
 
 const chip = (active: boolean, strong = false) =>
   `px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors tabular-nums ${
-    active ? 'bg-[#022340] text-white border-[#022340]' : strong ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+    active ? 'bg-brand text-white border-brand' : strong ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
   }`;
 
 export default function WalkInPanel({ isOpen, onClose, branchId, services, customer, customerLocked, onBooked }: WalkInPanelProps) {
@@ -151,9 +151,9 @@ export default function WalkInPanel({ isOpen, onClose, branchId, services, custo
                   </p>
                   <ul className="space-y-3">
                     {rows.map((pro) => (
-                      <li key={pro.id} data-walk-in-pro={pro.display_name} className={`rounded-xl border px-4 py-3 space-y-2.5 ${choice?.professionalId === pro.id ? 'border-[#022340] ring-2 ring-[#022340]/10' : 'border-slate-200'}`}>
+                      <li key={pro.id} data-walk-in-pro={pro.display_name} className={`rounded-xl border px-4 py-3 space-y-2.5 ${choice?.professionalId === pro.id ? 'border-brand ring-2 ring-brand/10' : 'border-slate-200'}`}>
                         <div className="flex items-start justify-between gap-3">
-                          <ProfessionalLink id={pro.id} className="text-sm font-bold text-[#022340]">{pro.display_name}</ProfessionalLink>
+                          <ProfessionalLink id={pro.id} className="text-sm font-bold text-brand-ink">{pro.display_name}</ProfessionalLink>
                           <Badge tone={pro.free_now ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} bold className="shrink-0">
                             {pro.free_now ? 'Libre ahora' : 'Ahora no'}
                           </Badge>
@@ -182,7 +182,7 @@ export default function WalkInPanel({ isOpen, onClose, branchId, services, custo
           )}
 
           {summary && (
-            <p data-walk-in-summary className="flex items-center gap-2 text-sm text-[#022340] bg-[#84D0D9]/15 border border-[#84D0D9]/40 rounded-lg px-3 py-2">
+            <p data-walk-in-summary className="flex items-center gap-2 text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/40 rounded-lg px-3 py-2">
               <Clock size={15} className="shrink-0" /> {summary}{service ? ` · ${service.duration_minutes} min` : ''}
             </p>
           )}

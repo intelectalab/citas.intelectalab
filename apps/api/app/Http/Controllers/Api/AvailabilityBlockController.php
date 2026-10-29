@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
+use App\Support\Audit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -138,7 +139,10 @@ class AvailabilityBlockController extends Controller
             'tenant_id' => $tenant->id,
         ] + (AvailabilityBlock::hasKind() ? ['created_by' => $request->user()->id] : []));
 
-        return response()->json($this->present($block->fresh(['professional:id,display_name', 'branch:id,name']), $tenant, $own), 201);
+        $block = $block->fresh(['professional:id,display_name', 'branch:id,name']);
+        $this->audit($request, 'availability_block.created', $block, [], array_filter($this->auditable($block)));
+
+        return response()->json($this->present($block, $tenant, $own), 201);
     }
 
     public function update(Request $request, string $id)
@@ -149,9 +153,16 @@ class AvailabilityBlockController extends Controller
         $this->assertBranch($request, $block->professional_id, $block->branch_id);
         [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own);
 
+        $auditBefore = $this->auditable($block);
         $block->update($this->columns($data, $startsAt, $endsAt));
+        $block = $block->fresh(['professional:id,display_name', 'branch:id,name']);
+        [$from, $to] = Audit::changed($auditBefore, $this->auditable($block));
 
-        return response()->json($this->present($block->fresh(['professional:id,display_name', 'branch:id,name']), $tenant, $own));
+        if ($from || $to) {
+            $this->audit($request, 'availability_block.updated', $block, $from, $to);
+        }
+
+        return response()->json($this->present($block, $tenant, $own));
     }
 
     public function destroy(Request $request, string $id)
@@ -159,9 +170,53 @@ class AvailabilityBlockController extends Controller
         $tenant = $this->tenant($request);
         $block = $this->find($tenant, $id, $this->ownProfessionalId($request->user()));
         $this->assertBranch($request, $block->professional_id, $block->branch_id);
+        $block->loadMissing(['professional:id,display_name', 'branch:id,name']);
         $block->delete();
 
+        $kind = $block->kindKey();
+        Audit::log($request, 'availability_block.deleted', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'availability_block',
+            'entity_id'    => $block->id,
+            'entity_label' => $block->professional?->display_name ?? $block->branch?->name,
+            'branch_id'    => $block->branch_id,
+            'before'       => array_filter([
+                'block_kind' => AvailabilityBlock::KINDS[$kind] ?? AvailabilityBlock::KINDS[AvailabilityBlock::KIND_OTHER],
+                'reason'     => $block->reason,
+                'starts_at'  => Carbon::parse($block->starts_at)->toIso8601String(),
+                'until_at'   => Carbon::parse($block->ends_at)->toIso8601String(),
+                'branch'     => $block->branch?->name,
+            ]),
+        ]);
+
         return response()->json(['message' => 'Bloqueo eliminado correctamente']);
+    }
+
+    private function auditable(AvailabilityBlock $block): array
+    {
+        $kind = $block->kindKey();
+
+        return [
+            'block_kind'   => AvailabilityBlock::KINDS[$kind] ?? AvailabilityBlock::KINDS[AvailabilityBlock::KIND_OTHER],
+            'professional' => $block->professional?->display_name,
+            'branch'       => $block->branch?->name,
+            'reason'       => $block->reason,
+            'starts_at'    => Carbon::parse($block->starts_at)->toIso8601String(),
+            'until_at'     => Carbon::parse($block->ends_at)->toIso8601String(),
+        ];
+    }
+
+    private function audit(Request $request, string $action, AvailabilityBlock $block, array $before = [], array $after = []): void
+    {
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $block->tenant_id,
+            'entity_type'  => 'availability_block',
+            'entity_id'    => $block->id,
+            'entity_label' => $block->professional?->display_name ?? $block->branch?->name,
+            'branch_id'    => $block->branch_id,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
     }
 
     private function assertBranch(Request $request, ?string $professionalId, ?string $branchId): void

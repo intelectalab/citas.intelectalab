@@ -48,18 +48,13 @@ class BusinessTypeController extends Controller
         $type = BusinessType::findOrFail($id);
         $outdated = collect($this->outdatedTenants($type))->keyBy('id');
 
-        $tenants = Tenant::where('business_type_id', $type->id)->orderBy('name')->get()->map(function (Tenant $tenant) use ($type, $outdated) {
-            $current = Tenant::profileFromType($type);
-            $own = $tenant->businessProfile('modules_off');
-
+        $tenants = Tenant::where('business_type_id', $type->id)->orderBy('name')->get()->map(function (Tenant $tenant) use ($outdated) {
             return [
                 'id'        => $tenant->id,
                 'name'      => $tenant->name,
                 'status'    => $tenant->status,
                 'synced_at' => $tenant->business_profile_synced_at,
                 'outdated'  => $outdated->has($tenant->id) ? $outdated[$tenant->id]['parts'] : [],
-                'modules_gained' => array_values(array_diff($own, $current['modules_off'])),
-                'modules_lost'   => array_values(array_diff($current['modules_off'], $own)),
             ];
         });
 
@@ -123,6 +118,7 @@ class BusinessTypeController extends Controller
         }
 
         $type = BusinessType::create($validated);
+        \App\Support\Audit::log($request, 'business_type.created', ['entity_type' => 'business_type', 'entity_id' => $type->id, 'entity_label' => $type->name]);
 
         return response()->json($type->makeVisible('template'), 201);
     }
@@ -130,12 +126,18 @@ class BusinessTypeController extends Controller
     public function update(Request $request, string $id)
     {
         $type = BusinessType::findOrFail($id);
-        $type->update($this->validated($request, $type));
+        $validated = $this->validated($request, $type);
+        [$was, $now] = \App\Support\Audit::changed($type->only(array_keys($validated)), $validated);
+        $type->update($validated);
+
+        if ($now) {
+            \App\Support\Audit::log($request, 'business_type.updated', ['entity_type' => 'business_type', 'entity_id' => $type->id, 'entity_label' => $type->name, 'before' => $was, 'after' => $now]);
+        }
 
         return response()->json($type->makeVisible('template'));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $type = BusinessType::findOrFail($id);
 
@@ -146,6 +148,7 @@ class BusinessTypeController extends Controller
         }
 
         $type->delete();
+        \App\Support\Audit::log($request, 'business_type.deleted', ['entity_type' => 'business_type', 'entity_id' => $type->id, 'entity_label' => $type->name]);
 
         return response()->json(['message' => 'Rubro eliminado correctamente']);
     }

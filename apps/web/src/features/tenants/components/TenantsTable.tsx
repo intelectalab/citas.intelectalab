@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Building2, Pencil, Trash2, Eye, CheckCircle, XCircle, LogIn } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormTenant from './FormTenant';
 import Link from 'next/link';
@@ -22,6 +22,8 @@ interface Tenant {
   subscription?: { status?: string; plan?: { name?: string; is_public_catalog?: boolean } | null } | null;
   users?: Array<{ is_owner?: boolean; account_type?: string }>;
 }
+
+const SUBSCRIPTION_STATUS: Record<string, string> = { active: 'Activa', trialing: 'En prueba', past_due: 'Pago vencido', expired: 'Prueba vencida', canceled: 'Cancelada' };
 
 export default function TenantsTable() {
   const { user, startImpersonation } = useAuth();
@@ -240,7 +242,7 @@ export default function TenantsTable() {
             <Building2 size={16} />
           </div>
           <div>
-            <Link href={`/admin/tenants/${tenant.id}`} className={`${styles.customerName} hover:text-[#3F768C] hover:underline`}>
+            <Link href={`/admin/tenants/${tenant.id}`} className={`${styles.customerName} hover:text-brand-accent hover:underline`}>
               {tenant.name}
             </Link>
             <span className="block text-xs text-slate-400 font-mono">
@@ -267,7 +269,7 @@ export default function TenantsTable() {
               <span className="font-semibold text-slate-700">{tenant.subscription.plan.name}</span>
               {tenant.subscription.plan.is_public_catalog === false && <span className="text-slate-400"> · a medida</span>}
               <span className="block text-[11px] text-slate-400">
-                {({ active: 'Activa', trialing: 'En prueba', past_due: 'Pago vencido', expired: 'Prueba vencida', canceled: 'Cancelada' } as Record<string, string>)[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
+                {SUBSCRIPTION_STATUS[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
               </span>
             </>
           ) : (
@@ -328,6 +330,18 @@ export default function TenantsTable() {
     },
   ];
 
+  const exportColumns: ExportColumn<Tenant>[] = [
+    { header: 'Empresa', value: (t) => t.name },
+    { header: 'Identificador', value: (t) => t.slug },
+    { header: 'Rubro', value: (t) => t.business_type?.name },
+    { header: 'Plan', value: (t) => t.subscription?.plan?.name },
+    { header: 'Plan a medida', value: (t) => (t.subscription?.plan ? (t.subscription.plan.is_public_catalog === false ? 'Sí' : 'No') : null) },
+    { header: 'Suscripción', value: (t) => (t.subscription?.status ? SUBSCRIPTION_STATUS[t.subscription.status] ?? t.subscription.status : null) },
+    { header: 'Estado', value: (t) => (TENANT_STATUS[t.status] ?? TENANT_STATUS.inactive).label },
+    { header: 'Zona horaria', value: (t) => t.timezone },
+    { header: 'Fecha de alta', type: 'date', value: (t) => t.created_at },
+  ];
+
   return (
     <div className="space-y-6 mb-8">
       <DataTable<Tenant>
@@ -357,6 +371,9 @@ export default function TenantsTable() {
           { id: 'status', label: 'Estado', value: (t) => t.status },
         ]}
         data={safeTenants}
+        exportTitle="Empresas"
+        exportScreen="admin-tenants"
+        exportColumns={exportColumns}
         getItemKey={(tenant) => tenant.id}
         entityLabel="tenants registrados"
       />

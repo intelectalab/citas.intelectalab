@@ -33,13 +33,13 @@ export default function PlanCard({ plan, onSelect }: { plan: PublicPlan; onSelec
     <div
       data-plan-card={plan.name}
       className={`bg-slate-50/50 border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative ${
-        plan.is_popular ? 'border-[#3F768C] ring-2 ring-[#3F768C]/10 bg-white' : 'border-slate-200'
+        plan.is_popular ? 'border-brand-accent ring-2 ring-brand-accent/10 bg-white' : 'border-slate-200'
       }`}
     >
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold text-[#022340]">{plan.name}</h3>
-          <div className="w-8 h-8 rounded-xl bg-[#84D0D9]/20 flex items-center justify-center text-[#3F768C]">
+          <h3 className="text-xl font-bold text-brand-ink">{plan.name}</h3>
+          <div className="w-8 h-8 rounded-xl bg-brand-soft/20 flex items-center justify-center text-brand-accent">
             <Building2 className="w-4 h-4" />
           </div>
         </div>
@@ -49,7 +49,7 @@ export default function PlanCard({ plan, onSelect }: { plan: PublicPlan; onSelec
         )}
 
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-black text-[#022340]">{plan.currency_symbol ?? 'S/'} {plan.price_monthly}</span>
+          <span className="text-3xl font-black text-brand-ink">{plan.currency_symbol ?? 'S/'} {plan.price_monthly}</span>
           <span className="text-xs text-slate-400 font-medium">/ mes</span>
         </div>
 
@@ -77,10 +77,10 @@ export default function PlanCard({ plan, onSelect }: { plan: PublicPlan; onSelec
       <button
         type="button"
         onClick={() => onSelect(plan)}
-        className="mt-6 w-full bg-[#022340] hover:bg-[#012840] text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-sm cursor-pointer"
+        className="mt-6 w-full bg-brand hover:bg-brand-hover text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-xs transition-all shadow-sm cursor-pointer"
       >
         <span>Elegir Plan y Registrarse</span>
-        <ArrowRight className="w-3.5 h-3.5 text-[#84D0D9]" />
+        <ArrowRight className="w-3.5 h-3.5 text-brand-soft" />
       </button>
     </div>
   );

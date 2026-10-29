@@ -56,7 +56,7 @@ function TimingTable({ title, hint, firstColumn, rows, tableKey, showTotal = fal
   return (
     <section className={`${cardClass} overflow-hidden`} data-table={tableKey}>
       <div className="px-6 pt-5 pb-3">
-        <h2 className="text-sm font-extrabold text-[#022340] uppercase tracking-wider">{title}</h2>
+        <h2 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">{title}</h2>
         <p className="text-xs text-slate-500 font-medium mt-1">{hint}</p>
       </div>
 
@@ -161,7 +161,7 @@ export default function AttentionTimes() {
     <div className="space-y-5 pb-8 font-sans">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#022340] tracking-tight">Tiempos de atención</h1>
+          <h1 className="text-2xl font-black text-brand-ink tracking-tight">Tiempos de atención</h1>
           <p className="text-sm text-slate-500 font-medium">
             {data ? `Del ${formatDate(data.from, { day: 'numeric', month: 'long' })} al ${formatDate(data.to, { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Cuánto duran de verdad las atenciones'}
           </p>
@@ -176,7 +176,7 @@ export default function AttentionTimes() {
               aria-pressed={period === item.id}
               onClick={() => setPeriod(item.id)}
               className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
-                period === item.id ? 'bg-[#022340] text-white' : 'text-slate-600 hover:bg-slate-50'
+                period === item.id ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               {item.label}

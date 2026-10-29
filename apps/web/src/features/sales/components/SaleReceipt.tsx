@@ -29,13 +29,14 @@ export default function SaleReceipt() {
   return (
     <div className="min-h-screen bg-[#F2F2F2] print:bg-white py-8 print:py-0">
       <div className="max-w-[340px] mx-auto mb-4 flex justify-end print:hidden">
-        <button type="button" data-print onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors">
+        <button type="button" data-print onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors">
           <Printer size={16} /> Imprimir
         </button>
       </div>
 
       <article data-receipt className="max-w-[340px] mx-auto bg-white text-slate-900 px-6 py-7 shadow-sm print:shadow-none print:max-w-none print:px-2 print:py-0 text-[13px] leading-snug">
         <header className="text-center space-y-0.5">
+          {sale.issuer.logo_url && <img src={sale.issuer.logo_url} alt="" data-receipt-logo className="mx-auto mb-2 max-h-14 max-w-[180px] object-contain grayscale print:grayscale" />}
           <h1 className="text-base font-extrabold">{sale.issuer.name}</h1>
           <p>{sale.issuer.tax_id ? `RUC ${sale.issuer.tax_id}` : 'RUC sin registrar'}</p>
           {sale.issuer.address && <p>{sale.issuer.address}</p>}
@@ -104,6 +105,7 @@ export default function SaleReceipt() {
             </p>
           )}
           {sale.status === 'void' && <p className="font-bold">VENTA ANULADA</p>}
+          {sale.issuer.footer && <p data-receipt-footer className="whitespace-pre-line pt-1">{sale.issuer.footer}</p>}
           <p>Gracias por su preferencia.</p>
         </footer>
       </article>

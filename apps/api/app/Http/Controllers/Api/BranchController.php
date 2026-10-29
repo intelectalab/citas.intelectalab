@@ -10,6 +10,7 @@ use App\Models\Professional;
 use App\Models\ProfessionalSchedule;
 use App\Models\Tenant;
 use App\Support\AppointmentFlow;
+use App\Support\Audit;
 use App\Support\BranchHours;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -149,6 +150,10 @@ class BranchController extends Controller
             \App\Support\Cash::ensureRegisters($tenant);
         }
 
+        if (\App\Support\Inventory::ready()) {
+            \App\Support\Inventory::ensureWarehouses($tenant);
+        }
+
         return response()->json($this->present($branch->fresh(), $tenant), 201);
     }
 
@@ -218,6 +223,13 @@ class BranchController extends Controller
         }
 
         $branch->update(['status' => $to]);
+        Audit::log($request, $to === 'active' ? 'branch.activated' : 'branch.deactivated', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'branch',
+            'entity_id'    => $branch->id,
+            'entity_label' => $branch->name,
+            'branch_id'    => $branch->id,
+        ]);
 
         return response()->json($this->present($branch->fresh(), $tenant));
     }

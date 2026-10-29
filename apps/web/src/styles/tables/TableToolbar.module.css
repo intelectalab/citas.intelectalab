@@ -35,7 +35,7 @@
 }
 
 .searchInputWrapper:focus-within {
-  border-color: #3f768c;
+  border-color: var(--brand-link, #3f768c);
   box-shadow: 0 0 0 3px rgba(63, 118, 140, 0.15);
 }
 
@@ -44,7 +44,7 @@
   outline: none;
   border: none;
   width: 100%;
-  color: #022340;
+  color: var(--brand-ink, #022340);
   font-weight: 500;
   font-size: 0.8125rem;
 }
@@ -69,7 +69,7 @@
   padding: 0.4375rem 0.875rem;
   border-radius: 9999px;
   border: 1px solid #cbd5e1;
-  color: #022340;
+  color: var(--brand-ink, #022340);
   font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
@@ -85,9 +85,9 @@
 }
 
 .filterActionBtnActive {
-  background-color: #022340;
+  background-color: var(--brand-solid, #022340);
   color: #ffffff;
-  border-color: #022340;
+  border-color: var(--brand-solid, #022340);
 }
 
 .exportBtn {
@@ -98,7 +98,7 @@
   background-color: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 0.5rem;
-  color: #022340;
+  color: var(--brand-ink, #022340);
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;

@@ -31,7 +31,7 @@ export default function CustomerPackages({ customerId }: { customerId: string })
     <section className={`${card} overflow-hidden flex flex-col`} data-card="packages">
       <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3">
         <div>
-          <SectionTitle><Boxes className="w-4 h-4 text-[#3F768C]" /> Paquetes</SectionTitle>
+          <SectionTitle><Boxes className="w-4 h-4 text-brand-accent" /> Paquetes</SectionTitle>
           <p className="text-xs text-slate-500 font-medium mt-1">
             {active.length ? `${active.length} vigente${active.length === 1 ? '' : 's'}: ${active.reduce((sum, p) => sum + p.sessions_total - p.sessions_used, 0)} sesiones por usar.` : 'Sesiones que pagó por adelantado.'}
           </p>
@@ -44,7 +44,7 @@ export default function CustomerPackages({ customerId }: { customerId: string })
           renderRow={(p) => (
             <li key={p.id} className="flex items-center gap-4 px-6 py-3 hover:bg-slate-50 transition-colors" data-customer-package={p.code}>
               <div className="flex-1 min-w-0">
-                <Link href={`/packages/${p.id}`} className="block text-sm font-semibold text-slate-800 hover:text-[#3F768C] truncate">{p.name}</Link>
+                <Link href={`/packages/${p.id}`} className="block text-sm font-semibold text-slate-800 hover:text-brand-accent truncate">{p.name}</Link>
                 <span className="block text-xs text-slate-500">{p.code} · {money(p.price, p.currency)} · {daysLeftLabel(p)}</span>
               </div>
               <div className="hidden sm:block w-44 shrink-0"><UsageBar pkg={p} /></div>

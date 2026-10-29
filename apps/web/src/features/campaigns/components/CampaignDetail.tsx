@@ -101,7 +101,7 @@ export default function CampaignDetail() {
     { id: 'pending', title: 'Por enviar', value: r?.pending ?? 0, note: 'saliendo ahora', icon: <Send size={18} />, color: 'text-sky-600' },
     { id: 'failed', title: 'Con error', value: r?.failed ?? 0, note: 'reintentar en Mensajes', icon: <AlertTriangle size={18} />, color: 'text-rose-600' },
     { id: 'skipped', title: 'No se enviaron', value: r?.skipped ?? 0, note: 'sin permiso o sin correo', icon: <Ban size={18} />, color: 'text-slate-500' },
-    { id: 'booked', title: 'Agendaron después', value: r?.booked.customers ?? 0, note: `${r?.booked.appointments ?? 0} citas en ${data.booked_days} días`, icon: <CalendarCheck size={18} />, color: 'text-[#3F768C]' },
+    { id: 'booked', title: 'Agendaron después', value: r?.booked.customers ?? 0, note: `${r?.booked.appointments ?? 0} citas en ${data.booked_days} días`, icon: <CalendarCheck size={18} />, color: 'text-brand-accent' },
   ];
 
   return (
@@ -114,9 +114,9 @@ export default function CampaignDetail() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className={`${card} p-6 space-y-5`} data-card="campaign">
           <div className="flex items-start gap-3">
-            <span className="w-12 h-12 rounded-2xl bg-[#84D0D9]/20 text-[#022340] flex items-center justify-center shrink-0"><Megaphone size={22} /></span>
+            <span className="w-12 h-12 rounded-2xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><Megaphone size={22} /></span>
             <div className="min-w-0">
-              <h1 className="text-xl font-black text-[#022340] tracking-tight break-words">{data.name}</h1>
+              <h1 className="text-xl font-black text-brand-ink tracking-tight break-words">{data.name}</h1>
               <Badge data-status={data.status} tone={CAMPAIGN_BADGES[data.status]} bold className="inline-block mt-2">{data.status_label}</Badge>
             </div>
           </div>
@@ -140,12 +140,12 @@ export default function CampaignDetail() {
           {((data.editable && can('campaigns.edit')) || can('campaigns.create')) && (
             <div className="flex flex-col gap-2 pt-4 border-t border-slate-100" data-actions>
               {data.editable && can('campaigns.edit') && (
-                <button type="button" data-action="edit" onClick={() => openForm('edit')} className={`${actionButton} bg-[#022340] text-white hover:bg-[#03315a]`}>
+                <button type="button" data-action="edit" onClick={() => openForm('edit')} className={`${actionButton} bg-brand text-white hover:bg-brand-hover`}>
                   <Pencil size={16} /> Cambiar campaña
                 </button>
               )}
               {can('campaigns.create') && (
-                <button type="button" data-action="duplicate" onClick={() => openForm('duplicate')} className={`${actionButton} ${data.editable && can('campaigns.edit') ? 'text-[#022340] border border-slate-200 hover:bg-slate-50' : 'bg-[#022340] text-white hover:bg-[#03315a]'}`}>
+                <button type="button" data-action="duplicate" onClick={() => openForm('duplicate')} className={`${actionButton} ${data.editable && can('campaigns.edit') ? 'text-brand-ink border border-slate-200 hover:bg-slate-50' : 'bg-brand text-white hover:bg-brand-hover'}`}>
                   <Copy size={16} /> Duplicar
                 </button>
               )}
@@ -182,9 +182,9 @@ export default function CampaignDetail() {
           )}
 
           <section className={`${card} overflow-hidden`} data-card="message">
-            <div className="px-5 pt-5 pb-3"><SectionTitle><Mail className="w-4 h-4 text-[#3F768C]" /> El correo</SectionTitle></div>
+            <div className="px-5 pt-5 pb-3"><SectionTitle><Mail className="w-4 h-4 text-brand-accent" /> El correo</SectionTitle></div>
             <div className="mx-5 mb-5 rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-[#022340]">{data.subject}</div>
+              <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-brand-ink">{data.subject}</div>
               <RichTextView body={data.body} className="px-5 py-4 text-sm text-slate-700" />
             </div>
           </section>
@@ -192,7 +192,7 @@ export default function CampaignDetail() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
             <section className={`${card} overflow-hidden flex flex-col`} data-card="booked">
               <div className="px-5 pt-5 pb-3">
-                <SectionTitle><CalendarCheck className="w-4 h-4 text-[#3F768C]" /> Agendaron después</SectionTitle>
+                <SectionTitle><CalendarCheck className="w-4 h-4 text-brand-accent" /> Agendaron después</SectionTitle>
                 <p className="text-xs text-slate-500 mt-1">Citas que agendaron quienes recibieron el correo, en los {data.booked_days} días siguientes. Puede que algunas las hubieran agendado igual.</p>
               </div>
               <PagedList
@@ -209,13 +209,13 @@ export default function CampaignDetail() {
 
             <section className={`${card} overflow-hidden flex flex-col`} data-card="recipients">
               <div className="px-5 pt-5 pb-3 space-y-2">
-                <SectionTitle><Users className="w-4 h-4 text-[#3F768C]" /> Destinatarios</SectionTitle>
+                <SectionTitle><Users className="w-4 h-4 text-brand-accent" /> Destinatarios</SectionTitle>
                 <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Filtrar destinatarios">
                   {FILTERS.map((f) => {
                     const count = data.recipients.filter(f.match).length;
                     return (
                       <button key={f.id} type="button" role="radio" aria-checked={filter === f.id} data-filter={f.id} onClick={() => setFilter(f.id)}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${filter === f.id ? 'bg-[#022340] text-white border-[#022340]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${filter === f.id ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                         {f.label} {count}
                       </button>
                     );

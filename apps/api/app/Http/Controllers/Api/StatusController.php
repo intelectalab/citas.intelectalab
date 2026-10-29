@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Status;
+use App\Support\Audit;
 
 class StatusController extends Controller
 {
@@ -96,6 +97,12 @@ class StatusController extends Controller
             ->findOrFail($id);
 
         $status->delete();
+        Audit::log($request, 'status.deleted', [
+            'tenant'       => $currentUser->tenant_id,
+            'entity_type'  => 'status',
+            'entity_id'    => $status->id,
+            'entity_label' => $status->name,
+        ]);
 
         return response()->json(['message' => 'Status deleted successfully']);
     }

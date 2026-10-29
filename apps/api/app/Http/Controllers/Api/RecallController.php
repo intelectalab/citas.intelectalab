@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\AppointmentFlow;
 use App\Support\AppointmentScheduler;
+use App\Support\Audit;
 use App\Support\Search;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -178,6 +179,17 @@ class RecallController extends Controller
             },
             'closed_reason' => in_array($to, Recall::CLOSED, true) ? (trim((string) ($validated['reason'] ?? '')) ?: null) : null,
         ]);
+
+        if ($to === Recall::CANCELLED) {
+            Audit::log($request, 'recall.discarded', array_filter([
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'recall',
+                'entity_id'    => $recall->id,
+                'entity_label' => \App\Support\Person::name($recall->customer),
+                'branch_id'    => $recall->source_appointment_id ? \Illuminate\Support\Facades\DB::table('appointments')->where('id', $recall->source_appointment_id)->value('branch_id') : null,
+                'after'        => array_filter(['recall_label' => $recall->label, 'service' => $recall->service?->name, 'due_date' => $recall->due_date?->format('Y-m-d'), 'reason' => $recall->closed_reason]),
+            ], fn ($value) => $value !== null));
+        }
 
         return response()->json($this->present($recall->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
     }

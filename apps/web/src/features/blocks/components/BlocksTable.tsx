@@ -3,17 +3,17 @@
 import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Building2, CalendarClock, CalendarOff, ChevronRight, Edit2, PlayCircle, Trash2, UserRound } from 'lucide-react';
-import { DataTable, type Column, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
-import { apiError, formatDateTime, statusStyle } from '@/features/appointments/appointments';
+import { addDays, apiError, dateOf, formatDateTime, statusStyle } from '@/features/appointments/appointments';
 import FormBlock from './FormBlock';
 import HolidaysTable from './HolidaysTable';
-import { KIND_STYLES, STATE_LABELS, durationLabel, rangeLabel, type Block, type BlockOptions } from '../blocks';
+import { KIND_STYLES, STATE_LABELS, durationLabel, isAllDay, rangeLabel, type Block, type BlockOptions } from '../blocks';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -153,6 +153,20 @@ export default function BlocksTable() {
       : []),
   ];
 
+  const exportColumns: ExportColumn<Block>[] = [
+    { header: 'Aplica a', value: (b) => b.professional?.display_name ?? b.branch?.name ?? '' },
+    { header: 'Alcance', value: (b) => (b.scope === 'branch' || !b.professional ? 'Toda la sede' : vocab.pro) },
+    { header: 'Sede', value: (b) => b.branch?.name ?? '' },
+    { header: 'Tipo', value: (b) => b.kind_label },
+    { header: 'Motivo', value: (b) => b.reason ?? '' },
+    { header: 'Cuándo', value: (b) => rangeLabel(b) },
+    { header: 'Desde', type: 'date', value: (b) => dateOf(b.starts_at) },
+    { header: 'Hasta', type: 'date', value: (b) => (isAllDay(b) ? addDays(dateOf(b.ends_at), -1) : dateOf(b.ends_at)) },
+    { header: 'Duración', value: (b) => durationLabel(b) },
+    { header: 'Estado', value: (b) => STATE_LABELS[b.state].label },
+    { header: 'Citas dentro', type: 'number', value: (b) => b.affected_count },
+  ];
+
   const columns: Column<Block>[] = [
     {
       header: 'Aplica a',
@@ -167,7 +181,7 @@ export default function BlocksTable() {
                 type="button"
                 data-edit={b.id}
                 onClick={() => { setEditing(b); setFormOpen(true); }}
-                className={`${styles.customerName} hover:text-[#3F768C] transition-colors text-left`}
+                className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}
               >
                 {b.professional?.display_name ?? b.branch?.name ?? '—'}
               </button>
@@ -233,7 +247,7 @@ export default function BlocksTable() {
           {can('blocks.edit') && (<button
             onClick={() => { setEditing(b); setFormOpen(true); }}
             title="Editar"
-            className="p-1.5 text-slate-400 hover:text-[#022340] hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors"
           >
             <Edit2 size={16} />
           </button>)}
@@ -276,6 +290,9 @@ export default function BlocksTable() {
           filterValues={filters}
           onFilterChange={handleFilterChange}
           columns={columns}
+          exportTitle="Bloqueos"
+          exportScreen="blocks"
+          exportColumns={exportColumns}
           dateFilters={[
             { id: 'when', label: 'Cuándo', future: true, value: (b) => b.starts_at, end: (b) => b.ends_at },
           ]}
@@ -332,7 +349,7 @@ export default function BlocksTable() {
                       >
                         <span>
                           <span className="block text-sm font-semibold text-slate-800">
-                            <span className="font-mono text-[#022340]">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#84D0D9]/25 text-[#022340]">Paquete {a.package}</span>}
+                            <span className="font-mono text-brand-ink">{a.code}</span> · {a.customer ?? '—'}{a.package && <span data-affected-package className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-brand-soft/25 text-brand-ink">Paquete {a.package}</span>}
                           </span>
                           <span className="block text-xs text-slate-500">
                             {formatDateTime(a.starts_at)} · {a.service}{a.professional ? ` · ${a.professional}` : ''}

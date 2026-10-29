@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Tenant;
 use App\Support\Access;
+use App\Support\Audit;
+use App\Support\Branding;
 use App\Support\Currency;
 use App\Support\EmailDesign;
 use App\Support\Messaging;
@@ -186,6 +188,20 @@ class MessageController extends Controller
             'user'         => $request->user(),
         ]);
 
+        Audit::log($request, $data['at'] ? 'message.scheduled' : 'message.sent', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'message',
+            'entity_id'    => $message->id,
+            'entity_label' => trim($data['subject']),
+            'branch_id'    => $message->branch_id ?? null,
+            'after'        => array_filter([
+                'customer'     => \App\Support\Person::name($customer),
+                'subject'      => trim($data['subject']),
+                'status'       => Messaging::STATUS_LABELS[$message->status] ?? $message->status,
+                'scheduled_at' => $data['at'] ? $data['at']->copy()->utc()->toIso8601String() : null,
+            ]),
+        ]);
+
         return response()->json($this->one($message->id), 201);
     }
 
@@ -230,6 +246,17 @@ class MessageController extends Controller
 
         $who = trim("{$request->user()->first_name} {$request->user()->last_name}");
         DB::table('messages')->where('id', $row->id)->update(['status' => 'cancelled', 'error' => "Lo canceló {$who}.", 'updated_at' => now()]);
+
+        $customer = $row->customer_id ? DB::table('customers')->where('id', $row->customer_id)->first(['first_name', 'last_name']) : null;
+        Audit::log($request, 'message.cancelled', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'message',
+            'entity_id'    => $row->id,
+            'entity_label' => $row->subject ?: null,
+            'branch_id'    => $row->branch_id ?? null,
+            'before'       => ['status' => Messaging::STATUS_LABELS[$row->status] ?? $row->status],
+            'after'        => array_filter(['status' => Messaging::STATUS_LABELS['cancelled'] ?? 'Cancelado', 'customer' => $customer ? trim("{$customer->first_name} {$customer->last_name}") : null]),
+        ]);
 
         return response()->json($this->one($row->id));
     }
@@ -336,14 +363,62 @@ class MessageController extends Controller
             DB::table('tenant_integrations')->insert($values + ['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'kind' => 'email', 'created_at' => now(), 'updated_at' => now()]);
         }
 
+        $after = $this->emailAudit(['provider' => $validated['provider']] + ($settings ?? []));
+        if ($validated['provider'] === 'smtp' && trim((string) ($validated['password'] ?? '')) !== '') {
+            $after['email_password'] = 'Cambiada';
+        }
+        [$from, $to] = Audit::changed($this->emailAudit($old), $after);
+        if ($to) {
+            Audit::log($request, 'settings.changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'settings',
+                'entity_label' => 'Correo',
+                'before'       => $from,
+                'after'        => $to,
+            ]);
+        }
+
         return $this->settings($request);
+    }
+
+    private function emailAudit(array $config): array
+    {
+        if (!$config) {
+            return ['email_provider' => 'Sin configurar'];
+        }
+
+        if (($config['provider'] ?? null) === 'simulated') {
+            return ['email_provider' => 'Probar sin enviar'];
+        }
+
+        return [
+            'email_provider' => isset(Messaging::PRESETS[$config['preset'] ?? '']) ? Messaging::PRESETS[$config['preset']]['label'] : 'Correo propio',
+            'email_host'     => $config['host'] ?? null,
+            'email_port'     => isset($config['port']) ? (int) $config['port'] : null,
+            'email_security' => isset($config['security']) ? mb_strtoupper($config['security']) : null,
+            'email_username' => $config['username'] ?? null,
+            'from_address'   => $config['from_address'] ?? null,
+            'from_name'      => $config['from_name'] ?? null,
+            'reply_to'       => $config['reply_to'] ?? null,
+        ];
     }
 
     public function removeEmail(Request $request)
     {
         abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
         $tenant = $this->tenant($request);
+        $old = Messaging::emailConfig($tenant->id);
         DB::table('tenant_integrations')->where('tenant_id', $tenant->id)->where('kind', 'email')->delete();
+
+        if ($old) {
+            Audit::log($request, 'settings.changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'settings',
+                'entity_label' => 'Correo',
+                'before'       => ['email_provider' => $this->emailAudit($old)['email_provider']],
+                'after'        => ['email_provider' => 'Sin configurar'],
+            ]);
+        }
 
         return $this->settings($request);
     }
@@ -410,6 +485,7 @@ class MessageController extends Controller
         $subject = trim((string) ($validated['subject'] ?? ''));
         $body = RichText::normalize($validated['body'] ?? '');
         $options = array_intersect_key($validated['options'] ?? [], $def['options'] ?? []);
+        $previous = Messaging::settings($tenant->id)[$kind];
 
         DB::table('message_settings')->upsert([[
             'id'         => (string) Str::uuid(),
@@ -424,7 +500,28 @@ class MessageController extends Controller
             'updated_at' => now(),
         ]], ['tenant_id', 'kind'], ['enabled', 'subject', 'body', 'options', 'updated_by', 'updated_at']);
 
-        return response()->json(Messaging::settings($tenant->id)[$kind]);
+        $saved = Messaging::settings($tenant->id)[$kind];
+        $noticeAudit = fn (array $notice) => [
+            'notice_enabled' => $notice['enabled'],
+            'notice_subject' => $notice['subject'],
+            'notice_body'    => RichText::same((string) $notice['body'], (string) $previous['body']) ? 'Igual' : 'Cambiado',
+            'notice_hours'   => $notice['options']['hours'] ?? null,
+            'notice_second'  => $notice['options']['second'] ?? null,
+            'notice_days'    => $notice['options']['days'] ?? null,
+        ];
+        [$from, $to] = Audit::changed($noticeAudit($previous), $noticeAudit($saved));
+        unset($from['notice_body']);
+        if ($to) {
+            Audit::log($request, 'settings.changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'settings',
+                'entity_label' => "Aviso automático: {$def['label']}",
+                'before'       => $from,
+                'after'        => $to,
+            ]);
+        }
+
+        return response()->json($saved);
     }
 
     public function resetNotice(Request $request, string $kind)
@@ -470,7 +567,7 @@ class MessageController extends Controller
         ])['logo'];
 
         abort_unless(@getimagesize($file->getRealPath()), 422, 'Ese archivo no es una imagen válida.');
-        EmailDesign::storeLogo($tenant, $file);
+        Branding::storeLogo($request, $tenant, $file, 'light');
 
         return $this->settings($request);
     }
@@ -479,7 +576,7 @@ class MessageController extends Controller
     {
         abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
         $tenant = $this->tenant($request);
-        EmailDesign::removeLogo($tenant);
+        Branding::removeLogo($request, $tenant, 'light');
 
         return $this->settings($request);
     }
@@ -512,14 +609,6 @@ class MessageController extends Controller
         ]);
     }
 
-    public function logo(string $tenant)
-    {
-        abort_unless(\Illuminate\Support\Str::isUuid($tenant), 404);
-        $path = EmailDesign::logoPath($tenant);
-        abort_unless($path, 404);
-
-        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($path), ['Cache-Control' => 'public, max-age=86400']);
-    }
 
     public function sendPaymentLink(Request $request, string $link)
     {

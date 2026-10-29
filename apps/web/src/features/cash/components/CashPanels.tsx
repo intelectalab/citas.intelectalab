@@ -14,7 +14,7 @@ import { cleanAmount, money, momentOf, type CashMovement, type CashRegister, typ
 
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 const cancelButton = 'px-4 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors';
-const primaryButton = 'px-5 py-2.5 text-sm font-bold bg-[#022340] text-white rounded-xl hover:bg-[#03315a] shadow-sm transition-colors disabled:opacity-50';
+const primaryButton = 'px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50';
 const errorClass = 'text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2';
 
 interface PanelProps {
@@ -119,9 +119,9 @@ export function CashMovementPanel({ session, registerName, onClose, onSaved }: P
                   data-movement-type={option.id}
                   onClick={() => setType(option.id)} selected={chosen} className="w-full flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
                 >
-                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-[#022340] text-[#84D0D9]' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                  <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
-                    <span className="block text-sm font-bold text-[#022340]">{option.title}</span>
+                    <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
                     <span className="block text-xs text-slate-500 mt-0.5">{option.hint}</span>
                   </span>
                 </OptionCard>
@@ -201,8 +201,8 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
               ))}
             </div>
             <div className="flex items-center justify-between px-5 py-3 bg-slate-50/80 border-t border-slate-100">
-              <span className="text-sm font-bold text-[#022340]">Debe haber en efectivo</span>
-              <span className="text-xl font-black text-[#022340] tabular-nums" data-expected>{money(expected, session?.currency)}</span>
+              <span className="text-sm font-bold text-brand-ink">Debe haber en efectivo</span>
+              <span className="text-xl font-black text-brand-ink tabular-nums" data-expected>{money(expected, session?.currency)}</span>
             </div>
           </div>
 
@@ -364,7 +364,7 @@ export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | n
                 {session.by_method.map((row) => (
                   <div key={row.method} className="rounded-xl border border-slate-200 px-4 py-3">
                     <span className="block text-xs text-slate-500">{row.label} · {row.count} {row.count === 1 ? 'pago' : 'pagos'}</span>
-                    <span className="block text-base font-black text-[#022340] tabular-nums">{money(row.total, session?.currency)}</span>
+                    <span className="block text-base font-black text-brand-ink tabular-nums">{money(row.total, session?.currency)}</span>
                   </div>
                 ))}
               </div>

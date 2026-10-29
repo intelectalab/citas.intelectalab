@@ -86,7 +86,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
         
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-[#022340] rounded-lg">
+            <div className="p-2 bg-blue-50 text-brand-ink rounded-lg">
               <UserPlus size={20} />
             </div>
             <div>
@@ -112,7 +112,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Documento</label>
               <select
-                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340]"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
                 value={form.type_document_id}
                 onChange={e => setForm({...form, type_document_id: e.target.value})}
               >
@@ -127,7 +127,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text"
                 placeholder="Ej. 10475829102"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.document_number}
                 onChange={e => setForm({...form, document_number: e.target.value})}
               />
@@ -140,7 +140,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text" required
                 placeholder="Ej. Carlos"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.first_name}
                 onChange={e => setForm({...form, first_name: e.target.value})}
               />
@@ -150,7 +150,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text" required
                 placeholder="Ej. Mendoza"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.last_name}
                 onChange={e => setForm({...form, last_name: e.target.value})}
               />
@@ -163,7 +163,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="email"
                 placeholder="correo@empresa.com"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.email}
                 onChange={e => setForm({...form, email: e.target.value})}
               />
@@ -173,7 +173,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text"
                 placeholder="+51 999 999 999"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.phone}
                 onChange={e => setForm({...form, phone: e.target.value})}
               />
@@ -183,7 +183,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Propietario / Responsable</label>
             <select
-              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340]"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
               value={form.manager_user_id}
               onChange={e => setForm({...form, manager_user_id: e.target.value})}
             >
@@ -199,7 +199,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
             <input 
               type="text"
               placeholder="Av. Principal 123"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
               value={form.address}
               onChange={e => setForm({...form, address: e.target.value})}
             />
@@ -211,7 +211,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text"
                 placeholder="Miraflores"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.district}
                 onChange={e => setForm({...form, district: e.target.value})}
               />
@@ -221,7 +221,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text"
                 placeholder="Lima"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.department}
                 onChange={e => setForm({...form, department: e.target.value})}
               />
@@ -231,7 +231,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
               <input 
                 type="text"
                 placeholder="15074"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#022340]/20 focus:border-[#022340] text-slate-800"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
                 value={form.postal_code}
                 onChange={e => setForm({...form, postal_code: e.target.value})}
               />
@@ -248,7 +248,7 @@ export default function FormContact({ isOpen, onClose, onSubmit, initialData }: 
             </button>
             <button 
               type="submit" 
-              className="px-5 py-2.5 text-sm font-medium bg-[#022340] text-white rounded-lg hover:bg-[#03315a] shadow-sm transition-colors"
+              className="px-5 py-2.5 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
             >
               {initialData ? 'Guardar Cambios' : 'Guardar Contacto'}
             </button>

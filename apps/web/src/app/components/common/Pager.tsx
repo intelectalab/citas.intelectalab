@@ -20,7 +20,7 @@ interface PagerProps {
   className?: string;
 }
 
-const button = 'p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#022340] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors';
+const button = 'p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-brand-ink disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors';
 
 export function Pager({ page, pages, onChange, className = '' }: PagerProps) {
   return (

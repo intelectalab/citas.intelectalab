@@ -1,8 +1,9 @@
 'use client';
 
-import { useAuth, TenantVocabulary } from '@/hooks/useAuth';
-import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
+import { useVocabulary, type Vocabulary } from '@/hooks/useVocabulary';
 import {
+  CircleHelp,
   Home,
   Users,
   Building2,
@@ -38,6 +39,12 @@ import {
   Receipt,
   Coins,
   UserCog,
+  History,
+  ArrowRightLeft,
+  Truck,
+  Sparkles,
+  CreditCard,
+  Palette,
   LucideIcon
 } from 'lucide-react';
 
@@ -49,6 +56,7 @@ export interface MenuItem {
   requireAdmin?: boolean;
   requireProfessional?: boolean;
   module?: string;
+  alsoModule?: string;
   perm?: string;
   saasAdminOnly?: boolean;
 }
@@ -67,7 +75,7 @@ export interface VisibleGroup {
   items: MenuItem[];
 }
 
-const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
+const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean): MenuGroup[] => [
   {
     id: 'home',
     items: [
@@ -84,6 +92,7 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
       { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket, saasAdminOnly: true },
       { name: 'Plantillas de rubros', href: '/admin/business-types', icon: Layers, saasAdminOnly: true },
       { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },
+      { name: 'Auditoría', href: '/admin/audit', icon: History, saasAdminOnly: true },
     ]
   },
   {
@@ -107,6 +116,7 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupIcon: Layers,
     items: [
       { name: vocab.clients, href: '/customers', icon: Users, module: 'crm', perm: 'customers.view' },
+      { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes', perm: 'quotes.view' },
       { name: 'Fichas de atención', href: '/records', icon: ClipboardList, module: 'records', perm: 'records.view' },
     ]
   },
@@ -126,14 +136,21 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Ventas',
     groupIcon: Briefcase,
     items: [
-      { name: 'Presupuestos', href: '/quotes', icon: FileText, module: 'quotes', requireAdmin: true },
       { name: 'Punto de venta', href: '/pos', icon: ShoppingCart, module: 'pos', perm: 'pos.view' },
       { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', perm: 'sales.view' },
       { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', perm: 'payments.view' },
       { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', perm: 'cash.view' },
-      { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
-      { name: 'Productos', href: '/products', icon: PackageOpen, module: 'pos', perm: 'products.view' },
-      { name: 'Inventario', href: '/modules/inventory', icon: Package, module: 'inventory', requireAdmin: true },
+    ]
+  },
+  {
+    id: 'inventory',
+    groupName: 'Inventario',
+    groupIcon: Package,
+    items: [
+      { name: 'Productos y stock', href: '/products', icon: PackageOpen, module: 'inventory', perm: 'products.view' },
+      { name: 'Kárdex', href: '/inventory/kardex', icon: History, module: 'inventory', perm: 'inventory.view' },
+      { name: 'Traslados', href: '/inventory/transfers', icon: ArrowRightLeft, module: 'inventory', alsoModule: 'multi_branch', perm: 'inventory.view' },
+      { name: 'Compras', href: '/inventory/purchases', icon: Truck, module: 'inventory', perm: 'inventory.view' },
     ]
   },
   {
@@ -141,11 +158,20 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
     groupName: 'Fidelización',
     groupIcon: Gift,
     items: [
-      { name: 'Paquetes', href: '/packages', icon: Boxes, module: 'packages', perm: 'packages.view' },
-      { name: 'Mensajes', href: '/messages', icon: Mail, perm: 'messages.view' },
       { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships', requireAdmin: true },
-      { name: 'Puntos y gift cards', href: '/modules/loyalty', icon: Gift, module: 'loyalty', requireAdmin: true },
+      { name: 'Paquetes', href: '/packages', icon: Boxes, module: 'packages', perm: 'packages.view' },
+      { name: 'Puntos', href: '/loyalty/points', icon: Sparkles, module: 'loyalty', perm: 'loyalty.view' },
+      { name: 'Gift cards', href: '/loyalty/gift-cards', icon: CreditCard, module: 'loyalty', perm: 'loyalty.view' },
+    ]
+  },
+  {
+    id: 'marketing',
+    groupName: 'Marketing',
+    groupIcon: Megaphone,
+    items: [
       { name: 'Campañas', href: '/campaigns', icon: Megaphone, module: 'marketing', perm: 'campaigns.view' },
+      { name: 'Mensajes', href: '/messages', icon: Mail, perm: 'messages.view' },
+      { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
     ]
   },
   {
@@ -156,9 +182,25 @@ const buildMenuGroups = (vocab: TenantVocabulary): MenuGroup[] => [
       { name: 'Sucursales', href: '/branches', icon: Store, perm: 'branches.view' },
       { name: 'Empresa', href: '/companies', icon: Building2, perm: 'company.view' },
       { name: 'Usuarios y roles', href: '/users', icon: UserCog, perm: 'users.view' },
+      { name: 'Auditoría', href: '/audit', icon: History, perm: 'audit.view' },
     ]
   }
 ];
+
+export type ModuleScreen = { name: string; needs?: string };
+
+export const screensByModule = (vocab: Vocabulary): Record<string, ModuleScreen[]> => {
+  const screens: Record<string, ModuleScreen[]> = {};
+  for (const group of buildMenuGroups(vocab, () => true)) {
+    for (const item of group.items) {
+      if (!item.module) continue;
+      for (const key of item.module.split('|')) {
+        (screens[key] ??= []).push({ name: item.name, needs: item.alsoModule });
+      }
+    }
+  }
+  return screens;
+};
 
 const RECENT_KEY = 'menu.recent';
 const RECENT_MAX = 6;
@@ -191,7 +233,7 @@ export function useMenu() {
   const isSuperAdmin = Boolean(isSaasAdmin || user?.is_saas_support);
   const hasNoPlan = !isSuperAdmin && !user?.plan_slug;
 
-  const groups: VisibleGroup[] = loading || hasNoPlan ? [] : buildMenuGroups(vocab).flatMap((group) => {
+  const groups: VisibleGroup[] = loading || hasNoPlan ? [] : buildMenuGroups(vocab, hasModule).flatMap((group) => {
     if (isSuperAdmin ? group.id !== 'saas-admin' && group.id !== 'home' : group.id === 'saas-admin') return [];
     if (group.feature && !hasFeature(group.feature)) return [];
 
@@ -201,16 +243,25 @@ export function useMenu() {
       if (item.perm && !isSuperAdmin && !can(item.perm)) return false;
       if (item.feature && !hasFeature(item.feature)) return false;
       if (item.module && !hasModule(item.module)) return false;
+      if (item.alsoModule && !hasModule(item.alsoModule)) return false;
       return true;
     });
 
     return items.length > 0 ? [{ group, items }] : [];
   });
 
-  const settings: MenuItem | null = loading ? null
-    : isSaasAdmin ? { name: 'Configuración', href: '/admin/configuration', icon: Settings }
-    : !isSuperAdmin && can('settings.view') ? { name: 'Configuración', href: '/settings', icon: Settings }
-    : null;
+  const help: MenuItem[] = !loading && !isSuperAdmin && user?.help_enabled ? [{ name: 'Autoayuda', href: '/help', icon: CircleHelp }] : [];
 
-  return { groups, settings, hasNoPlan, loading, userId: user?.id ?? null };
+  const footer: MenuItem[] = loading ? []
+    : isSaasAdmin ? [
+        { name: 'Personalización', href: '/admin/personalization', icon: Palette },
+        { name: 'Configuración', href: '/admin/configuration', icon: Settings },
+      ]
+    : !isSuperAdmin && can('settings.view') ? [
+        { name: 'Personalización', href: '/personalization', icon: Palette },
+        { name: 'Configuración', href: '/settings', icon: Settings },
+      ]
+    : [];
+
+  return { groups, footer: [...footer, ...help], hasNoPlan, loading, userId: user?.id ?? null };
 }
