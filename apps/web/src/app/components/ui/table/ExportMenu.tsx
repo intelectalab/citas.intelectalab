@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
+import Floating from '@/app/components/common/Floating';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -53,16 +54,7 @@ export default function ExportMenu<T>({ title, screen, columns, filtered, select
   const [hidden, setHidden] = useState<string[]>([]);
   const [busy, setBusy] = useState<'' | 'xlsx' | 'csv'>('');
   const [error, setError] = useState('');
-  const box = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
-    const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', escape);
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); };
-  }, [open]);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const isPlatform = !user?.tenant && Boolean(user?.is_saas_admin);
   const limits = LIMITS.filter((limit) => limit < filtered.length);
@@ -149,14 +141,21 @@ export default function ExportMenu<T>({ title, screen, columns, filtered, select
   ];
 
   return (
-    <div className="relative" ref={box}>
-      <button type="button" className={styles.exportBtn} data-export-toggle aria-expanded={open} onClick={toggle}>
+    <>
+      <button ref={buttonRef} type="button" className={styles.exportBtn} data-export-toggle aria-expanded={open} onClick={toggle}>
         <Download size={14} />
         <span className={`${styles.btnText} ${styles.btnTextCollapse}`}>Exportar</span>
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full mt-2 z-30 w-80 max-w-[calc(100vw-1.5rem)] max-sm:fixed max-sm:inset-x-3 max-sm:top-20 max-sm:mt-0 max-sm:w-auto max-sm:max-w-none max-sm:max-h-[calc(100dvh-6rem)] max-sm:overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl space-y-3" data-export-menu>
+      <Floating
+        anchorRef={buttonRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        align="right"
+        role="dialog"
+        className="w-80 max-w-[calc(100vw-1rem)] rounded-2xl border border-slate-200 bg-white shadow-xl overflow-y-auto select-scroll animate-in fade-in duration-150"
+      >
+        <div className="p-4 space-y-3" data-export-menu>
           <div>
             <span className="block text-sm font-bold text-brand-ink">Exportar {title.toLowerCase()}</span>
             <span className="block text-xs text-slate-500 mt-0.5">Con los filtros que tienes puestos y en el orden de la lista.</span>
@@ -213,7 +212,7 @@ export default function ExportMenu<T>({ title, screen, columns, filtered, select
           {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <p className="text-[11px] text-slate-400">{plural(rows.length, 'fila', 'filas')} · La descarga queda registrada con tu nombre.</p>
         </div>
-      )}
-    </div>
+      </Floating>
+    </>
   );
 }
