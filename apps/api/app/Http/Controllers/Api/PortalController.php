@@ -396,6 +396,7 @@ class PortalController extends AppointmentController
         $this->auditAppointment($request, 'appointment.cancelled', $appointment, $this->auditFacts($appointment) + ['reason' => $reason, 'late_cancel' => $late]);
         \App\Support\Recalls::appointmentChanged($tenant, $appointment);
         \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
+        \App\Support\Walkin::appointmentChanged($tenant, $appointment);
 
         return response()->json($this->presentForCustomer($appointment, $tenant));
     }

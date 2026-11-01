@@ -109,7 +109,7 @@ export default function CodesEditor() {
                 <span className="font-mono text-slate-500">-</span>
               </span>
               <span className="col-span-2 md:col-span-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                <span>Próximo: <b className="font-mono text-brand-ink" data-code-next>{shown}-{numberOf(code)}</b></span>
+                <span>{code.daily ? 'Cada día empieza en' : 'Próximo'}: <b className="font-mono text-brand-ink" data-code-next>{shown}-{numberOf(code)}</b></span>
                 {canEdit && shown !== code.default && (
                   <button type="button" data-code-default={code.type} onClick={() => setDraft((current) => ({ ...current, [code.type]: code.default }))} className="font-semibold text-slate-500 hover:text-brand-ink">
                     Volver a {code.default}

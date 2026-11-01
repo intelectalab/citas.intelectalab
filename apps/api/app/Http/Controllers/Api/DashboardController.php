@@ -103,6 +103,19 @@ class DashboardController extends Controller
                 ->when($own, fn ($q) => $q->where('professional_id', $own))->count(), 'href' => '/records'];
         }
 
+        if ($tenant->hasModule('walkin') && $user->allows('walkin.view') && \App\Support\Walkin::ready()) {
+            $pending[] = [
+                'key'   => 'walkin',
+                'count' => \App\Models\WalkinEntry::where('tenant_id', $tenant->id)
+                    ->where('status', \App\Models\WalkinEntry::WAITING)
+                    ->whereBetween('arrived_at', [$dayStart->copy()->utc(), $dayEnd->copy()->utc()])
+                    ->when($limit, fn ($q, $id) => $q->where('branch_id', $id))
+                    ->when($own, fn ($q) => $q->where(fn ($sub) => $sub->whereNull('professional_id')->orWhere('professional_id', $own)))
+                    ->count(),
+                'href'  => '/walkin',
+            ];
+        }
+
         $activity = AppointmentStatusHistory::where('tenant_id', $tenant->id)
             ->where('created_at', '<=', $now->toIso8601String())
             ->when($own, fn ($q) => $q->whereHas('appointment', fn ($q) => $q->where('professional_id', $own)))

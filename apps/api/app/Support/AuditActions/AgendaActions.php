@@ -11,6 +11,9 @@ class AgendaActions
         'appointment.no_show'          => ['Marcó que no asistió a la cita', 'agenda'],
         'appointment.forced'           => ['Agendó en un horario no disponible', 'agenda'],
         'waitlist.withdrawn'           => ['Retiró a alguien de la lista de espera', 'agenda'],
+        'walkin.created'               => ['Anotó a alguien en la cola sin cita', 'agenda'],
+        'walkin.served'                => ['Pasó a atención a alguien de la cola sin cita', 'agenda'],
+        'walkin.left'                  => ['Marcó que se retiró de la cola sin cita', 'agenda'],
         'recall.discarded'             => ['Descartó un control', 'agenda'],
         'availability_block.created'   => ['Creó un bloqueo de horario', 'agenda'],
         'availability_block.updated'   => ['Cambió un bloqueo de horario', 'agenda'],
@@ -61,5 +64,7 @@ class AgendaActions
         'breed'                   => 'Raza',
         'holiday_year'            => 'Año',
         'holidays_added'          => 'Feriados agregados',
+        'ticket'                  => 'Turno',
+        'waited_minutes'          => 'Espera (min)',
     ];
 }

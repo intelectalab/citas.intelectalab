@@ -102,7 +102,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     items: [
       { name: 'Agenda', href: '/agenda', icon: CalendarDays, module: 'agenda', perm: 'agenda.view' },
       { name: 'Citas', href: '/appointments', icon: Ticket, module: 'agenda', perm: 'agenda.view' },
-      { name: 'Cola sin cita', href: '/modules/walkin', icon: ListOrdered, module: 'walkin', perm: 'walkin.view' },
+      { name: 'Cola sin cita', href: '/walkin', icon: ListOrdered, module: 'walkin', perm: 'walkin.view' },
       { name: 'Lista de espera', href: '/waitlist', icon: Hourglass, module: 'agenda', perm: 'waitlist.view' },
       { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'agenda', perm: 'recalls.view' },
       { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes', perm: 'classes.view' },

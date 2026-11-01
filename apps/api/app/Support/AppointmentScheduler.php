@@ -49,9 +49,9 @@ class AppointmentScheduler
         return $this->evaluate($day, $service, $professional, $start, $duration);
     }
 
-    public function slots(Service $service, Branch $branch, Carbon $date, ?Professional $professional = null, ?string $ignoreId = null): array
+    public function slots(Service $service, Branch $branch, Carbon $date, ?Professional $professional = null, ?string $ignoreId = null, ?int $interval = null): array
     {
-        $interval = max(5, (int) AppointmentFlow::rule($this->tenant, 'agenda.slot_interval'));
+        $interval = max(5, $interval ?? (int) AppointmentFlow::rule($this->tenant, 'agenda.slot_interval'));
         $duration = $service->duration_minutes;
         $date = $date->copy()->startOfDay();
 

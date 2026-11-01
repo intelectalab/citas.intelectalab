@@ -145,7 +145,7 @@ export default function HomePage() {
     ? [
         { label: 'Nueva cita', icon: CalendarDays, href: '/agenda' },
         { label: `${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client}`, icon: UserPlus, href: '/customers' },
-        hasModule('walkin') ? { label: 'Cola sin cita', icon: ListOrdered, href: '/modules/walkin' }
+        hasModule('walkin') ? { label: 'Cola sin cita', icon: ListOrdered, href: '/walkin' }
           : hasModule('classes') ? { label: 'Clases', icon: CalendarClock, href: '/modules/classes' }
           : hasModule('records') ? { label: 'Fichas de atención', icon: ClipboardList, href: '/records' }
           : { label: 'Lista de espera', icon: Hourglass, href: '/waitlist' },
@@ -164,6 +164,7 @@ export default function HomePage() {
     blocked: { label: 'Citas dentro de un bloqueo o feriado', detail: 'Hay que reprogramarlas o cancelarlas' },
     recalls: { label: 'Controles vencidos', detail: `${vocab.clients} que ya debían volver` },
     waitlist: { label: 'En lista de espera', detail: 'Esperan que se libere un horario' },
+    walkin: { label: 'En cola sin cita hoy', detail: `${vocab.clients} esperando atención` },
     draft_records: { label: 'Fichas sin firmar', detail: 'Borradores por terminar' },
   };
   const pendingItems = (data?.pending ?? []).filter((item) => item.count > 0);

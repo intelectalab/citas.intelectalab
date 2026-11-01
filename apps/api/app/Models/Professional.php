@@ -56,6 +56,11 @@ class Professional extends Model
         return $this->belongsToMany(Service::class, 'service_professionals', 'professional_id', 'service_id');
     }
 
+    public function branches(): BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class, 'professional_schedules', 'professional_id', 'branch_id')->distinct();
+    }
+
     public function schedules(): HasMany
     {
         return $this->hasMany(ProfessionalSchedule::class, 'professional_id');

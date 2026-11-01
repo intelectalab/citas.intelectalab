@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\CareRecordController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\RecallController;
 use App\Http\Controllers\Api\WaitlistController;
+use App\Http\Controllers\Api\WalkinController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\Api\SpecialtyController;
 use App\Http\Controllers\Api\CustomerBoardController;
@@ -159,6 +160,13 @@ Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(functio
     });
 });
 
+Route::prefix('kiosk')->middleware('throttle:60,1')->group(function () {
+    Route::get('/{code}', [WalkinController::class, 'kioskInfo']);
+    Route::get('/{code}/choices', [WalkinController::class, 'kioskChoices']);
+    Route::post('/{code}/lookup', [WalkinController::class, 'kioskLookup']);
+    Route::post('/{code}/queue', [WalkinController::class, 'kioskRegister'])->middleware('throttle:15,1');
+});
+
 Route::middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::post('/subscriptions/subscribe', [SubscriptionController::class, 'subscribe']);
 
@@ -199,6 +207,16 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/branches/{branch}/rooms', [RoomController::class, 'store'])->middleware('perm:rooms.create');
         Route::put('/rooms/{room}', [RoomController::class, 'update'])->middleware('perm:rooms.edit');
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy'])->middleware('perm:rooms.delete');
+    });
+
+    Route::middleware('module:walkin')->group(function () {
+        Route::get('/walkins', [WalkinController::class, 'index'])->middleware('perm:walkin.view');
+        Route::get('/walkins/choices', [WalkinController::class, 'choices'])->middleware('perm:walkin.view');
+        Route::post('/walkins', [WalkinController::class, 'store'])->middleware('perm:walkin.create');
+        Route::put('/walkins/{walkin}', [WalkinController::class, 'update'])->middleware('perm:walkin.edit');
+        Route::get('/walkins/{walkin}/options', [WalkinController::class, 'options'])->middleware('perm:walkin.edit');
+        Route::post('/walkins/{walkin}/serve', [WalkinController::class, 'serve'])->middleware('perm:walkin.edit');
+        Route::post('/walkins/{walkin}/status', [WalkinController::class, 'changeStatus'])->middleware('perm:walkin.edit');
     });
 
     Route::middleware('module:agenda')->group(function () use ($guarded) {

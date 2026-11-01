@@ -337,11 +337,13 @@ class AppointmentController extends Controller
             'override_reason'       => 'nullable|string|max:255',
             'recall_id'             => 'nullable|uuid',
             'waitlist_id'           => 'nullable|uuid',
+            'walkin_id'             => 'nullable|uuid',
         ]);
 
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
         $recall = $this->recallToBook($tenant, $customer, $validated['recall_id'] ?? null);
         $waiting = $this->waitlistToBook($tenant, $customer, $validated['waitlist_id'] ?? null);
+        $walkin = $this->walkinToBook($tenant, $customer, $validated['walkin_id'] ?? null);
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $professional = Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
@@ -360,7 +362,7 @@ class AppointmentController extends Controller
         $duration = (int) ($validated['duration_minutes'] ?? $service->duration_minutes);
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($request, $tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall, $waiting) {
+        return DB::transaction(function () use ($request, $tenant, $user, $validated, $customer, $service, $professional, $branch, $dependentId, $start, $end, $duration, $recall, $waiting, $walkin) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($response = $this->limitReached($tenant, $start)) {
@@ -389,7 +391,7 @@ class AppointmentController extends Controller
                 'starts_at'             => $start,
                 'ends_at'               => $end,
                 'status'                => $status,
-                'source'                => 'staff',
+                'source'                => $walkin ? 'walkin' : 'staff',
                 'price'                 => $service->price,
             ] + Currency::column($tenant) + [
                 'notes'                 => $validated['notes'] ?? null,
@@ -411,6 +413,10 @@ class AppointmentController extends Controller
 
             if ($waiting) {
                 \App\Support\Waitlist::book($waiting, $appointment);
+            }
+
+            if ($walkin) {
+                \App\Support\Walkin::book($walkin, $appointment);
             }
 
             return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true), 201);
@@ -538,6 +544,7 @@ class AppointmentController extends Controller
 
             \App\Support\Recalls::appointmentChanged($tenant, $appointment);
             \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
+            \App\Support\Walkin::appointmentChanged($tenant, $appointment);
 
             return response()->json($this->present($appointment, $tenant, true) + [
                 'late_cancel' => $lateCancel,
@@ -685,6 +692,25 @@ class AppointmentController extends Controller
 
         if (!$entry->isOpen()) {
             throw ValidationException::withMessages(['waitlist_id' => 'Esa persona ya no está en la lista de espera.']);
+        }
+
+        return $entry;
+    }
+
+    protected function walkinToBook(Tenant $tenant, Customer $customer, ?string $id): ?\App\Models\WalkinEntry
+    {
+        if (!$id || !\App\Support\Walkin::ready()) {
+            return null;
+        }
+
+        $entry = \App\Models\WalkinEntry::where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($id);
+
+        if ($entry->customer_id !== $customer->id) {
+            throw ValidationException::withMessages(['walkin_id' => 'Ese turno de la cola es de otra persona.']);
+        }
+
+        if ($entry->status !== \App\Models\WalkinEntry::WAITING) {
+            throw ValidationException::withMessages(['walkin_id' => 'Esa persona ya no está esperando en la cola.']);
         }
 
         return $entry;

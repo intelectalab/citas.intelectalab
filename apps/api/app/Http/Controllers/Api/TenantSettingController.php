@@ -121,6 +121,9 @@ class TenantSettingController extends Controller
             'quote_rules.track_clinical_zones' => 'required_with:quote_rules|boolean',
             'quote_rules.plan_validity_days'   => 'required_with:quote_rules|integer|min:1|max:3650',
             'quote_rules.cancel_policy'        => ['required_with:quote_rules', Rule::in(array_keys(Quotes::CANCEL_POLICIES))],
+            'walkin_rules' => 'sometimes|array',
+            'walkin_rules.self_checkin' => 'required_with:walkin_rules|boolean',
+            'walkin_rules.max_wait'     => 'required_with:walkin_rules|integer|min:10|max:300',
             'session_portal_idle_minutes' => ['sometimes', 'integer', 'min:0', 'max:1440', fn ($attribute, $value, $fail) => $value > 0 && $value < 5 ? $fail('El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).') : null],
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
@@ -291,6 +294,13 @@ class TenantSettingController extends Controller
             ]);
         }
 
+        if (isset($validated['walkin_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'walkin.self_checkin' => (bool) $validated['walkin_rules']['self_checkin'],
+                'walkin.max_wait'     => (int) $validated['walkin_rules']['max_wait'],
+            ]);
+        }
+
         $settings->save();
 
         $fresh = $tenant->fresh(['businessType', 'settings', 'activeSubscription.plan']);
@@ -368,6 +378,7 @@ class TenantSettingController extends Controller
             'inventory_rules' => Inventory::enabled($tenant) ? Inventory::rules($tenant) : null,
             'loyalty_rules' => Loyalty::enabled($tenant) ? Loyalty::rules($tenant) : null,
             'quote_rules' => Quotes::enabled($tenant) ? Quotes::rules($tenant) : null,
+            'walkin_rules' => $tenant->hasModule('walkin') ? \App\Support\Walkin::rules($tenant) : null,
             'session_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.idle_minutes'),
             'help_enabled' => (bool) AppointmentFlow::rule($tenant, 'help.enabled'),
             'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),

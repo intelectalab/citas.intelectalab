@@ -31,7 +31,9 @@ class Access
             'override' => 'Agendar aunque el horario no esté disponible: fuera del horario de atención, en una pausa o sobre un bloqueo. Nunca permite dos citas a la misma hora',
         ]],
         'walkin' => ['label' => 'Cola sin cita', 'module' => 'walkin', 'actions' => [
-            'view' => 'Entrar a la cola sin cita (en construcción)',
+            'view'   => 'Ver la cola sin cita y el tiempo estimado de espera',
+            'create' => 'Anotar en la cola a quien llega sin cita',
+            'edit'   => 'Pasar a atención a quien espera, cambiar su preferencia o registrar que se retiró',
         ]],
         'waitlist' => ['label' => 'Lista de espera', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver la lista de espera',
@@ -196,7 +198,7 @@ class Access
 
     public const LAYOUT = [
         'agenda'           => ['section' => 'agenda', 'screens' => ['Agenda', 'Citas'], 'short' => ['view' => 'Ver', 'create' => 'Agendar', 'edit' => 'Confirmar, atender y cancelar']],
-        'walkin'           => ['section' => 'agenda', 'screens' => ['Cola sin cita'], 'building' => true, 'short' => ['view' => 'Entrar']],
+        'walkin'           => ['section' => 'agenda', 'screens' => ['Cola sin cita'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Atender o retirar']],
         'waitlist'         => ['section' => 'agenda', 'screens' => ['Lista de espera'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Cambiar o cerrar']],
         'recalls'          => ['section' => 'agenda', 'screens' => ['Controles y seguimiento'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar o dar por hecho']],
         'classes'          => ['section' => 'agenda', 'screens' => ['Clases'], 'building' => true, 'short' => ['view' => 'Entrar']],
@@ -248,7 +250,7 @@ class Access
             'description' => 'Lleva el día a día de una sede: agenda, equipo, ventas, caja y su personal.',
             'scope' => 'branch',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit', 'override'], 'walkin' => ['view'], 'classes' => ['view'], 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
+                'agenda' => ['view', 'create', 'edit', 'override'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view'], 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'schedules' => ['view', 'edit'], 'rooms' => self::EVERYTHING,
@@ -266,7 +268,7 @@ class Access
             'description' => 'Agenda, recibe y cobra a quien llega. No elimina ni devuelve dinero.',
             'scope' => 'branch',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
+                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => ['view'], 'holidays' => ['view'],
                 'customers' => ['view', 'create', 'edit'],
                 'services' => ['view'], 'professionals' => ['view'], 'schedules' => ['view'], 'rooms' => ['view'],
@@ -291,7 +293,7 @@ class Access
             'description' => 'Atiende sus propias citas y llena sus fichas. Solo ve lo suyo.',
             'scope' => 'own',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
+                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => self::EVERYTHING, 'holidays' => ['view'], 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit'], 'records' => ['view', 'edit'],
                 'services' => ['view'], 'rooms' => ['view'],

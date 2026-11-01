@@ -247,6 +247,54 @@ class Notifier
         }
     }
 
+    public static function walkinAdded(Tenant $tenant, \App\Models\WalkinEntry $entry, ?int $waitMinutes = null): void
+    {
+        try {
+            if (!self::available()) {
+                return;
+            }
+            $entry->loadMissing(['customer', 'service', 'professional']);
+            $customerName = trim(($entry->customer?->first_name ?? '') . ' ' . ($entry->customer?->last_name ?? ''));
+            $waitLabel = $waitMinutes === null
+                ? 'Sin hueco estimado hoy'
+                : ($waitMinutes === 0 ? 'Para atender ahora' : "Espera estimada ~{$waitMinutes} min");
+            $origin = $entry->source === 'kiosk' ? 'Se anotó en el kiosko' : 'En la cola sin cita';
+
+            $body = implode(' · ', array_filter([
+                "{$entry->ticket} {$customerName}",
+                $entry->service?->name,
+                $entry->professional ? "Prefiere a {$entry->professional->display_name}" : null,
+                $waitLabel,
+            ]));
+
+            $recipientIds = User::where('tenant_id', $tenant->id)
+                ->where('status', 'active')
+                ->where(function ($q) use ($entry) {
+                    $q->where('is_owner', true)
+                        ->orWhereNull('branch_id')
+                        ->orWhere('branch_id', $entry->branch_id);
+                })
+                ->pluck('id')
+                ->all();
+
+            foreach ($recipientIds as $userId) {
+                self::send(
+                    $tenant->id,
+                    $userId,
+                    'walkin.added',
+                    "{$origin}: {$entry->ticket}",
+                    $body,
+                    '/walkin',
+                    'walkin_entry',
+                    $entry->id,
+                    "walkin-added:{$entry->id}:{$userId}",
+                );
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     public static function adminIds(string $tenantId): array
     {
         return User::where('tenant_id', $tenantId)

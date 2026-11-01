@@ -40,6 +40,7 @@ export const RULE_GROUPS: RuleGroup[] = [
       { key: 'agenda.checkin_step', label: 'Registrar la llegada del cliente', hint: 'Agrega el paso "llegó" antes de iniciar la atención.', type: 'boolean' },
       { key: 'agenda.respect_buffers', label: 'Respetar pausas entre citas', hint: 'No permite agendar encima de la pausa de un servicio.', type: 'boolean' },
       { key: 'walkin.self_checkin', label: 'Autorregistro en la cola sin cita', hint: 'El cliente se anota solo desde una tableta.', type: 'boolean' },
+      { key: 'walkin.max_wait', label: 'Espera máxima aceptada en la cola', hint: 'Si la espera estimada supera esto en el kiosko, sugiere reservar una cita.', type: 'number', unit: 'min' },
       { key: 'professionals.license', label: 'Pedir número de colegiatura', hint: 'Muestra ese dato en el formulario y la tabla de profesionales.', type: 'boolean' },
       { key: 'customers.clinical_fields', label: 'Datos clínicos del cliente', hint: 'Muestra el tipo de sangre y trata las observaciones como antecedentes. Para rubros de salud.', type: 'boolean' },
     ],

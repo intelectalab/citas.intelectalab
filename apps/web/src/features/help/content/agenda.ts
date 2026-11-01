@@ -170,8 +170,21 @@ export const agendaTopics: HelpTopics = (vocab) => {
       ],
     },
 
-    '/modules/walkin': {
-      summary: `Servirá para atender a quien llega sin cita, por orden de llegada, como en una barbería. Esta pantalla está en construcción: todavía no se puede usar.`,
+    '/walkin': {
+      summary: `Para ${cs} que llegan sin cita y esperan su turno, como en una barbería. Cada uno recibe un turno del día (T-001, T-002...) y ves cuánto le falta para pasar.`,
+      points: [
+        { title: 'Pestañas', text: 'En espera, En atención, Atendidos y Se retiraron son de hoy. En Días anteriores ves los turnos de los últimos 90 días.' },
+        { title: 'Tarjetas', text: `Filtran a quienes esperan a un ${p} en particular, a quienes llevan más de 30 minutos y a quienes se anotaron en el kiosko.` },
+        { title: 'La espera', text: `Se calcula con lo mismo que usa la agenda: el horario de cada ${p}, sus citas, sus pausas y ausencias, y quienes están antes en la cola.` },
+        { title: 'Atender', text: 'Crea su cita desde ese momento y empieza la atención. Se cobra y se da por atendida desde la cita, como cualquier otra; al terminarla, el turno pasa solo a Atendidos.' },
+        { title: 'Kiosko', text: 'Se enciende en Configuración, Cola sin cita. Desde ahí también se abre en la tableta de la entrada.' },
+      ],
+      tasks: [
+        { title: 'Anotar a alguien que llega sin cita', steps: ['Pulsa "Anotar en la cola".', `Busca ${theClient} por nombre o celular. Si es nuevo, pulsa "+" para registrarlo ahí mismo.`, `Elige el servicio. En "¿Con qué ${p}?" aparecen solo quienes trabajan hoy y hacen ese servicio, con la espera de cada uno.`, 'Pulsa "Anotar en la cola".'] },
+        { title: 'Pasarlo a atención', steps: ['En "En espera", pulsa "Atender".', `Elige a un ${p} libre. Si pidió a alguien, aparece marcado.`, 'Pulsa "Empezar la atención". Si tu empresa cobra antes de atender, se abre la cita para cobrarla primero.'] },
+        { title: 'Si se fue sin atenderse', steps: ['Pulsa la X de su fila y confirma.', 'Si vuelve el mismo día, en "Se retiraron" pulsa la flecha para ponerlo otra vez en espera.'] },
+        { title: 'Cambiar la letra del turno', steps: ['Ve a Personalización, Códigos.', 'Cambia la letra de "Turnos de la cola sin cita" y guarda. El cambio rige desde el siguiente turno.'] },
+      ],
     },
 
     '/modules/classes': {

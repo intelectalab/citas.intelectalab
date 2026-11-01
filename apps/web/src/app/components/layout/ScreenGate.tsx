@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 const SCREENS: { path: string; perm: string; exact?: boolean }[] = [
   { path: '/agenda', perm: 'agenda.view' },
   { path: '/appointments', perm: 'agenda.view' },
+  { path: '/walkin', perm: 'walkin.view' },
   { path: '/waitlist', perm: 'waitlist.view' },
   { path: '/recalls', perm: 'recalls.view' },
   { path: '/blocks', perm: 'blocks.view' },

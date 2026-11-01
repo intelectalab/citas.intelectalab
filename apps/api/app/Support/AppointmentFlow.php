@@ -103,6 +103,8 @@ class AppointmentFlow
         'quotes.track_clinical_zones' => true,
         'quotes.plan_validity_days'   => 365,
         'quotes.cancel_policy'        => 'unused_quote',
+        'walkin.self_checkin'         => true,
+        'walkin.max_wait'             => 90,
     ];
 
     public static function keys(): array

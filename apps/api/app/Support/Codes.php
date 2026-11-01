@@ -22,6 +22,7 @@ class Codes
         'product'        => ['label' => 'Productos (SKU)', 'prefix' => 'P', 'digits' => 4, 'sequence' => 'product', 'module' => 'pos|inventory'],
         'transfer'       => ['label' => 'Traslados', 'prefix' => 'TR', 'digits' => 4, 'table' => 'stock_transfers', 'column' => 'code', 'module' => 'inventory'],
         'purchase'       => ['label' => 'Compras', 'prefix' => 'OC', 'digits' => 4, 'table' => 'purchase_orders', 'column' => 'code', 'module' => 'inventory'],
+        'walkin'         => ['label' => 'Turnos de la cola sin cita', 'prefix' => 'T', 'digits' => 3, 'daily' => true, 'module' => 'walkin'],
     ];
 
     public const LEGACY = ['quote' => ['P']];
@@ -96,6 +97,11 @@ class Codes
     public static function preview(string $tenantId, string $type, ?string $prefix = null): string
     {
         $config = self::TYPES[$type];
+
+        if (!empty($config['daily'])) {
+            return self::format($prefix ?? self::prefix($tenantId, $type), 1, $config['digits']);
+        }
+
         $number = isset($config['sequence'])
             ? (int) (DB::table('tenant_sequences')->where('tenant_id', $tenantId)->where('key', $config['sequence'])->value('next_value') ?? 1)
             : self::highest($tenantId, $type) + 1;
@@ -117,6 +123,7 @@ class Codes
             'default' => self::TYPES[$type]['prefix'],
             'next'    => self::preview($tenant->id, $type),
             'digits'  => self::TYPES[$type]['digits'],
+            'daily'   => !empty(self::TYPES[$type]['daily']),
         ])->values()->all();
     }
 

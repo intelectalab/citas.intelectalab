@@ -6,7 +6,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
-import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
+import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import Switch from '@/app/components/common/Switch';
@@ -40,6 +40,7 @@ interface SettingsPayload {
   inventory_rules?: { allow_negative: boolean; consume_on_service: boolean; transfer_two_step: boolean; cost_method: CostMethod; alert_min_stock: boolean } | null;
   loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number } | null;
   quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy } | null;
+  walkin_rules?: { self_checkin: boolean; max_wait: number } | null;
   booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
   payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
   session_idle_minutes?: number;
@@ -123,11 +124,11 @@ const LOCK_REASONS: Record<string, string> = {
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
-type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'ventas' | 'presupuestos' | 'inventario' | 'fidelizacion' | 'adelantos' | 'integraciones' | 'correo' | 'grupos' | 'seguridad' | 'descargas';
+type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'walkin' | 'ventas' | 'presupuestos' | 'inventario' | 'fidelizacion' | 'adelantos' | 'integraciones' | 'correo' | 'grupos' | 'seguridad' | 'descargas';
 
 const SECTION_GROUPS: { title: string; sections: { id: SectionId; label: string }[] }[] = [
   { title: 'Tu empresa', sections: [{ id: 'empresa', label: 'Datos y código' }, { id: 'modulos', label: 'Módulos' }, { id: 'moneda', label: 'Moneda' }, { id: 'ayuda', label: 'Autoayuda' }] },
-  { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'salas', label: 'Salas y equipos' }] },
+  { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'salas', label: 'Salas y equipos' }, { id: 'walkin', label: 'Cola sin cita' }] },
   { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'presupuestos', label: 'Presupuestos y planes' }, { id: 'inventario', label: 'Inventario y almacenes' }, { id: 'fidelizacion', label: 'Puntos y gift cards' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
   { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }] },
   { title: 'Clientes', sections: [{ id: 'grupos', label: 'Grupos de clientes' }] },
@@ -147,6 +148,7 @@ export default function TenantSettings() {
   const [inventoryRules, setInventoryRules] = useState<{ allowNegative: boolean; consumeOnService: boolean; transferTwoStep: boolean; costMethod: CostMethod; alertMinStock: boolean } | null>(null);
   const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string } | null>(null);
   const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy } | null>(null);
+  const [walkinRules, setWalkinRules] = useState<{ selfCheckin: boolean; maxWait: string } | null>(null);
   const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
   const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
   const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
@@ -212,6 +214,10 @@ export default function TenantSettings() {
       trackClinicalZones: payload.quote_rules.track_clinical_zones,
       planValidityDays: String(payload.quote_rules.plan_validity_days ?? 365),
       cancelPolicy: payload.quote_rules.cancel_policy ?? 'unused_quote',
+    } : null);
+    setWalkinRules(payload.walkin_rules ? {
+      selfCheckin: payload.walkin_rules.self_checkin,
+      maxWait: String(payload.walkin_rules.max_wait),
     } : null);
     setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days) } : null);
     setPaymentRules(payload.payment_rules ? {
@@ -300,6 +306,12 @@ export default function TenantSettings() {
             track_clinical_zones: quoteRules.trackClinicalZones,
             plan_validity_days: Number(quoteRules.planValidityDays || 0),
             cancel_policy: quoteRules.cancelPolicy,
+          },
+        } : null;
+      case 'walkin': return walkinRules ? {
+          walkin_rules: {
+            self_checkin: walkinRules.selfCheckin,
+            max_wait: Number(walkinRules.maxWait || 90),
           },
         } : null;
       case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : null;
@@ -478,6 +490,7 @@ export default function TenantSettings() {
     reservas: Boolean(bookingRules),
     inasistencias: Boolean(misses),
     salas: Boolean(equipmentDown),
+    walkin: Boolean(walkinRules),
     ventas: Boolean(salesRules),
     presupuestos: Boolean(quoteRules),
     inventario: Boolean(inventoryRules),
@@ -798,6 +811,56 @@ export default function TenantSettings() {
             })}
           </div>
           {saveBar('salas')}
+        </section>
+      )}
+
+      {show('walkin') && walkinRules && (
+        <section className={cardClass} data-card="walkin-rules">
+          <div>
+            <SectionTitle>
+              <ListOrdered className="w-4 h-4 text-brand-accent" /> Cola sin cita
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Para quien llega sin cita y espera su turno, como en una barbería.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Kiosko para que se anoten solos</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Una tableta en la entrada donde la persona escribe su celular, elige el servicio y recibe su turno.
+              </span>
+              {walkinRules.selfCheckin && user?.tenant?.code && (
+                <a href={`/kiosko/${user.tenant.code}`} target="_blank" rel="noreferrer" data-kiosk-link className="inline-block mt-1.5 text-xs font-semibold text-brand-ink hover:text-brand-accent underline underline-offset-2">
+                  Abrir el kiosko en esta pantalla
+                </a>
+              )}
+            </div>
+            <Switch
+              checked={walkinRules.selfCheckin}
+              onChange={(checked) => { setMessage(null); setWalkinRules({ ...walkinRules, selfCheckin: checked }); }}
+              label="Kiosko para que se anoten solos"
+            />
+          </div>
+
+          {walkinRules.selfCheckin && (
+            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+              <label htmlFor="walkin-max-wait" className="text-sm font-semibold text-slate-800">En el kiosko, no anotar si la espera pasa de</label>
+              <input
+                id="walkin-max-wait"
+                inputMode="numeric"
+                data-rule="max_wait"
+                value={walkinRules.maxWait}
+                onChange={(e) => { setMessage(null); setWalkinRules({ ...walkinRules, maxWait: e.target.value.replace(/\D/g, '').slice(0, 3) }); }}
+                className={hoursInput}
+              />
+              <span className="text-sm text-slate-600">minutos.</span>
+              <span className="w-full text-xs text-slate-500">Si la espera es mayor, el kiosko le sugiere reservar una cita. Recepción sí puede anotarlo igual. Va de 10 a 300 minutos.</span>
+            </div>
+          )}
+
+          {saveBar('walkin')}
         </section>
       )}
 

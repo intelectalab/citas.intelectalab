@@ -37,6 +37,7 @@ export interface CodeType {
   default: string;
   next: string;
   digits: number;
+  daily?: boolean;
 }
 
 export interface BrandPayload {

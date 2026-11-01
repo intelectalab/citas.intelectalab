@@ -1,19 +1,28 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Construction, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { MODULE_LABELS, PENDING_SECTIONS } from '@/lib/modules';
 
 export default function ModulePage() {
   const params = useParams<{ key: string }>();
+  const router = useRouter();
   const { hasModule, loading, can } = useAuth();
   const moduleKey = params.key;
+
+  useEffect(() => {
+    if (!loading && moduleKey === 'walkin') {
+      router.replace('/walkin');
+    }
+  }, [loading, moduleKey, router]);
+
   const section = PENDING_SECTIONS[moduleKey];
   const label = section?.label ?? MODULE_LABELS[moduleKey];
 
-  if (loading) {
+  if (loading || moduleKey === 'walkin') {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />
