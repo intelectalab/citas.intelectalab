@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsurePlanPaid
 {
     private const OPEN = [
-        'api/billing/*', 'api/subscriptions/*', 'api/notifications*', 'api/data-exports', 'api/logout', 'api/impersonation/*',
+        'api/billing/*', 'api/subscriptions/*', 'api/account/password', 'api/notifications*', 'api/data-exports', 'api/logout', 'api/impersonation/*',
     ];
 
     public function handle(Request $request, Closure $next, ?string $area = null): Response

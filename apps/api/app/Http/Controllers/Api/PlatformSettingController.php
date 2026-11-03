@@ -33,6 +33,8 @@ class PlatformSettingController extends Controller
             'usage_danger_percent'  => 'sometimes|required|integer|min:2|max:100',
             'allow_tenant_signup'   => 'sometimes|required|boolean',
             'impersonation_hours'   => 'sometimes|required|integer|min:1|max:24',
+            'mfa_tenant_admins'     => 'sometimes|boolean',
+            'mfa_platform'          => 'sometimes|boolean',
         ], [
             'accent_color.regex' => 'El color debe tener el formato #RRGGBB.',
         ]);

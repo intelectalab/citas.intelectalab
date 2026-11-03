@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Mail } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { usePlatform } from '@/hooks/usePlatform';
+import { useAuth } from '@/hooks/useAuth';
 
 const inputClass = 'w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 font-medium placeholder-slate-400 focus:outline-hidden focus:border-brand-accent focus:bg-white focus:ring-2 focus:ring-brand-accent/20 transition-all';
 const buttonClass = 'w-full bg-brand hover:bg-brand-hover text-white font-bold py-3 px-6 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center justify-center gap-2 text-sm shadow-md transition-all disabled:opacity-70 cursor-pointer';
@@ -81,7 +82,8 @@ export function ForgotPasswordPage() {
 export function ResetPasswordPage() {
   const params = useParams<{ token: string }>();
   const router = useRouter();
-  const [info, setInfo] = useState<{ email: string; where: string } | null>(null);
+  const { login } = useAuth();
+  const [info, setInfo] = useState<{ email: string; where: string; invite?: boolean; name?: string } | null>(null);
   const [invalid, setInvalid] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -107,6 +109,18 @@ export function ResetPasswordPage() {
       setError('');
       const res = await api.post('/password/reset', { token: params.token, password, password_confirmation: confirm });
       setDone(res.data.message);
+      if (res.data.access_token) {
+        try {
+          localStorage.setItem('last_activity', String(Date.now()));
+          localStorage.setItem('auth_token', res.data.access_token);
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+        } catch {
+        }
+        api.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`;
+        login(res.data.access_token, res.data.user);
+        router.push('/home?bienvenida=1');
+        return;
+      }
       try {
         sessionStorage.setItem('switch_account_email', res.data.email);
       } catch {
@@ -120,7 +134,10 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <Shell title="Crea tu contraseña nueva" text={info ? `Para ${info.email} en ${info.where}. Usa al menos 8 caracteres.` : 'Revisando el enlace...'}>
+    <Shell
+      title={info?.invite ? `Te damos la bienvenida${info.name ? `, ${info.name}` : ''}` : 'Crea tu contraseña nueva'}
+      text={info ? (info.invite ? `Crea la contraseña con la que entrarás a ${info.where} (${info.email}). Usa al menos 8 caracteres.` : `Para ${info.email} en ${info.where}. Usa al menos 8 caracteres.`) : 'Revisando el enlace...'}
+    >
       {invalid ? (
         <div className="space-y-3">
           <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium">{invalid}</p>
@@ -147,7 +164,7 @@ export function ResetPasswordPage() {
             </div>
           ))}
           <button type="submit" disabled={busy} className={buttonClass}>
-            {busy ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Guardar mi contraseña nueva'}
+            {busy ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : info.invite ? 'Guardar y entrar' : 'Guardar mi contraseña nueva'}
           </button>
         </form>
       ) : null}

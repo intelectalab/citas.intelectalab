@@ -12,6 +12,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
+import PayPlanDrawer from './PayPlanDrawer';
 import { BILLING_STATES, INVOICE_REASONS, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, cycleLabel, type BillingPayload } from '../billing';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -23,7 +24,7 @@ export default function PlanCard() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  const [panel, setPanel] = useState<'' | 'plans' | 'history'>('');
+  const [panel, setPanel] = useState<'' | 'plans' | 'history' | 'pay'>('');
   const [choice, setChoice] = useState<{ plan: string; cycle: 'monthly' | 'yearly' }>({ plan: '', cycle: 'monthly' });
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -37,6 +38,10 @@ export default function PlanCard() {
     const params = new URLSearchParams(window.location.search);
     const back = params.get('plan');
     if (params.get('tab') === 'plan' || back) setTimeout(() => document.getElementById('plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+    if (params.get('bienvenida') === '1') {
+      setNotice('Te damos la bienvenida. Último paso: pulsa "Autorizar tarjeta" y escríbela tú en Mercado Pago. No se cobra nada durante la prueba gratis.');
+      window.history.replaceState(null, '', '/companies');
+    }
     if (!back) { load(); return; }
 
     setNotice('Revisando tu pago con Mercado Pago...');
@@ -70,8 +75,11 @@ export default function PlanCard() {
   const paid = billing.price > 0 && !billing.free;
   const failed = Boolean(billing.card?.failed_at);
   const canAct = billing.can_pay && billing.online;
-  const showPay = canAct && paid && (['grace', 'locked'].includes(billing.state) || failed || (!authorized && billing.state === 'active'));
-  const showCard = canAct && paid && billing.state !== 'locked';
+  const cardMethod = billing.methods?.card ?? billing.online;
+  const transferMethod = Boolean(billing.methods?.transfer);
+  const showPay = canAct && paid && !billing.review && (['grace', 'locked'].includes(billing.state) || failed || (!authorized && (billing.state === 'active' || (billing.state === 'trial' && !cardMethod))));
+  const showCard = canAct && paid && cardMethod && billing.state !== 'locked';
+  const startPay = () => (transferMethod ? setPanel('pay') : go('pay', '/billing/pay'));
 
   const go = async (action: string, path: string, body?: object) => {
     try {
@@ -108,7 +116,7 @@ export default function PlanCard() {
       case 'active':
         return billing.free ? 'Plan sin costo.' : `${price}. Vigente hasta el ${shortDate(billing.ends_at)}. ${authorized ? 'Se renueva solo con tu tarjeta.' : 'Paga antes de esa fecha para que no se interrumpa.'}`;
       case 'grace':
-        return `Venció el ${shortDate(billing.ends_at)}. Hasta el ${shortDate(billing.grace_ends_at)} todo funciona igual; después tu empresa pasa a solo lectura.`;
+        return `Venció el ${shortDate(billing.ends_at)}. Págalo antes del ${shortDate(billing.grace_ends_at)} para que tu empresa siga usando el sistema.`;
       default:
         return billing.message ?? '';
     }
@@ -143,6 +151,18 @@ export default function PlanCard() {
         </p>
       )}
 
+      {billing.review && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-transfer-review>
+          Comprobante en revisión: {money(billing.review.amount, billing.review.currency)} por {billing.review.method}, operación {billing.review.operation_number}, enviado {momentOf(billing.review.sent_at)}{billing.review.period ? `; cubrirá del ${shortDate(billing.review.period[0])} al ${shortDate(billing.review.period[1])}` : ''}. Te avisaremos cuando lo confirmemos.
+        </p>
+      )}
+
+      {!billing.review && billing.rejected && (
+        <p className="text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2" data-transfer-rejected>
+          No pudimos confirmar tu pago de {money(billing.rejected.amount, billing.rejected.currency)}: {billing.rejected.message} Puedes volver a enviarlo con &quot;Pagar ahora&quot;.
+        </p>
+      )}
+
       {billing.simulated && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Cobro simulado: estas son las pruebas del sistema y no se mueve dinero.</p>
       )}
@@ -154,7 +174,7 @@ export default function PlanCard() {
         billing.online ? (
           <div className="flex flex-wrap gap-2">
             {showPay && (
-              <button type="button" data-billing-pay disabled={busy !== ''} onClick={() => go('pay', '/billing/pay')} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
+              <button type="button" data-billing-pay disabled={busy !== ''} onClick={startPay} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
                 {busy === 'pay' ? <Loader2 size={15} className="animate-spin" /> : null} Pagar ahora
               </button>
             )}
@@ -188,6 +208,14 @@ export default function PlanCard() {
           <button type="button" data-cancel-card onClick={() => setConfirmCancel(true)} className="text-xs font-semibold text-rose-700 hover:underline">Cancelar el cobro automático</button>
         )
       )}
+
+      <PayPlanDrawer
+        open={panel === 'pay'}
+        billing={billing}
+        onClose={() => setPanel('')}
+        onCard={() => { setPanel(''); go('pay', '/billing/pay'); }}
+        onSent={async (message) => { setPanel(''); setNotice(message); await load(); await refetchUser(); }}
+      />
 
       <FormDrawer isOpen={panel === 'plans'} onClose={() => setPanel('')} title="Cambiar plan" subtitle="Elige el plan y cada cuánto pagarlo" icon={<Repeat size={18} />}>
         <div className="space-y-4" data-plans-panel>

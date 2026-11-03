@@ -51,6 +51,8 @@ class AuthController extends Controller
             'is_saas_admin' => $isSaasAdmin,
             'is_saas_support' => $isSaasSupport,
             'is_tenant_admin' => $user->isTenantAdmin(),
+            'platform_pending' => $user->tenant_id ? null : ['transfers' => \App\Support\PlanTransfers::pendingCount()],
+            'must_change_password' => (bool) ($user->must_change_password ?? false),
             'impersonator' => $impersonator ? [
                 'name' => trim($impersonator->first_name . ' ' . $impersonator->last_name),
             ] : null,

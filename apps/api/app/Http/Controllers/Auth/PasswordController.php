@@ -47,7 +47,15 @@ class PasswordController extends Controller
             'password.confirmed' => 'Las dos contraseñas no coinciden.',
         ]);
 
-        $account = AccountSecurity::reset($request, $validated['token'], $validated['password']);
+        $result = AccountSecurity::reset($request, $validated['token'], $validated['password']);
+        $account = $result['account'];
+
+        if ($result['invite']) {
+            return response()->json([
+                'message' => 'Listo: tu contraseña quedó guardada.',
+                'email'   => $account->email,
+            ] + LoginController::issue($request, $account));
+        }
 
         return response()->json([
             'message' => 'Listo: tu contraseña cambió. Ya puedes entrar con ella.',

@@ -18,6 +18,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import Switch from '@/app/components/common/Switch';
 import { CORE_MODULE_LABELS, MODULE_GROUPS, MODULE_LABELS } from '@/lib/modules';
 import { SUBSCRIPTION_STATUS, TENANT_STATUS } from '../tenantStatus';
+import MemberAccessDrawer, { type TenantMember } from './MemberAccessDrawer';
 import { BILLING_STATES, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, type Billing, type PlanPayment } from '@/features/billing/billing';
 
 interface TenantModule {
@@ -166,6 +167,7 @@ export default function TenantDetail() {
   const [detail, setDetail] = useState<TenantDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [accessFor, setAccessFor] = useState<TenantMember | null>(null);
   const [notice, setNotice] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const [plans, setPlans] = useState<any[]>([]);
@@ -773,16 +775,11 @@ export default function TenantDetail() {
                       {member.status !== 'active' && <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[11px] rounded-md font-medium">Desactivada</span>}
                       {member.role && <span className="px-2 py-0.5 bg-white border border-slate-200 text-slate-700 text-[11px] rounded-md font-medium">{member.role}</span>}
                     </div>
-                    {canManage && member.security && (member.security.locked_minutes || member.security.mfa_active || member.security.mfa_mode === 'off') && (
+                    {canManage && (
                       <div className="basis-full flex flex-wrap items-center gap-2 text-[11px]" data-member-security={member.email}>
-                        {member.security.locked_minutes ? (
-                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/tenants/${detail.id}/users/${member.id}/security`, { action: 'unlock' }), 'Cuenta desbloqueada.')} className="px-2 py-0.5 rounded-md font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100">Bloqueada · desbloquear</button>
-                        ) : null}
-                        {member.security.mfa_mode === 'off' ? (
-                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/tenants/${detail.id}/users/${member.id}/security`, { action: 'code_default' }), 'Se le volverá a pedir el código según su rol.')} className="px-2 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100">Sin código · volver a pedirlo</button>
-                        ) : member.security.mfa_active ? (
-                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/tenants/${detail.id}/users/${member.id}/security`, { action: 'code_off' }), 'Ya no se le pide el código al entrar.')} className="px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">Código al entrar · quitárselo</button>
-                        ) : null}
+                        {member.security?.locked_minutes ? <span className="px-2 py-0.5 rounded-md font-semibold bg-rose-50 text-rose-700">Bloqueada</span> : null}
+                        {member.security?.mfa_mode === 'off' ? <span className="px-2 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800">Sin código</span> : member.security?.mfa_active ? <span className="px-2 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-700">Código al entrar</span> : null}
+                        <button type="button" data-member-access-open={member.email} onClick={() => setAccessFor(member)} className="ml-auto px-2.5 py-1 rounded-md font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100">Acceso</button>
                       </div>
                     )}
                   </div>
@@ -795,6 +792,15 @@ export default function TenantDetail() {
         </section>
 
         {canManage && <TenantAuditCard tenantId={detail.id} className={`xl:col-span-12 ${card}`} refreshKey={detail} />}
+
+        {canManage && accessFor && (
+          <MemberAccessDrawer
+            tenantId={detail.id}
+            member={detail.users.find((member) => member.id === accessFor.id) ?? accessFor}
+            onClose={() => setAccessFor(null)}
+            onChanged={(fresh) => apply(fresh)}
+          />
+        )}
       </div>
     </div>
   );

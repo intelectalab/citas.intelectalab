@@ -169,8 +169,8 @@ class DueNotices
             }
 
             $graceDay = Carbon::parse($state['grace_ends_at'])->setTimezone($zone);
-            $title = 'Tu plan venció: paga para no pasar a solo lectura';
-            $body = 'Venció el ' . $endDay->locale('es')->isoFormat('D [de] MMMM') . '. Hasta el ' . $graceDay->locale('es')->isoFormat('D [de] MMMM') . ' todo funciona igual; después tu equipo solo podrá ver y exportar, y el portal dejará de recibir reservas.';
+            $title = 'Tu plan venció';
+            $body = 'Venció el ' . $endDay->locale('es')->isoFormat('D [de] MMMM') . '. Págalo antes del ' . $graceDay->locale('es')->isoFormat('D [de] MMMM') . ' para que tu empresa siga usando el sistema.';
 
             foreach (Notifier::adminIds($tenant->id) as $userId) {
                 Notifier::send($tenant->id, $userId, 'subscription.grace', $title, $body, '/companies?tab=plan', 'subscription', $subscription->id, "subscription-grace:{$subscription->id}:{$endDay->toDateString()}:{$today->toDateString()}");
@@ -190,7 +190,7 @@ class DueNotices
         $body = ($trial ? 'La prueba' : 'La suscripción') . ' termina el ' . $endDay->locale('es')->isoFormat('D [de] MMMM') . '. '
             . ($card
                 ? 'Ese día se cobrará ' . Currency::format($price, $subscription->plan?->currency) . ' a tu tarjeta' . ($subscription->card_last4 ? " terminada en {$subscription->card_last4}" : '') . '.'
-                : 'Paga tu plan en Mi empresa → Plan para que tu equipo y tus clientes sigan usando el sistema.');
+                : 'Págalo en Mi empresa → Tu plan para que tu empresa siga usando el sistema.');
 
         foreach (Notifier::adminIds($tenant->id) as $userId) {
             Notifier::send($tenant->id, $userId, 'subscription.ending', $title, $body, '/companies?tab=plan', 'subscription', $subscription->id, "subscription:{$subscription->id}:{$endDay->toDateString()}:{$bucket}");

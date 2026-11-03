@@ -194,6 +194,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen = fals
                           >
                             <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-brand-soft' : 'text-slate-500 group-hover:text-slate-300'}`} />
                             {!isCollapsed && <span className="truncate">{item.name}</span>}
+                            {item.badge === 'platform_transfers' && (user?.platform_pending?.transfers ?? 0) > 0 && (
+                              <span data-menu-badge={item.badge} className={`${isCollapsed ? 'absolute ml-5 -mt-4' : 'ml-auto'} min-w-5 h-5 px-1.5 rounded-full bg-amber-400 text-[11px] font-bold text-[#0B1B2B] flex items-center justify-center`}>
+                                {user?.platform_pending?.transfers}
+                              </span>
+                            )}
                           </Link>
                         );
                       })}

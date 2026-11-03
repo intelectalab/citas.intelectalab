@@ -48,14 +48,20 @@ class PlanBilling
         return Subscriptions::ready() && $row && $row->status === 'active' && $row->provider === 'mercadopago' && !empty(self::credentials()['secret_key']);
     }
 
+    public static function cardEnabled(): bool
+    {
+        return (self::connected() || (Subscriptions::ready() && PaymentLinks::simulationAllowed()))
+            && (bool) (\App\Models\PlatformSetting::value('plan_mercadopago') ?? true);
+    }
+
     public static function enabled(): bool
     {
-        return self::connected() || (Subscriptions::ready() && PaymentLinks::simulationAllowed());
+        return self::cardEnabled() || PlanTransfers::enabled();
     }
 
     public static function simulated(): bool
     {
-        return !self::connected() && self::enabled();
+        return !self::connected() && self::cardEnabled();
     }
 
     private static function client(): MercadoPagoClient
@@ -113,7 +119,7 @@ class PlanBilling
 
     public static function cardUrl(Subscription $subscription, User $user, ?SaaSPlan $plan = null, ?string $cycle = null): string
     {
-        abort_unless(self::enabled(), 422, self::NOT_CONNECTED);
+        abort_unless(self::cardEnabled(), 422, self::NOT_CONNECTED);
         $plan ??= $subscription->plan;
         $cycle ??= $subscription->billing_cycle;
         $amount = Subscriptions::price($plan, $cycle);
@@ -175,7 +181,7 @@ class PlanBilling
 
     public static function payUrl(Subscription $subscription, User $user, SaaSPlan $plan, string $cycle): string
     {
-        abort_unless(self::enabled(), 422, self::NOT_CONNECTED);
+        abort_unless(self::cardEnabled(), 422, self::NOT_CONNECTED);
         $amount = Subscriptions::price($plan, $cycle);
 
         if ($amount <= 0) {

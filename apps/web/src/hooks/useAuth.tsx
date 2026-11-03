@@ -63,6 +63,7 @@ export interface User {
   idle_minutes?: number;
   help_enabled?: boolean;
   must_change_password?: boolean;
+  platform_pending?: { transfers: number } | null;
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
   roles?: string[];

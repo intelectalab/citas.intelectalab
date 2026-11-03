@@ -62,6 +62,7 @@ class TenantController extends Controller
             'admin_first_name' => 'required|string|max:100',
             'admin_last_name'  => 'required|string|max:100',
             'admin_email'      => 'required|email|max:190',
+            'payment_method'   => 'nullable|in:card,manual',
         ]);
 
         $password = Str::password(12, symbols: false);
@@ -88,17 +89,32 @@ class TenantController extends Controller
             'password'         => $password,
         ]);
 
+        $card = ($validated['payment_method'] ?? 'manual') === 'card';
+        $subscription = \App\Support\Subscriptions::latest($result['tenant']->id);
+
+        if ($card && $subscription && \App\Support\Subscriptions::ready()) {
+            $subscription->update(['requires_card' => true]);
+        }
+
+        $invited = \App\Support\AccountSecurity::invite($result['user'], $result['tenant'], $card);
+
+        if (!$invited && \Illuminate\Support\Facades\Schema::hasColumn('users', 'must_change_password')) {
+            $result['user']->forceFill(['must_change_password' => true])->saveQuietly();
+        }
+
         AuditEvent::record($request, 'tenant.created', $result['tenant'], null, [
             'plan_id'          => $validated['plan_id'],
             'business_type_id' => $validated['business_type_id'],
             'owner_email'      => $validated['admin_email'],
+            'payment_method'   => $card ? 'Tarjeta en línea' : 'Transferencia o convenio',
+            'invited'          => $invited,
         ]);
 
         return response()->json([
             'message' => 'Tenant creado correctamente',
             'data' => $result['tenant'],
             'installed' => $result['installed'],
-            'owner' => ['email' => $validated['admin_email'], 'temporary_password' => $password],
+            'owner' => ['email' => $validated['admin_email'], 'invited' => $invited, 'temporary_password' => $invited ? null : $password],
         ], 201);
     }
 
@@ -293,6 +309,69 @@ class TenantController extends Controller
         }
 
         AuditEvent::record($request, 'tenant.user_security', $tenant, $before, ['user' => $target->email, 'mfa_mode' => $target->mfa_mode, 'locked' => (bool) \App\Support\AccountSecurity::lockedMinutes($target)]);
+
+        return response()->json($this->detail($tenant));
+    }
+
+    public function userInvite(Request $request, string $tenant, string $user)
+    {
+        $tenant = Tenant::findOrFail($tenant);
+        $target = \App\Models\User::where('tenant_id', $tenant->id)->findOrFail($user);
+        abort_unless(\App\Support\PlatformMail::ready(), 422, 'El correo de la plataforma no está funcionando: dale una contraseña temporal.');
+        $subscription = \App\Support\Subscriptions::latest($tenant->id);
+        $card = $subscription && \App\Support\Subscriptions::ready() && $subscription->requires_card && $subscription->card_status !== 'authorized';
+
+        abort_unless(\App\Support\AccountSecurity::invite($target, $tenant, $card && $target->is_owner), 503, 'No se pudo enviar la invitación. Revisa el correo de la plataforma.');
+        AuditEvent::record($request, 'tenant.user_invited', $tenant, [], ['user' => $target->email]);
+
+        return response()->json(['message' => "Le enviamos la invitación a {$target->email}. El enlace vale " . \App\Support\AccountSecurity::INVITE_DAYS . ' días.']);
+    }
+
+    public function userPassword(Request $request, string $tenant, string $user)
+    {
+        $tenant = Tenant::findOrFail($tenant);
+        $target = \App\Models\User::where('tenant_id', $tenant->id)->findOrFail($user);
+        $password = Str::password(10, symbols: false);
+
+        $target->forceFill(['password_hash' => \Illuminate\Support\Facades\Hash::make($password), 'must_change_password' => true] + (\App\Support\AccountSecurity::ready() ? ['failed_logins' => 0, 'locked_until' => null] : []))->saveQuietly();
+        $target->tokens()->delete();
+
+        if (\App\Support\AccountSecurity::ready()) {
+            \App\Support\AccountSecurity::forgetDevices($target);
+        }
+
+        AuditEvent::record($request, 'tenant.user_password', $tenant, [], ['user' => $target->email]);
+
+        return response()->json(['email' => $target->email, 'temporary_password' => $password]);
+    }
+
+    public function userEmail(Request $request, string $tenant, string $user)
+    {
+        $tenant = Tenant::findOrFail($tenant);
+        $target = \App\Models\User::where('tenant_id', $tenant->id)->findOrFail($user);
+        $request->merge(['email' => is_string($request->email) ? Str::lower(trim($request->email)) : $request->email]);
+        $email = $request->validate([
+            'email' => ['required', 'email', 'max:190', \Illuminate\Validation\Rule::unique('users', 'email')->where('tenant_id', $tenant->id)->ignore($target->id)],
+        ], [
+            'email.required' => 'Escribe el correo nuevo.',
+            'email.email'    => 'Ese correo no es válido.',
+            'email.unique'   => 'Otra cuenta de esta empresa ya usa ese correo.',
+        ])['email'];
+
+        $old = $target->email;
+
+        if ($old !== $email) {
+            $target->forceFill(['email' => $email])->saveQuietly();
+
+            if (\App\Support\AccountSecurity::ready()) {
+                \App\Support\AccountSecurity::forgetDevices($target);
+            }
+
+            AuditEvent::record($request, 'tenant.user_email', $tenant, ['email' => $old], ['email' => $email]);
+            $body = '<p>Hola ' . e($target->first_name) . ':</p><p>El correo con el que entras a <strong>' . e($tenant->name) . '</strong> cambió a <strong>' . e($email) . '</strong>. Lo cambió el equipo de soporte de la plataforma.</p><p>Si no lo pediste, escríbenos.</p>';
+            \App\Support\PlatformMail::trySend($email, 'Tu correo de acceso cambió', $body, $tenant);
+            \App\Support\PlatformMail::trySend($old, 'Tu correo de acceso cambió', $body, $tenant);
+        }
 
         return response()->json($this->detail($tenant));
     }

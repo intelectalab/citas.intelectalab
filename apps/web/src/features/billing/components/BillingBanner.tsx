@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { AlertTriangle, CreditCard, Lock, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/features/appointments/appointments';
@@ -12,6 +12,7 @@ const day = (date: string | null | undefined) => (date ? formatDate(date, { day:
 export default function BillingBanner() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const billing = user?.tenant?.billing;
   const [blocked, setBlocked] = useState('');
 
@@ -20,6 +21,13 @@ export default function BillingBanner() {
     window.addEventListener('plan-locked', show);
     return () => window.removeEventListener('plan-locked', show);
   }, []);
+
+  useEffect(() => {
+    if (billing?.state !== 'card_needed' || !billing.can_pay || pathname !== '/home') return;
+    if (new URLSearchParams(window.location.search).get('bienvenida') === '1') {
+      router.replace('/companies?tab=plan&bienvenida=1');
+    }
+  }, [billing?.state, billing?.can_pay, pathname, router]);
 
   useEffect(() => {
     if (!blocked) return;
@@ -53,20 +61,20 @@ export default function BillingBanner() {
       : 'Solo lectura: el plan no está pagado. Puedes ver y exportar, pero no agendar, vender ni cambiar nada. El portal no recibe reservas.';
   } else if (billing.state === 'grace') {
     tone = 'bg-amber-400 text-[#0B1B2B]';
-    text = `Tu plan venció el ${day(billing.ends_at)}. Paga antes del ${day(billing.grace_ends_at)} para no pasar a solo lectura.`;
+    text = `Tu plan venció el ${day(billing.ends_at)}. Págalo antes del ${day(billing.grace_ends_at)} para que tu empresa siga usando el sistema.`;
   } else if (failed) {
     tone = 'bg-amber-400 text-[#0B1B2B]';
     icon = <CreditCard size={15} className="shrink-0" />;
-    text = 'No se pudo cobrar el plan a tu tarjeta. Mercado Pago lo volverá a intentar; puedes cambiar la tarjeta o pagar ahora.';
+    text = 'No se pudo cobrar el plan a tu tarjeta. Mercado Pago lo volverá a intentar; también puedes cambiar la tarjeta o pagar de otra forma.';
   } else if (billing.state === 'trial' && daysLeft !== null && daysLeft <= 7 && !authorized && billing.price > 0) {
     tone = 'bg-sky-100 text-sky-900';
-    text = `Tu prueba gratis termina ${daysLeft <= 0 ? 'hoy' : daysLeft === 1 ? 'mañana' : `en ${daysLeft} días`}. ${billing.online ? 'Autoriza tu tarjeta para seguir sin interrupciones.' : 'Escribe a soporte para activar tu plan.'}`;
+    text = `Tu prueba gratis termina ${daysLeft <= 0 ? 'hoy' : daysLeft === 1 ? 'mañana' : `en ${daysLeft} días`}. ${billing.online ? 'Paga tu plan para que tu empresa siga usando el sistema.' : 'Escribe a soporte para activar tu plan.'}`;
   } else {
     return toast;
   }
 
   const action = billing.can_pay
-    ? (billing.online ? <Link href="/companies?tab=plan" data-banner-action className="shrink-0 px-3 py-1 rounded-lg bg-brand text-white font-bold hover:bg-brand-hover transition-colors">{billing.state === 'card_needed' || (billing.state === 'trial' && !authorized) ? 'Autorizar tarjeta' : 'Ver mi plan'}</Link> : null)
+    ? (billing.online ? <Link href="/companies?tab=plan" data-banner-action className="shrink-0 px-3 py-1 rounded-lg bg-brand text-white font-bold hover:bg-brand-hover transition-colors">{billing.state === 'card_needed' ? 'Autorizar tarjeta' : 'Ver mi plan'}</Link> : null)
     : <span className="shrink-0 opacity-90">Avísale al administrador de tu empresa.</span>;
 
   return (

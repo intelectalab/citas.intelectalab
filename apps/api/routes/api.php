@@ -135,9 +135,17 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
         Route::delete('/admin/platform-mail', [\App\Http\Controllers\Api\PlatformMailController::class, 'destroy']);
         Route::post('/admin/platform-mail/test', [\App\Http\Controllers\Api\PlatformMailController::class, 'test'])->middleware('throttle:10,1');
         Route::post('/tenants/{tenant}/users/{user}/security', [TenantController::class, 'userSecurity']);
+        Route::post('/tenants/{tenant}/users/{user}/password', [TenantController::class, 'userPassword']);
+        Route::post('/tenants/{tenant}/users/{user}/invite', [TenantController::class, 'userInvite'])->middleware('throttle:10,1');
+        Route::put('/tenants/{tenant}/users/{user}/email', [TenantController::class, 'userEmail']);
         Route::get('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'show']);
         Route::put('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'update']);
         Route::post('/admin/billing/test', [\App\Http\Controllers\Api\PlatformBillingController::class, 'test']);
+        Route::put('/admin/billing/methods', [\App\Http\Controllers\Api\PlatformBillingController::class, 'methods']);
+        Route::get('/admin/billing/transfers', [\App\Http\Controllers\Api\PlatformBillingController::class, 'transfers']);
+        Route::post('/admin/billing/transfers/{id}/approve', [\App\Http\Controllers\Api\PlatformBillingController::class, 'approveTransfer'])->whereUuid('id');
+        Route::post('/admin/billing/transfers/{id}/reject', [\App\Http\Controllers\Api\PlatformBillingController::class, 'rejectTransfer'])->whereUuid('id');
+        Route::get('/admin/billing/transfers/{id}/voucher', [\App\Http\Controllers\Api\PlatformBillingController::class, 'transferVoucher'])->whereUuid('id');
         Route::get('/admin/currencies', [CurrencyController::class, 'platform']);
         Route::put('/admin/currencies/{code}', [CurrencyController::class, 'toggle']);
         Route::put('/admin/platform-settings', [PlatformSettingController::class, 'update']);
@@ -201,11 +209,15 @@ Route::prefix('kiosk')->middleware('throttle:60,1')->group(function () {
 
 Route::middleware(['auth:sanctum', 'staff', 'plan'])->group(function () {
     Route::post('/subscriptions/subscribe', [SubscriptionController::class, 'subscribe']);
+    Route::put('/account/password', [\App\Http\Controllers\Api\AccountPasswordController::class, 'update'])->middleware('throttle:10,1');
     Route::get('/billing', [\App\Http\Controllers\Api\BillingController::class, 'show']);
     Route::post('/billing/card', [\App\Http\Controllers\Api\BillingController::class, 'card'])->middleware('throttle:20,1');
     Route::post('/billing/pay', [\App\Http\Controllers\Api\BillingController::class, 'pay'])->middleware('throttle:20,1');
     Route::post('/billing/plan', [\App\Http\Controllers\Api\BillingController::class, 'change'])->middleware('throttle:20,1');
     Route::post('/billing/cancel-card', [\App\Http\Controllers\Api\BillingController::class, 'cancelCard']);
+    Route::get('/billing/transfer', [\App\Http\Controllers\Api\BillingController::class, 'transferOptions']);
+    Route::post('/billing/transfer', [\App\Http\Controllers\Api\BillingController::class, 'transfer'])->middleware('throttle:10,1');
+    Route::get('/billing/transfers/{id}/voucher', [\App\Http\Controllers\Api\BillingController::class, 'transferVoucher'])->whereUuid('id');
 
     Route::get('/type-documents', [TypeDocumentController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);

@@ -57,7 +57,7 @@ class RegisterTenantController extends Controller
         $cardUrl = null;
         $subscription = \App\Support\Subscriptions::latest($result['tenant']->id);
 
-        if ($subscription && \App\Support\PlanBilling::enabled() && \App\Support\Subscriptions::price($subscription->plan, $subscription->billing_cycle) > 0) {
+        if ($subscription && \App\Support\PlanBilling::cardEnabled() && \App\Support\Subscriptions::price($subscription->plan, $subscription->billing_cycle) > 0) {
             $subscription->update(['requires_card' => true]);
 
             try {

@@ -7,6 +7,7 @@ use App\Models\AuditEvent;
 use App\Models\SaaSPlan;
 use App\Models\Subscription;
 use App\Support\PlanBilling;
+use App\Support\PlanTransfers;
 use App\Support\Subscriptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -145,6 +146,13 @@ class BillingController extends Controller
         abort_unless(PlanBilling::enabled(), 422, PlanBilling::NOT_CONNECTED);
 
         if (in_array($state, ['grace', 'locked', 'none'], true) || $subscription->status === 'canceled') {
+            if (!PlanBilling::cardEnabled()) {
+                $subscription->update(['pending_plan_id' => $plan->id, 'pending_billing_cycle' => $cycle]);
+                Subscriptions::forget($subscription->tenant_id);
+
+                return ['message' => "Listo: elegiste el plan {$plan->name}. Ahora págalo con \"Pagar ahora\" para activarlo."];
+            }
+
             return ['checkout_url' => PlanBilling::payUrl($subscription, $user, $plan, $cycle)];
         }
 
@@ -154,8 +162,8 @@ class BillingController extends Controller
                 AuditEvent::record($request, 'subscription.plan_changed', $user->tenant, $before, $subscription->only(['plan_id', 'billing_cycle', 'status']));
             }
 
-            if ($subscription->card_status === 'authorized' && $same) {
-                return ['message' => "Ya estás en el plan {$plan->name}."];
+            if (($subscription->card_status === 'authorized' && $same) || !PlanBilling::cardEnabled()) {
+                return ['message' => $same ? "Ya estás en el plan {$plan->name}." : "Listo: tu prueba sigue con el plan {$plan->name}."];
             }
 
             return ['checkout_url' => PlanBilling::cardUrl($subscription->fresh('plan'), $user, $plan, $cycle)];
@@ -165,7 +173,7 @@ class BillingController extends Controller
             return ['message' => "Ya estás en el plan {$plan->name}."];
         }
 
-        if ($subscription->card_status === 'authorized') {
+        if ($subscription->card_status === 'authorized' && PlanBilling::cardEnabled()) {
             return ['checkout_url' => PlanBilling::cardUrl($subscription, $user, $plan, $cycle)];
         }
 
@@ -174,6 +182,60 @@ class BillingController extends Controller
         Subscriptions::forget($subscription->tenant_id);
 
         return ['message' => "El plan {$plan->name} empieza cuando pagues el próximo periodo."];
+    }
+
+    public function transferOptions(Request $request)
+    {
+        $subscription = $this->subscription($request, false);
+        abort_unless(PlanTransfers::enabled(), 404, 'La plataforma no recibe pagos por transferencia por ahora.');
+        $config = PlanTransfers::config();
+
+        return response()->json([
+            'review_text' => $config['review_text'],
+            'accounts'    => collect($config['accounts'])->map(fn ($account) => $account + ['label' => PlanTransfers::label($account)])->values(),
+            'pending'     => ($row = PlanTransfers::pendingFor($subscription->id)) ? PlanTransfers::present($row) : null,
+        ]);
+    }
+
+    public function transfer(Request $request)
+    {
+        $subscription = $this->subscription($request);
+        [$plan, $cycle] = $this->choice($request, $subscription);
+
+        $validated = $request->validate([
+            'method_id'        => 'required|string|max:40',
+            'operation_number' => 'required|string|max:60',
+            'paid_on'          => 'required|date|before_or_equal:today|after:' . now()->subDays(60)->toDateString(),
+            'voucher'          => 'required|string',
+        ], [
+            'method_id.required'        => 'Elige a dónde pagaste.',
+            'operation_number.required' => 'Escribe el número de operación que aparece en tu comprobante.',
+            'paid_on.required'          => 'Escribe la fecha en que pagaste.',
+            'paid_on.before_or_equal'   => 'La fecha no puede ser de un día que todavía no llega.',
+            'paid_on.after'             => 'La fecha es muy antigua.',
+            'voucher.required'          => 'Sube la foto o captura del comprobante.',
+        ]);
+
+        $row = PlanTransfers::report($subscription, $request->user(), $validated + ['plan_id' => $plan->id, 'billing_cycle' => $cycle]);
+        \App\Support\Audit::log($request, 'subscription.transfer_sent', [
+            'tenant'      => $subscription->tenant_id,
+            'entity_type' => 'subscription',
+            'entity_id'   => $subscription->id,
+            'after'       => ['amount' => (float) $row->amount, 'method' => $row->method_label, 'operation_number' => $row->operation_number],
+        ]);
+
+        return response()->json([
+            'message' => 'Recibimos tu comprobante. Lo revisaremos en ' . PlanTransfers::config()['review_text'] . ' y te avisaremos.',
+        ] + json_decode($this->show($request)->getContent(), true));
+    }
+
+    public function transferVoucher(Request $request, string $id)
+    {
+        $subscription = $this->subscription($request, false);
+        $row = \Illuminate\Support\Facades\DB::table('plan_payments')->where('id', $id)->where('subscription_id', $subscription->id)->where('kind', 'transfer')->first();
+        abort_unless($row, 404);
+
+        return PlanTransfers::voucher($row);
     }
 
     public function simulatedView(string $id)

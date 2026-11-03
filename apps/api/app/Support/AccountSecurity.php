@@ -29,6 +29,8 @@ class AccountSecurity
 
     public const RESET_MINUTES = 60;
 
+    public const INVITE_DAYS = 3;
+
     public static function ready(): bool
     {
         static $ready = null;
@@ -126,12 +128,17 @@ class AccountSecurity
         }
 
         if (!$account->tenant_id) {
-            return $account->isSaasAdmin() || $account->isSaasSupport();
+            return ($account->isSaasAdmin() || $account->isSaasSupport()) && (bool) \App\Models\PlatformSetting::value('mfa_platform');
         }
 
         $tenant = self::tenantOf($account);
 
-        return $tenant && $account->isTenantAdmin() && (bool) AppointmentFlow::rule($tenant, 'security.mfa_admin');
+        return $tenant && $account->isTenantAdmin() && self::adminRule($tenant);
+    }
+
+    public static function adminRule(Tenant $tenant): bool
+    {
+        return (bool) ($tenant->rules()['security.mfa_admin'] ?? \App\Models\PlatformSetting::value('mfa_tenant_admins'));
     }
 
     public static function trusted(User|Customer $account, ?string $device): bool
@@ -378,7 +385,7 @@ class AccountSecurity
             return null;
         }
 
-        $row = DB::table('account_tokens')->where('kind', 'reset')->where('token_hash', self::hash($token))->first();
+        $row = DB::table('account_tokens')->whereIn('kind', ['reset', 'invite'])->where('token_hash', self::hash($token))->first();
 
         return $row && !$row->used_at && Carbon::parse($row->expires_at)->isFuture() ? $row : null;
     }
@@ -396,10 +403,12 @@ class AccountSecurity
             'email'   => PlatformMail::mask($account->email),
             'where'   => $account->tenant?->name ?? 'Administración de la plataforma',
             'account' => $row->account_type === 'customer' ? 'customer' : 'staff',
+            'invite'  => $row->kind === 'invite',
+            'name'    => $account->first_name,
         ];
     }
 
-    public static function reset(Request $request, string $token, string $password): User|Customer
+    public static function reset(Request $request, string $token, string $password): array
     {
         $row = self::resetRow($token);
         $account = $row ? self::find($row->account_type, $row->account_id) : null;
@@ -410,11 +419,11 @@ class AccountSecurity
 
         DB::transaction(function () use ($row, $account, $password) {
             DB::table('account_tokens')->where('id', $row->id)->update(['used_at' => now()]);
-            DB::table('account_tokens')->where('kind', 'reset')->where('account_type', $row->account_type)->where('account_id', $account->id)->whereNull('used_at')->update(['used_at' => now()]);
+            DB::table('account_tokens')->whereIn('kind', ['reset', 'invite'])->where('account_type', $row->account_type)->where('account_id', $account->id)->whereNull('used_at')->update(['used_at' => now()]);
 
             $values = ['password_hash' => Hash::make($password), 'failed_logins' => 0, 'locked_until' => null];
 
-            if ($account instanceof Customer) {
+            if ($account instanceof Customer || Schema::hasColumn('users', 'must_change_password')) {
                 $values['must_change_password'] = false;
             }
 
@@ -424,7 +433,7 @@ class AccountSecurity
 
         self::forgetDevices($account);
 
-        Audit::log($request, 'auth.password_reset', [
+        Audit::log($request, $row->kind === 'invite' ? 'auth.invite_accepted' : 'auth.password_reset', [
             'actor'        => $account,
             'tenant'       => $account->tenant_id,
             'impersonator' => null,
@@ -432,13 +441,46 @@ class AccountSecurity
             'entity_id'    => $account->id,
         ]);
 
-        return $account;
+        return ['account' => $account, 'invite' => $row->kind === 'invite'];
+    }
+
+    public static function invite(User $user, Tenant $tenant, bool $card): bool
+    {
+        if (!self::ready() || !PlatformMail::ready()) {
+            return false;
+        }
+
+        DB::table('account_tokens')->where('kind', 'invite')->where('account_type', 'user')->where('account_id', $user->id)->whereNull('used_at')->update(['used_at' => now()]);
+        $token = Str::random(64);
+        DB::table('account_tokens')->insert([
+            'id'           => (string) Str::uuid(),
+            'kind'         => 'invite',
+            'account_type' => 'user',
+            'account_id'   => $user->id,
+            'token_hash'   => self::hash($token),
+            'expires_at'   => now()->addDays(self::INVITE_DAYS),
+            'sent_at'      => now(),
+            'created_at'   => now(),
+        ]);
+
+        $url = rtrim((string) config('app.frontend_url'), '/') . '/restablecer/' . $token;
+        $tenant->loadMissing(['settings', 'businessType']);
+
+        return PlatformMail::trySend(
+            $user->email,
+            'Te damos la bienvenida a ' . $tenant->name,
+            '<p>Hola ' . e($user->first_name) . ':</p><p>Ya está lista la cuenta de <strong>' . e($tenant->name) . '</strong> en ' . e(PlatformMail::productName()) . '. Entras con este correo y una contraseña que eliges tú.</p>'
+                . '<p><a href="' . e($url) . '">Crear mi contraseña</a></p>'
+                . ($card ? '<p>Después te pediremos autorizar tu tarjeta en Mercado Pago para el pago del plan. Ahí la escribes tú; nadie más la ve.</p>' : '')
+                . '<p>El enlace vale ' . self::INVITE_DAYS . ' días. Si vence, pídenos uno nuevo.</p>',
+            $tenant,
+        );
     }
 
     public static function present(User|Customer $account): array
     {
         $tenantRequired = $account instanceof User && $account->tenant_id && $account->isTenantAdmin()
-            && ($tenant = self::tenantOf($account)) && (bool) AppointmentFlow::rule($tenant, 'security.mfa_admin');
+            && ($tenant = self::tenantOf($account)) && self::adminRule($tenant);
 
         return [
             'mfa_mode'      => self::ready() ? ($account->mfa_mode ?? null) : null,

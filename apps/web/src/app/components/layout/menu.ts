@@ -61,6 +61,7 @@ export interface MenuItem {
   alsoModule?: string;
   perm?: string;
   saasAdminOnly?: boolean;
+  badge?: 'platform_transfers';
 }
 
 export interface MenuGroup {
@@ -92,6 +93,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     requireAdmin: true,
     items: [
       { name: 'Tenants', href: '/admin/tenants', icon: Building2 },
+      { name: 'Cobros', href: '/admin/cobros', icon: Wallet, saasAdminOnly: true, badge: 'platform_transfers' },
       { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket, saasAdminOnly: true },
       { name: 'Plantillas de rubros', href: '/admin/business-types', icon: Layers, saasAdminOnly: true },
       { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },

@@ -20,7 +20,7 @@ export default function CredentialsNote({ email, password }: CredentialsNoteProp
       </div>
 
       <p className="text-xs text-slate-500 bg-slate-100/80 border border-slate-200/60 p-3 rounded-xl font-medium">
-        Cópiala antes de cerrar: no se vuelve a mostrar. Si se pierde, puedes darle otra con el botón de la llave.
+        Cópiala antes de cerrar: no se vuelve a mostrar. Al entrar con ella, el sistema le pedirá crear su propia contraseña.
       </p>
     </div>
   );

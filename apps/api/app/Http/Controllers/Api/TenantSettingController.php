@@ -402,7 +402,7 @@ class TenantSettingController extends Controller
             'session_idle_roles'   => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('created_at')->get(['id', 'name'])
                 ->map(fn ($role) => ['id' => $role->id, 'name' => $role->name, 'minutes' => ((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? null])->values(),
             'help_enabled' => (bool) AppointmentFlow::rule($tenant, 'help.enabled'),
-            'mfa_admin' => (bool) AppointmentFlow::rule($tenant, 'security.mfa_admin'),
+            'mfa_admin' => \App\Support\AccountSecurity::adminRule($tenant),
             'mfa_ready' => \App\Support\PlatformMail::ready(),
             'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
             'customer_groups' => $tenant->hasModule('marketing') ? [
@@ -506,7 +506,7 @@ class TenantSettingController extends Controller
                 'session_idle_roles'          => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name'])
                     ->map(fn ($role) => $role->name . ': ' . (((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? 'como la empresa'))->implode(', '),
                 'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
-                'mfa_admin'                   => (bool) AppointmentFlow::rule($tenant, 'security.mfa_admin'),
+                'mfa_admin'                   => \App\Support\AccountSecurity::adminRule($tenant),
             ],
             'Autoayuda' => [
                 'help_enabled' => (bool) AppointmentFlow::rule($tenant, 'help.enabled'),

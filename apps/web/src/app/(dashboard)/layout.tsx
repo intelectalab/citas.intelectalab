@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Navbar from '../components/layout/Navbar';
 import ScreenGate from '../components/layout/ScreenGate';
+import ChangePasswordGate from '@/features/auth/components/ChangePasswordGate';
 import IdleLogout from '../components/layout/IdleLogout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import BrandStyle from '../components/layout/BrandStyle';
@@ -79,7 +80,7 @@ export default function DashboardLayout({
           <BillingBanner />
           <Navbar onOpenMenu={() => setMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto p-3 sm:p-6">
-            <ScreenGate>{children}</ScreenGate>
+            <ChangePasswordGate><ScreenGate>{children}</ScreenGate></ChangePasswordGate>
           </main>
         </div>
       </div>

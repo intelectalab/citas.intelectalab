@@ -50,6 +50,9 @@ class Audit
         'subscription.canceled'           => ['Canceló la suscripción', 'companies'],
         'subscription.plan_changed'       => ['Cambió su plan', 'companies'],
         'subscription.card_cancelled'     => ['Canceló el cobro automático a la tarjeta', 'companies'],
+        'subscription.transfer_sent'      => ['Envió un comprobante de pago del plan', 'companies'],
+        'subscription.transfer_approved'  => ['Aprobó un pago del plan por transferencia', 'companies'],
+        'subscription.transfer_rejected'  => ['Rechazó un pago del plan por transferencia', 'companies'],
         'platform.billing_changed'        => ['Cambió el cobro de la plataforma', 'platform'],
         'plan.created'                    => ['Creó un plan', 'companies'],
         'plan.updated'                    => ['Cambió un plan', 'companies'],
@@ -90,7 +93,13 @@ class Audit
         'auth.reset_requested'            => ['Pidió recuperar su contraseña', 'access'],
         'auth.password_reset'             => ['Cambió su contraseña con el enlace del correo', 'access'],
         'platform.mail_changed'           => ['Cambió el correo de la plataforma', 'platform'],
+        'platform.codes_off'              => ['Se apagó el código de la plataforma desde la consola del servidor', 'platform'],
         'tenant.user_security'            => ['Cambió el ingreso de una cuenta de una empresa', 'support'],
+        'tenant.user_password'            => ['Le dio una contraseña temporal a una cuenta de una empresa', 'support'],
+        'tenant.user_email'               => ['Le cambió el correo a una cuenta de una empresa', 'support'],
+        'auth.password_changed'           => ['Cambió su contraseña', 'access'],
+        'auth.invite_accepted'            => ['Creó su contraseña con la invitación', 'access'],
+        'tenant.user_invited'             => ['Le reenvió la invitación a una cuenta de una empresa', 'support'],
     ];
 
     public const LOOK_SECTIONS = [
@@ -115,7 +124,7 @@ class Audit
         'filters' => 'Filtros', 'scope' => 'Qué se descargó', 'limit' => 'Primeras filas', 'columns' => 'Columnas', 'branch' => 'Sede', 'max_users' => 'Usuarios', 'max_professionals' => 'Profesionales',
         'text' => 'Detalle',
         'host' => 'Servidor', 'port' => 'Puerto', 'security' => 'Seguridad', 'username' => 'Usuario', 'from_address' => 'Correo remitente', 'from_name' => 'Nombre remitente', 'password' => 'Contraseña', 'mfa_mode' => 'Código al entrar', 'locked' => 'Bloqueo',
-        'grace_days' => 'Días de gracia', 'payment_provider' => 'Pasarela de pagos', 'payment_mode' => 'Modo de cobro', 'public_key' => 'Public Key', 'secret_key' => 'Access Token', 'webhook_secret' => 'Clave secreta de avisos',
+        'grace_days' => 'Días de gracia', 'mfa_tenant_admins' => 'Código al entrar para administradores (valor inicial)', 'mfa_platform' => 'Código al entrar para la plataforma', 'payment_provider' => 'Pasarela de pagos', 'payment_mode' => 'Modo de cobro', 'public_key' => 'Public Key', 'secret_key' => 'Access Token', 'webhook_secret' => 'Clave secreta de avisos',
         'pending_plan_id' => 'Plan siguiente', 'pending_billing_cycle' => 'Ciclo siguiente', 'billing_cycle' => 'Ciclo', 'card_status' => 'Tarjeta',
         'client' => 'Quien se atiende (singular)', 'clients' => 'Quienes se atienden (plural)', 'pro' => 'Quien atiende (singular)', 'pros' => 'Quienes atienden (plural)',
         'dependent' => 'Acompañante (singular)', 'dependents_word' => 'Acompañantes (plural)', 'client_gender' => 'Se dice el o la (quien se atiende)', 'pro_gender' => 'Se dice el o la (quien atiende)', 'dependent_gender' => 'Se dice el o la (acompañante)',

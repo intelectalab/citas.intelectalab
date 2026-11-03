@@ -177,7 +177,7 @@ class LoginController extends Controller
         }
     }
 
-    private static function issue(Request $request, User|Customer $account): array
+    public static function issue(Request $request, User|Customer $account): array
     {
         $token = $account->createToken('auth_token')->plainTextToken;
 
@@ -214,7 +214,7 @@ class LoginController extends Controller
             'is_owner'     => $isCustomer ? false : (bool) $account->is_owner,
             'account_type' => $isCustomer ? 'customer' : 'staff',
             'status'       => $isCustomer ? 'active' : $account->status,
-            'must_change_password' => $isCustomer && $account->must_change_password,
+            'must_change_password' => (bool) ($account->must_change_password ?? false),
         ];
     }
 

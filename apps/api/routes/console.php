@@ -12,9 +12,16 @@ Artisan::command('inspire', function () {
 
 Artisan::command('subscriptions:expire', function () {
     $limit = now()->subDays(\App\Support\Subscriptions::graceDays());
+    $withCard = \App\Support\Subscriptions::ready();
     $trials = DB::table('subscriptions')
         ->where('status', 'trialing')
-        ->where(fn ($q) => $q->where('ends_at', '<=', $limit)->orWhere(fn ($q) => $q->whereNull('ends_at')->where('trial_ends_at', '<=', $limit)))
+        ->where(function ($q) use ($limit, $withCard) {
+            $ended = fn ($when) => fn ($c) => $c->where('ends_at', '<=', $when)->orWhere(fn ($n) => $n->whereNull('ends_at')->where('trial_ends_at', '<=', $when));
+            $withCard
+                ? $q->where(fn ($c) => $c->where(fn ($p) => $p->whereNull('card_status')->orWhere('card_status', '!=', 'authorized'))->where($ended(now())))
+                    ->orWhere(fn ($c) => $c->where('card_status', 'authorized')->where($ended($limit)))
+                : $q->where($ended(now()));
+        })
         ->update(['status' => 'expired', 'updated_at' => now()]);
 
     $pastDue = DB::table('subscriptions')
@@ -129,3 +136,27 @@ Artisan::command('db:demo {--agregar : Solo suma los ejemplos nuevos, sin borrar
     $this->call('migrate:fresh', ['--force' => true, '--seed' => true]);
     $this->info('Base lista con los datos de muestra.');
 })->purpose('Vuelve a crear la base local con los datos de muestra (migrate:fresh --seed, borra todo), o con --agregar solo suma los ejemplos nuevos');
+
+Artisan::command('seguridad:sin-codigo', function () {
+    \App\Models\PlatformSetting::put(['mfa_platform' => false]);
+    \App\Support\PlatformLook::forget();
+    $users = \App\Models\User::whereNull('tenant_id')->get()->filter(fn ($user) => $user->isPlatformUser());
+    $unlocked = 0;
+
+    if (\App\Support\AccountSecurity::ready()) {
+        foreach ($users as $user) {
+            if ($user->locked_until || $user->failed_logins || $user->mfa_mode === 'required') {
+                $user->forceFill(['failed_logins' => 0, 'locked_until' => null, 'mfa_mode' => $user->mfa_mode === 'required' ? null : $user->mfa_mode])->saveQuietly();
+                $unlocked++;
+            }
+        }
+    }
+
+    \App\Support\Audit::log(request(), 'platform.codes_off', [
+        'before' => [],
+        'after'  => ['mfa_platform' => false],
+    ]);
+
+    $this->info("Listo: las cuentas de la plataforma ya entran sin código. Cuentas desbloqueadas o sin código obligatorio: {$unlocked}.");
+    $this->line('Las empresas quedan como estaban. Vuelve a encender el código en la consola cuando el correo funcione.');
+})->purpose('Emergencia: apaga el código al entrar de las cuentas de la plataforma (superadmin y soporte) y las desbloquea');

@@ -26,7 +26,10 @@ class PlatformSetting extends Model
         'usage_danger_percent'  => 90,
         'allow_tenant_signup'   => true,
         'impersonation_hours'   => 2,
-        'grace_days'            => 7,
+        'grace_days'            => 3,
+        'mfa_tenant_admins'     => false,
+        'mfa_platform'          => false,
+        'plan_mercadopago'      => true,
     ];
 
     public const PUBLIC_KEYS = [

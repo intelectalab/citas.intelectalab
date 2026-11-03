@@ -446,7 +446,7 @@ class AccessController extends Controller
         abort_if($this->isAdminRole(Access::roleOf($target)) && !$actor->isTenantAdmin(), 403, 'Solo un administrador puede cambiar a otro administrador.');
 
         $password = Str::password(10, symbols: false);
-        $target->update(['password_hash' => Hash::make($password)]);
+        $target->forceFill(['password_hash' => Hash::make($password)] + (\Illuminate\Support\Facades\Schema::hasColumn('users', 'must_change_password') ? ['must_change_password' => true] : []))->saveQuietly();
         $target->tokens()->delete();
         Access::logChange($request, $tenant, 'user', $target->id, 'Le dio una contraseña nueva.');
         $this->audit($request, $tenant, 'user.password_reset', 'user', $target->id, trim("{$target->first_name} {$target->last_name}"), [], [], $target->branch_id);

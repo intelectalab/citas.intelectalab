@@ -4,6 +4,7 @@ import Button from '@/app/components/common/Button';
 import { labelClass } from '@/app/components/ui/forms/styles';
 import { useState, useEffect } from 'react';
 import Select from '@/app/components/common/Select';
+import OptionCard from '@/app/components/common/OptionCard';
 import { Building2 } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
@@ -21,6 +22,7 @@ export interface TenantFormData extends Tenant {
   plan_id: string;
   start_trial: boolean;
   billing_cycle: string;
+  payment_method: 'card' | 'manual';
   legal_name: string;
   tax_id: string;
   phone: string;
@@ -49,6 +51,7 @@ const EMPTY_FORM: TenantFormData = {
   plan_id: '',
   start_trial: true,
   billing_cycle: 'monthly',
+  payment_method: 'manual',
   legal_name: '',
   tax_id: '',
   phone: '',
@@ -228,6 +231,21 @@ export default function FormTenant({
               </div>
             )}
 
+            <div>
+              <label className={labelClass}>¿Cómo pagará su plan?</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Cómo pagará su plan">
+                {([
+                  ['card', 'Con tarjeta en línea', 'Al entrar, la empresa autoriza su propia tarjeta en Mercado Pago; nadie más la ve. Se cobra sola cada periodo.'],
+                  ['manual', 'Por transferencia o convenio', 'La empresa paga y sube su comprobante para que lo apruebes en Cobros, o registras el pago a mano.'],
+                ] as const).map(([key, title, hint]) => (
+                  <OptionCard key={key} type="button" role="radio" aria-checked={formData.payment_method === key} data-payment-method={key} selected={formData.payment_method === key} onClick={() => set('payment_method', key)} className="text-left rounded-xl border px-3.5 py-3">
+                    <span className="block text-sm font-bold text-brand-ink">{title}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>
+                  </OptionCard>
+                ))}
+              </div>
+            </div>
+
             <p className={sectionClass}>Datos de la empresa</p>
 
             <div>
@@ -285,7 +303,7 @@ export default function FormTenant({
             <div>
               <label className={labelClass}>Correo del administrador *</label>
               <input type="email" required maxLength={190} value={formData.admin_email} onChange={(e) => set('admin_email', e.target.value)} className={inputClass} placeholder="admin@empresa.com" />
-              <span className="text-[10px] text-slate-400 mt-1 block">Será el dueño de la cuenta. Su contraseña inicial se genera y se muestra al crear.</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">Será el dueño de la cuenta. Le llegará un correo para crear su contraseña (si el correo de la plataforma no funciona, verás una contraseña temporal al crear).</span>
             </div>
 
             <p className={sectionClass}>Sistema</p>

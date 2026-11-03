@@ -34,7 +34,28 @@ class Subscriptions
 
     public static function graceDays(): int
     {
-        return max(0, (int) (PlatformSetting::value('grace_days') ?? 7));
+        return max(0, (int) (PlatformSetting::value('grace_days') ?? 3));
+    }
+
+    public static function unpaidTrial(Subscription $subscription): bool
+    {
+        return in_array($subscription->status, ['trialing', 'expired'], true)
+            && !(self::ready() && $subscription->card_status === 'authorized');
+    }
+
+    public static function graceFor(Subscription $subscription): int
+    {
+        return self::unpaidTrial($subscription) ? 0 : self::graceDays();
+    }
+
+    public static function periodFor(Subscription $subscription, string $cycle, ?Carbon $paidAt = null): array
+    {
+        $paidAt ??= now();
+        $base = self::endOf($subscription);
+        $current = in_array($subscription->status, ['active', 'trialing'], true) && $base && $base->gt($paidAt->copy()->subDays(self::graceFor($subscription)));
+        $start = $current ? $base->copy() : $paidAt->copy();
+
+        return [$start, $cycle === 'yearly' ? $start->copy()->addYear() : $start->copy()->addMonth()];
     }
 
     public static function latest(string $tenantId): ?Subscription
@@ -75,7 +96,7 @@ class Subscriptions
         }
 
         $end = self::endOf($subscription);
-        $graceEnd = $end?->copy()->addDays(self::graceDays());
+        $graceEnd = $end?->copy()->addDays(self::graceFor($subscription));
         $base = ['ends_at' => $end, 'grace_ends_at' => $graceEnd];
 
         if ($subscription->status === 'canceled') {
@@ -87,7 +108,7 @@ class Subscriptions
         }
 
         if (self::ready() && $subscription->status === 'trialing' && $subscription->requires_card
-            && $subscription->card_status !== 'authorized' && PlanBilling::enabled()) {
+            && $subscription->card_status === null && PlanBilling::cardEnabled()) {
             return ['state' => 'card_needed'] + $base;
         }
 
@@ -114,10 +135,7 @@ class Subscriptions
         $cycle = $values['billing_cycle'] ?? $subscription->billing_cycle;
         $paidAt = $values['paid_at'] ?? now();
         $wasTrial = $subscription->status === 'trialing';
-        $base = self::endOf($subscription);
-        $current = in_array($subscription->status, ['active', 'trialing'], true) && $base && $base->gt(now()->subDays(self::graceDays()));
-        $periodStart = $current ? $base->copy() : Carbon::parse($paidAt);
-        $periodEnd = $cycle === 'yearly' ? $periodStart->copy()->addYear() : $periodStart->copy()->addMonth();
+        [$periodStart, $periodEnd] = self::periodFor($subscription, $cycle, Carbon::parse($paidAt));
 
         $paidStatusId = Status::whereHas('module', fn ($q) => $q->where('name', 'payments'))
             ->whereNull('tenant_id')
@@ -188,10 +206,14 @@ class Subscriptions
             'message'       => in_array($state['state'], self::LOCKED_STATES, true) ? self::lockMessage($tenant) : null,
             'can_pay'       => (bool) ($user?->isTenantAdmin()),
             'online'        => PlanBilling::enabled(),
+            'methods'       => ['card' => PlanBilling::cardEnabled(), 'transfer' => PlanTransfers::enabled()],
+            'review'        => $subscription && ($pendingTransfer = PlanTransfers::pendingFor($subscription->id)) ? PlanTransfers::present($pendingTransfer) : null,
+            'rejected'      => $subscription && ($rejectedTransfer = PlanTransfers::lastRejected($subscription->id)) ? PlanTransfers::present($rejectedTransfer) : null,
             'simulated'     => PlanBilling::simulated(),
             'plan'          => $plan ? ['id' => $plan->id, 'name' => $plan->name, 'currency' => $plan->currency ?? 'PEN'] : null,
             'billing_cycle' => $subscription?->billing_cycle,
             'price'         => $subscription ? self::price($plan, $subscription->billing_cycle) : 0,
+            'next_period'   => $subscription ? array_map($day, self::periodFor($subscription, $subscription->pending_billing_cycle ?? $subscription->billing_cycle)) : null,
             'pending_plan'  => $pending ? ['id' => $pending->id, 'name' => $pending->name, 'billing_cycle' => $subscription->pending_billing_cycle, 'price' => self::price($pending, $subscription->pending_billing_cycle ?? 'monthly')] : null,
             'card'          => $subscription && self::ready() ? [
                 'required'      => (bool) $subscription->requires_card,

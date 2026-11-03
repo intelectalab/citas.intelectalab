@@ -152,7 +152,24 @@ export default function TenantsTable() {
       const res = await api.post('/tenants', formData);
       const owner = res.data?.owner;
 
-      if (owner?.temporary_password) {
+      if (owner?.invited) {
+        setModalConfig({
+          isOpen: true,
+          type: 'alert',
+          title: '¡Empresa creada!',
+          message: (
+            <span className="block space-y-3 pt-1" data-tenant-invited>
+              <span className="block text-sm text-slate-600">
+                {res.data?.data?.name} quedó lista. Le enviamos a <span className="font-semibold text-slate-800">{owner.email}</span> un correo de bienvenida para que cree su contraseña{formData.payment_method === 'card' ? ' y después autorice su tarjeta en Mercado Pago' : ''}.
+              </span>
+              <span className="block text-xs text-slate-500 bg-slate-100/80 border border-slate-200/60 p-3 rounded-xl font-medium">
+                El enlace vale 3 días. Si no le llega, en la página de la empresa (Personal → Acceso) puedes reenviarlo o darle una contraseña temporal.
+              </span>
+            </span>
+          ),
+          confirmText: 'Entendido',
+        });
+      } else if (owner?.temporary_password) {
         setModalConfig({
           isOpen: true,
           type: 'alert',
@@ -173,7 +190,7 @@ export default function TenantsTable() {
                 </span>
               </span>
               <span className="block text-xs text-slate-500 bg-slate-100/80 border border-slate-200/60 p-3 rounded-xl font-medium">
-                Cópiala ahora: no se vuelve a mostrar.
+                Cópiala ahora: no se vuelve a mostrar. Al entrar con ella, el sistema le pedirá crear su propia contraseña. (No se envió invitación porque el correo de la plataforma no está funcionando.)
               </span>
             </span>
           ),

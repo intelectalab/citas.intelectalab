@@ -9,6 +9,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError } from '@/features/appointments/appointments';
 import { momentOf } from '@/features/sales/sales';
+import Switch from '@/app/components/common/Switch';
 
 interface PlatformMailData {
   configured: boolean;
@@ -38,6 +39,7 @@ export default function PlatformMailCard() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [codes, setCodes] = useState<{ mfa_tenant_admins: boolean; mfa_platform: boolean } | null>(null);
 
   const apply = (payload: PlatformMailData) => {
     setData(payload);
@@ -56,7 +58,27 @@ export default function PlatformMailCard() {
     api.get('/admin/platform-mail')
       .then((res) => apply(res.data))
       .catch((err) => setError(apiError(err, 'No se pudo cargar el correo de la plataforma.')));
+    api.get('/admin/platform-settings')
+      .then((res) => setCodes({ mfa_tenant_admins: Boolean(res.data.values.mfa_tenant_admins), mfa_platform: Boolean(res.data.values.mfa_platform) }))
+      .catch(() => setCodes(null));
   }, []);
+
+  const saveCodes = async (key: 'mfa_tenant_admins' | 'mfa_platform', on: boolean) => {
+    try {
+      setBusy(key);
+      setError('');
+      setNotice('');
+      const res = await api.put('/admin/platform-settings', { [key]: on });
+      setCodes({ mfa_tenant_admins: Boolean(res.data.values.mfa_tenant_admins), mfa_platform: Boolean(res.data.values.mfa_platform) });
+      setNotice(key === 'mfa_platform'
+        ? (on ? 'Desde ahora las cuentas de la plataforma entran con código.' : 'Las cuentas de la plataforma entran sin código.')
+        : (on ? 'Las empresas que no lo cambiaron piden código a sus administradores.' : 'Las empresas que no lo cambiaron dejan de pedir código a sus administradores.'));
+    } catch (err) {
+      setError(apiError(err, 'No se pudo guardar.'));
+    } finally {
+      setBusy('');
+    }
+  };
 
   useEffect(() => {
     if (user?.email && !testTo) setTestTo(user.email);
@@ -179,9 +201,27 @@ export default function PlatformMailCard() {
           </button>
         </div>
         <p className="text-xs text-slate-500">
-          {data.tested_at ? `Última prueba ${momentOf(data.tested_at)}: ${data.test_ok ? 'llegó bien.' : 'falló.'}` : 'Los códigos para entrar se empiezan a pedir solo cuando una prueba sale bien.'}
+          {data.tested_at ? `Última prueba ${momentOf(data.tested_at)}: ${data.test_ok ? 'llegó bien.' : 'falló.'}` : 'El correo empieza a usarse cuando una prueba sale bien.'}
         </p>
       </div>
+
+      {codes && (
+        <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100" data-code-switches>
+          {([
+            ['mfa_tenant_admins', 'Pedir código al entrar a los administradores de las empresas', 'Es el valor inicial. Cada empresa lo enciende o lo apaga en su propio panel (Configuración → Cierre de sesión), y eso solo cambia esa empresa.'],
+            ['mfa_platform', 'Pedir código al entrar a las cuentas de la plataforma', 'Para el superadmin y soporte. Enciéndelo solo si sus correos existen y los revisan.'],
+          ] as const).map(([key, title, hint]) => (
+            <div key={key} className="flex items-center justify-between gap-4 px-4 py-3.5" data-code-switch={key}>
+              <span>
+                <span className="block text-sm font-semibold text-slate-800">{title}</span>
+                <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>
+              </span>
+              <Switch checked={codes[key]} disabled={busy !== ''} onChange={(on) => saveCodes(key, on)} label={title} />
+            </div>
+          ))}
+          {!data.ready && <p className="px-4 py-2.5 text-xs text-amber-800 bg-amber-50 rounded-b-2xl">Aunque estén encendidos, no se pide código mientras el correo no esté funcionando.</p>}
+        </div>
+      )}
 
       <SuccessAlert message={notice} />
       <ErrorAlert message={error} />

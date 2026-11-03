@@ -135,7 +135,7 @@ class PlatformLook
     {
         $payload = Cache::rememberForever(self::CACHE_KEY, fn () => PlatformSetting::publicValues() + ['look' => self::present()]);
         $payload['look']['maintenance'] = self::maintenance();
-        $payload['card_on_signup'] = PlanBilling::enabled();
+        $payload['card_on_signup'] = PlanBilling::cardEnabled();
 
         return $payload;
     }

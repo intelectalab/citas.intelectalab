@@ -10,6 +10,7 @@ import Switch from '@/app/components/common/Switch';
 import PlatformCurrencies from './PlatformCurrencies';
 import PlatformBilling from './PlatformBilling';
 import PlatformMailCard from './PlatformMailCard';
+import PlatformPayMethods from './PlatformPayMethods';
 
 interface PlatformValues {
   product_name: string;
@@ -75,7 +76,15 @@ export default function PlatformSettings() {
     try {
       setSaving(true);
       setMessage(null);
-      const res = await api.put('/admin/platform-settings', { ...values, support_email: values.support_email || null });
+      const general = {
+        product_name: values.product_name,
+        accent_color: values.accent_color,
+        usage_warning_percent: values.usage_warning_percent,
+        usage_danger_percent: values.usage_danger_percent,
+        allow_tenant_signup: values.allow_tenant_signup,
+        impersonation_hours: values.impersonation_hours,
+      };
+      const res = await api.put('/admin/platform-settings', { ...general, support_email: values.support_email || null });
       setValues(res.data.values);
       applyPlatform(res.data.values);
       setMessage({ type: 'ok', text: 'Configuración guardada.' });
@@ -198,6 +207,8 @@ export default function PlatformSettings() {
       </div>
 
       <PlatformMailCard />
+
+      <PlatformPayMethods />
 
       <PlatformBilling />
 

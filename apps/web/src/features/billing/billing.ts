@@ -14,6 +14,10 @@ export interface Billing {
   billing_cycle: 'monthly' | 'yearly' | null;
   price: number;
   pending_plan: { id: string; name: string; billing_cycle: 'monthly' | 'yearly' | null; price: number } | null;
+  methods?: { card: boolean; transfer: boolean };
+  next_period?: [string, string] | null;
+  review?: TransferPayment | null;
+  rejected?: TransferPayment | null;
   card: {
     required: boolean;
     status: 'authorized' | 'cancelled' | null;
@@ -24,10 +28,42 @@ export interface Billing {
   } | null;
 }
 
+export interface TransferAccount {
+  id: string;
+  type: 'bank' | 'yape' | 'plin';
+  label?: string;
+  bank?: string;
+  holder?: string;
+  account_number?: string;
+  cci?: string;
+  currency?: string;
+  phone?: string;
+  qr?: string;
+}
+
+export interface TransferPayment {
+  id: string;
+  status: 'review' | 'paid' | 'rejected';
+  amount: number;
+  currency: string;
+  plan?: string;
+  billing_cycle?: string;
+  method?: string;
+  operation_number?: string;
+  paid_on?: string;
+  message?: string;
+  sent_at: string;
+  reviewed_at?: string;
+  reviewer?: string;
+  tenant?: { id: string; name: string };
+  voucher_type?: 'image' | 'pdf';
+  period?: [string, string];
+}
+
 export interface PlanPayment {
   id: string;
-  kind: 'link' | 'card' | 'charge';
-  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'expired';
+  kind: 'link' | 'card' | 'charge' | 'transfer';
+  status: 'pending' | 'review' | 'paid' | 'failed' | 'rejected' | 'cancelled' | 'expired';
   amount: number;
   currency: string;
   provider: string;
@@ -75,10 +111,13 @@ export const PAYMENT_KINDS: Record<PlanPayment['kind'], string> = {
   link: 'Pago en línea',
   card: 'Autorización de tarjeta',
   charge: 'Cobro automático',
+  transfer: 'Transferencia',
 };
 
 export const PAYMENT_STATUS: Record<PlanPayment['status'], { label: string; badge: string }> = {
   pending: { label: 'Pendiente', badge: 'bg-slate-100 text-slate-600' },
+  review: { label: 'En revisión', badge: 'bg-amber-50 text-amber-800' },
+  rejected: { label: 'No confirmado', badge: 'bg-rose-50 text-rose-700' },
   paid: { label: 'Listo', badge: 'bg-emerald-50 text-emerald-700' },
   failed: { label: 'Rechazado', badge: 'bg-rose-50 text-rose-700' },
   cancelled: { label: 'Anulado', badge: 'bg-slate-100 text-slate-500' },
@@ -90,6 +129,7 @@ export const INVOICE_REASONS: Record<string, string> = {
   subscription_cycle: 'Cobro automático',
   online: 'Pago en línea',
   manual: 'Registrado por la plataforma',
+  transfer: 'Transferencia',
 };
 
 export const cycleLabel = (cycle: string | null | undefined) => (cycle === 'yearly' ? 'al año' : 'al mes');
