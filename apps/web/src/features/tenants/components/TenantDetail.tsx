@@ -59,7 +59,7 @@ interface TenantDetailData {
   plan_payments?: PlanPayment[];
   modules: TenantModule[];
   usage: Array<{ key: string; used: number; limit: number | null }>;
-  users: Array<{ id: string; first_name: string; last_name: string; email: string; status: string; is_owner: boolean; role: string | null }>;
+  users: Array<{ id: string; first_name: string; last_name: string; email: string; status: string; is_owner: boolean; role: string | null; security?: { mfa_mode: string | null; mfa_active: boolean; locked_minutes: number | null } }>;
   customer_accounts: number;
   can_impersonate: boolean;
   settings?: {
@@ -759,7 +759,7 @@ export default function TenantDetail() {
               {detail.users.map((member) => {
                 const fullName = `${member.first_name || ''} ${member.last_name || ''}`.trim();
                 return (
-                  <div key={member.id} className="flex items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl">
+                  <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-full bg-brand/10 text-brand-ink font-bold text-sm flex items-center justify-center shrink-0">
                         {(fullName || 'U').charAt(0).toUpperCase()}
@@ -773,6 +773,18 @@ export default function TenantDetail() {
                       {member.status !== 'active' && <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[11px] rounded-md font-medium">Desactivada</span>}
                       {member.role && <span className="px-2 py-0.5 bg-white border border-slate-200 text-slate-700 text-[11px] rounded-md font-medium">{member.role}</span>}
                     </div>
+                    {canManage && member.security && (member.security.locked_minutes || member.security.mfa_active || member.security.mfa_mode === 'off') && (
+                      <div className="basis-full flex flex-wrap items-center gap-2 text-[11px]" data-member-security={member.email}>
+                        {member.security.locked_minutes ? (
+                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/tenants/${detail.id}/users/${member.id}/security`, { action: 'unlock' }), 'Cuenta desbloqueada.')} className="px-2 py-0.5 rounded-md font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100">Bloqueada · desbloquear</button>
+                        ) : null}
+                        {member.security.mfa_mode === 'off' ? (
+                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/tenants/${detail.id}/users/${member.id}/security`, { action: 'code_default' }), 'Se le volverá a pedir el código según su rol.')} className="px-2 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100">Sin código · volver a pedirlo</button>
+                        ) : member.security.mfa_active ? (
+                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/tenants/${detail.id}/users/${member.id}/security`, { action: 'code_off' }), 'Ya no se le pide el código al entrar.')} className="px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">Código al entrar · quitárselo</button>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 );
               })}

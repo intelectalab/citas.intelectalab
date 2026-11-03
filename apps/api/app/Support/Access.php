@@ -611,7 +611,7 @@ class Access
                 $actions[] = [
                     'action'   => $action,
                     'name'     => $name,
-                    'label'    => self::ACTIONS[$action] ?? self::SPECIAL[$action],
+                    'label'    => self::ACTIONS[$action] ?? self::SPECIAL[$action] ?? self::LAYOUT[$key]['short'][$action] ?? $action,
                     'short'    => isset(self::SPECIAL[$action]) ? ($name === 'data.export' ? 'Exportar datos' : self::SPECIAL[$action]) : (self::LAYOUT[$key]['short'][$action] ?? self::ACTIONS[$action]),
                     'special'  => isset(self::SPECIAL[$action]),
                     'hint'     => $text($hint),

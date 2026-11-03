@@ -62,8 +62,8 @@ export default function PlatformBilling() {
       setNotice(!connect
         ? data.connected ? 'Listo: la plataforma ya no cobra los planes en línea.' : 'Cambios guardados.'
         : mode === 'production'
-          ? 'Mercado Pago conectado: los planes de las empresas se cobran de verdad.'
-          : 'Mercado Pago conectado en modo de pruebas: los cobros no mueven dinero real.');
+          ? 'Mercado Pago quedó conectado. Los planes de las empresas se pagan con la cuenta de la plataforma.'
+          : 'Mercado Pago quedó conectado en modo de pruebas. Usa las tarjetas de prueba: lo que se pague no llega a la cuenta.');
     } catch (err) {
       setError(apiError(err, 'No se pudo guardar.'));
     } finally {
@@ -107,7 +107,7 @@ export default function PlatformBilling() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {([
-          ['Estado', data.connected ? `Conectado${data.mode === 'production' ? ' · real' : ' · pruebas'}` : data.simulation ? 'Simulación (solo pruebas)' : 'Sin conectar'],
+          ['Estado', data.connected ? `Conectado${data.mode === 'production' ? ' · producción' : ' · pruebas'}` : data.simulation ? 'Simulación (solo pruebas)' : 'Sin conectar'],
           ['Tarjetas autorizadas', String(data.summary.cards)],
           ['Cobros con problema', String(data.summary.failed)],
         ] as [string, string][]).map(([label, value]) => (
@@ -121,8 +121,8 @@ export default function PlatformBilling() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Modo de cobro">
         {([
-          ['sandbox', 'Pruebas', 'Credenciales de prueba: no se mueve dinero.'],
-          ['production', 'Real', 'Credenciales de producción: se cobra de verdad.'],
+          ['sandbox', 'Pruebas', 'Credenciales de prueba, para probar con tarjetas de prueba.'],
+          ['production', 'Producción', 'Credenciales de producción: lo que paguen las empresas llega a la cuenta.'],
         ] as const).map(([key, label, hint]) => (
           <OptionCard key={key} type="button" role="radio" aria-checked={mode === key} data-mode={key} selected={mode === key} onClick={() => setMode(key)} className="text-left rounded-xl border px-3.5 py-3 transition-colors">
             <span className="block text-sm font-bold text-brand-ink">{label}</span>
@@ -144,7 +144,7 @@ export default function PlatformBilling() {
 
       <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-3">
         <span className="block text-xs font-bold text-slate-700">Avisos de Mercado Pago</span>
-        <p className="text-xs text-slate-600">En la aplicación de Mercado Pago, entra a Webhooks, pega esta dirección y marca los eventos <span className="font-semibold">Order (Mercado Pago)</span>, <span className="font-semibold">Planes y suscripciones</span> y <span className="font-semibold">Pagos recurrentes</span>. Copia aquí la clave secreta. Sin avisos, el sistema igual revisa los cobros cada 15 minutos.</p>
+        <p className="text-xs text-slate-600">En la aplicación de Mercado Pago, entra a Webhooks, pega esta dirección y marca solo los eventos <span className="font-semibold">Order (Mercado Pago)</span> y <span className="font-semibold">Planes y suscripciones</span>. Copia aquí la firma secreta. Mercado Pago admite una sola dirección por aplicación: usa una aplicación para la plataforma y otra para cada empresa. Sin avisos, el sistema igual revisa los cobros cada 15 minutos.</p>
         <div className="flex flex-col sm:flex-row gap-2">
           <input readOnly aria-label="Dirección de avisos de la plataforma" value={data.webhook_url} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs flex-1`} />
           <button type="button" data-platform-webhook-copy onClick={copy} className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-xl text-slate-700 hover:bg-slate-50 transition-colors">

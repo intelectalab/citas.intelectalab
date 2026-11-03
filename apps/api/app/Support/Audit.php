@@ -84,6 +84,13 @@ class Audit
         'auth.idle_logout'                => ['Se cerró su sesión por inactividad', 'access'],
         'auth.failed'                     => ['Escribió una contraseña equivocada', 'access'],
         'auth.blocked'                    => ['No pudo entrar: cuenta desactivada o empresa suspendida', 'access'],
+        'auth.locked'                     => ['Su cuenta se bloqueó por intentos fallidos', 'access'],
+        'auth.code_failed'                => ['Escribió mal el código de ingreso', 'access'],
+        'auth.code_skipped'               => ['Entró sin código porque el correo de la plataforma falló', 'access'],
+        'auth.reset_requested'            => ['Pidió recuperar su contraseña', 'access'],
+        'auth.password_reset'             => ['Cambió su contraseña con el enlace del correo', 'access'],
+        'platform.mail_changed'           => ['Cambió el correo de la plataforma', 'platform'],
+        'tenant.user_security'            => ['Cambió el ingreso de una cuenta de una empresa', 'support'],
     ];
 
     public const LOOK_SECTIONS = [
@@ -107,6 +114,7 @@ class Audit
         'profesional' => 'Profesional', 'archivo' => 'Archivo', 'title' => 'Lista', 'format' => 'Formato', 'rows' => 'Filas',
         'filters' => 'Filtros', 'scope' => 'Qué se descargó', 'limit' => 'Primeras filas', 'columns' => 'Columnas', 'branch' => 'Sede', 'max_users' => 'Usuarios', 'max_professionals' => 'Profesionales',
         'text' => 'Detalle',
+        'host' => 'Servidor', 'port' => 'Puerto', 'security' => 'Seguridad', 'username' => 'Usuario', 'from_address' => 'Correo remitente', 'from_name' => 'Nombre remitente', 'password' => 'Contraseña', 'mfa_mode' => 'Código al entrar', 'locked' => 'Bloqueo',
         'grace_days' => 'Días de gracia', 'payment_provider' => 'Pasarela de pagos', 'payment_mode' => 'Modo de cobro', 'public_key' => 'Public Key', 'secret_key' => 'Access Token', 'webhook_secret' => 'Clave secreta de avisos',
         'pending_plan_id' => 'Plan siguiente', 'pending_billing_cycle' => 'Ciclo siguiente', 'billing_cycle' => 'Ciclo', 'card_status' => 'Tarjeta',
         'client' => 'Quien se atiende (singular)', 'clients' => 'Quienes se atienden (plural)', 'pro' => 'Quien atiende (singular)', 'pros' => 'Quienes atienden (plural)',

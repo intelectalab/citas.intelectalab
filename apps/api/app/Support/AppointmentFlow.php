@@ -85,6 +85,7 @@ class AppointmentFlow
         'campaigns.manager_scope'     => 'branch',
         'booking.count_late_cancel'   => false,
         'help.enabled'                => true,
+        'security.mfa_admin'          => true,
         'crm.inactive_days'           => 60,
         'crm.frequent_visits'         => 4,
         'crm.vip_spend'               => 1500,

@@ -246,6 +246,12 @@ export default function UsersRolesBoard() {
             {user.status === 'active' ? 'Activo' : 'Desactivado'}
           </Badge>
           <span className="block mt-1 text-[11px] text-slate-400" data-last-login>{user.last_login_at ? `Entró ${momentOf(user.last_login_at)}` : 'Todavía no entra'}</span>
+          {(user.security?.mfa_active || user.security?.locked_minutes) && (
+            <span className="flex flex-wrap gap-1 mt-1">
+              {user.security?.mfa_active && <span data-user-2fa className="px-1.5 py-0.5 text-[10px] rounded font-bold bg-emerald-50 text-emerald-700">Código al entrar</span>}
+              {user.security?.locked_minutes && <span data-user-locked className="px-1.5 py-0.5 text-[10px] rounded font-bold bg-rose-50 text-rose-700">Bloqueada</span>}
+            </span>
+          )}
         </div>
       ),
     },

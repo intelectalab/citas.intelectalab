@@ -9,6 +9,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import Switch from '@/app/components/common/Switch';
 import PlatformCurrencies from './PlatformCurrencies';
 import PlatformBilling from './PlatformBilling';
+import PlatformMailCard from './PlatformMailCard';
 
 interface PlatformValues {
   product_name: string;
@@ -195,6 +196,8 @@ export default function PlatformSettings() {
           {saving ? 'Guardando...' : 'Guardar cambios'}
         </button>
       </div>
+
+      <PlatformMailCard />
 
       <PlatformBilling />
 

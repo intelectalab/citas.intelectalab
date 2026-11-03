@@ -278,6 +278,25 @@ class TenantController extends Controller
         );
     }
 
+    public function userSecurity(Request $request, string $tenant, string $user)
+    {
+        $tenant = Tenant::findOrFail($tenant);
+        $target = \App\Models\User::where('tenant_id', $tenant->id)->findOrFail($user);
+        abort_unless(\App\Support\AccountSecurity::ready(), 503, 'Falta actualizar la base de datos: ejecuta php artisan migrate.');
+        $action = $request->validate(['action' => ['required', \Illuminate\Validation\Rule::in(['unlock', 'code_off', 'code_default'])]])['action'];
+        $before = ['mfa_mode' => $target->mfa_mode, 'locked' => (bool) \App\Support\AccountSecurity::lockedMinutes($target)];
+
+        if ($action === 'unlock') {
+            \App\Support\AccountSecurity::unlock($target);
+        } else {
+            $target->forceFill(['mfa_mode' => $action === 'code_off' ? 'off' : null])->saveQuietly();
+        }
+
+        AuditEvent::record($request, 'tenant.user_security', $tenant, $before, ['user' => $target->email, 'mfa_mode' => $target->mfa_mode, 'locked' => (bool) \App\Support\AccountSecurity::lockedMinutes($target)]);
+
+        return response()->json($this->detail($tenant));
+    }
+
     public function detail(Tenant $tenant): array
     {
         $tenant = Tenant::with(['businessType', 'settings', 'company', 'users.roles'])->findOrFail($tenant->id);
@@ -376,6 +395,7 @@ class TenantController extends Controller
                 'status'     => $user->status,
                 'is_owner'   => $user->is_owner,
                 'role'       => $user->is_owner ? 'Dueño' : $user->roles->first()?->name,
+                'security'   => \App\Support\AccountSecurity::present($user),
             ]),
             'settings' => [
                 'vocabulary'            => $tenant->vocabulary(),

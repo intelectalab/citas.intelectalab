@@ -66,6 +66,11 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CurrencyController;
 
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/login/verify', [LoginController::class, 'verify'])->middleware('throttle:10,1');
+Route::post('/login/resend', [LoginController::class, 'resend'])->middleware('throttle:5,1');
+Route::post('/password/forgot', [\App\Http\Controllers\Auth\PasswordController::class, 'forgot'])->middleware('throttle:5,1');
+Route::get('/password/reset/{token}', [\App\Http\Controllers\Auth\PasswordController::class, 'show'])->middleware('throttle:20,1');
+Route::post('/password/reset', [\App\Http\Controllers\Auth\PasswordController::class, 'reset'])->middleware('throttle:10,1');
 Route::post('/register-customer', [RegisterCustomerController::class, 'register'])->middleware('throttle:10,1');
 Route::get('/signup-info/{code}', [BrandingController::class, 'signupInfo'])->middleware('throttle:20,1');
 Route::post('/register-tenant', [RegisterTenantController::class, 'register']);
@@ -125,6 +130,11 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
 
         Route::apiResource('saas-plans', SaaSPlanController::class);
         Route::get('/admin/platform-settings', [PlatformSettingController::class, 'show']);
+        Route::get('/admin/platform-mail', [\App\Http\Controllers\Api\PlatformMailController::class, 'show']);
+        Route::put('/admin/platform-mail', [\App\Http\Controllers\Api\PlatformMailController::class, 'update']);
+        Route::delete('/admin/platform-mail', [\App\Http\Controllers\Api\PlatformMailController::class, 'destroy']);
+        Route::post('/admin/platform-mail/test', [\App\Http\Controllers\Api\PlatformMailController::class, 'test'])->middleware('throttle:10,1');
+        Route::post('/tenants/{tenant}/users/{user}/security', [TenantController::class, 'userSecurity']);
         Route::get('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'show']);
         Route::put('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'update']);
         Route::post('/admin/billing/test', [\App\Http\Controllers\Api\PlatformBillingController::class, 'test']);
@@ -495,6 +505,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan'])->group(function () {
         Route::middleware('perm:users.edit')->group(function () {
             Route::put('/users/{user}', [AccessController::class, 'updateUser']);
             Route::post('/users/{user}/password', [AccessController::class, 'resetPassword']);
+            Route::post('/users/{user}/security', [AccessController::class, 'security']);
             Route::put('/users/{user}/permissions', [AccessController::class, 'setUserPermission']);
             Route::delete('/users/{user}/permissions', [AccessController::class, 'resetUserPermissions']);
             Route::put('/roles/{role}', [AccessController::class, 'updateRole']);

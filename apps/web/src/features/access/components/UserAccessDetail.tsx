@@ -47,7 +47,8 @@ const FOCUS_TITLES: Record<string, string> = {
 
 export default function UserAccessDetail() {
   const params = useParams<{ id: string }>();
-  const { can } = useAuth();
+  const { can, user: me } = useAuth();
+  const isAdmin = Boolean(me?.is_tenant_admin);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,6 +79,27 @@ export default function UserAccessDetail() {
       setDetail(res.data);
     } catch (err) {
       setError(apiError(err, 'No se pudo cambiar el permiso.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const security = async (action: 'unlock' | 'require_code' | 'default_code') => {
+    if (!detail) return;
+
+    try {
+      setBusy(action);
+      setError('');
+      setNotice('');
+      const res = await api.post(`/access/users/${detail.user.id}/security`, { action });
+      setDetail(res.data);
+      setNotice(action === 'unlock'
+        ? `${detail.user.name} ya puede volver a entrar.`
+        : action === 'require_code'
+          ? `Desde ahora ${detail.user.name} recibirá un código por correo cada vez que entre.`
+          : `${detail.user.name} vuelve a lo de su rol: no se le pide código.`);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo completar.'));
     } finally {
       setBusy('');
     }
@@ -219,6 +241,29 @@ export default function UserAccessDetail() {
               <Link href={`/professionals/${user.professional_id}`} className="flex items-center gap-2 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                 <Contact size={15} /> Atiende citas: ver su horario y sus citas
               </Link>
+            )}
+            {user.security && (
+              <div className="rounded-xl border border-slate-200 p-3 space-y-2" data-user-security>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-700">Código por correo al entrar</span>
+                  <Badge tone={user.security.mfa_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
+                    {user.security.mfa_mode === 'off' ? 'Quitado por la plataforma' : user.security.mfa_active ? (user.security.mfa_mode === 'required' ? 'Siempre' : 'Por ser administrador') : 'No'}
+                  </Badge>
+                </div>
+                {isAdmin && detail.can_edit && user.security.mfa_mode !== 'off' && !(user.security.mfa_active && user.security.mfa_mode !== 'required') && (
+                  <button type="button" data-action="toggle-code" disabled={busy !== ''} onClick={() => security(user.security?.mfa_mode === 'required' ? 'default_code' : 'require_code')} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors disabled:opacity-50">
+                    {user.security.mfa_mode === 'required' ? 'Dejar de pedirle el código' : 'Pedirle siempre el código'}
+                  </button>
+                )}
+                {user.security.locked_minutes && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <span className="text-xs font-semibold text-rose-700" data-user-locked>Bloqueada {user.security.locked_minutes} min por intentos fallidos</span>
+                    {detail.can_edit && (
+                      <button type="button" data-action="unlock" disabled={busy !== ''} onClick={() => security('unlock')} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors disabled:opacity-50">Desbloquear</button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
             {detail.can_edit && !user.is_owner && !user.is_self && (
               <button type="button" data-action="new-password" onClick={() => { setError(''); setNotice(''); setConfirm('password'); }} className="flex items-center gap-2 text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">

@@ -39,6 +39,14 @@ export interface StaffUser {
   revoked?: number;
   created_at?: string;
   last_login_at?: string | null;
+  security?: AccountSecurityInfo;
+}
+
+export interface AccountSecurityInfo {
+  mfa_mode: 'required' | 'off' | null;
+  mfa_active: boolean;
+  locked_until: string | null;
+  locked_minutes: number | null;
 }
 
 export interface GridAction {

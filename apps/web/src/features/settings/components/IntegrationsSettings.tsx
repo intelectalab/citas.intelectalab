@@ -200,8 +200,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
       apply(res.data);
       setNotice(isMercadoPago
         ? mode === 'production'
-          ? 'Mercado Pago conectado: los links de pago, los adelantos y los paquetes en línea ya cobran de verdad.'
-          : 'Mercado Pago conectado en modo de pruebas: los cobros usan tus credenciales de prueba y no mueven dinero real.'
+          ? 'Mercado Pago quedó conectado. Los links de pago, los adelantos y los paquetes en línea se pagan con la cuenta de Mercado Pago de tu empresa.'
+          : 'Mercado Pago quedó conectado en modo de pruebas. Usa las tarjetas de prueba de Mercado Pago: lo que se pague no llega a tu cuenta.'
         : isReal
           ? `Guardamos las llaves de ${provider?.label}. Todavía no se cobra con ${provider?.label}: aún no está conectado al sistema.`
           : chosen === 'none'
@@ -274,8 +274,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
               <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Modo</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Modo de cobro">
                 {([
-                  ['sandbox', 'Pruebas', 'Con credenciales de prueba: no se mueve dinero real.'],
-                  ['production', 'Real', 'Con credenciales de producción: se cobra de verdad.'],
+                  ['sandbox', 'Pruebas', 'Con las credenciales de prueba, para probar con tarjetas de prueba.'],
+                  ['production', 'Producción', 'Con las credenciales de producción: lo que paguen tus pacientes llega a tu cuenta.'],
                 ] as const).map(([key, label, hint]) => (
                   <OptionCard key={key} type="button" role="radio" aria-checked={mode === key} data-mode={key} disabled={!canSave} selected={mode === key} onClick={() => { setMode(key); setNotice(''); }} className="text-left rounded-xl border px-3.5 py-3 transition-colors">
                     <span className="block text-sm font-bold text-brand-ink">{label}</span>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\AccountSecurity;
 use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -17,6 +18,7 @@ class LoginController extends Controller
             'email'      => ['required', 'email'],
             'password'   => ['required', 'string'],
             'account_id' => ['nullable', 'uuid'],
+            'device_token' => ['nullable', 'string', 'max:100'],
         ]);
 
         $email = trim($credentials['email']);
@@ -37,7 +39,9 @@ class LoginController extends Controller
         }
 
         if ($matches->isEmpty()) {
-            foreach ($staff->concat($customers) as $attempted) {
+            $attempts = $staff->concat($customers);
+
+            foreach ($attempts as $attempted) {
                 Audit::log($request, 'auth.failed', [
                     'actor'       => $attempted,
                     'tenant'      => $attempted->tenant_id,
@@ -45,6 +49,13 @@ class LoginController extends Controller
                     'entity_type' => $attempted instanceof Customer ? 'customer' : 'user',
                     'entity_id'   => $attempted->id,
                 ]);
+                AccountSecurity::failed($request, $attempted);
+            }
+
+            $locked = $attempts->map(fn (User|Customer $attempted) => AccountSecurity::lockedMinutes($attempted))->filter();
+
+            if ($attempts->isNotEmpty() && $locked->count() === $attempts->count()) {
+                return response()->json(['message' => self::lockedMessage($locked->min()), 'code' => 'ACCOUNT_LOCKED'], 423);
             }
 
             return response()->json([
@@ -84,7 +95,13 @@ class LoginController extends Controller
             ], 403);
         }
 
-        $matches = $allowed;
+        $unlocked = $allowed->reject(fn (User|Customer $account) => AccountSecurity::lockedMinutes($account))->values();
+
+        if ($unlocked->isEmpty()) {
+            return response()->json(['message' => self::lockedMessage($allowed->map(fn (User|Customer $account) => AccountSecurity::lockedMinutes($account))->min()), 'code' => 'ACCOUNT_LOCKED'], 423);
+        }
+
+        $matches = $unlocked;
 
         if ($matches->count() > 1) {
             return response()->json([
@@ -101,6 +118,67 @@ class LoginController extends Controller
         }
 
         $account = $matches->first();
+        AccountSecurity::succeeded($account);
+
+        if (AccountSecurity::codeRequired($account) && !AccountSecurity::trusted($account, $credentials['device_token'] ?? null)) {
+            try {
+                return response()->json(AccountSecurity::challenge($request, $account));
+            } catch (\Throwable $e) {
+                report($e);
+                \App\Support\PlatformMail::markFailed($e, 'un código de ingreso');
+                Audit::log($request, 'auth.code_skipped', [
+                    'actor'        => $account,
+                    'tenant'       => $account->tenant_id,
+                    'impersonator' => null,
+                    'entity_type'  => $account instanceof Customer ? 'customer' : 'user',
+                    'entity_id'    => $account->id,
+                ]);
+            }
+        }
+
+        return response()->json(self::issue($request, $account));
+    }
+
+    public static function lockedMessage(?int $minutes): string
+    {
+        $minutes = max(1, (int) $minutes);
+
+        return "Por seguridad bloqueamos tu cuenta después de varios intentos fallidos. Vuelve a intentarlo en {$minutes} " . ($minutes === 1 ? 'minuto' : 'minutos') . ', o usa "¿Olvidaste tu contraseña?".';
+    }
+
+    public function verify(Request $request)
+    {
+        $validated = $request->validate([
+            'challenge' => ['required', 'string'],
+            'code'      => ['required', 'string', 'max:12'],
+            'trust'     => ['sometimes', 'boolean'],
+        ], ['code.required' => 'Escribe el código que te llegó al correo.']);
+
+        $account = AccountSecurity::verify($request, $validated['challenge'], $validated['code']);
+        $active = $account instanceof Customer ? $account->portal_enabled !== false : $account->status === 'active';
+        abort_unless($active && (is_null($account->tenant_id) || $account->tenant?->isActive()), 403, 'Tu cuenta ya no tiene acceso. Comunícate con el administrador.');
+
+        return response()->json(self::issue($request, $account) + (!empty($validated['trust']) ? ['device_token' => AccountSecurity::trust($request, $account)] : []));
+    }
+
+    public function resend(Request $request)
+    {
+        $challenge = $request->validate(['challenge' => ['required', 'string']])['challenge'];
+
+        try {
+            return response()->json(AccountSecurity::resend($request, $challenge));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            \App\Support\PlatformMail::markFailed($e, 'un código de ingreso');
+
+            return response()->json(['message' => 'No pudimos enviar otro código. Pulsa "Volver" y escribe tu contraseña de nuevo: esta vez entrarás sin código.', 'code' => 'CODE_NOT_SENT'], 503);
+        }
+    }
+
+    private static function issue(Request $request, User|Customer $account): array
+    {
         $token = $account->createToken('auth_token')->plainTextToken;
 
         Audit::log($request, 'auth.login', [
@@ -115,11 +193,11 @@ class LoginController extends Controller
             $account->forceFill(['last_login_at' => now()])->saveQuietly();
         }
 
-        return response()->json([
+        return [
             'access_token' => $token,
             'token_type' => 'Bearer',
             'user' => self::sessionUser($account),
-        ]);
+        ];
     }
 
     public static function sessionUser(User|Customer $account): array

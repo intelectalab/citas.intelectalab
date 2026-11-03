@@ -233,7 +233,7 @@ class PaymentController extends Controller
                 $to['webhook_secret'] = 'Cambiada';
             }
             if (($current?->mode ?? null) !== $values['mode']) {
-                $to['payment_mode'] = $values['mode'] === 'production' ? 'Real' : ($values['mode'] === 'sandbox' ? 'Pruebas' : 'Simulación');
+                $to['payment_mode'] = $values['mode'] === 'production' ? 'Producción' : ($values['mode'] === 'sandbox' ? 'Pruebas' : 'Simulación');
             }
         }
         if ($to) {

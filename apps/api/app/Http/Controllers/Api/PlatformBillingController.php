@@ -110,7 +110,7 @@ class PlatformBillingController extends Controller
 
             $after += array_filter([
                 'payment_provider' => $row ? null : 'Mercado Pago',
-                'payment_mode'     => ($row?->mode ?? null) !== $values['mode'] ? ($values['mode'] === 'production' ? 'Real' : 'Pruebas') : null,
+                'payment_mode'     => ($row?->mode ?? null) !== $values['mode'] ? ($values['mode'] === 'production' ? 'Producción' : 'Pruebas') : null,
                 'public_key'       => trim((string) ($validated['public_key'] ?? '')) !== '' ? 'Cambiada' : null,
                 'secret_key'       => trim((string) ($validated['secret_key'] ?? '')) !== '' ? 'Cambiada' : null,
                 'webhook_secret'   => trim((string) ($validated['webhook_secret'] ?? '')) !== '' ? 'Cambiada' : null,

@@ -47,6 +47,8 @@ interface SettingsPayload {
   session_idle_minutes?: number;
   session_idle_roles?: { id: string; name: string; minutes: number | null }[];
   help_enabled?: boolean;
+  mfa_admin?: boolean;
+  mfa_ready?: boolean;
   session_portal_idle_minutes?: number;
   customer_groups?: { inactive_days: number; frequent_visits: number; vip_spend: number; manager_scope?: 'branch' | 'choose' } | null;
 }
@@ -157,6 +159,8 @@ export default function TenantSettings() {
   const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
   const [idleRoles, setIdleRoles] = useState<{ id: string; name: string; value: IdleValue | null }[]>([]);
   const [helpOn, setHelpOn] = useState(true);
+  const [mfaAdmin, setMfaAdmin] = useState(true);
+  const [mfaReady, setMfaReady] = useState(false);
   const [portalIdle, setPortalIdle] = useState<{ on: boolean } & IdleValue>({ on: false, choice: '30', custom: '' });
   const [groups, setGroups] = useState<{ inactive: string; frequent: string; vip: string; scope: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,6 +239,8 @@ export default function TenantSettings() {
     setIdle(toIdle(payload.session_idle_minutes ?? 30));
     setIdleRoles((payload.session_idle_roles ?? []).map((role) => ({ id: role.id, name: role.name, value: role.minutes ? toIdle(role.minutes) : null })));
     setHelpOn(payload.help_enabled ?? true);
+    setMfaAdmin(payload.mfa_admin ?? true);
+    setMfaReady(Boolean(payload.mfa_ready));
     const portalMinutes = payload.session_portal_idle_minutes ?? 0;
     setPortalIdle(portalMinutes > 0 ? { on: true, ...toIdle(portalMinutes) } : { on: false, choice: '30', custom: '' });
   };
@@ -268,7 +274,7 @@ export default function TenantSettings() {
       case 'modulos': return { modules_off: [...modulesOff].sort() };
       case 'fases': return { appointment_statuses: statusNames };
       case 'ayuda': return { help_enabled: helpOn };
-      case 'seguridad': return { session_idle_minutes: fromIdle(idle), session_idle_roles: Object.fromEntries(idleRoles.map((role) => [role.id, role.value ? fromIdle(role.value) : null])), session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0 };
+      case 'seguridad': return { session_idle_minutes: fromIdle(idle), session_idle_roles: Object.fromEntries(idleRoles.map((role) => [role.id, role.value ? fromIdle(role.value) : null])), session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0, ...(user?.is_tenant_admin ? { mfa_admin: mfaAdmin } : {}) };
       case 'grupos': return groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0), manager_scope: groups.scope } } : null;
       case 'salas': return equipmentDown ? { equipment_down: equipmentDown } : null;
       case 'ventas': return salesRules ? {
@@ -1559,6 +1565,18 @@ export default function TenantSettings() {
             <Switch checked={portalIdle.on} onChange={(on) => { setMessage(null); setPortalIdle({ ...portalIdle, on }); }} label="Desconectar también a los clientes del portal" />
           </div>
           {portalIdle.on && renderIdle('portal-idle', 'Cerrar la sesión del cliente tras', portalIdle, (next) => setPortalIdle({ ...portalIdle, ...next }), 'portal-idle-minutes')}
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 space-y-2" data-row="mfa-admin">
+          <div className="flex items-center justify-between gap-4">
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Pedir un código por correo a los administradores al entrar</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Después de la contraseña, el administrador escribe un código de 6 dígitos que le llega al correo. Puede marcar su computadora como de confianza por 30 días. A otras personas se les puede pedir desde su página en Usuarios.</span>
+            </span>
+            <Switch checked={mfaAdmin} disabled={!user?.is_tenant_admin} onChange={(on) => { setMessage(null); setMfaAdmin(on); }} label="Pedir un código por correo a los administradores al entrar" />
+          </div>
+          {!mfaReady && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">Todavía no se pide: el equipo de la plataforma aún no conecta el correo desde el que salen los códigos.</p>}
+          {!user?.is_tenant_admin && <p className="text-xs text-slate-500">Solo el administrador de la empresa cambia esto.</p>}
         </div>
         {saveBar('seguridad')}
       </section>

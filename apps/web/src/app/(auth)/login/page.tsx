@@ -85,6 +85,69 @@ export default function AuthPage() {
   const [accounts, setAccounts] = useState<LoginAccount[]>([]);
   const [loadingAccountId, setLoadingAccountId] = useState<string | null>(null);
   const [selectError, setSelectError] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<{ id: string; email_hint: string; minutes: number; trust_days: number } | null>(null);
+  const [code, setCode] = useState('');
+  const [trust, setTrust] = useState(true);
+  const [codeNotice, setCodeNotice] = useState('');
+
+  const deviceKey = (email: string) => `trusted_device:${email.trim().toLowerCase()}`;
+  const readDevice = (email: string) => {
+    try {
+      return localStorage.getItem(deviceKey(email));
+    } catch {
+      return null;
+    }
+  };
+
+  const afterLogin = async (data: any) => {
+    if (data.requires_code) {
+      setAccounts([]);
+      setCode('');
+      setCodeNotice('');
+      setChallenge({ id: data.challenge, email_hint: data.email_hint, minutes: data.minutes, trust_days: data.trust_days });
+      return;
+    }
+
+    await completeSession(data);
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!challenge) return;
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await api.post('/login/verify', { challenge: challenge.id, code, trust });
+      if (response.data.device_token) {
+        try {
+          localStorage.setItem(deviceKey(loginEmail), response.data.device_token);
+        } catch {
+        }
+      }
+      await completeSession(response.data);
+    } catch (err: any) {
+      const errors = err.response?.data?.errors;
+      setErrorMessage((errors ? (Object.values(errors)[0] as string[])?.[0] : null) || err.response?.data?.message || 'No se pudo comprobar el código.');
+      setCode('');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!challenge) return;
+    setErrorMessage(null);
+    setCodeNotice('');
+
+    try {
+      const response = await api.post('/login/resend', { challenge: challenge.id });
+      setCodeNotice(response.data.message);
+    } catch (err: any) {
+      const errors = err.response?.data?.errors;
+      setErrorMessage((errors ? (Object.values(errors)[0] as string[])?.[0] : null) || err.response?.data?.message || 'No se pudo enviar otro código.');
+    }
+  };
 
   const completeSession = async (data: any) => {
     const token = data.access_token || data.token;
@@ -119,7 +182,8 @@ export default function AuthPage() {
     try {
       const response = await api.post('/login', {
         email: loginEmail,
-        password: loginPassword
+        password: loginPassword,
+        device_token: readDevice(loginEmail),
       });
 
       if (response.data.requires_tenant_selection) {
@@ -128,7 +192,7 @@ export default function AuthPage() {
         return;
       }
 
-      await completeSession(response.data);
+      await afterLogin(response.data);
     } catch (err: any) {
       setErrorMessage(
         err.response?.data?.message || err.message || 'Credenciales incorrectas o error al conectar con el servidor'
@@ -147,9 +211,11 @@ export default function AuthPage() {
         email: loginEmail,
         password: loginPassword,
         account_id: account.account_id,
+        device_token: readDevice(loginEmail),
       });
 
-      await completeSession(response.data);
+      setLoadingAccountId(null);
+      await afterLogin(response.data);
     } catch (err: any) {
       setSelectError(
         err.response?.data?.message || err.message || 'No se pudo ingresar a la empresa seleccionada'
@@ -301,14 +367,14 @@ export default function AuthPage() {
                   </div>
 
                   <h1 className="text-2xl sm:text-3xl font-black text-brand-ink tracking-tight pt-2">
-                    Iniciar Sesión
+                    {challenge ? 'Revisa tu correo' : 'Iniciar Sesión'}
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                    Ingresa con tu correo y contraseña.
+                    {challenge ? 'Escribe el código para terminar de entrar.' : 'Ingresa con tu correo y contraseña.'}
                   </p>
                 </div>
 
-                {idleNotice && !errorMessage && (
+                {idleNotice && !errorMessage && !challenge && (
                   <div data-notice="idle" className="p-3 rounded-xl bg-brand-soft/15 border border-brand-soft/50 text-brand-ink text-xs font-medium">
                     {idleNotice}
                   </div>
@@ -320,6 +386,48 @@ export default function AuthPage() {
                   </div>
                 )}
 
+                {challenge ? (
+                  <form onSubmit={handleVerifyCode} className="space-y-4" data-code-step>
+                    <div className="p-3 rounded-xl bg-brand-soft/15 border border-brand-soft/50 text-brand-ink text-xs font-medium">
+                      Te enviamos un código de 6 dígitos a <span className="font-bold">{challenge.email_hint}</span>. Vence en {challenge.minutes} minutos.
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="login-code" className="block text-xs font-bold text-brand-ink uppercase tracking-wider">
+                        Código de ingreso
+                      </label>
+                      <input
+                        id="login-code"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        autoFocus
+                        required
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder="000000"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xl tracking-[0.5em] text-center font-mono font-bold text-slate-800 placeholder-slate-300 focus:outline-hidden focus:border-brand-accent focus:bg-white focus:ring-2 focus:ring-brand-accent/20 transition-all"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
+                      <span className="text-xs text-slate-700 font-medium">Confiar en este equipo {challenge.trust_days} días (no volver a pedir el código aquí)</span>
+                      <Switch checked={trust} onChange={setTrust} label="Confiar en este equipo" />
+                    </div>
+                    {codeNotice && <p data-code-notice className="text-xs text-emerald-700 font-medium">{codeNotice}</p>}
+                    <button
+                      type="submit"
+                      disabled={isLoading || code.length !== 6}
+                      className="w-full bg-brand hover:bg-brand-hover text-white font-bold py-3 px-6 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center justify-center gap-2 text-xs sm:text-sm shadow-md transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-70 cursor-pointer"
+                    >
+                      {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><span>Entrar</span><ArrowRight className="w-4 h-4 text-brand-soft" /></>}
+                    </button>
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <button type="button" data-code-back onClick={() => { setChallenge(null); setCode(''); setErrorMessage(null); setCodeNotice(''); }} className="text-slate-500 hover:text-brand-ink cursor-pointer">Volver</button>
+                      <button type="button" data-code-resend disabled={isLoading} onClick={handleResendCode} className="text-brand-accent hover:text-brand-ink cursor-pointer disabled:opacity-50">¿No te llegó? Enviar otro código</button>
+                    </div>
+                  </form>
+                ) : (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-brand-ink uppercase tracking-wider">
@@ -346,7 +454,7 @@ export default function AuthPage() {
                         Contraseña
                       </label>
                       <Link
-                        href="/forgot-password"
+                        href="/recuperar"
                         className="text-xs font-semibold text-brand-accent hover:text-brand-ink transition-colors"
                       >
                         ¿Olvidaste tu contraseña?
@@ -390,6 +498,7 @@ export default function AuthPage() {
                     )}
                   </button>
                 </form>
+                )}
 
                 <div className="border-t border-slate-100 pt-4 space-y-2">
                   <div className="flex items-center justify-between text-xs text-slate-500 font-medium">

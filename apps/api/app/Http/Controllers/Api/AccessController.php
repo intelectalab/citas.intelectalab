@@ -204,6 +204,7 @@ class AccessController extends Controller
                     'branch'          => $u->branch_id ? ['id' => $u->branch_id, 'name' => $branches[$u->branch_id] ?? ''] : null,
                     'professional_id' => $professionals[$u->id] ?? null,
                     'last_login_at'   => $u->last_login_at ?? null,
+                    'security'        => \App\Support\AccountSecurity::present($u),
                     'granted'         => (int) ($exceptions[$u->id]->granted ?? 0),
                     'revoked'         => (int) ($exceptions[$u->id]->revoked ?? 0),
                     'created_at'      => $u->created_at,
@@ -237,6 +238,7 @@ class AccessController extends Controller
                 'professional_id' => DB::table('professionals')->where('tenant_id', $tenant->id)->where('user_id', $target->id)->value('id'),
                 'created_at'      => $target->created_at,
                 'last_login_at'   => $target->last_login_at ?? null,
+                'security'        => \App\Support\AccountSecurity::present($target),
             ],
             'everything' => $everything,
             'locked'     => $this->lockedReason($target, $actor, $role)
@@ -450,6 +452,34 @@ class AccessController extends Controller
         $this->audit($request, $tenant, 'user.password_reset', 'user', $target->id, trim("{$target->first_name} {$target->last_name}"), [], [], $target->branch_id);
 
         return response()->json(['email' => $target->email, 'temporary_password' => $password]);
+    }
+
+    public function security(Request $request, string $user)
+    {
+        $tenant = $this->tenant($request);
+        $actor = $request->user();
+        $target = $this->findUser($tenant, $user);
+        $this->assertMyStaff($actor, $target);
+        abort_unless(\App\Support\AccountSecurity::ready(), 503, 'Falta actualizar la base de datos: ejecuta php artisan migrate.');
+
+        $validated = $request->validate(['action' => ['required', Rule::in(['unlock', 'require_code', 'default_code'])]]);
+        abort_if($validated['action'] !== 'unlock' && !$actor->isTenantAdmin(), 403, 'Solo un administrador cambia quién entra con código.');
+        abort_if($validated['action'] !== 'unlock' && $target->mfa_mode === 'off', 422, 'El equipo de la plataforma le quitó el código de ingreso a esta persona. Pídeles que lo vuelvan a activar.');
+        $name = trim("{$target->first_name} {$target->last_name}");
+
+        if ($validated['action'] === 'unlock') {
+            \App\Support\AccountSecurity::unlock($target);
+            Access::logChange($request, $tenant, 'user', $target->id, 'Le quitó el bloqueo por intentos fallidos.');
+            $this->audit($request, $tenant, 'user.unlocked', 'user', $target->id, $name, [], [], $target->branch_id);
+        } else {
+            $mode = $validated['action'] === 'require_code' ? 'required' : null;
+            $before = $target->mfa_mode;
+            $target->forceFill(['mfa_mode' => $mode])->saveQuietly();
+            Access::logChange($request, $tenant, 'user', $target->id, $mode ? 'Le pidió el código por correo al entrar.' : 'Volvió a lo de su rol para el código al entrar.');
+            $this->audit($request, $tenant, 'user.mfa_changed', 'user', $target->id, $name, ['mfa_mode' => $before ? 'Siempre' : 'Según su rol'], ['mfa_mode' => $mode ? 'Siempre' : 'Según su rol'], $target->branch_id);
+        }
+
+        return $this->showUser($request, $user);
     }
 
     public function setUserPermission(Request $request, string $user)

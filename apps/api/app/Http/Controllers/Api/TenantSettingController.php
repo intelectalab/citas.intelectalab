@@ -99,6 +99,7 @@ class TenantSettingController extends Controller
             'session_idle_minutes' => 'sometimes|integer|min:5|max:1440',
             'session_idle_roles'   => 'sometimes|array',
             'session_idle_roles.*' => 'nullable|integer|min:5|max:1440',
+            'mfa_admin' => ['sometimes', 'boolean', fn ($attribute, $value, $fail) => $request->user()->isTenantAdmin() ? null : $fail('Solo el administrador de la empresa puede cambiar el código al entrar.')],
             'help_enabled' => ['sometimes', 'boolean', fn ($attribute, $value, $fail) => $request->user()->isTenantAdmin() ? null : $fail('Solo el administrador de la empresa puede encender o apagar la autoayuda.')],
             'customer_groups' => 'sometimes|array',
             'customer_groups.inactive_days'   => 'required_with:customer_groups|integer|min:15|max:730',
@@ -246,6 +247,10 @@ class TenantSettingController extends Controller
                 'booking.miss_limit'  => (int) $validated['booking_misses']['limit'],
                 'booking.block_days'  => (int) $validated['booking_misses']['block_days'],
             ] + (array_key_exists('count_late_cancel', $validated['booking_misses']) ? ['booking.count_late_cancel' => (bool) $validated['booking_misses']['count_late_cancel']] : []));
+        }
+
+        if (array_key_exists('mfa_admin', $validated)) {
+            $settings->rules = array_merge($settings->rules ?? [], ['security.mfa_admin' => (bool) $validated['mfa_admin']]);
         }
 
         if (array_key_exists('help_enabled', $validated)) {
@@ -397,6 +402,8 @@ class TenantSettingController extends Controller
             'session_idle_roles'   => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('created_at')->get(['id', 'name'])
                 ->map(fn ($role) => ['id' => $role->id, 'name' => $role->name, 'minutes' => ((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? null])->values(),
             'help_enabled' => (bool) AppointmentFlow::rule($tenant, 'help.enabled'),
+            'mfa_admin' => (bool) AppointmentFlow::rule($tenant, 'security.mfa_admin'),
+            'mfa_ready' => \App\Support\PlatformMail::ready(),
             'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
             'customer_groups' => $tenant->hasModule('marketing') ? [
                 'inactive_days'   => (int) AppointmentFlow::rule($tenant, 'crm.inactive_days'),
@@ -499,6 +506,7 @@ class TenantSettingController extends Controller
                 'session_idle_roles'          => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name'])
                     ->map(fn ($role) => $role->name . ': ' . (((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? 'como la empresa'))->implode(', '),
                 'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
+                'mfa_admin'                   => (bool) AppointmentFlow::rule($tenant, 'security.mfa_admin'),
             ],
             'Autoayuda' => [
                 'help_enabled' => (bool) AppointmentFlow::rule($tenant, 'help.enabled'),
