@@ -59,7 +59,7 @@ class AuthController extends Controller
                 'name' => trim($impersonator->first_name . ' ' . $impersonator->last_name),
             ] : null,
             'account_type' => 'staff',
-            'idle_minutes' => $tenant ? (int) \App\Support\AppointmentFlow::rule($tenant, 'session.idle_minutes') : \App\Support\AppointmentFlow::RULE_DEFAULTS['session.idle_minutes'],
+            'idle_minutes' => $tenant ? \App\Support\Access::idleMinutes($tenant, $user) : \App\Support\AppointmentFlow::RULE_DEFAULTS['session.idle_minutes'],
             'help_enabled' => $tenant ? (bool) \App\Support\AppointmentFlow::rule($tenant, 'help.enabled') : false,
             'roles' => $user->roles ? $user->roles->pluck('slug') : [],
             'permissions' => \App\Support\Access::of($user),

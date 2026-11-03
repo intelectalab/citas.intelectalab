@@ -16,6 +16,7 @@ class AppointmentScheduler
 {
     public const MESSAGES = [
         'SERVICE_INACTIVE' => 'El servicio no está activo',
+        'SERVICE_NOT_BRANCH' => 'Este servicio no se da en esta sede',
         'PRO_INACTIVE'     => ':name no está disponible para agendar',
         'PRO_NO_SERVICE'   => ':name no realiza este servicio',
         'PAST'             => 'El horario ya pasó',
@@ -45,12 +46,23 @@ class AppointmentScheduler
     public function check(Service $service, Professional $professional, Branch $branch, Carbon $start, int $duration, ?string $ignoreId = null): array
     {
         $day = $this->dayContext($professional, $branch, $start->copy()->startOfDay(), $ignoreId);
+        $result = $this->evaluate($day, $service, $professional, $start, $duration);
 
-        return $this->evaluate($day, $service, $professional, $start, $duration);
+        if (!$service->offeredAt($branch->id)) {
+            $result['ok'] = false;
+            $result['overridable'] = false;
+            $result['reasons'][] = ['code' => 'SERVICE_NOT_BRANCH', 'message' => self::MESSAGES['SERVICE_NOT_BRANCH'], 'detail' => $branch->name];
+        }
+
+        return $result;
     }
 
     public function slots(Service $service, Branch $branch, Carbon $date, ?Professional $professional = null, ?string $ignoreId = null, ?int $interval = null): array
     {
+        if (!$service->offeredAt($branch->id)) {
+            return [];
+        }
+
         $interval = max(5, $interval ?? (int) AppointmentFlow::rule($this->tenant, 'agenda.slot_interval'));
         $duration = $service->duration_minutes;
         $date = $date->copy()->startOfDay();

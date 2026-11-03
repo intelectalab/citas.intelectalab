@@ -61,6 +61,7 @@ const empty = {
   price: '',
   validityDays: '90',
   active: true,
+  sellOnline: false,
   bookingMode: 'free' as BookingMode,
   frequency: 'weekly' as Frequency,
   customDays: [] as CustomDay[],
@@ -102,6 +103,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
         price: String(initialData.price),
         validityDays: String(initialData.validity_days),
         active: initialData.status === 'active',
+        sellOnline: Boolean(initialData.sell_online),
         bookingMode: initialData.booking_mode,
         frequency: initialData.frequency,
         customDays: initialData.custom_days ?? [],
@@ -175,6 +177,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
       price: Number(form.price || 0),
       validity_days: Number(form.validityDays || 0),
       status: form.active ? 'active' : 'inactive',
+      sell_online: form.bookingMode === 'free' && form.sellOnline,
       booking_mode: form.bookingMode,
       frequency: form.frequency,
       custom_days: form.frequency === 'custom' ? form.customDays : [],
@@ -405,6 +408,18 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
               <span className="block text-xs text-slate-500">Apágalo para dejar de ofrecerlo sin borrarlo. Los ya vendidos siguen igual.</span>
             </div>
             <Switch checked={form.active} onChange={(active) => set({ active })} label="Paquete a la venta" />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3" data-field="sell-online">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Se vende en línea</span>
+              <span className="block text-xs text-slate-500">
+                {form.bookingMode === 'free'
+                  ? 'El cliente lo ve en su portal y lo compra pagando en línea. El paquete queda a su nombre al pagar.'
+                  : 'Solo los paquetes de uso libre: los de fechas acordadas se venden en la sede, porque hay que elegir días y profesional.'}
+              </span>
+            </div>
+            <Switch checked={form.bookingMode === 'free' && form.sellOnline} disabled={form.bookingMode !== 'free'} onChange={(sellOnline) => set({ sellOnline })} label="Se vende en línea" />
           </div>
 
           <ErrorAlert message={error} />

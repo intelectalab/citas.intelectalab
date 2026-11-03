@@ -6,8 +6,9 @@ use App\Http\Controllers\Auth\RegisterTenantController;
 use App\Http\Controllers\Auth\SubscriptionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\TypeDocumentController;
-use App\Http\Controllers\ContactController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\PortalQuoteController;
+use App\Http\Controllers\Api\PortalShopController;
 use App\Http\Controllers\Api\AccessController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ServiceCategoryController;
@@ -43,6 +44,8 @@ use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\RecallController;
 use App\Http\Controllers\Api\WaitlistController;
 use App\Http\Controllers\Api\WalkinController;
+use App\Http\Controllers\Api\AutomationController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\StatusController;
 use App\Http\Controllers\Api\SpecialtyController;
 use App\Http\Controllers\Api\CustomerBoardController;
@@ -143,6 +146,18 @@ Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(functio
     Route::post('/dependents', [PortalController::class, 'storeDependent']);
     Route::get('/packages', [PortalController::class, 'packages'])->middleware('module:packages|quotes');
 
+    Route::middleware('module:quotes')->group(function () {
+        Route::get('/quotes', [PortalQuoteController::class, 'index']);
+        Route::get('/quotes/{quote}/pdf', [PortalQuoteController::class, 'pdf']);
+        Route::post('/quotes/{quote}/accept', [PortalQuoteController::class, 'accept']);
+        Route::post('/quotes/{quote}/reject', [PortalQuoteController::class, 'reject']);
+    });
+
+    Route::middleware('module:packages')->group(function () {
+        Route::get('/shop', [PortalShopController::class, 'index']);
+        Route::post('/shop/packages/{plan}', [PortalShopController::class, 'buy']);
+    });
+
     Route::middleware('module:booking')->group(function () {
         Route::get('/catalog', [PortalController::class, 'catalog']);
         Route::get('/availability', [PortalController::class, 'portalAvailability']);
@@ -209,6 +224,13 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy'])->middleware('perm:rooms.delete');
     });
 
+    Route::get('/reports', [ReportController::class, 'show'])->middleware('perm:reports.view|reports.own');
+
+    Route::middleware('module:automations')->group(function () {
+        Route::get('/automations', [AutomationController::class, 'index'])->middleware('perm:automations.view');
+        Route::put('/automations/{automation}', [AutomationController::class, 'update'])->middleware('perm:automations.edit');
+    });
+
     Route::middleware('module:walkin')->group(function () {
         Route::get('/walkins', [WalkinController::class, 'index'])->middleware('perm:walkin.view');
         Route::get('/walkins/choices', [WalkinController::class, 'choices'])->middleware('perm:walkin.view');
@@ -241,6 +263,7 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
             Route::get('/appointments/availability', [AppointmentController::class, 'availability']);
             Route::get('/appointments/context', [AppointmentController::class, 'context']);
             Route::get('/appointments/day', [AppointmentController::class, 'day']);
+            Route::get('/appointments/range', [AppointmentController::class, 'range']);
         });
         Route::get('/appointments/metrics', [AppointmentController::class, 'metrics'])->middleware('perm:attention.view');
         Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'show']);
@@ -428,13 +451,6 @@ Route::middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/customers/{customer}/booking-strikes/forgive', [CustomerController::class, 'forgiveBooking'])->middleware('perm:customers.forgive');
         Route::apiResource('customers.dependents', CustomerDependentController::class)->only(['index'])->middleware('perm:customers.view');
         Route::apiResource('customers.dependents', CustomerDependentController::class)->only(['store', 'update', 'destroy'])->middleware('perm:customers.edit|customers.create');
-
-        Route::prefix('contacts')->group(function () {
-            Route::get('/', [ContactController::class, 'index']);
-            Route::post('/', [ContactController::class, 'store']);
-            Route::put('/{id}', [ContactController::class, 'update']);
-            Route::delete('/{id}', [ContactController::class, 'destroy']);
-        });
     });
 
     Route::get('/company', [\App\Http\Controllers\Api\CompanyController::class, 'show']);

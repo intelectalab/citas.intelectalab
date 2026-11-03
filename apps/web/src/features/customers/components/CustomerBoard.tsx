@@ -16,6 +16,7 @@ export interface BoardCustomer {
   pipeline_stage_id?: string | null;
   last_visit?: string | null;
   next_visit?: string | null;
+  stage_manual_at?: string | null;
 }
 
 interface CustomerBoardProps {
@@ -110,6 +111,7 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                       className={`bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-xs transition-all ${info.can_move ? 'cursor-grab active:cursor-grabbing hover:border-brand-accent' : ''} ${dragging === row.id ? 'opacity-50' : ''}`}
                     >
                       <CustomerLink id={row.id} className="block text-sm font-bold text-brand-ink truncate">{`${row.first_name} ${row.last_name}`}</CustomerLink>
+                      {row.stage_manual_at && <span data-manual-stage title="Se movió a mano: aquí se queda hasta su próxima cita" className="inline-block text-[10px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 rounded-md px-1.5 py-0.5">Movido a mano</span>}
                       <div className="space-y-1 text-xs text-slate-500">
                         <span className="flex items-center gap-1.5"><Phone size={12} className="text-slate-400 shrink-0" />{row.phone || 'Sin teléfono'}</span>
                         <span className="flex items-center gap-1.5"><CalendarCheck size={12} className="text-emerald-600 shrink-0" />{row.last_visit ? `Última visita: ${shortDate(row.last_visit)}` : 'Aún sin atenciones'}</span>

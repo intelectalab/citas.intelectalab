@@ -27,6 +27,9 @@ class CatalogActions
         'campaign.updated'         => ['Cambió una campaña', 'marketing'],
         'campaign.sent'            => ['Envió una campaña', 'marketing'],
         'campaign.scheduled'       => ['Programó una campaña', 'marketing'],
+        'automation.enabled'       => ['Encendió una automatización', 'marketing'],
+        'automation.disabled'      => ['Apagó una automatización', 'marketing'],
+        'automation.updated'       => ['Cambió una automatización', 'marketing'],
         'message.sent'             => ['Envió un mensaje a un cliente', 'marketing'],
         'message.scheduled'        => ['Programó un mensaje a un cliente', 'marketing'],
     ];
@@ -38,6 +41,7 @@ class CatalogActions
         'buffer_after_minutes'  => 'Minutos libres después',
         'online_booking'        => 'Se reserva en línea',
         'is_virtual'            => 'Atención virtual',
+        'branches'              => 'Sedes donde se da',
         'service_kind'          => 'Tipo de atención',
         'capacity'              => 'Cupos',
         'deposit'               => 'Adelanto',
@@ -73,5 +77,9 @@ class CatalogActions
         'body'                  => 'Mensaje',
         'coupon'                => 'Cupón',
         'recipients'            => 'Destinatarios',
+        'message'               => 'Mensaje',
+        'send_time'             => 'Hora de envío',
+        'delay_minutes'         => 'Minutos después',
+        'repeat_days'           => 'Se repite cada (días)',
     ];
 }

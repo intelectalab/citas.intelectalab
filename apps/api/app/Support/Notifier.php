@@ -42,7 +42,7 @@ class Notifier
 
             $appointment->loadMissing(['customer', 'service', 'professional', 'branch']);
             $professionalUser = $appointment->professional?->user_id;
-            $admins = self::adminIds($appointment->tenant_id);
+            $admins = array_merge(self::adminIds($appointment->tenant_id), self::managerIds($appointment->tenant_id, $appointment->branch_id));
 
             if ($byCustomer) {
                 [$type, $title] = match (true) {
@@ -72,6 +72,17 @@ class Notifier
                 $parts = [$who, $appointment->service?->name, $when, $userId === $professionalUser ? null : $with];
 
                 self::send($appointment->tenant_id, $userId, $type, $title, implode(' · ', array_filter($parts)), '/agenda', 'appointment', $appointment->id);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    public static function forgetBlock(string $blockId): void
+    {
+        try {
+            if (self::available()) {
+                DB::table('user_notifications')->where('type', 'block.soon')->where('entity_type', 'block')->where('entity_id', $blockId)->delete();
             }
         } catch (\Throwable $e) {
             report($e);
@@ -117,7 +128,7 @@ class Notifier
                         '/blocks',
                         'block',
                         $block->id,
-                        "block-soon:{$block->id}",
+                        "block-soon:{$block->id}:" . Carbon::parse($block->starts_at)->format('YmdHi') . '-' . Carbon::parse($block->ends_at)->format('YmdHi'),
                     );
                 }
             }
@@ -254,10 +265,10 @@ class Notifier
                 return;
             }
             $entry->loadMissing(['customer', 'service', 'professional']);
-            $customerName = trim(($entry->customer?->first_name ?? '') . ' ' . ($entry->customer?->last_name ?? ''));
+            $customerName = trim(($entry->customer?->first_name ?? '') . ' ' . ($entry->customer?->last_name === '-' ? '' : ($entry->customer?->last_name ?? '')));
             $waitLabel = $waitMinutes === null
-                ? 'Sin hueco estimado hoy'
-                : ($waitMinutes === 0 ? 'Para atender ahora' : "Espera estimada ~{$waitMinutes} min");
+                ? 'Hoy ya no alcanza'
+                : ($waitMinutes <= 0 ? 'Pasa ahora' : "Espera de unos {$waitMinutes} min");
             $origin = $entry->source === 'kiosk' ? 'Se anotó en el kiosko' : 'En la cola sin cita';
 
             $body = implode(' · ', array_filter([
@@ -269,11 +280,8 @@ class Notifier
 
             $recipientIds = User::where('tenant_id', $tenant->id)
                 ->where('status', 'active')
-                ->where(function ($q) use ($entry) {
-                    $q->where('is_owner', true)
-                        ->orWhereNull('branch_id')
-                        ->orWhere('branch_id', $entry->branch_id);
-                })
+                ->get()
+                ->filter(fn (User $user) => self::seesWalkin($user, $entry))
                 ->pluck('id')
                 ->all();
 
@@ -295,9 +303,124 @@ class Notifier
         }
     }
 
+    private static function seesWalkin(User $user, \App\Models\WalkinEntry $entry): bool
+    {
+        if (!$user->allows('walkin.view')) {
+            return false;
+        }
+
+        $limit = Access::branchLimit($user);
+        if ($limit && $limit !== $entry->branch_id) {
+            return false;
+        }
+
+        if (Access::scopeOf($user) !== 'own') {
+            return true;
+        }
+
+        $own = \App\Models\Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id');
+
+        return $own && ($entry->professional_id ? $entry->professional_id === $own : Access::worksAt($own, $entry->branch_id));
+    }
+
+    public static function staffWith(string $tenantId, string $permission, ?string $branchId, ?string $professionalId = null): array
+    {
+        $own = $professionalId ? \App\Models\Professional::where('id', $professionalId)->value('user_id') : null;
+
+        return User::where('tenant_id', $tenantId)->where('status', 'active')->get()
+            ->filter(function (User $user) use ($permission, $branchId, $own) {
+                if (!$user->allows($permission)) {
+                    return false;
+                }
+
+                $limit = Access::branchLimit($user);
+
+                if ($limit && $branchId && $limit !== $branchId) {
+                    return false;
+                }
+
+                return Access::scopeOf($user) !== 'own' || ($own && $own === $user->id);
+            })
+            ->pluck('id')->values()->all();
+    }
+
+    public static function quoteAnswered(Tenant $tenant, object $quote, Customer $customer, bool $accepted, ?string $reason): void
+    {
+        try {
+            $name = Person::name($customer);
+            $title = $accepted ? "{$name} aceptó el presupuesto {$quote->code}" : "{$name} rechazó el presupuesto {$quote->code}";
+            $body = $accepted
+                ? ($quote->sale_id ? 'Ya tiene su plan de tratamiento y su venta por cobrar.' : 'Pásalo a cobro para crear su plan de tratamiento.')
+                : "Motivo: {$reason}";
+            $creator = DB::table('quote_status_history')->where('quote_id', $quote->id)->whereNotNull('actor_user_id')->orderBy('created_at')->value('actor_user_id');
+            $ids = array_unique(array_filter([...self::staffWith($tenant->id, 'quotes.edit', $quote->branch_id, $quote->professional_id), $creator]));
+
+            foreach ($ids as $id) {
+                self::send($tenant->id, $id, $accepted ? 'quote.accepted' : 'quote.rejected', $title, $body, "/quotes?quote={$quote->id}", 'quote', $quote->id, "quote-answer:{$quote->id}");
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    public static function emergencyAccess(Tenant $tenant, object $record, User $actor, string $reason): void
+    {
+        try {
+            $customer = Customer::find($record->customer_id);
+            $title = Person::name($actor) . ' abrió por emergencia una ficha privada';
+            $body = 'Ficha de ' . Person::name($customer) . ". Motivo: {$reason}";
+
+            foreach (array_unique(array_filter([$record->created_by, ...self::adminIds($tenant->id)])) as $userId) {
+                if ($userId === $actor->id) {
+                    continue;
+                }
+
+                self::send($tenant->id, $userId, 'record.emergency', $title, $body, '/records', 'care_record', $record->id, 'emergency:' . $record->id . ':' . $actor->id . ':' . now()->format('YmdHi'));
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    public static function packageBought(Tenant $tenant, object $package, object $sale): void
+    {
+        try {
+            $customer = Customer::find($package->customer_id);
+            $title = Person::name($customer) . " compró el {$package->name} en línea";
+            $body = 'Pagó ' . Currency::format((float) $sale->total, $sale->currency ?? Currency::of($tenant)) . " (venta {$sale->code}). Ya puede reservar sus sesiones.";
+
+            foreach (self::staffWith($tenant->id, 'packages.view', $sale->branch_id) as $id) {
+                self::send($tenant->id, $id, 'package.bought', $title, $body, "/packages/{$package->id}", 'package', $package->id, "package-bought:{$package->id}");
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    public static function managerIds(string $tenantId, ?string $branchId): array
+    {
+        if (!$branchId) {
+            return [];
+        }
+
+        return User::where('tenant_id', $tenantId)
+            ->where('status', 'active')
+            ->where('branch_id', $branchId)
+            ->whereHas('roles', fn ($r) => $r->where('slug', 'manager'))
+            ->pluck('id')
+            ->all();
+    }
+
+    public static function lastTypeFor(string $userId, string $entityType, string $entityId): ?string
+    {
+        return DB::table('user_notifications')->where('user_id', $userId)->where('entity_type', $entityType)->where('entity_id', $entityId)
+            ->orderByDesc('created_at')->value('type');
+    }
+
     public static function adminIds(string $tenantId): array
     {
         return User::where('tenant_id', $tenantId)
+            ->where('status', 'active')
             ->where(fn ($q) => $q->where('is_owner', true)->orWhereHas('roles', fn ($r) => $r->whereIn('slug', ['owner', 'admin'])))
             ->pluck('id')
             ->all();

@@ -15,6 +15,7 @@ import DateField from '@/app/components/common/DateField';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 import { useAuth } from '@/hooks/useAuth';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { AgendaMonth, AgendaWeek, addMonths, daysBetween, mondayOf, monthGrid, type RangePayload } from './AgendaRange';
 import {
   RELEASED, addDays, apiError, formatDate, fromMinutes, statusStyle, timeOf, toMinutes, todayISO,
   type Appointment,
@@ -30,7 +31,8 @@ interface DayProfessional {
 
 interface PendingMove {
   appointment: Appointment;
-  professional: DayProfessional;
+  professional: { id: string; display_name: string };
+  date: string;
   time: string;
 }
 
@@ -45,7 +47,22 @@ interface DayPayload {
 
 type PhoneView = 'pro' | 'list';
 
+type ViewMode = 'day' | 'week' | 'month';
+
 const VIEW_KEY = 'agenda.phone-view';
+
+const MODE_KEY = 'agenda.view';
+
+const readMode = (): ViewMode => {
+  try {
+    const saved = localStorage.getItem(MODE_KEY);
+    return saved === 'week' || saved === 'month' ? saved : 'day';
+  } catch {
+    return 'day';
+  }
+};
+
+const MODES: [ViewMode, string][] = [['day', 'Día'], ['week', 'Semana'], ['month', 'Mes']];
 
 const readView = (): PhoneView => {
   try {
@@ -103,6 +120,9 @@ export default function AgendaDay() {
   const [branchId, setBranchId] = useState('');
   const [slotInterval, setSlotInterval] = useState(15);
   const [day, setDay] = useState<DayPayload | null>(null);
+  const [mode, setMode] = useState<ViewMode>('day');
+  const [rangeData, setRangeData] = useState<RangePayload | null>(null);
+  const [proFilter, setProFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeCard, setActiveCard] = useState('');
@@ -113,6 +133,31 @@ export default function AgendaDay() {
   const [focusPro, setFocusPro] = useState('');
   const nowLine = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef('');
+
+  useEffect(() => { setMode(readMode()); }, []);
+
+  const chooseMode = (next: ViewMode) => {
+    setMode(next);
+    setActiveCard('');
+    try { localStorage.setItem(MODE_KEY, next); } catch {}
+  };
+
+  const openDay = (target: string) => {
+    setDate(target);
+    chooseMode('day');
+  };
+
+  const span = useMemo(() => {
+    if (mode === 'week') {
+      const from = mondayOf(date);
+      return { from, to: addDays(from, 6), month: '' };
+    }
+    if (mode === 'month') {
+      const grid = monthGrid(date);
+      return { from: grid.start, to: grid.end, month: grid.first };
+    }
+    return { from: date, to: date, month: '' };
+  }, [mode, date]);
 
   const choosePhoneView = (view: PhoneView) => {
     setPhoneView(view);
@@ -129,15 +174,18 @@ export default function AgendaDay() {
   const load = useCallback(() => {
     if (!branchId) return;
 
-    api.get('/appointments/day', { params: { date, branch_id: branchId } })
-      .then((res) => {
-        setDay(res.data);
+    const request = mode === 'day'
+      ? api.get('/appointments/day', { params: { date, branch_id: branchId } }).then((res) => setDay(res.data))
+      : api.get('/appointments/range', { params: { from: span.from, to: span.to, branch_id: branchId } }).then((res) => setRangeData(res.data));
+
+    request
+      .then(() => {
         setError('');
         setUpdatedAt(new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }));
       })
       .catch((err) => setError(apiError(err, 'No se pudo cargar la agenda.')))
       .finally(() => setLoading(false));
-  }, [date, branchId]);
+  }, [date, branchId, mode, span]);
 
   const { openNew, openDetail, panels, isOpen: panelOpen } = useAppointmentPanels(load);
 
@@ -159,7 +207,16 @@ export default function AgendaDay() {
     load();
   }, [load]);
 
-  const appointments = day?.appointments ?? [];
+  const rangeAppointments = useMemo(
+    () => (rangeData && rangeData.from === span.from ? rangeData.appointments.filter((a) => !proFilter || a.professional?.id === proFilter) : []),
+    [rangeData, span.from, proFilter],
+  );
+  const appointments = mode === 'day' ? day?.appointments ?? [] : rangeAppointments;
+  const cardAppointments = mode === 'month' ? appointments.filter((a) => a.starts_at.startsWith(span.month.slice(0, 7))) : appointments;
+  const proColors = useMemo(
+    () => Object.fromEntries((rangeData?.professionals ?? []).map((p) => [p.id, p.color_code])),
+    [rangeData],
+  );
   const card = CARDS.find((c) => c.id === activeCard);
 
   const visible = useMemo(
@@ -238,7 +295,7 @@ export default function AgendaDay() {
     if (dragged.professional?.id === professional.id && timeOf(dragged.starts_at) === time) return;
 
     setMoveError('');
-    setPendingMove({ appointment: dragged, professional, time });
+    setPendingMove({ appointment: dragged, professional, date, time });
   };
 
   const confirmMove = async () => {
@@ -248,7 +305,7 @@ export default function AgendaDay() {
       setMoving(true);
       setMoveError('');
       await api.post(`/appointments/${pendingMove.appointment.id}/reschedule`, {
-        starts_at: `${date}T${pendingMove.time}`,
+        starts_at: `${pendingMove.date}T${pendingMove.time}`,
         professional_id: pendingMove.professional.id,
         branch_id: branchId,
       });
@@ -268,13 +325,19 @@ export default function AgendaDay() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-brand-ink tracking-tight">Agenda</h1>
-          <p className="text-sm text-slate-500 font-medium first-letter:uppercase" data-agenda-date={date}>{formatDate(date)}</p>
+          <p className="text-sm text-slate-500 font-medium first-letter:uppercase" data-agenda-date={date}>
+            {mode === 'week'
+              ? `${formatDate(span.from, { day: 'numeric', month: 'short' })} – ${formatDate(span.to, { day: 'numeric', month: 'short', year: 'numeric' })}`
+              : mode === 'month'
+                ? formatDate(span.month, { month: 'long', year: 'numeric' })
+                : formatDate(date)}
+          </p>
           <p className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
             <button type="button" title="Actualizar ahora" data-refresh onClick={load} className="hover:text-brand-accent transition-colors">
               <RefreshCw size={12} />
             </button>
             <span data-updated-at>{updatedAt ? `Se actualiza sola · última vez a las ${updatedAt}` : 'Se actualiza sola'}</span>
-            <span className="hidden sm:inline">· Arrastra una cita para moverla</span>
+            {mode !== 'month' && <span className="hidden sm:inline">· Arrastra una cita para moverla</span>}
           </p>
         </div>
 
@@ -291,7 +354,36 @@ export default function AgendaDay() {
             </div>
           )}
 
-          <button type="button" title="Día anterior" onClick={() => setDate(addDays(date, -1))} className={navButton}>
+          <div className="flex items-center gap-0.5 p-0.5 bg-white border border-slate-200 rounded-lg" role="radiogroup" aria-label="Vista" data-agenda-modes>
+            {MODES.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={mode === value}
+                data-agenda-mode={value}
+                onClick={() => chooseMode(value)}
+                className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${mode === value ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {mode !== 'day' && (rangeData?.professionals.length ?? 0) > 1 && (
+            <div className="w-52" data-pro-filter>
+              <Select
+                ariaLabel={vocab.pro}
+                placeholder={`Todos los ${vocab.pros.toLowerCase()}`}
+                value={proFilter}
+                onChange={(e) => setProFilter(String(e.target.value))}
+                options={(rangeData?.professionals ?? []).map((p) => ({ value: p.id, label: p.display_name }))}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-2" data-agenda-nav>
+          <button type="button" title={mode === 'day' ? 'Día anterior' : mode === 'week' ? 'Semana anterior' : 'Mes anterior'} onClick={() => setDate(mode === 'day' ? addDays(date, -1) : mode === 'week' ? addDays(date, -7) : addMonths(date, -1))} className={navButton}>
             <ChevronLeft size={16} />
           </button>
           <button
@@ -301,9 +393,10 @@ export default function AgendaDay() {
           >
             Hoy
           </button>
-          <button type="button" title="Día siguiente" onClick={() => setDate(addDays(date, 1))} className={navButton}>
+          <button type="button" title={mode === 'day' ? 'Día siguiente' : mode === 'week' ? 'Semana siguiente' : 'Mes siguiente'} onClick={() => setDate(mode === 'day' ? addDays(date, 1) : mode === 'week' ? addDays(date, 7) : addMonths(date, 1))} className={navButton}>
             <ChevronRight size={16} />
           </button>
+          </div>
           <DateField
             ariaLabel="Ir a una fecha"
             size="compact"
@@ -324,10 +417,10 @@ export default function AgendaDay() {
       </div>
 
       <div className="grid grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-4" data-agenda-cards>
-        {[{ id: '', title: 'Citas del día', statuses: [] as string[], icon: <CalendarDays size={18} />, color: 'text-slate-500', active: 'border-slate-400 ring-2 ring-slate-400/20' }, ...CARDS].map((item) => {
+        {[{ id: '', title: mode === 'day' ? 'Citas del día' : mode === 'week' ? 'Citas de la semana' : 'Citas del mes', statuses: [] as string[], icon: <CalendarDays size={18} />, color: 'text-slate-500', active: 'border-slate-400 ring-2 ring-slate-400/20' }, ...CARDS].map((item) => {
           const count = item.id === ''
-            ? appointments.filter((a) => !RELEASED.includes(a.status)).length
-            : appointments.filter((a) => item.statuses.includes(a.status)).length;
+            ? cardAppointments.filter((a) => !RELEASED.includes(a.status)).length
+            : cardAppointments.filter((a) => item.statuses.includes(a.status)).length;
           const isActive = activeCard === item.id;
 
           return (
@@ -355,7 +448,7 @@ export default function AgendaDay() {
 
       <ErrorAlert message={error} />
 
-      {(day?.holidays ?? []).map((holiday) => (
+      {mode === 'day' && (day?.holidays ?? []).map((holiday) => (
         <p
           key={holiday.name}
           data-holiday={holiday.closed ? 'closed' : 'open'}
@@ -367,7 +460,42 @@ export default function AgendaDay() {
       ))}
 
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {loading && !day ? (
+        {mode !== 'day' && branches.length > 0 ? (
+          !rangeData || rangeData.from !== span.from ? (
+            <p className="p-8 text-sm text-slate-500">Cargando agenda...</p>
+          ) : mode === 'week' ? (
+            <AgendaWeek
+              data={rangeData}
+              days={daysBetween(span.from, span.to)}
+              appointments={visible}
+              professionalId={proFilter}
+              colors={proColors}
+              isPhone={isPhone}
+              canCreate={can('agenda.create')}
+              slotInterval={slotInterval}
+              onOpen={openDetail}
+              onDay={openDay}
+              onNew={(newDate, time) => openNew({ date: newDate, time, branch_id: branchId, ...(proFilter ? { professional_id: proFilter } : {}) })}
+              onMove={(appointment, newDate, time) => {
+                if (!appointment.professional) return;
+                setMoveError('');
+                setPendingMove({ appointment, professional: appointment.professional, date: newDate, time });
+              }}
+            />
+          ) : (
+            <AgendaMonth
+              data={rangeData}
+              days={daysBetween(span.from, span.to)}
+              appointments={visible}
+              professionalId={proFilter}
+              colors={proColors}
+              isPhone={isPhone}
+              month={span.month}
+              onOpen={openDetail}
+              onDay={openDay}
+            />
+          )
+        ) : loading && !day ? (
           <p className="p-8 text-sm text-slate-500">Cargando agenda...</p>
         ) : branches.length === 0 ? (
           <p className="p-8 text-sm text-slate-500">Tu empresa no tiene sedes activas.</p>
@@ -611,10 +739,10 @@ export default function AgendaDay() {
             </p>
             <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-sm space-y-1">
               <p className="text-slate-500">
-                Ahora: <span className="font-semibold text-slate-700">{timeOf(pendingMove.appointment.starts_at)} con {pendingMove.appointment.professional?.display_name}</span>
+                Ahora: <span className="font-semibold text-slate-700">{pendingMove.date !== pendingMove.appointment.starts_at.slice(0, 10) ? `${formatDate(pendingMove.appointment.starts_at.slice(0, 10), { weekday: 'short', day: 'numeric', month: 'short' })}, ` : ''}{timeOf(pendingMove.appointment.starts_at)} con {pendingMove.appointment.professional?.display_name}</span>
               </p>
               <p className="text-slate-500">
-                Pasa a: <span className="font-semibold text-slate-900" data-move-to>{pendingMove.time} con {pendingMove.professional.display_name}</span>
+                Pasa a: <span className="font-semibold text-slate-900" data-move-to>{pendingMove.date !== pendingMove.appointment.starts_at.slice(0, 10) ? `${formatDate(pendingMove.date, { weekday: 'short', day: 'numeric', month: 'short' })}, ` : ''}{pendingMove.time} con {pendingMove.professional.display_name}</span>
               </p>
             </div>
             <ErrorAlert message={moveError} />

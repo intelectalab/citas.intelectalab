@@ -141,6 +141,7 @@ class AvailabilityBlockController extends Controller
 
         $block = $block->fresh(['professional:id,display_name', 'branch:id,name']);
         $this->audit($request, 'availability_block.created', $block, [], array_filter($this->auditable($block)));
+        $this->notifyAffected($tenant, $block, $request->user()->id);
 
         return response()->json($this->present($block, $tenant, $own), 201);
     }
@@ -159,7 +160,9 @@ class AvailabilityBlockController extends Controller
         [$from, $to] = Audit::changed($auditBefore, $this->auditable($block));
 
         if ($from || $to) {
+            \App\Support\Notifier::forgetBlock($block->id);
             $this->audit($request, 'availability_block.updated', $block, $from, $to);
+            $this->notifyAffected($tenant, $block, $request->user()->id);
         }
 
         return response()->json($this->present($block, $tenant, $own));
@@ -171,6 +174,7 @@ class AvailabilityBlockController extends Controller
         $block = $this->find($tenant, $id, $this->ownProfessionalId($request->user()));
         $this->assertBranch($request, $block->professional_id, $block->branch_id);
         $block->loadMissing(['professional:id,display_name', 'branch:id,name']);
+        \App\Support\Notifier::forgetBlock($block->id);
         $block->delete();
 
         $kind = $block->kindKey();
@@ -308,6 +312,16 @@ class AvailabilityBlockController extends Controller
             'ends_at'         => $endsAt->toIso8601String(),
             'reason'          => $data['reason'],
         ] + (AvailabilityBlock::hasKind() ? ['kind' => $data['kind']] : []);
+    }
+
+    private function notifyAffected(Tenant $tenant, AvailabilityBlock $block, string $actorId): void
+    {
+        $zone = $tenant->zone();
+        $from = Carbon::parse($block->starts_at)->setTimezone($zone);
+        $what = ($block->professional ? "La ausencia de {$block->professional->display_name}" : 'El cierre de ' . ($block->branch?->name ?? 'la sede')) . ' del ' . $from->locale('es')->isoFormat('D [de] MMMM');
+        $appointments = $this->affectedQuery($tenant, $block->professional_id, $block->branch_id, Carbon::parse($block->starts_at), Carbon::parse($block->ends_at))->get(['id', 'professional_id', 'branch_id']);
+
+        \App\Support\DueNotices::closure($tenant, $appointments, $what, '/agenda', $actorId, "block:{$block->id}:" . Carbon::parse($block->starts_at)->format('YmdHi') . '-' . Carbon::parse($block->ends_at)->format('YmdHi'), $block->professional ? 'Tu ausencia del ' . $from->locale('es')->isoFormat('D [de] MMMM') : null);
     }
 
     private function affectedQuery(Tenant $tenant, ?string $professionalId, ?string $branchId, Carbon $startsAt, Carbon $endsAt): Builder

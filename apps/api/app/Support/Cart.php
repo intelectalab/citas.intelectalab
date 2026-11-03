@@ -167,6 +167,10 @@ class Cart
                     self::fail($field, 'Uno de los servicios del carrito ya no está activo. Quítalo del carrito.');
                 }
 
+                if (!$service->offeredAt($branch->id)) {
+                    self::fail($field, "{$service->name} no se da en {$branch->name}. Quítalo del carrito o cambia de sede.");
+                }
+
                 $professional = null;
 
                 if (!empty($item['professional_id'])) {
@@ -330,13 +334,33 @@ class Cart
             'appointment_id'  => null,
             'appointment'     => null,
             'details'         => $details,
+            'snapshot'        => Packages::snapshot($plan),
             'package'         => [
                 'sessions'       => (int) $items->sum('sessions'),
                 'booking_mode'   => $c['booking_mode'],
                 'schedule_label' => Packages::scheduleLabel($c),
-                'scheduled'      => $details ? count($details['slots']) : 0,
+                'scheduled'      => count($details['slots'] ?? []),
             ],
         ];
+    }
+
+    private static function storedDetails(array $line): ?string
+    {
+        $details = ($line['details'] ?? null) ?: [];
+
+        if (!empty($line['snapshot'])) {
+            $details['plan'] = $line['snapshot'];
+        }
+
+        return $details ? json_encode($details) : null;
+    }
+
+    private static function shownDetails(?string $raw): ?array
+    {
+        $details = $raw ? (json_decode($raw, true) ?: []) : [];
+        unset($details['plan']);
+
+        return $details ?: null;
     }
 
     public static function preview(array $resolved): array
@@ -461,7 +485,7 @@ class Cart
                 'total'           => $line['total'],
                 'professional_id' => $line['professional_id'],
                 'appointment_id'  => $line['appointment_id'],
-            ] + ($ordered ? ['position' => $position] : []) + ($detailed ? ['details' => isset($line['details']) ? json_encode($line['details']) : null] : []), $resolved['lines'], array_keys($resolved['lines'])));
+            ] + ($ordered ? ['position' => $position] : []) + ($detailed ? ['details' => self::storedDetails($line)] : []), $resolved['lines'], array_keys($resolved['lines'])));
 
             if ($resolved['applied']) {
                 Coupons::redeem($resolved['applied']['coupon'], $id, $resolved['customer']?->id, $resolved['applied']['discount']);
@@ -506,7 +530,7 @@ class Cart
                 'id'              => $i->appointment_id ?? $i->reference_id,
                 'quantity'        => (int) round((float) $i->quantity),
                 'professional_id' => $i->appointment_id ? null : $i->professional_id,
-                'details'         => isset($i->details) && $i->details ? json_decode($i->details, true) : null,
+                'details'         => self::shownDetails($i->details ?? null),
             ])->values(),
         ];
     }

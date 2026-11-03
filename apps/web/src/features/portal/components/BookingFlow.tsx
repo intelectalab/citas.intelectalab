@@ -375,7 +375,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             ))
         )}
 
-        {step === 'branch' && catalog.branches.map((item) => (
+        {step === 'branch' && catalog.branches.filter((item) => !service?.branch_ids?.length || service.branch_ids.includes(item.id)).map((item) => (
           <button key={item.id} type="button" data-branch={item.name} aria-pressed={branchId === item.id} onClick={() => { setBranchId(item.id); setProfessionalId(''); setTime(''); }} className={optionClass(branchId === item.id)}>
             <span className="text-sm font-bold text-slate-800">{item.name}</span>
           </button>

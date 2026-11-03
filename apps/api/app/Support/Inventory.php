@@ -698,7 +698,7 @@ class Inventory
             $title = $after <= 0 ? 'Producto agotado' : 'Stock bajo el mínimo';
             $qtyLabel = $after <= 0 ? 'Sin existencias (0)' : 'Quedan ' . self::formatQty($after) . ' (mínimo ' . self::formatQty($product->min_stock) . ')';
             $body = "{$product->name} · {$warehouse->branch_name} · {$qtyLabel}";
-            $dedupe = "low-stock:{$warehouse->id}:{$product->id}:" . now()->toDateString();
+            $dedupe = "low-stock:{$warehouse->id}:{$product->id}:" . now($tenant->zone())->toDateString();
 
             foreach ($userIds as $userId) {
                 Notifier::send(

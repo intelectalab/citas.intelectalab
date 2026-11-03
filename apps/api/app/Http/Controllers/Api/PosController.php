@@ -122,7 +122,7 @@ class PosController extends SaleController
             ->with('status')
             ->orderBy('name')
             ->get()
-            ->reject(fn (Service $s) => $s->status?->slug === 'inactive')
+            ->reject(fn (Service $s) => $s->status?->slug === 'inactive' || !$s->offeredAt($branch?->id))
             ->map(fn (Service $s) => [
                 'id'               => $s->id,
                 'name'             => $s->name,

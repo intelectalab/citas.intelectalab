@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Support\Access;
+use App\Support\AppointmentFlow;
 use App\Support\Audit;
 use App\Support\Campaigns;
 use App\Support\Coupons;
@@ -46,12 +48,31 @@ class CampaignController extends Controller
         return $value ? Carbon::parse($value)->toIso8601String() : null;
     }
 
-    private function segment(Tenant $tenant, array $validated): array
+    private function branchScope(Tenant $tenant, $user): ?array
     {
+        $limit = Access::branchLimit($user);
+
+        if (!$limit) {
+            return null;
+        }
+
+        return [
+            'branch_id'   => $limit,
+            'branch_name' => DB::table('branches')->where('id', $limit)->value('name'),
+            'can_choose'  => AppointmentFlow::rule($tenant, 'campaigns.manager_scope') === 'choose',
+        ];
+    }
+
+    private function segment(Tenant $tenant, array $validated, $user): array
+    {
+        $scope = $this->branchScope($tenant, $user);
+        $only = $scope && (!$scope['can_choose'] || ($validated['only_branch'] ?? true)) ? $scope['branch_id'] : null;
+
         return array_filter([
-            'group'      => $validated['group'],
-            'service_id' => $validated['group'] === 'service' ? $validated['service_id'] : null,
-            'branch_id'  => $validated['group'] === 'branch' ? $validated['branch_id'] : null,
+            'group'       => $validated['group'],
+            'service_id'  => $validated['group'] === 'service' ? $validated['service_id'] : null,
+            'branch_id'   => $validated['group'] === 'branch' ? $validated['branch_id'] : null,
+            'only_branch' => $only,
         ]);
     }
 
@@ -61,6 +82,7 @@ class CampaignController extends Controller
             'group'      => ['required', Rule::in(array_keys(Campaigns::GROUPS))],
             'service_id' => ['required_if:group,service', 'nullable', 'uuid', Rule::exists('services', 'id')->where('tenant_id', $tenant->id)],
             'branch_id'  => ['required_if:group,branch', 'nullable', 'uuid', Rule::exists('branches', 'id')->where('tenant_id', $tenant->id)],
+            'only_branch' => 'nullable|boolean',
         ];
     }
 
@@ -127,6 +149,7 @@ class CampaignController extends Controller
             'variables' => collect(Campaigns::VARIABLES)->map(fn ($label, $key) => ['token' => "[{$key}]", 'label' => $label])->values(),
             'volume_warning' => Campaigns::VOLUME_WARNING,
             'email'     => $this->emailState($tenant),
+            'branch_scope' => $this->branchScope($tenant, $request->user()),
         ]);
     }
 
@@ -135,7 +158,7 @@ class CampaignController extends Controller
         $tenant = $this->tenant($request);
         $validated = $request->validate($this->segmentRules($tenant), self::SEGMENT_MESSAGES);
 
-        return response()->json(Campaigns::audience($tenant, $this->segment($tenant, $validated)));
+        return response()->json(Campaigns::audience($tenant, $this->segment($tenant, $validated, $request->user())));
     }
 
     private function input(Request $request, Tenant $tenant): array
@@ -176,7 +199,7 @@ class CampaignController extends Controller
             throw ValidationException::withMessages(['send' => 'Antes de enviar campañas, configura el correo de tu empresa en Configuración → Correo de tu empresa.']);
         }
 
-        $segment = $this->segment($tenant, $validated);
+        $segment = $this->segment($tenant, $validated, $request->user());
         $audience = Campaigns::audience($tenant, $segment);
 
         if ($audience['eligible'] === 0) {
@@ -388,11 +411,20 @@ class CampaignController extends Controller
             return null;
         }
 
-        return DB::table('marketing_campaign_recipients as r')
+        $row = DB::table('marketing_campaign_recipients as r')
             ->join('customers as c', 'c.id', '=', 'r.customer_id')
             ->join('tenants as t', 't.id', '=', 'r.tenant_id')
             ->where('r.id', $recipient)
             ->first(['r.id', 'r.tenant_id', 'r.customer_id', 'c.first_name']);
+
+        if ($row || !\App\Support\Automations::ready()) {
+            return $row;
+        }
+
+        return DB::table('automation_logs as l')
+            ->join('customers as c', 'c.id', '=', 'l.customer_id')
+            ->where('l.id', $recipient)
+            ->first(['l.id', 'l.tenant_id', 'l.customer_id', 'c.first_name']);
     }
 
     public function unsubscribeShow(string $recipient)

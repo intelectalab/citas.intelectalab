@@ -16,7 +16,6 @@ use App\Support\AppointmentFlow;
 use App\Support\Audit;
 use App\Support\Branding;
 use App\Support\Currency;
-use App\Support\CustomerStages;
 use App\Support\Notifier;
 use App\Support\Walkin;
 use Illuminate\Http\JsonResponse;
@@ -157,6 +156,7 @@ class WalkinController extends Controller
                 'services'      => $this->activeServices($tenant)->map(fn (Service $s) => [
                     'id'               => $s->id,
                     'name'             => $s->name,
+                    'branch_ids'       => $s->branch_ids,
                     'duration_minutes' => (int) $s->duration_minutes,
                     'price'            => (float) $s->price,
                 ])->values(),
@@ -488,7 +488,7 @@ class WalkinController extends Controller
             'branch'        => ['id' => $branch->id, 'name' => $branch->name, 'address' => $branch->address],
             'branches'      => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name']),
             'services'      => $this->activeServices($tenant)
-                ->filter(fn (Service $s) => $working->contains(fn (Professional $p) => Walkin::canDo($s, $p)))
+                ->filter(fn (Service $s) => $s->offeredAt($branch->id) && $working->contains(fn (Professional $p) => Walkin::canDo($s, $p)))
                 ->map(fn (Service $s) => [
                     'id'               => $s->id,
                     'name'             => $s->name,
@@ -656,10 +656,6 @@ class WalkinController extends Controller
             'phone'      => $phone,
             'notes'      => $notes,
         ]);
-
-        if (CustomerStages::ready() && ($stage = CustomerStages::defaultId(CustomerStages::stages($tenant)))) {
-            CustomerStages::move($tenant, $customer->id, $stage, null, 'walkin');
-        }
 
         return $customer;
     }

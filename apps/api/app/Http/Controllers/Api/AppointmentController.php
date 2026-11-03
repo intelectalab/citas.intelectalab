@@ -155,6 +155,7 @@ class AppointmentController extends Controller
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
+                    'branch_ids'       => $s->branch_ids,
                 ])->values(),
             'can_override' => (bool) AppointmentFlow::rule($tenant, 'agenda.allow_override') && $request->user()->allows('agenda.override'),
             'slot_interval' => (int) AppointmentFlow::rule($tenant, 'agenda.slot_interval'),
@@ -237,11 +238,96 @@ class AppointmentController extends Controller
         ]);
     }
 
+    public function range(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        $validated = $request->validate([
+            'from'      => 'required|date_format:Y-m-d',
+            'to'        => 'required|date_format:Y-m-d|after_or_equal:from',
+            'branch_id' => 'required|uuid',
+        ]);
+
+        $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        Access::assertBranch($request->user(), $branch->id);
+        $timezone = AppointmentScheduler::timezone($branch, $tenant);
+        $from = Carbon::createFromFormat('Y-m-d', $validated['from'], $timezone)->startOfDay();
+        $to = Carbon::createFromFormat('Y-m-d', $validated['to'], $timezone)->startOfDay()->addDay();
+        abort_if($from->diffInDays($to) > 42, 422, 'Se pueden ver hasta 6 semanas a la vez.');
+        $own = $this->ownProfessionalId($request->user());
+
+        $appointments = Appointment::where('tenant_id', $tenant->id)
+            ->where('branch_id', $branch->id)
+            ->when($own, fn ($q) => $q->where('professional_id', $own))
+            ->where('starts_at', '>=', $from->toIso8601String())
+            ->where('starts_at', '<', $to->toIso8601String())
+            ->with(self::RELATIONS)
+            ->orderBy('starts_at')
+            ->get();
+
+        $schedules = ProfessionalSchedule::where('tenant_id', $tenant->id)
+            ->where('branch_id', $branch->id)
+            ->when($own, fn ($q) => $q->where('professional_id', $own))
+            ->orderBy('starts_local')
+            ->get()
+            ->groupBy('professional_id');
+
+        $blocks = AvailabilityBlock::where('tenant_id', $tenant->id)
+            ->where(fn ($q) => $q->whereIn('professional_id', $schedules->keys())->orWhere(fn ($q) => $q->whereNull('professional_id')->where('branch_id', $branch->id)))
+            ->where('starts_at', '<', $to->toIso8601String())
+            ->where('ends_at', '>', $from->toIso8601String())
+            ->get();
+
+        $local = fn ($value) => Carbon::parse($value)->setTimezone($timezone)->format(self::LOCAL_FORMAT);
+
+        $holidays = \App\Support\Holidays::available()
+            ? \App\Models\Holiday::where('tenant_id', $tenant->id)
+                ->where('date', '>=', $from->toDateString())
+                ->where('date', '<', $to->toDateString())
+                ->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $branch->id))
+                ->orderBy('name')
+                ->get()
+            : collect();
+
+        $professionals = Professional::where('tenant_id', $tenant->id)
+            ->when($own, fn ($q) => $q->where('id', $own))
+            ->whereIn('id', $schedules->keys()->merge($appointments->pluck('professional_id'))->unique())
+            ->orderBy('display_name')
+            ->get()
+            ->map(fn (Professional $p) => [
+                'id'           => $p->id,
+                'display_name' => $p->display_name,
+                'color_code'   => $p->color_code,
+                'schedules'    => ($schedules[$p->id] ?? collect())->map(fn (ProfessionalSchedule $s) => [
+                    'weekday' => (int) $s->weekday,
+                    'starts'  => substr($s->starts_local, 0, 5),
+                    'ends'    => substr($s->ends_local, 0, 5),
+                ])->values(),
+            ])->values();
+
+        return response()->json([
+            'from'          => $validated['from'],
+            'to'            => $validated['to'],
+            'now'           => now($timezone)->format(self::LOCAL_FORMAT),
+            'holidays'      => $holidays->map(fn ($h) => ['date' => Carbon::parse($h->date)->toDateString(), 'name' => $h->name, 'closed' => (bool) $h->closed])->values(),
+            'professionals' => $professionals,
+            'blocks'        => $blocks->map(fn (AvailabilityBlock $b) => [
+                'professional_id' => $b->professional_id,
+                'starts'          => $local($b->starts_at),
+                'ends'            => $local($b->ends_at),
+                'reason'          => $b->reason,
+            ])->values(),
+            'my_professional_id' => Professional::where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->value('id'),
+            'appointments'  => $appointments->map(fn (Appointment $a) => $this->present($a, $tenant)),
+        ]);
+    }
+
     public function show(Request $request, string $appointment)
     {
         $appointment = $this->find($request, $appointment);
 
         return response()->json($this->present($appointment, $this->tenant($request), true) + [
+            'late_cancel_strike' => \App\Support\OnlineBooking::lateCancelPreview($this->tenant($request), $appointment),
             'customer_timing' => AppointmentTiming::summarize(
                 Appointment::where('tenant_id', $appointment->tenant_id)
                     ->where('customer_id', $appointment->customer_id)
@@ -441,12 +527,14 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'status' => ['required', Rule::in(AppointmentFlow::keys())],
             'reason' => 'nullable|string|max:255',
+            'by_customer' => 'nullable|boolean',
         ]);
 
         $to = $validated['status'];
         $reason = trim((string) ($validated['reason'] ?? '')) ?: null;
+        $byCustomer = (bool) ($validated['by_customer'] ?? false);
 
-        return DB::transaction(function () use ($request, $appointment, $tenant, $user, $to, $reason) {
+        return DB::transaction(function () use ($request, $appointment, $tenant, $user, $to, $reason, $byCustomer) {
             $appointment = $this->find($request, $appointment);
             $appointment = Appointment::whereKey($appointment->id)->lockForUpdate()->first()->load(self::RELATIONS);
             $from = $appointment->status;
@@ -523,7 +611,7 @@ class AppointmentController extends Controller
                 case AppointmentFlow::CANCELLED:
                     $changes['cancelled_at'] = $now;
                     $changes['cancel_reason'] = $reason;
-                    $changes['cancelled_by'] = 'staff';
+                    $changes['cancelled_by'] = $byCustomer && \App\Support\OnlineBooking::lateCancelPreview($tenant, $appointment) ? 'customer' : 'staff';
                     break;
             }
 

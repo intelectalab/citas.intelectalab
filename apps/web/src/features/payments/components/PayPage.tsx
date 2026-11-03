@@ -13,6 +13,7 @@ interface PublicLink {
   status: 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
   status_label: string;
   purpose: 'sale' | 'deposit';
+  online_package?: boolean;
   amount: number;
   currency: string;
   currency_info: CurrencyInfo;
@@ -168,7 +169,9 @@ export default function PayPage() {
                 <p className="text-sm text-slate-600">
                   {isDeposit
                     ? `Tu cita${link.appointment ? ` ${link.appointment}` : ''} quedó reservada y confirmada. El resto se paga en la sede.`
-                    : `${link.company.name} ya recibió tu pago${link.paid_at ? ` (${momentOf(link.paid_at)})` : ''}.`}
+                    : link.online_package
+                      ? 'Tu paquete ya está a tu nombre. Reserva tus sesiones desde tu portal.'
+                      : `${link.company.name} ya recibió tu pago${link.paid_at ? ` (${momentOf(link.paid_at)})` : ''}.`}
                 </p>
               </div>
             )}
@@ -179,7 +182,7 @@ export default function PayPage() {
                 <h1 className="text-lg font-black text-brand-ink">{link.status === 'expired' ? 'Este link venció' : 'Este link ya no está disponible'}</h1>
                 <p className="text-sm text-slate-600">
                   {link.reason ?? (link.status === 'expired'
-                    ? isDeposit ? 'Pasó el tiempo para pagar el adelanto. Si el horario sigue libre, vuelve a reservarlo.' : 'Pídele a la empresa un link nuevo.'
+                    ? isDeposit ? 'Pasó el tiempo para pagar el adelanto. Si el horario sigue libre, vuelve a reservarlo.' : link.online_package ? 'Pasó el tiempo para pagar. Si aún lo quieres, cómpralo otra vez desde tu portal.' : 'Pídele a la empresa un link nuevo.'
                     : 'Pídele a la empresa un link nuevo.')}
                 </p>
                 <p className="text-xs text-slate-400">No se te cobró nada.</p>
@@ -187,6 +190,12 @@ export default function PayPage() {
             )}
 
             {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
+
+            {link.online_package && link.status !== 'pending' && (
+              <Link href="/portal" data-back-portal className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
+                <CalendarCheck size={16} /> Volver a mi portal
+              </Link>
+            )}
 
             {isDeposit && link.status !== 'pending' && (
               <Link href="/portal" data-back-portal className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">

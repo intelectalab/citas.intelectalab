@@ -13,6 +13,7 @@ export interface Appointment {
   duration_minutes: number;
   price: string;
   source: string;
+  late_cancel_strike?: { window_hours: number; misses: number; limit: number | null; block_days: number; would_block: boolean } | null;
   notes: string | null;
   reschedule_count: number;
   override_reason: string | null;
@@ -59,7 +60,7 @@ export interface AppointmentStep {
 export interface AppointmentContext {
   branches: { id: string; name: string }[];
   professionals: { id: string; display_name: string; color_code: string | null; branch_ids: string[] }[];
-  services: { id: string; name: string; duration_minutes: number; price: string; professional_ids: string[] }[];
+  services: { id: string; name: string; duration_minutes: number; price: string; professional_ids: string[]; branch_ids?: string[] }[];
   can_override: boolean;
   slot_interval: number;
 }

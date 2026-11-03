@@ -335,78 +335,8 @@ class QuoteController extends Controller
     public function pdf(Request $request, string $quote)
     {
         $tenant = $this->tenant($request);
-        $branchLimit = Access::branchLimit($request->user());
 
-        $q = DB::table('quotes as q')
-            ->join('customers as c', 'c.id', '=', 'q.customer_id')
-            ->leftJoin('branches as b', 'b.id', '=', 'q.branch_id')
-            ->leftJoin('professionals as p', 'p.id', '=', 'q.professional_id')
-            ->where('q.tenant_id', $tenant->id)
-            ->where('q.id', $quote)
-            ->when($branchLimit, fn ($query, $id) => $query->where(fn ($sub) => $sub->where('q.branch_id', $id)->orWhereNull('q.branch_id')))
-            ->first(['q.*', 'c.first_name', 'c.last_name', 'c.document_number', 'c.phone as customer_phone', 'c.email as customer_email', 'b.name as branch_name', 'b.address as branch_address', 'p.display_name as professional_name', 'p.license_number']);
-        abort_unless($q, 404, 'No se encontró el presupuesto.');
-
-        $currency = Currency::of($tenant);
-        $money = fn ($amount) => Currency::format((float) $amount, $currency);
-        $salesRules = Sales::rules($tenant);
-        $zone = $tenant->zone();
-
-        $items = DB::table('quote_items')->where('tenant_id', $tenant->id)->where('quote_id', $q->id)->orderBy('sort_order')->get()
-            ->map(function ($item) use ($money) {
-                $meta = is_string($item->metadata) ? (json_decode($item->metadata, true) ?: []) : (array) ($item->metadata ?? []);
-
-                return [
-                    'description' => $item->description,
-                    'detail'      => collect([$meta['zone'] ?? null, $meta['phase'] ?? null, $meta['notes'] ?? null])->filter()->implode(' · '),
-                    'quantity'    => rtrim(rtrim(number_format((float) $item->quantity, 2, '.', ''), '0'), '.'),
-                    'unit_price'  => $money($item->unit_price),
-                    'discount'    => (float) $item->discount > 0 ? $money($item->discount) : null,
-                    'total'       => $money($item->total),
-                ];
-            });
-
-        $installments = DB::table('quote_installments')->where('tenant_id', $tenant->id)->where('quote_id', $q->id)->orderBy('number')->get()
-            ->map(fn ($i) => ['number' => (int) $i->number, 'due_date' => Carbon::parse($i->due_date)->format('d/m/Y'), 'amount' => $money($i->amount)]);
-
-        $html = view('quotes.pdf', [
-            'quote' => [
-                'code'         => $q->code,
-                'title'        => $q->title,
-                'status'       => $q->status,
-                'status_label' => Quotes::STATUSES[$q->status] ?? $q->status,
-                'date'         => Carbon::parse($q->created_at)->setTimezone($zone)->format('d/m/Y'),
-                'valid_until'  => $q->valid_until ? Carbon::parse($q->valid_until)->format('d/m/Y') : null,
-                'customer'     => trim("{$q->first_name} {$q->last_name}"),
-                'document'     => $q->document_number,
-                'phone'        => $q->customer_phone,
-                'email'        => $q->customer_email,
-                'branch'       => $q->branch_name,
-                'branch_address' => $q->branch_address,
-                'professional' => $q->professional_name,
-                'license'      => $q->license_number,
-                'notes'        => $q->notes,
-                'subtotal'     => $money($q->subtotal),
-                'discount'     => (float) $q->discount > 0 ? $money($q->discount) : null,
-                'tax'          => (float) $q->tax > 0 ? $money($q->tax) : null,
-                'tax_label'    => 'IGV ' . rtrim(rtrim(number_format((float) $salesRules['tax_rate'], 2, '.', ''), '0'), '.') . '%' . ($salesRules['prices_include_tax'] ? ' (incluido)' : ''),
-                'total'        => $money($q->total),
-            ],
-            'items'        => $items,
-            'installments' => $installments,
-            'company'      => $tenant->name,
-            'client'       => $tenant->vocabulary()['client'],
-            'pro'          => $tenant->vocabulary()['pro'],
-            'document'     => \App\Support\Documents::forPdf($tenant),
-            'printedAt'    => now($zone)->format('d/m/Y H:i'),
-        ])->render();
-
-        $name = trim(preg_replace('/[^\pL\pN \-]+/u', '', "Presupuesto {$q->code} {$q->first_name} {$q->last_name}")) ?: 'Presupuesto';
-
-        return response(\App\Support\Documents::pdf($html), 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . Str::ascii($name) . '.pdf"',
-        ]);
+        return Quotes::pdf($tenant, $quote, Access::branchLimit($request->user()));
     }
 
     private function validateQuotePayload(Request $request, ?string $quoteId = null): array
@@ -430,9 +360,9 @@ class QuoteController extends Controller
     private function validateQuoteFields(Request $request): array
     {
         return $request->validate([
-            'customer_id'                 => 'required|uuid',
-            'branch_id'                   => 'nullable|uuid',
-            'professional_id'             => 'nullable|uuid',
+            'customer_id'                 => ['required', 'uuid', Rule::exists('customers', 'id')->where('tenant_id', $request->user()->tenant_id)->whereNull('deleted_at')],
+            'branch_id'                   => ['nullable', 'uuid', Rule::exists('branches', 'id')->where('tenant_id', $request->user()->tenant_id)],
+            'professional_id'             => ['nullable', 'uuid', Rule::exists('professionals', 'id')->where('tenant_id', $request->user()->tenant_id)],
             'title'                       => 'required|string|max:200',
             'valid_until'                 => 'nullable|date_format:Y-m-d',
             'notes'                       => 'nullable|string|max:2000',
@@ -454,6 +384,9 @@ class QuoteController extends Controller
             'installments.*.amount'       => 'required_with:installments|numeric|min:0.01|max:9999999',
         ], [
             'customer_id.required'         => 'Elige al cliente o paciente.',
+            'customer_id.exists'           => 'Ese cliente no existe en tu empresa.',
+            'branch_id.exists'             => 'Esa sede no existe en tu empresa.',
+            'professional_id.exists'       => 'Ese profesional no existe en tu empresa.',
             'title.required'               => 'Escribe un título para el presupuesto o plan de tratamiento.',
             'items.required'               => 'Agrega al menos una línea al presupuesto.',
             'items.min'                    => 'Agrega al menos una línea al presupuesto.',
@@ -483,6 +416,11 @@ class QuoteController extends Controller
                 ? (int) $item['sessions_total']
                 : ($item['item_type'] === 'service' ? max(1, (int) round($qty)) : 0);
 
+            if ($item['item_type'] === 'package' && !empty($item['reference_id'])) {
+                $perPackage = (int) (Packages::planItems([$item['reference_id']])[$item['reference_id']] ?? collect())->sum('sessions');
+                $sessionsTotal = $perPackage > 0 ? $perPackage * max(1, (int) round($qty)) : $sessionsTotal;
+            }
+
             $sessionsUsed = min($sessionsTotal, max(0, (int) ($item['sessions_used'] ?? 0)));
 
             $meta = array_filter([
@@ -510,6 +448,13 @@ class QuoteController extends Controller
         }
 
         $totals = Sales::totals($salesRules, $gross, $totalDiscount);
+
+        $installmentsSum = round(array_sum(array_map(fn ($i) => (float) $i['amount'], $validated['installments'] ?? [])), 2);
+
+        if (!empty($validated['installments']) && abs($installmentsSum - (float) $totals['total']) > 0.01) {
+            $currency = Currency::of($tenant);
+            throw ValidationException::withMessages(['installments' => 'Las cuotas suman ' . Currency::format($installmentsSum, $currency) . ' y el total es ' . Currency::format((float) $totals['total'], $currency) . ': ' . ($installmentsSum < (float) $totals['total'] ? 'faltan ' : 'sobran ') . Currency::format(abs($installmentsSum - (float) $totals['total']), $currency) . '.']);
+        }
 
         DB::table('quote_installments')->where('tenant_id', $tenant->id)->where('quote_id', $quoteId)->delete();
 
@@ -552,7 +497,7 @@ class QuoteController extends Controller
 
         $initialStatus = $validated['status'] ?? 'draft';
 
-        DB::transaction(function () use ($tenant, $user, $validated, $validUntil, $initialStatus) {
+        $createdId = DB::transaction(function () use ($tenant, $user, $validated, $validUntil, $initialStatus) {
             $quoteId = (string) Str::uuid();
             $code = Quotes::nextCode($tenant->id);
 
@@ -597,7 +542,13 @@ class QuoteController extends Controller
                 'note'          => $initialStatus === 'sent' ? 'Presupuesto creado y enviado al cliente.' : 'Presupuesto creado como borrador.',
                 'created_at'    => now(),
             ]);
+
+            return $quoteId;
         });
+
+        if ($initialStatus === 'sent') {
+            \App\Support\Messaging::quoteSent($tenant, DB::table('quotes')->where('id', $createdId)->first(), $user);
+        }
 
         return $this->index($request);
     }
@@ -700,31 +651,42 @@ class QuoteController extends Controller
                 ]);
             }
 
-            $updates = [
-                'status'     => $to,
-                'updated_at' => now(),
-            ];
-
-            if ($to === 'accepted') {
-                $updates['accepted_at'] = now();
-                $updates['accepted_via'] = 'staff';
+            if ($from === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'status' => 'Un presupuesto anulado no se reabre: crea uno nuevo.',
+                ]);
             }
 
-            DB::table('quotes')->where('id', $row->id)->update($updates);
-            $fresh = DB::table('quotes')->where('id', $row->id)->first();
+            if (in_array($from, ['rejected', 'expired'], true) && $to !== 'draft') {
+                throw ValidationException::withMessages([
+                    'status' => 'Primero reábrelo como borrador.',
+                ]);
+            }
 
             if ($to === 'accepted') {
                 $shouldCreateSale = array_key_exists('create_sale', $validated) && $validated['create_sale'] !== null
                     ? (bool) $validated['create_sale']
                     : $rules['auto_create_sale'];
 
-                if ($shouldCreateSale && Sales::ready()) {
-                    Quotes::ensureSale($tenant, $fresh, $user);
-                    $fresh = DB::table('quotes')->where('id', $row->id)->first();
-                }
+                $note = isset($validated['note']) && trim($validated['note']) !== '' ? trim($validated['note']) : null;
+                $fresh = Quotes::approve($tenant, $row, $user, 'staff', $shouldCreateSale, $note);
 
-                Quotes::createPlan($tenant, $fresh, $user);
+                return ['id' => $row->id, 'from' => $from, 'to' => $to, 'sale_id' => $fresh->sale_id ?? null];
             }
+
+            $updates = [
+                'status'     => $to,
+                'updated_at' => now(),
+            ];
+
+            if ($to === 'draft' && $row->valid_until && (string) $row->valid_until < Quotes::today($tenant->id)) {
+                $updates['valid_until'] = $rules['validity_days'] > 0
+                    ? Carbon::now($tenant->zone())->addDays($rules['validity_days'])->toDateString()
+                    : null;
+            }
+
+            DB::table('quotes')->where('id', $row->id)->update($updates);
+            $fresh = DB::table('quotes')->where('id', $row->id)->first();
 
             if (in_array($to, ['rejected', 'cancelled'], true)) {
                 DB::table('quote_installments')
@@ -758,6 +720,10 @@ class QuoteController extends Controller
         });
 
         $action = ['accepted' => 'quote.approved', 'rejected' => 'quote.rejected', 'cancelled' => 'quote.cancelled'][$change['to'] ?? ''] ?? null;
+
+        if (($change['to'] ?? null) === 'sent') {
+            \App\Support\Messaging::quoteSent($tenant, DB::table('quotes')->where('id', $change['id'])->first(), $user);
+        }
 
         if ($action) {
             $this->auditQuote($request, $tenant, $action, $change['id'], [
@@ -842,25 +808,7 @@ class QuoteController extends Controller
 
             if ($row->status !== 'accepted') {
                 $approvedFrom = $row->status;
-                DB::table('quotes')->where('id', $row->id)->update([
-                    'status'       => 'accepted',
-                    'accepted_at'  => now(),
-                    'accepted_via' => 'staff',
-                    'updated_at'   => now(),
-                ]);
-
-                DB::table('quote_status_history')->insert([
-                    'id'            => (string) Str::uuid(),
-                    'tenant_id'     => $tenant->id,
-                    'quote_id'      => $row->id,
-                    'from_status'   => $row->status,
-                    'to_status'     => 'accepted',
-                    'actor_user_id' => $user->id,
-                    'note'          => 'Presupuesto aprobado al pasar a cobro.',
-                    'created_at'    => now(),
-                ]);
-
-                $row = DB::table('quotes')->where('id', $row->id)->first();
+                $row = Quotes::approve($tenant, $row, $user, 'staff', true, 'Presupuesto aprobado al pasar a cobro.');
             }
 
             $sale = Quotes::ensureSale($tenant, $row, $user);

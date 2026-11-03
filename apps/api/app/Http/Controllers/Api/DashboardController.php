@@ -8,7 +8,6 @@ use App\Models\AppointmentStatusHistory;
 use App\Models\CareRecord;
 use App\Models\Customer;
 use App\Models\Professional;
-use App\Models\ProfessionalSchedule;
 use App\Models\Recall;
 use App\Models\Tenant;
 use App\Models\User;
@@ -53,14 +52,7 @@ class DashboardController extends Controller
         $completed = $today->where('status', AppointmentFlow::COMPLETED);
         $lastWeek = $between($appointments(), $dayStart->copy()->subWeek(), $dayEnd->copy()->subWeek())->whereNotIn('status', AppointmentFlow::RELEASED)->count();
 
-        $scheduled = ProfessionalSchedule::where('professional_schedules.tenant_id', $tenant->id)
-            ->where('weekday', $dayStart->dayOfWeek)
-            ->when($own, fn ($q) => $q->where('professional_id', $own))
-            ->join('branches', 'branches.id', '=', 'professional_schedules.branch_id')
-            ->where('branches.status', 'active')
-            ->when($limit, fn ($q, $id) => $q->where('professional_schedules.branch_id', $id))
-            ->get(['starts_local', 'ends_local'])
-            ->sum(fn ($s) => Carbon::parse($s->starts_local)->diffInMinutes(Carbon::parse($s->ends_local)));
+        $scheduled = \App\Support\WorkMinutes::compute($tenant, $dayStart, $dayStart->copy()->addDay(), $limit, $own)['total'];
         $booked = $active->sum(fn (Appointment $a) => $a->starts_at->diffInMinutes($a->ends_at));
 
         $upcoming = $today->filter(fn (Appointment $a) => in_array($a->status, self::OPEN, true) && $a->ends_at->gte($now))->take(6)->values();

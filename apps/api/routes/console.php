@@ -38,11 +38,54 @@ Artisan::command('messages:send', function () {
     }
 
     $campaigns = \App\Support\Campaigns::dispatchDue();
+    $automations = \App\Support\Automations::runDue();
     $done = \App\Support\Messaging::process(null, 200);
-    $this->info("Campañas que salieron: {$campaigns}. Enviados: {$done['sent']}. Con error: {$done['failed']}. No enviados: {$done['not_sent']}.");
+    $this->info("Campañas que salieron: {$campaigns}. Automatizaciones: {$automations}. Enviados: {$done['sent']}. Con error: {$done['failed']}. No enviados: {$done['not_sent']}.");
 })->purpose('Arma los recordatorios y envía los mensajes pendientes o programados');
 
 Schedule::command('messages:send')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('appointments:confirmations', function () {
+    $count = 0;
+    foreach (\App\Models\Tenant::where('status', 'active')->with('settings')->get() as $tenant) {
+        \App\Support\Confirmations::process($tenant);
+        \App\Support\Notifier::upcomingAbsences($tenant);
+        $count++;
+    }
+
+    $this->info("Empresas revisadas: {$count}.");
+})->purpose('Revisa las citas sin confirmar (avisa o libera según la regla) y las ausencias próximas');
+
+Schedule::command('appointments:confirmations')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('customers:stages', function () {
+    if (!\App\Support\CustomerStages::automatic()) {
+        $this->warn('Falta actualizar la base de datos: ejecuta php artisan migrate.');
+
+        return;
+    }
+
+    $moved = 0;
+    foreach (\App\Models\Tenant::where('status', 'active')->with('settings')->get() as $tenant) {
+        $moved += \App\Support\CustomerStages::refresh($tenant);
+    }
+
+    $this->info("Clientes que cambiaron de columna: {$moved}.");
+})->purpose('Ubica a cada cliente en la columna del tablero que corresponde a su historia');
+
+Schedule::command('customers:stages')->dailyAt('03:10')->withoutOverlapping();
+
+Artisan::command('notifications:due', function () {
+    $count = 0;
+    foreach (\App\Models\Tenant::where('status', 'active')->with(['settings', 'activeSubscription.plan'])->get() as $tenant) {
+        \App\Support\DueNotices::run($tenant, true);
+        $count++;
+    }
+
+    $this->info("Empresas revisadas: {$count}.");
+})->purpose('Avisa controles por vencer, fichas en borrador, tope del plan y suscripción por vencer');
+
+Schedule::command('notifications:due')->hourlyAt(7)->withoutOverlapping();
 
 Artisan::command('db:demo {--agregar : Solo suma los ejemplos nuevos, sin borrar nada} {--force : No pregunta antes de borrar}', function () {
     if (app()->isProduction()) {

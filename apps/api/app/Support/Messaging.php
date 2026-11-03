@@ -52,6 +52,8 @@ class Messaging
         'Portal'      => 'Dirección del portal',
         'Correo'      => 'Correo del cliente',
         'Control'     => 'Nombre del control',
+        'Presupuesto' => 'Título del presupuesto',
+        'Condiciones' => 'Condiciones del paquete',
     ];
 
     public const KINDS = [
@@ -129,6 +131,20 @@ class Messaging
             'body'  => "Hola [Nombre]:\n\nSe acerca la fecha de tu [Control] ([Fecha]). Reserva tu cita en nuestro portal o escríbenos.\n\n[Empresa]",
             'options' => ['days' => 3],
         ],
+        'quote_sent' => [
+            'label' => 'Tienes un presupuesto',
+            'when'  => 'Al marcar un presupuesto como "Enviado". Si la empresa permite responderlo en línea, el cliente lo acepta o rechaza desde su portal.',
+            'vars'  => ['Nombre', 'Presupuesto', 'Monto', 'Vence', 'Portal', 'Empresa'],
+            'subject' => 'Tu presupuesto: [Presupuesto]',
+            'body'  => "Hola [Nombre]:\n\nTe enviamos el presupuesto [Presupuesto] por [Monto], válido hasta el [Vence].\n\nPuedes verlo y responderlo en tu portal:\n[Portal]\n\n[Empresa]",
+        ],
+        'package_bought' => [
+            'label' => 'Compraste un paquete',
+            'when'  => 'Al pagarse un paquete comprado desde el portal.',
+            'vars'  => ['Nombre', 'Paquete', 'Sesiones', 'Vence', 'Condiciones', 'Portal', 'Empresa'],
+            'subject' => 'Tu paquete [Paquete] está listo',
+            'body'  => "Hola [Nombre]:\n\nGracias por tu compra. Tu paquete [Paquete] trae [Sesiones] y vale hasta el [Vence].\n\n[Condiciones]\n\nReserva tus sesiones en tu portal:\n[Portal]\n\n[Empresa]",
+        ],
         'portal_access' => [
             'label' => 'Acceso al portal',
             'when'  => 'Al darle acceso al portal a un cliente o al restablecer su contraseña.',
@@ -157,8 +173,9 @@ class Messaging
     {
         return match ($kind) {
             'manual'   => self::MANUAL_LABEL,
-            'campaign' => 'Campaña',
-            default    => self::KINDS[$kind]['label'] ?? $kind,
+            'campaign'   => 'Campaña',
+            'automation' => 'Automatización',
+            default      => self::KINDS[$kind]['label'] ?? $kind,
         };
     }
 
@@ -596,6 +613,47 @@ class Messaging
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    public static function portalUrl(): string
+    {
+        return rtrim((string) config('app.frontend_url'), '/') . '/login';
+    }
+
+    public static function quoteSent(Tenant $tenant, object $quote, ?User $user): void
+    {
+        $customer = Customer::find($quote->customer_id);
+
+        if (!$customer) {
+            return;
+        }
+
+        self::queue($tenant, 'quote_sent', $customer, [
+            'Presupuesto' => "{$quote->title} ({$quote->code})",
+            'Monto'       => Currency::format((float) $quote->total, Currency::of($tenant)),
+            'Vence'       => $quote->valid_until ? self::longDate(Carbon::parse($quote->valid_until, $tenant->zone())) : 'sin fecha de vencimiento',
+            'Portal'      => self::portalUrl(),
+        ], ['branch_id' => $quote->branch_id, 'entity_type' => 'quote', 'entity_id' => $quote->id, 'dedupe_key' => "quote-sent:{$quote->id}:" . substr((string) $quote->updated_at, 0, 19), 'user' => $user]);
+    }
+
+    public static function packageBought(Tenant $tenant, object $package): void
+    {
+        $customer = Customer::find($package->customer_id);
+
+        if (!$customer) {
+            return;
+        }
+
+        $sessions = (int) DB::table('customer_package_items')->where('customer_package_id', $package->id)->sum('sessions_total');
+        $conditions = is_string($package->conditions) ? (json_decode($package->conditions, true) ?: []) : (array) $package->conditions;
+
+        self::queue($tenant, 'package_bought', $customer, [
+            'Paquete'     => $package->name,
+            'Sesiones'    => Packages::sessions($sessions),
+            'Vence'       => self::longDate(Carbon::parse($package->expires_at)->setTimezone($tenant->zone())),
+            'Condiciones' => (string) ($conditions['terms_text'] ?? ''),
+            'Portal'      => self::portalUrl(),
+        ], ['branch_id' => $package->branch_id, 'entity_type' => 'package', 'entity_id' => $package->id, 'dedupe_key' => "package-bought:{$package->id}"]);
     }
 
     public static function portalAccess(Tenant $tenant, Customer $customer, ?User $user): ?object

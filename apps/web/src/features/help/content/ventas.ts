@@ -86,6 +86,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Movimiento', text: 'Para poner dinero, pagar un gasto o retirar efectivo, con su motivo. Los cobros a clientes entran solos, no se anotan aquí.', perm: 'cash.edit' },
         { title: 'Cerrar caja', text: 'Cuenta el efectivo y escríbelo. El sistema dice si cuadra, si falta o si sobra.', perm: 'cash.edit' },
         { title: 'Turnos cerrados', text: 'Cada cierre con su resultado: cuadró, faltaron o sobraron.' },
+        { title: 'Cada quien su turno', text: 'Sin el permiso "Turnos de otros", cada persona ve y cierra solo el turno que abrió. Una caja abierta por otra persona sale con su nombre, sin montos. El gerente trae ese permiso de fábrica.' },
         { title: 'Nueva caja', text: 'Para agregar otra caja en una sede.', perm: 'cash.create' },
       ],
       tasks: [

@@ -38,6 +38,7 @@ interface Service {
   recall_label?: string | null;
   recall_days?: number | null;
   recall_service_id?: string | null;
+  branch_ids?: string[];
 }
 
 const EMPTY_FORM = {
@@ -88,6 +89,9 @@ export default function FormService({
   const [otherServices, setOtherServices] = useState<{ id: string; name: string }[]>([]);
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [allBranches, setAllBranches] = useState(true);
+  const [branchIds, setBranchIds] = useState<string[]>([]);
 
   const usesSupplies = hasModule('inventory') && (can('inventory.view') || can('services.view'));
   const [supplies, setSupplies] = useState<ServiceSuppliesData | null>(null);
@@ -144,8 +148,20 @@ export default function FormService({
     } else {
       setForm(EMPTY_FORM);
     }
+    setAllBranches(!(initialData?.branch_ids?.length));
+    setBranchIds(initialData?.branch_ids ?? []);
     setSaveError('');
   }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/branches')
+      .then((res) => {
+        const list = (Array.isArray(res.data) ? res.data : res.data?.branches ?? []) as { id: string; name: string; status?: string }[];
+        setBranches(list.filter((b) => b.status !== 'inactive').map((b) => ({ id: b.id, name: b.name })));
+      })
+      .catch(() => setBranches([]));
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -199,6 +215,11 @@ export default function FormService({
       setSaveError('Elige el estado del servicio: Activo o Inactivo.');
       return;
     }
+    if (branches.length > 1 && !allBranches && branchIds.length === 0) {
+      setActiveAccordion(4);
+      setSaveError('Marca al menos una sede donde se da el servicio, o elige "Todas las sedes".');
+      return;
+    }
     try {
       setLoading(true);
       setSaveError('');
@@ -210,6 +231,7 @@ export default function FormService({
         recall_days: hasRecall ? form.recall_days : null,
         recall_service_id: hasRecall ? form.recall_service_id || null : null,
         deposit_value: Number(form.deposit_value || 0),
+        ...(branches.length > 1 ? { branch_ids: allBranches ? [] : branchIds } : {}),
       };
 
       const res = initialData?.id
@@ -389,6 +411,42 @@ export default function FormService({
 
                       {sec.id === 4 && (
                         <div className="space-y-4">
+                          {branches.length > 1 && (
+                            <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-service-branches>
+                              <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600">¿En qué sedes se da?</span>
+                              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Sedes donde se da">
+                                {([['all', 'Todas las sedes'], ['some', 'Solo en algunas']] as const).map(([value, label]) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={(value === 'all') === allBranches}
+                                    data-branch-mode={value}
+                                    onClick={() => setAllBranches(value === 'all')}
+                                    className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${(value === 'all') === allBranches ? 'border-brand bg-brand-soft/20 text-brand-ink' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                              {!allBranches && (
+                                <div className="space-y-1.5">
+                                  {branches.map((branch) => (
+                                    <label key={branch.id} className="flex items-center gap-2.5 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={branchIds.includes(branch.id)}
+                                        onChange={(e) => setBranchIds(e.target.checked ? [...branchIds, branch.id] : branchIds.filter((id) => id !== branch.id))}
+                                        className="rounded border-slate-300 text-brand-ink focus:ring-brand"
+                                      />
+                                      <span className="text-sm text-slate-800">{branch.name}</span>
+                                    </label>
+                                  ))}
+                                  <span className="block text-xs text-slate-400">En las demás sedes no se puede agendar ni aparece en el portal ni en el kiosko.</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="space-y-2.5">
                             {[
                               { key: 'online_booking' as const, label: 'Se puede reservar en línea', hint: 'Aparece en el portal del cliente y en la reserva pública.' },

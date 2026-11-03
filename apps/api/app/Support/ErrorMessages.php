@@ -21,6 +21,16 @@ class ErrorMessages
 
     public const OTHER_CLIENT_ERROR = 'No se pudo completar la acción. Revisa los datos e inténtalo de nuevo.';
 
+    public const DATABASE_DOWN = 'No pudimos conectarnos con la base de datos, así que no se pudo completar la acción. Inténtalo de nuevo en unos minutos; si sigue pasando, avísale al administrador.';
+
+    private const DATABASE_PATTERNS = [
+        '/SQLSTATE\[08\d{3}\]/',
+        '/SQLSTATE\[HY000\] \[2002\]/',
+        '/Connection refused/i',
+        '/could not connect to server/i',
+        '/server closed the connection unexpectedly/i',
+    ];
+
     private const DEFAULTS = [
         '/^$/',
         '/^Unauthenticated\.?$/i',
@@ -42,17 +52,44 @@ class ErrorMessages
         }
 
         $data = $response->getData(true);
-        $message = is_array($data) ? (string) ($data['message'] ?? '') : '';
-        $debugDetail = $status >= 500 && config('app.debug') && $message !== '' && $message !== 'Server Error';
+        $data = is_array($data) ? $data : [];
+        $message = (string) ($data['message'] ?? '');
 
-        if ($debugDetail || ! self::isDefault($message)) {
+        if ($status >= 500 && $message !== '' && ! self::isDefault($message) && ! self::isTechnical($message, $data)) {
             return $response;
         }
 
-        $data = is_array($data) ? $data : [];
-        $data['message'] = self::BY_STATUS[$status] ?? ($status >= 500 ? self::BY_STATUS[500] : self::OTHER_CLIENT_ERROR);
+        if ($status < 500 && ! self::isDefault($message)) {
+            return $response;
+        }
 
-        return $response->setData($data);
+        $friendly = self::isDatabaseDown($message) ? self::DATABASE_DOWN : (self::BY_STATUS[$status] ?? ($status >= 500 ? self::BY_STATUS[500] : self::OTHER_CLIENT_ERROR));
+
+        $clean = ['message' => $friendly] + array_intersect_key($data, array_flip(['code', 'errors']));
+
+        if (config('app.debug') && $message !== '' && $message !== $friendly) {
+            $clean['debug'] = ['message' => $message] + array_intersect_key($data, array_flip(['exception', 'file', 'line']));
+        }
+
+        return $response->setData($clean);
+    }
+
+    private static function isTechnical(string $message, array $data): bool
+    {
+        $exception = (string) ($data['exception'] ?? '');
+
+        return ($exception !== '' && !str_contains($exception, 'HttpException')) || self::isDatabaseDown($message) || preg_match('/SQLSTATE|Exception|Stack trace|\.php|Call to |Undefined (index|variable|array key|method)/i', $message) === 1;
+    }
+
+    private static function isDatabaseDown(string $message): bool
+    {
+        foreach (self::DATABASE_PATTERNS as $pattern) {
+            if (preg_match($pattern, $message)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function isDefault(string $message): bool

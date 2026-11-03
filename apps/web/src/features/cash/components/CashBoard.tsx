@@ -43,6 +43,7 @@ export default function CashBoard() {
   const sessions = data?.sessions ?? [];
   const canManage = Boolean(data?.can_manage);
   const canOperate = Boolean((data as { can_operate?: boolean } | null)?.can_operate);
+  const seesOthers = (data as { sees_others?: boolean } | null)?.sees_others !== false;
   const term = searchTerm.trim().toLowerCase();
 
   const rows = sessions.filter((session) =>
@@ -222,7 +223,12 @@ export default function CashBoard() {
                 </div>
               </div>
 
-              {session ? (
+              {session?.hidden ? (
+                <div data-register-other className="mt-auto">
+                  <span className="block text-sm font-semibold">La abrió {session.opened_by ?? 'otra persona'}</span>
+                  <span className="block text-xs text-slate-300 mt-1">Desde {momentOf(session.opened_at)}. Solo quien la abrió o el gerente pueden verla y cerrarla.</span>
+                </div>
+              ) : session ? (
                 <>
                   <div>
                     <span className="block text-[11px] font-bold text-brand-soft uppercase tracking-wider">Debe haber en efectivo</span>
@@ -273,7 +279,7 @@ export default function CashBoard() {
       )}
 
       <DataTable<CashSession>
-        title="Turnos cerrados"
+        title={seesOthers ? 'Turnos cerrados' : 'Mis turnos cerrados'}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         filterConfigs={filterConfigs}

@@ -9,7 +9,7 @@ import CustomerDependents, { type CustomerDependent } from './CustomerDependents
 import { User, ChevronDown } from 'lucide-react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
-import { stageOf, type BoardInfo } from '../board';
+import { AUTO_STAGE, stageOf, type BoardInfo } from '../board';
 
 interface FormCustomerProps {
   isOpen: boolean;
@@ -49,7 +49,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
     department: '',
     postal_code: '',
     medical_notes: '',
-    pipeline_stage_id: '',
+    pipeline_stage_id: AUTO_STAGE,
   });
 
   const sections = [
@@ -82,7 +82,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
         department: initialData.department || '',
         postal_code: initialData.postal_code || '',
         medical_notes: initialData.medical_notes || '',
-        pipeline_stage_id: initialData.pipeline_stage_id || '',
+        pipeline_stage_id: initialData.stage_manual_at && initialData.pipeline_stage_id ? initialData.pipeline_stage_id : AUTO_STAGE,
       });
     } else {
       setForm({
@@ -103,7 +103,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
         department: '',
         postal_code: '',
         medical_notes: '',
-        pipeline_stage_id: '',
+        pipeline_stage_id: AUTO_STAGE,
       });
     }
     setPendingDependents([]);
@@ -373,12 +373,15 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Etapa en el tablero</label>
                           <Select
                             ariaLabel="Etapa en el tablero"
-                            placeholder={`Sin elegir: aparece en "${stageOf(board, null)?.name ?? ''}"`}
-                            value={board.stages.some((stage) => stage.id === form.pipeline_stage_id) ? form.pipeline_stage_id : ''}
+                            clearable={false}
+                            value={board.stages.some((stage) => stage.id === form.pipeline_stage_id) ? form.pipeline_stage_id : AUTO_STAGE}
                             onChange={(e) => setForm({ ...form, pipeline_stage_id: String(e.target.value) })}
-                            options={board.stages.map((stage) => ({ value: stage.id, label: stage.name }))}
+                            options={[
+                              { value: AUTO_STAGE, label: initialData?.pipeline_stage_id && !initialData.stage_manual_at ? `Que se ubique solo (hoy: ${stageOf(board, initialData.pipeline_stage_id)?.name ?? ''})` : 'Que se ubique solo según sus citas' },
+                              ...board.stages.map((stage) => ({ value: stage.id, label: stage.name })),
+                            ]}
                           />
-                          <p className="text-xs text-slate-500 mt-1.5">Es la columna donde aparece en el tablero de {vocab.clients.toLowerCase()}. Cada cambio queda en su página.</p>
+                          <p className="text-xs text-slate-500 mt-1.5">Es la columna donde aparece en el tablero de {vocab.clients.toLowerCase()}. Si eliges una a mano, se queda ahí hasta su próxima cita. Cada cambio queda en su página.</p>
                         </div>
                         )}
                       </div>

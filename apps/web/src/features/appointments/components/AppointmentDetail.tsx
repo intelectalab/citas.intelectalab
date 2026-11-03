@@ -43,6 +43,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const [notes, setNotes] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [byCustomer, setByCustomer] = useState(false);
 
   const statusNames = Object.fromEntries((user?.tenant?.appointment_statuses ?? []).map((s) => [s.key, s.name]));
 
@@ -84,10 +85,11 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       setBusy(status);
       setError('');
       setNotice('');
-      const res = await api.post(`/appointments/${appointment.id}/status`, { status, reason: reason || null });
+      const res = await api.post(`/appointments/${appointment.id}/status`, { status, reason: reason || null, ...(status === 'cancelled' && byCustomer ? { by_customer: true } : {}) });
       apply(res.data);
       setCancelling(false);
       setCancelReason('');
+      setByCustomer(false);
       const waiting = Number(res.data.waitlist_matches ?? 0);
       const notices = [
         res.data.late_cancel ? 'Se canceló fuera del plazo sin costo de tu empresa.' : '',
@@ -275,10 +277,31 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                 />
+                {appointment.late_cancel_strike && (() => {
+                  const strike = appointment.late_cancel_strike;
+                  const name = appointment.customer?.name ?? `${vocab.pick('client', 'el', 'la')} ${vocab.client.toLowerCase()}`;
+                  const count = strike.limit ? `${strike.misses} de ${strike.limit}` : `${strike.misses}`;
+                  return (
+                    <div className="rounded-lg border border-rose-200 bg-white px-3 py-2 space-y-1.5" data-late-cancel>
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" checked={byCustomer} onChange={(e) => setByCustomer(e.target.checked)} className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
+                        <span className="text-sm text-slate-800">Lo pidió {vocab.pick('client', 'el', 'la')} {vocab.client.toLowerCase()}</span>
+                      </label>
+                      <p className="text-xs text-slate-500">Reservó en línea y faltan menos de {strike.window_hours} horas: si la cancelación es a pedido suyo, cuenta como una falta.</p>
+                      {byCustomer && (
+                        <p className="text-xs font-semibold text-rose-700" data-late-cancel-warning>
+                          {strike.would_block
+                            ? `Avísale: con esta, ${name} queda con ${count} faltas y no podrá reservar en línea ${strike.block_days > 0 ? `durante ${strike.block_days} días` : 'hasta que se lo permitas desde su ficha'}.`
+                            : `Avísale: con esta, ${name} queda con ${count} ${strike.limit || strike.misses > 1 ? 'faltas' : 'falta'} por reservas en línea.`}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => { setCancelling(false); setCancelReason(''); }}
+                    onClick={() => { setCancelling(false); setCancelReason(''); setByCustomer(false); }}
                     className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
                   >
                     No cancelar

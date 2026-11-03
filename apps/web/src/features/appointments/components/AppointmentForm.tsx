@@ -374,7 +374,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
               placeholder="Seleccione..."
               value={serviceId}
               onChange={(e) => { setServiceId(String(e.target.value)); setTime(initial?.time ?? ''); setCanForce(false); }}
-              options={(context?.services ?? []).map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min` }))}
+              options={(context?.services ?? []).filter((s) => !branchId || !s.branch_ids?.length || s.branch_ids.includes(branchId) || s.id === serviceId).map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min` }))}
               onAdd={can('services.create') ? () => setServiceFormOpen(true) : undefined}
               addLabel="Nuevo servicio"
             />

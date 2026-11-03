@@ -344,10 +344,6 @@ INSERT INTO customer_consents (tenant_id, customer_id, channel, granted, source,
   ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '50eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'whatsapp', true, 'staff', now())
 ON CONFLICT DO NOTHING;
 
-INSERT INTO automation_rules (id, tenant_id, name, trigger_event, conditions, channel, marketing_template_id, delay_minutes, is_active) VALUES
-  ('68eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Recuperación de clientes inactivos', 'customer.inactive', '{"days": 90}'::jsonb, 'whatsapp', NULL, 0, false)
-ON CONFLICT DO NOTHING;
-
 INSERT INTO record_templates (id, tenant_id, name, description, fields, consent_text, require_consent, is_default) VALUES
   (
     '69eebc99-9c0b-4ef8-bb6d-6bb9bd380a01',
@@ -1219,6 +1215,10 @@ BEGIN
     INSERT INTO package_plans (tenant_id, name, description, price, validity_days, booking_mode, frequency, custom_days, professional_mode, late_policy, refund_policy, created_at)
     VALUES (tenant, p.name, p.description, p.price, p.days, p.mode, p.frequency, p.custom_days, p.pro_mode, p.late, p.refund, now() - interval '200 days')
     RETURNING id INTO plan;
+
+    IF p.mode = 'free' AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'package_plans' AND column_name = 'sell_online') THEN
+      EXECUTE 'UPDATE package_plans SET sell_online = true WHERE id = $1' USING plan;
+    END IF;
 
     INSERT INTO package_plan_items (tenant_id, package_plan_id, service_id, sessions, position)
     SELECT tenant, plan, s.id, (e.value->>'sessions')::int, (e.ordinality - 1)::smallint

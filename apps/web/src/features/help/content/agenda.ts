@@ -8,13 +8,33 @@ export const agendaTopics: HelpTopics = (vocab) => {
   const theClient = `${vocab.pick('client', 'el', 'la')} ${c}`;
 
   return {
+    '/reports': {
+      summary: `Cómo va tu negocio en el periodo que elijas: ventas, citas y ocupación, ${cs}, ${ps} y servicios. Con Analítica avanzada, cada número se compara con el periodo anterior. Si atiendes como ${p}, ves "Mis números": solo lo tuyo.`,
+      points: [
+        { title: 'Periodo y sede', text: 'Arriba eliges los últimos 7, 30 o 90 días, el mes en curso, el mes anterior o tus propias fechas, y la sede.' },
+        { title: 'Ventas', text: 'Ingresos (cobros menos devoluciones), ventas, ticket promedio, descuentos, propinas y devoluciones; por día, por medio de pago, por tipo y por sede.' },
+        { title: 'Citas y ocupación', text: `Citas, atendidas, ocupación (qué parte del horario del equipo tuvo citas), cancelaciones, inasistencias y reservas por el portal. El mapa muestra qué días y horas se piden más.` },
+        { title: `${vocab.clients}, ${vocab.pros} y servicios`, text: `Quiénes vuelven, los que más gastaron, cómo le fue a cada ${p} y qué se vende más. Para cada ${p} y cada servicio verás la Producción (precio de lo atendido) y lo Cobrado (lo que de verdad se pagó, ya restados los descuentos). Vienen con Analítica avanzada.` },
+        { title: 'Mes en curso', text: 'Se compara con los mismos días del mes anterior: del 1 al 2 de noviembre contra el 1 al 2 de octubre.' },
+        { title: 'Si eres gerente', text: `Todo es de tu sede, también los ${cs} nuevos (su primera cita en tu sede) y los que volvieron.` },
+        { title: 'Montos', text: 'Los ingresos y gastos solo se ven con el permiso "Ver montos".' },
+        { title: 'Exportar', text: 'Cada tabla se descarga a Excel con su botón.', perm: 'data.export' },
+        { title: 'Mis números', text: `Tus citas atendidas, tu producción (el precio de lo que atendiste, no lo cobrado), tu ocupación, tus inasistencias, tu tiempo promedio, tus servicios y tus ${cs} más frecuentes, comparados con el periodo anterior.`, perm: 'reports.own' },
+      ],
+      tasks: [
+        { title: 'Ver mis números', perm: 'reports.own', steps: ['Entra a Reportes, o pulsa "Ver mis números" en Inicio.', 'Elige el periodo y, si atiendes en varias sedes, la sede.', 'La flecha de cada número dice si subió o bajó frente al periodo anterior.'] },
+        { title: 'Ver cómo te fue el mes pasado', steps: ['En el periodo elige "Mes anterior".', 'Revisa Ventas y luego Citas y ocupación.', 'Con Analítica avanzada, la flecha de cada número dice si subió o bajó frente al mes de antes.'] },
+        { title: `Comparar a tus ${ps}`, steps: [`Entra a la pestaña ${vocab.pros}.`, 'Mira atendidas, ocupación e inasistencias de cada uno.', 'Descarga la tabla con "Exportar" si la necesitas.'] },
+      ],
+    },
+
     '/home': {
       summary: `Es el resumen de tu día: las citas de hoy, lo que está pasando ahora mismo, lo que queda por resolver y cómo te fue en los últimos 30 días. Si atiendes como ${p}, ves solo lo tuyo.`,
       points: [
         { title: 'Ahora mismo', text: 'Cuántas personas esperan, cuántas están en atención y cuántas citas faltan confirmar.' },
         { title: 'Por resolver', text: 'Citas por confirmar, citas pasadas que nadie cerró, citas dentro de un bloqueo o feriado, controles vencidos y fichas sin firmar. Haz clic en cada una para ir a la lista.' },
         { title: 'Acciones rápidas', text: `Atajos para agendar una cita, registrar ${vocab.pick('client', 'un', 'una')} ${c} nuevo y abrir las pantallas que más se usan.` },
-        { title: 'Números del mes', text: `Asistencia, ${cs} nuevos y el valor de lo atendido. Ese valor es el precio de los servicios atendidos, no lo que se cobró.` },
+        { title: 'Números del mes', text: `Asistencia, ${cs} nuevos y el valor de lo atendido. Ese valor es el precio de los servicios atendidos, no lo que se cobró. Si atiendes como ${p}, dice "Tu producción" y "Ver mis números" lleva a tus reportes.` },
       ],
       tasks: [
         { title: 'Empezar el día', steps: ['Mira "Por resolver" y resuelve lo pendiente: confirma citas, cierra las de ayer.', 'Revisa "Ahora mismo" para saber quién está esperando.', 'Pulsa "Ir a la agenda" para ver el día completo.'] },
@@ -22,14 +42,17 @@ export const agendaTopics: HelpTopics = (vocab) => {
     },
 
     '/agenda': {
-      summary: `Es el día de trabajo de una sede, con una columna por cada ${p}. Aquí se agenda, se mueve y se atiende cada cita. Se actualiza sola, así que lo que hace otra persona aparece sin recargar.`,
+      summary: `Es el trabajo de una sede por día, semana o mes. En Día hay una columna por cada ${p}. Aquí se agenda, se mueve y se atiende cada cita. Se actualiza sola, así que lo que hace otra persona aparece sin recargar.`,
       points: [
-        { title: 'Cambiar de día', text: 'Usa "Día anterior", "Hoy" y "Día siguiente", o elige una fecha en el calendario.' },
+        { title: 'Día, Semana y Mes', text: `Los botones junto a la fecha cambian la vista. Semana muestra los 7 días con sus horas; Mes, cada día con sus citas y su ocupación. Recuerda la última vista que usaste.` },
+        { title: 'Cambiar de fecha', text: 'Las flechas avanzan un día, una semana o un mes según la vista; "Hoy" vuelve a hoy, o elige una fecha en el calendario.' },
+        { title: `Un solo ${p}`, text: `En Semana y Mes puedes elegir a un ${p} para ver solo su agenda. Cada cita lleva el color de su ${p}.` },
+        { title: 'Ir a un día', text: 'En Semana pulsa el nombre del día, y en Mes pulsa el día, para abrirlo en la vista Día.' },
         { title: 'Cambiar de sede', text: 'Si tu empresa tiene varias sedes, elige cuál ver arriba.' },
         { title: 'Tarjetas de arriba', text: 'Filtran la agenda: pendientes, confirmadas, en curso, atendidas o canceladas.' },
         { title: 'Espacios grises', text: `Son horas en que ${vocab.pick('pro', 'el', 'la')} ${p} no atiende: pausas, vacaciones, bloqueos o un feriado. No se pueden usar para agendar.` },
         { title: 'Nueva cita', text: 'Con el botón de arriba o haciendo clic en un espacio libre de la columna, a la hora que quieres.', perm: 'agenda.create' },
-        { title: 'Mover una cita', text: 'Arrástrala a otra hora o a otra columna y confirma con "Sí, mover". Solo se mueven las citas que aún no empiezan.', perm: 'agenda.edit' },
+        { title: 'Mover una cita', text: `Arrástrala a otra hora o a otra columna y confirma con "Sí, mover". En Semana se puede mover a otro día, con el mismo ${p}. Solo se mueven las citas que aún no empiezan.`, perm: 'agenda.edit' },
         { title: 'Abrir una cita', text: 'Haz clic en ella para ver sus datos, su historial y los botones para avanzarla.' },
         { title: 'En el celular', text: `Elige "Por ${p}" para ver la agenda de una persona, o "Lista" para ver todas las citas del día una debajo de otra.` },
       ],
@@ -63,6 +86,7 @@ export const agendaTopics: HelpTopics = (vocab) => {
           steps: [
             'Haz clic en la cita.',
             'Para cancelar, pulsa "Cancelar cita", escribe el motivo y pulsa "Cancelar la cita".',
+            'Si reservó en línea, falta poco y lo pide el cliente, marca "Lo pidió…": el panel te dice con cuántas faltas queda para que se lo avises. Sale solo si tu empresa cuenta la cancelación a última hora como falta.',
             'Si la persona no llegó, pulsa "No asistió". Se puede marcar pasados unos minutos de la hora de la cita.',
             { text: 'Si alguien de la lista de espera puede usar ese horario, la cita te lo avisa.', perm: 'waitlist.view' },
           ],
@@ -194,6 +218,13 @@ export const agendaTopics: HelpTopics = (vocab) => {
     '/notifications': {
       summary: `Son tus avisos: citas reservadas o canceladas desde el portal, plazos de confirmación vencidos, horarios que se liberaron y lo que pasa con las citas de tus ${cs}. La campana de arriba muestra los últimos.`,
       points: [
+        { title: 'Bloqueos y feriados', text: `Si se registra una ausencia, un cierre o un feriado sobre citas ya agendadas, le avisa ${vocab.pick('pro', 'al', 'a la')} ${p} y a quien maneja la agenda de esa sede.` },
+        { title: 'Controles', text: 'Una vez al día, los controles vencidos y los que vencen en los próximos 3 días.' },
+        { title: 'Fichas sin terminar', text: `${vocab.pick('pro', 'Al', 'A la')} ${p}, las fichas que siguen en borrador 24 horas después de atender.` },
+        { title: 'Presupuestos y paquetes', text: `Cuando ${theClient} acepta o rechaza un presupuesto, o compra un paquete en el portal.` },
+        { title: 'Acceso de emergencia', text: 'Al autor de una ficha privada y a los administradores, cuando alguien la abre por emergencia.' },
+        { title: 'Si eres gerente de sede', text: 'También te llegan los cierres de caja con diferencia, las salas o equipos fuera de uso y las citas canceladas de tu sede.' },
+        { title: 'Tu plan y tu suscripción', text: 'Al administrador, cuando se llega al 80 % o al 100 % de un tope del plan, y 7, 3 y 1 día antes de que venza la prueba o la suscripción.', admin: true },
         { title: 'Sin leer', text: 'La campana muestra cuántos avisos tienes sin leer. "Marcar todo como leído" los limpia.' },
         { title: 'Ir al detalle', text: 'Haz clic en un aviso para abrir lo que lo causó.' },
       ],

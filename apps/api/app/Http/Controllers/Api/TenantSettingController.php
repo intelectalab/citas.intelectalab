@@ -15,6 +15,7 @@ use App\Support\OnlineBooking;
 use App\Support\Quotes;
 use App\Support\Sales;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -94,12 +95,16 @@ class TenantSettingController extends Controller
             'booking_misses.action'     => ['required_with:booking_misses', Rule::in(['none', 'note', 'block'])],
             'booking_misses.limit'      => 'required_with:booking_misses|integer|min:1|max:20',
             'booking_misses.block_days' => 'required_with:booking_misses|integer|min:0|max:3650',
+            'booking_misses.count_late_cancel' => 'sometimes|boolean',
             'session_idle_minutes' => 'sometimes|integer|min:5|max:1440',
+            'session_idle_roles'   => 'sometimes|array',
+            'session_idle_roles.*' => 'nullable|integer|min:5|max:1440',
             'help_enabled' => ['sometimes', 'boolean', fn ($attribute, $value, $fail) => $request->user()->isTenantAdmin() ? null : $fail('Solo el administrador de la empresa puede encender o apagar la autoayuda.')],
             'customer_groups' => 'sometimes|array',
             'customer_groups.inactive_days'   => 'required_with:customer_groups|integer|min:15|max:730',
             'customer_groups.frequent_visits' => 'required_with:customer_groups|integer|min:2|max:60',
             'customer_groups.vip_spend'       => 'required_with:customer_groups|numeric|min:1|max:9999999',
+            'customer_groups.manager_scope'   => ['sometimes', Rule::in(['branch', 'choose'])],
             'inventory_rules' => 'sometimes|array',
             'inventory_rules.allow_negative'     => 'required_with:inventory_rules|boolean',
             'inventory_rules.consume_on_service' => 'required_with:inventory_rules|boolean',
@@ -121,6 +126,7 @@ class TenantSettingController extends Controller
             'quote_rules.track_clinical_zones' => 'required_with:quote_rules|boolean',
             'quote_rules.plan_validity_days'   => 'required_with:quote_rules|integer|min:1|max:3650',
             'quote_rules.cancel_policy'        => ['required_with:quote_rules', Rule::in(array_keys(Quotes::CANCEL_POLICIES))],
+            'quote_rules.portal_accept'        => 'sometimes|boolean',
             'walkin_rules' => 'sometimes|array',
             'walkin_rules.self_checkin' => 'required_with:walkin_rules|boolean',
             'walkin_rules.max_wait'     => 'required_with:walkin_rules|integer|min:10|max:300',
@@ -147,6 +153,7 @@ class TenantSettingController extends Controller
             'payment_rules.deposit_refund_hours.*' => 'Las horas para devolver el adelanto van de 0 a 720.',
             'payment_rules.link_hours.*'           => 'Un link de pago vence entre 1 y 720 horas después.',
             'session_idle_minutes.*'               => 'El tiempo sin actividad va de 5 a 1440 minutos (24 horas).',
+            'session_idle_roles.*.*'               => 'El tiempo sin actividad de cada rol va de 5 a 1440 minutos (24 horas).',
             'customer_groups.inactive_days.*'      => 'Los días para considerar inactivo a un cliente van de 15 a 730.',
             'customer_groups.frequent_visits.*'    => 'Las visitas para ser frecuente van de 2 a 60.',
             'customer_groups.vip_spend.*'          => 'Escribe el monto VIP como un número mayor que 0.',
@@ -238,7 +245,7 @@ class TenantSettingController extends Controller
                 'booking.miss_action' => $validated['booking_misses']['action'],
                 'booking.miss_limit'  => (int) $validated['booking_misses']['limit'],
                 'booking.block_days'  => (int) $validated['booking_misses']['block_days'],
-            ]);
+            ] + (array_key_exists('count_late_cancel', $validated['booking_misses']) ? ['booking.count_late_cancel' => (bool) $validated['booking_misses']['count_late_cancel']] : []));
         }
 
         if (array_key_exists('help_enabled', $validated)) {
@@ -254,7 +261,14 @@ class TenantSettingController extends Controller
                 'crm.inactive_days'   => (int) $validated['customer_groups']['inactive_days'],
                 'crm.frequent_visits' => (int) $validated['customer_groups']['frequent_visits'],
                 'crm.vip_spend'       => round((float) $validated['customer_groups']['vip_spend'], 2),
-            ]);
+            ] + (isset($validated['customer_groups']['manager_scope']) ? ['campaigns.manager_scope' => $validated['customer_groups']['manager_scope']] : []));
+        }
+
+        if (isset($validated['session_idle_roles'])) {
+            $roleIds = DB::table('roles')->where('tenant_id', $tenant->id)->pluck('id')->all();
+            $settings->rules = array_merge($settings->rules ?? [], ['session.idle_by_role' => collect($validated['session_idle_roles'])
+                ->filter(fn ($minutes, $roleId) => $minutes !== null && in_array($roleId, $roleIds, true))
+                ->map(fn ($minutes) => (int) $minutes)->all()]);
         }
 
         if (isset($validated['session_portal_idle_minutes'])) {
@@ -291,7 +305,7 @@ class TenantSettingController extends Controller
                 'quotes.track_clinical_zones' => (bool) $validated['quote_rules']['track_clinical_zones'],
                 'quotes.plan_validity_days'   => (int) $validated['quote_rules']['plan_validity_days'],
                 'quotes.cancel_policy'        => $validated['quote_rules']['cancel_policy'],
-            ]);
+            ] + (array_key_exists('portal_accept', $validated['quote_rules']) ? ['quotes.portal_accept' => (bool) $validated['quote_rules']['portal_accept']] : []));
         }
 
         if (isset($validated['walkin_rules'])) {
@@ -380,12 +394,15 @@ class TenantSettingController extends Controller
             'quote_rules' => Quotes::enabled($tenant) ? Quotes::rules($tenant) : null,
             'walkin_rules' => $tenant->hasModule('walkin') ? \App\Support\Walkin::rules($tenant) : null,
             'session_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.idle_minutes'),
+            'session_idle_roles'   => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('created_at')->get(['id', 'name'])
+                ->map(fn ($role) => ['id' => $role->id, 'name' => $role->name, 'minutes' => ((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? null])->values(),
             'help_enabled' => (bool) AppointmentFlow::rule($tenant, 'help.enabled'),
             'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
             'customer_groups' => $tenant->hasModule('marketing') ? [
                 'inactive_days'   => (int) AppointmentFlow::rule($tenant, 'crm.inactive_days'),
                 'frequent_visits' => (int) AppointmentFlow::rule($tenant, 'crm.frequent_visits'),
                 'vip_spend'       => (float) AppointmentFlow::rule($tenant, 'crm.vip_spend'),
+                'manager_scope'   => AppointmentFlow::rule($tenant, 'campaigns.manager_scope') === 'choose' ? 'choose' : 'branch',
             ] : null,
             'booking_misses' => $tenant->hasModule('booking') ? \App\Support\OnlineBooking::policy($tenant) : null,
             'payment_rules' => $tenant->hasModule('pos') && \App\Support\PaymentLinks::ready() ? [
@@ -448,6 +465,7 @@ class TenantSettingController extends Controller
                 'track_clinical_zones' => $quotes['track_clinical_zones'],
                 'plan_validity_days'   => $quotes['plan_validity_days'],
                 'quote_cancel_policy'  => self::AUDIT_CANCEL_POLICIES[$quotes['cancel_policy']] ?? $quotes['cancel_policy'],
+                'quote_portal_accept'  => $quotes['portal_accept'],
             ],
             'Inventario y almacenes' => [
                 'allow_negative'     => $inventory['allow_negative'],
@@ -478,6 +496,8 @@ class TenantSettingController extends Controller
             ],
             'Cierre de sesión' => [
                 'session_idle_minutes'        => (int) AppointmentFlow::rule($tenant, 'session.idle_minutes'),
+                'session_idle_roles'          => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name'])
+                    ->map(fn ($role) => $role->name . ': ' . (((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? 'como la empresa'))->implode(', '),
                 'session_portal_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes'),
             ],
             'Autoayuda' => [

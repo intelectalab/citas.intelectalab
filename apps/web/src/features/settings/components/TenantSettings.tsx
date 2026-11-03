@@ -9,6 +9,7 @@ import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
+import { useVocabulary } from '@/hooks/useVocabulary';
 import Switch from '@/app/components/common/Switch';
 import Select from '@/app/components/common/Select';
 import CurrencySettings from './CurrencySettings';
@@ -39,14 +40,15 @@ interface SettingsPayload {
   sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
   inventory_rules?: { allow_negative: boolean; consume_on_service: boolean; transfer_two_step: boolean; cost_method: CostMethod; alert_min_stock: boolean } | null;
   loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number } | null;
-  quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy } | null;
+  quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy; portal_accept?: boolean } | null;
   walkin_rules?: { self_checkin: boolean; max_wait: number } | null;
-  booking_misses?: { action: MissAction; limit: number; block_days: number } | null;
+  booking_misses?: { action: MissAction; limit: number; block_days: number; count_late_cancel?: boolean; window_hours?: number } | null;
   payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
   session_idle_minutes?: number;
+  session_idle_roles?: { id: string; name: string; minutes: number | null }[];
   help_enabled?: boolean;
   session_portal_idle_minutes?: number;
-  customer_groups?: { inactive_days: number; frequent_visits: number; vip_spend: number } | null;
+  customer_groups?: { inactive_days: number; frequent_visits: number; vip_spend: number; manager_scope?: 'branch' | 'choose' } | null;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
@@ -139,6 +141,7 @@ const SECTION_LABELS = Object.fromEntries(SECTION_GROUPS.flatMap((g) => g.sectio
 
 export default function TenantSettings() {
   const { user, loading: authLoading, refetchUser, can } = useAuth();
+  const vocab = useVocabulary();
   const [data, setData] = useState<SettingsPayload | null>(null);
   const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
@@ -147,14 +150,15 @@ export default function TenantSettings() {
   const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
   const [inventoryRules, setInventoryRules] = useState<{ allowNegative: boolean; consumeOnService: boolean; transferTwoStep: boolean; costMethod: CostMethod; alertMinStock: boolean } | null>(null);
   const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string } | null>(null);
-  const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy } | null>(null);
+  const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy; portalAccept: boolean } | null>(null);
   const [walkinRules, setWalkinRules] = useState<{ selfCheckin: boolean; maxWait: string } | null>(null);
-  const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string } | null>(null);
+  const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string; lateCancel: boolean; windowHours: number } | null>(null);
   const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
   const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
+  const [idleRoles, setIdleRoles] = useState<{ id: string; name: string; value: IdleValue | null }[]>([]);
   const [helpOn, setHelpOn] = useState(true);
   const [portalIdle, setPortalIdle] = useState<{ on: boolean } & IdleValue>({ on: false, choice: '30', custom: '' });
-  const [groups, setGroups] = useState<{ inactive: string; frequent: string; vip: string } | null>(null);
+  const [groups, setGroups] = useState<{ inactive: string; frequent: string; vip: string; scope: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string; section?: SectionId } | null>(null);
@@ -214,20 +218,22 @@ export default function TenantSettings() {
       trackClinicalZones: payload.quote_rules.track_clinical_zones,
       planValidityDays: String(payload.quote_rules.plan_validity_days ?? 365),
       cancelPolicy: payload.quote_rules.cancel_policy ?? 'unused_quote',
+      portalAccept: payload.quote_rules.portal_accept ?? true,
     } : null);
     setWalkinRules(payload.walkin_rules ? {
       selfCheckin: payload.walkin_rules.self_checkin,
       maxWait: String(payload.walkin_rules.max_wait),
     } : null);
-    setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days) } : null);
+    setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days), lateCancel: Boolean(payload.booking_misses.count_late_cancel), windowHours: payload.booking_misses.window_hours ?? 24 } : null);
     setPaymentRules(payload.payment_rules ? {
       requireDeposit: payload.payment_rules.require_deposit,
       depositMinutes: String(payload.payment_rules.deposit_minutes),
       refundHours: String(payload.payment_rules.deposit_refund_hours),
       linkHours: String(payload.payment_rules.link_hours),
     } : null);
-    setGroups(payload.customer_groups ? { inactive: String(payload.customer_groups.inactive_days), frequent: String(payload.customer_groups.frequent_visits), vip: String(payload.customer_groups.vip_spend) } : null);
+    setGroups(payload.customer_groups ? { inactive: String(payload.customer_groups.inactive_days), frequent: String(payload.customer_groups.frequent_visits), vip: String(payload.customer_groups.vip_spend), scope: payload.customer_groups.manager_scope ?? 'branch' } : null);
     setIdle(toIdle(payload.session_idle_minutes ?? 30));
+    setIdleRoles((payload.session_idle_roles ?? []).map((role) => ({ id: role.id, name: role.name, value: role.minutes ? toIdle(role.minutes) : null })));
     setHelpOn(payload.help_enabled ?? true);
     const portalMinutes = payload.session_portal_idle_minutes ?? 0;
     setPortalIdle(portalMinutes > 0 ? { on: true, ...toIdle(portalMinutes) } : { on: false, choice: '30', custom: '' });
@@ -262,8 +268,8 @@ export default function TenantSettings() {
       case 'modulos': return { modules_off: [...modulesOff].sort() };
       case 'fases': return { appointment_statuses: statusNames };
       case 'ayuda': return { help_enabled: helpOn };
-      case 'seguridad': return { session_idle_minutes: fromIdle(idle), session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0 };
-      case 'grupos': return groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0) } } : null;
+      case 'seguridad': return { session_idle_minutes: fromIdle(idle), session_idle_roles: Object.fromEntries(idleRoles.map((role) => [role.id, role.value ? fromIdle(role.value) : null])), session_portal_idle_minutes: portalIdle.on ? fromIdle(portalIdle) : 0 };
+      case 'grupos': return groups ? { customer_groups: { inactive_days: Number(groups.inactive || 0), frequent_visits: Number(groups.frequent || 0), vip_spend: Number(groups.vip || 0), manager_scope: groups.scope } } : null;
       case 'salas': return equipmentDown ? { equipment_down: equipmentDown } : null;
       case 'ventas': return salesRules ? {
           sales_rules: {
@@ -306,6 +312,7 @@ export default function TenantSettings() {
             track_clinical_zones: quoteRules.trackClinicalZones,
             plan_validity_days: Number(quoteRules.planValidityDays || 0),
             cancel_policy: quoteRules.cancelPolicy,
+            portal_accept: quoteRules.portalAccept,
           },
         } : null;
       case 'walkin': return walkinRules ? {
@@ -314,7 +321,7 @@ export default function TenantSettings() {
             max_wait: Number(walkinRules.maxWait || 90),
           },
         } : null;
-      case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0) } } : null;
+      case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0), count_late_cancel: misses.lateCancel } } : null;
       case 'adelantos': return paymentRules ? {
           payment_rules: {
             require_deposit: paymentRules.requireDeposit,
@@ -1246,13 +1253,27 @@ export default function TenantSettings() {
             <div>
               <span className="block text-sm font-semibold text-slate-800">Generar la venta por cobrar automáticamente al aprobar</span>
               <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
-                Cuando el presupuesto pasa a &quot;Aprobado&quot;, se crea sola su cuenta por cobrar en Ventas para poder recibir pagos totales o por cuotas de inmediato.
+                Cuando el presupuesto pasa a &quot;Aprobado&quot;, se crea sola su cuenta por cobrar en Ventas para poder recibir pagos totales o por cuotas de inmediato. Si lo apagas, el plan de sesiones se crea recién al pasarlo a cobro.
               </span>
             </div>
             <Switch
               checked={quoteRules.autoCreateSale}
               onChange={(on) => { setMessage(null); setQuoteRules({ ...quoteRules, autoCreateSale: on }); }}
               label="Generar la venta por cobrar automáticamente al aprobar"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100" data-rule="portal-accept">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">El {vocab.client.toLowerCase()} puede aceptar o rechazar el presupuesto desde su portal</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Ve los presupuestos que marques como &quot;Enviado&quot;, con su PDF. Si acepta, se aprueba igual que desde aquí; si no le interesa, te deja el motivo.
+              </span>
+            </div>
+            <Switch
+              checked={quoteRules.portalAccept}
+              onChange={(on) => { setMessage(null); setQuoteRules({ ...quoteRules, portalAccept: on }); }}
+              label="Aceptar presupuestos desde el portal"
             />
           </div>
 
@@ -1422,6 +1443,13 @@ export default function TenantSettings() {
               </span>
             </div>
           )}
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100" data-rule="count-late-cancel">
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Contar también la cancelación a última hora</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Si cancela desde su portal con menos de {misses.windowHours} horas de anticipación, cuenta como una falta.</span>
+            </span>
+            <Switch checked={misses.lateCancel} onChange={(on) => { setMessage(null); setMisses({ ...misses, lateCancel: on }); }} label="Contar también la cancelación a última hora" />
+          </div>
           {saveBar('inasistencias')}
         </section>
       )}
@@ -1458,6 +1486,21 @@ export default function TenantSettings() {
               <span className="text-sm text-slate-600">o más en los últimos 12 meses.</span>
             </div>
           </div>
+          <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3" data-rule="manager-scope">
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Campañas del gerente de sede</span>
+              <span className="block text-xs text-slate-500 mt-0.5">"De su sede" son quienes tuvieron una cita en esa sede en los últimos 12 meses. Tú, como administrador, siempre envías a toda la empresa.</span>
+            </span>
+            <div className="w-72">
+              <Select
+                ariaLabel="Campañas del gerente de sede"
+                clearable={false}
+                options={[{ value: 'branch', label: `Solo a ${vocab.clients.toLowerCase()} de su sede` }, { value: 'choose', label: 'Elige: su sede o toda la empresa' }]}
+                value={groups.scope}
+                onChange={(e) => { setMessage(null); setGroups({ ...groups, scope: String(e.target.value) }); }}
+              />
+            </div>
+          </div>
           {saveBar('grupos')}
         </section>
       )}
@@ -1474,6 +1517,38 @@ export default function TenantSettings() {
         </div>
 
         {renderIdle('session-idle', 'Cerrar la sesión de tu equipo tras', idle, (next) => setIdle(next), 'idle-minutes')}
+        {idleRoles.length > 0 && (
+        <div className="pt-4 border-t border-slate-100 space-y-3" data-row="idle-by-role">
+          <div>
+            <span className="block text-sm font-semibold text-slate-800">Tiempo distinto por rol</span>
+            <span className="block text-xs text-slate-500 mt-0.5">Cada rol usa el tiempo de tu equipo, salvo que le pongas otro. Por ejemplo, más tiempo para quien atiende sin tocar la computadora.</span>
+          </div>
+          {idleRoles.map((role) => (
+            <div key={role.id} className="flex flex-wrap items-center gap-3" data-idle-role={role.name}>
+              <span className="w-40 text-sm text-slate-700 truncate">{role.name}</span>
+              <div className="w-56">
+                <Select
+                  ariaLabel={`Tiempo sin actividad de ${role.name}`}
+                  clearable={false}
+                  options={[{ value: 'default', label: `Como el equipo (${fromIdle(idle) || 30} min)` }, ...IDLE_OPTIONS]}
+                  value={role.value ? role.value.choice : 'default'}
+                  onChange={(e) => {
+                    setMessage(null);
+                    const choice = String(e.target.value);
+                    setIdleRoles(idleRoles.map((r) => (r.id === role.id ? { ...r, value: choice === 'default' ? null : { choice, custom: r.value?.custom || '30' } } : r)));
+                  }}
+                />
+              </div>
+              {role.value?.choice === 'custom' && (
+                <>
+                  <input inputMode="numeric" aria-label={`Minutos sin actividad de ${role.name}`} value={role.value.custom} onChange={(e) => { setMessage(null); setIdleRoles(idleRoles.map((r) => (r.id === role.id && r.value ? { ...r, value: { ...r.value, custom: e.target.value.replace(/\D/g, '').slice(0, 4) } } : r))); }} className={hoursInput} />
+                  <span className="text-sm text-slate-600">minutos</span>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+        )}
 
         <div className="pt-4 border-t border-slate-100 space-y-3" data-row="portal-idle-switch">
           <div className="flex items-center justify-between gap-4">

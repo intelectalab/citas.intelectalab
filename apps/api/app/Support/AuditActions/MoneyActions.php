@@ -20,6 +20,7 @@ class MoneyActions
         'package.cancelled'       => ['Anuló un paquete vendido', 'money'],
         'package.extended'        => ['Extendió la vigencia de un paquete', 'money'],
         'package.used_manually'   => ['Descontó una sesión de un paquete sin cita', 'money'],
+        'package.online_started'  => ['Empezó a comprar un paquete en línea', 'money'],
         'package_plan.created'    => ['Creó un paquete', 'money'],
         'package_plan.updated'    => ['Cambió un paquete', 'money'],
         'package_plan.deleted'    => ['Eliminó un paquete', 'money'],
@@ -42,6 +43,6 @@ class MoneyActions
         'frequency' => 'Frecuencia', 'professional_mode' => 'Profesional', 'late_policy' => 'Si avisa tarde o no llega', 'refund_policy' => 'Devolución',
         'terms' => 'Condiciones', 'services' => 'Servicios', 'service' => 'Servicio', 'days' => 'Días', 'package' => 'Paquete',
         'refund' => 'Devolución', 'appointments' => 'Citas canceladas', 'note' => 'Nota', 'sale' => 'Venta', 'debt_action' => 'Lo que faltaba pagar',
-        'purchaser' => 'Compró', 'recipient' => 'Para',
+        'purchaser' => 'Compró', 'recipient' => 'Para', 'amount' => 'Monto', 'branch' => 'Sede', 'sell_online' => 'Se vende en línea',
     ];
 }

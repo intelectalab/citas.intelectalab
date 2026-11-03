@@ -110,6 +110,27 @@ class PaymentLinks
             ->where('status', 'pending')
             ->where('expires_at', '<', now())
             ->update(['status' => 'expired', 'updated_at' => now()]);
+
+        self::dropAbandoned($tenantId);
+    }
+
+    public static function dropAbandoned(?string $tenantId = null): void
+    {
+        $sales = DB::table('sales')
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->where('notes', Packages::ONLINE_NOTE)
+            ->where('status', 'pending')
+            ->where('paid', 0)
+            ->whereNotExists(fn ($q) => $q->from('payment_links')->whereColumn('payment_links.sale_id', 'sales.id')->where('payment_links.status', 'pending'))
+            ->get();
+
+        foreach ($sales as $sale) {
+            try {
+                Refunds::void($sale, 'El cliente no completó el pago en línea.');
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
     }
 
     public static function latestForSale(string $saleId): ?object
@@ -133,7 +154,7 @@ class PaymentLinks
         return Str::lower(Str::random(40));
     }
 
-    public static function forSale(Tenant $tenant, object $sale, User $user): object
+    public static function forSale(Tenant $tenant, object $sale, ?User $user): object
     {
         if (!in_array($sale->status, ['pending', 'partial'], true) || (float) $sale->balance <= 0) {
             throw ValidationException::withMessages(['link' => 'Esta venta no tiene saldo por cobrar.']);
@@ -157,7 +178,7 @@ class PaymentLinks
             'sale_id'     => $sale->id,
             'customer_id' => $sale->customer_id,
             'expires_at'  => now()->addHours($hours),
-            'created_by'  => $user->id,
+            'created_by'  => $user?->id,
         ]);
     }
 
@@ -304,6 +325,7 @@ class PaymentLinks
             'status'       => $link->status,
             'status_label' => self::STATUS_LABELS[$link->status] ?? $link->status,
             'purpose'      => $link->purpose,
+            'online_package' => $link->sale_id && DB::table('sales')->where('id', $link->sale_id)->value('notes') === Packages::ONLINE_NOTE,
             'amount'       => round((float) $link->amount, 2),
             'currency'     => $link->currency,
             'currency_info' => Currency::present($link->currency),
@@ -721,7 +743,7 @@ class PaymentLinks
             ->orderByDesc('created_at')
             ->limit(20)
             ->get()
-            ->map(fn ($link) => self::present($link) + ['token' => $link->token])
+            ->map(fn ($link) => self::present($link) + ['token' => $link->token, 'can_drop' => $link->purpose === 'deposit' || ($link->sale_id && DB::table('sales')->where('id', $link->sale_id)->value('notes') === Packages::ONLINE_NOTE)])
             ->values()
             ->all();
     }

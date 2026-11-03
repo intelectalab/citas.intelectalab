@@ -95,10 +95,12 @@ export const catalogoTopics: HelpTopics = (vocab) => {
         { title: 'Agendar sesiones', text: 'En un paquete con fechas, agenda de una vez las sesiones que faltan.', perm: 'agenda.create' },
         { title: 'Registrar uso sin cita', text: 'Descuenta una sesión atendida sin cita, con su motivo.', perm: 'packages.use' },
         { title: 'Dar más días', text: 'Amplía la vigencia de un paquete, con su motivo.', perm: 'packages.edit' },
-        { title: 'Anular paquete', text: 'Termina un paquete vendido y devuelve dinero si corresponde.', perm: 'packages.delete' },
+        { title: 'Anular paquete', text: 'Termina un paquete vendido y devuelve dinero si corresponde, hasta lo que se pagó por él.', perm: 'packages.delete' },
+        { title: 'Se vende en línea', text: `Un paquete de uso libre con esta casilla aparece en el portal: ${theClient} elige la sede, paga en línea y el paquete queda a su nombre. Te llega un aviso a la campana. Los de fechas acordadas se venden solo en la sede.`, perm: 'packages.create|packages.edit' },
+        { title: 'Lo vendido no cambia', text: 'Si editas un paquete del catálogo, los que ya se vendieron, o están esperando su pago, conservan las sesiones y condiciones con que se vendieron.' },
       ],
       tasks: [
-        { title: 'Crear un paquete', perm: 'packages.create', steps: ['Entra a "Catálogo" y pulsa "Nuevo paquete".', 'Elige los servicios, las sesiones y cuántos días vale.', 'Elige cómo se agenda y sus condiciones.', 'Guarda.'] },
+        { title: 'Crear un paquete', perm: 'packages.create', steps: ['Entra a "Catálogo" y pulsa "Nuevo paquete".', 'Elige los servicios, las sesiones y cuántos días vale.', 'Elige cómo se agenda y sus condiciones.', 'Si quieres venderlo en el portal, enciende "Se vende en línea".', 'Guarda.'] },
         { title: 'Usar una sesión del paquete', steps: ['Agenda la cita del servicio.', 'Al cobrar, elige "Usar paquete".', 'La sesión se descuenta al dar por atendida la cita.'] },
         { title: 'Anular un paquete vendido', perm: 'packages.delete', steps: ['Abre el paquete.', 'Pulsa "Anular paquete" y escribe el motivo.', 'Elige qué pasa con el dinero, el monto y cómo se devuelve.', 'Confirma. Si es en efectivo, hace falta la caja abierta.'] },
       ],
@@ -141,6 +143,21 @@ export const catalogoTopics: HelpTopics = (vocab) => {
       ],
     },
 
+    '/automations': {
+      summary: `Correos que salen solos cuando pasa algo con ${aClient}: su cumpleaños, su primera atención, si no asistió, si dejó de venir o si llegó a fidelizado.`,
+      points: [
+        { title: 'Encender o apagar', text: 'Vienen apagadas con un texto de ejemplo. El interruptor de cada fila las enciende. Solo les llega a quienes lleguen a esa situación desde que la enciendes.', perm: 'automations.edit' },
+        { title: 'Editar', text: 'El lápiz abre su panel: hora o cuánto después sale, cuántas veces a la misma persona, cupón, asunto y mensaje con formato.', perm: 'automations.edit' },
+        { title: 'Sin saturar', text: `Cada ${c} recibe como máximo una automatización por día, y solo si aceptó promociones por correo.` },
+        { title: 'Resultados', text: 'Cuántos correos salieron este mes y cuántos agendaron una cita en los 7 días siguientes.' },
+        { title: 'Dónde se ven', text: 'Cada correo enviado queda en Mensajes, como "Automatización".' },
+      ],
+      tasks: [
+        { title: 'Encender el saludo de cumpleaños', perm: 'automations.edit', steps: ['Pulsa el lápiz de "Cumpleaños".', 'Revisa el asunto y el mensaje; elige un cupón si quieres regalar algo.', 'Enciende "Encendida" y pulsa "Guardar".'] },
+        { title: `Escribirle a ${aClient} que no asistió`, perm: 'automations.edit', steps: ['Pulsa el lápiz de "No asistió".', 'Elige cuánto después sale (por ejemplo, 2 horas).', 'Enciéndela y pulsa "Guardar".'] },
+      ],
+    },
+
     '/campaigns': {
       summary: `Envía un correo de promoción a un grupo de ${cs}, ahora o programado, y muestra los resultados: cuántos lo recibieron y cuántos agendaron después.`,
       points: [
@@ -151,6 +168,7 @@ export const catalogoTopics: HelpTopics = (vocab) => {
         { title: 'Duplicar', text: 'Crea una campaña nueva con lo mismo, para repetirla.', perm: 'campaigns.create' },
         { title: 'Cambiar o cancelar', text: 'Una campaña programada se puede cambiar o cancelar antes de que salga.', perm: 'campaigns.edit' },
         { title: 'Permiso para promociones', text: `Solo la reciben ${cs} que aceptaron promociones por correo; se marca en su ficha.` },
+        { title: 'Si eres gerente de sede', text: `Tus campañas llegan a ${cs} de tu sede: quienes tuvieron una cita ahí en los últimos 12 meses. Si el administrador lo permite, puedes elegir enviar a toda la empresa.` },
         { title: 'Exportar', text: 'Descarga a Excel o CSV lo que estás viendo, en el orden de la lista. Eliges cuántas filas y qué columnas.', perm: 'data.export' },
       ],
       tasks: [

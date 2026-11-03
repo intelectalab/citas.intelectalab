@@ -1,5 +1,6 @@
 export interface PortalAppointment {
   id: string;
+  source?: string;
   code: string;
   status: string;
   status_name: string;
@@ -32,6 +33,7 @@ export interface PortalPolicies {
   auto_confirm: boolean;
   cancel_allowed: boolean;
   cancel_window_hours: number;
+  late_cancel_counts?: boolean;
   reschedule_max: number;
   confirm_deadline_hours?: number;
   confirm_on_miss?: 'notify' | 'notify_release' | 'release';
@@ -69,6 +71,7 @@ export interface PortalOverview {
 
 export interface PortalService {
   id: string;
+  branch_ids?: string[];
   name: string;
   category: string | null;
   duration_minutes: number;

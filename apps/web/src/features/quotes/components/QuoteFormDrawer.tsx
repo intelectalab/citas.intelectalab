@@ -456,6 +456,10 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
                       updateLine(line.key, {
                         quantity: q,
                         ...(line.item_type === 'service' ? { sessions_total: q || '1' } : {}),
+                        ...(line.item_type === 'package' ? (() => {
+                          const pkg = board.packages.find((x) => x.id === line.reference_id);
+                          return pkg ? { sessions_total: String(pkg.sessions_total * Math.max(1, Number(q || 1))) } : {};
+                        })() : {}),
                       });
                     }}
                     className={inputClass}

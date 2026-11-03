@@ -33,6 +33,11 @@ class CashController extends Controller
         return !$user->isTenantAdmin() && $user->roles()->where('slug', 'professional')->exists();
     }
 
+    private function assertOwn(User $user, object $session): void
+    {
+        abort_unless($user->allows('cash.others') || $session->opened_by === $user->id, 403, 'Este turno lo abrió otra persona: solo ella o quien tenga el permiso "Turnos de otros" puede verlo o manejarlo.');
+    }
+
     private function session(Tenant $tenant, string $id, bool $lock = false): object
     {
         $query = DB::table('cash_sessions')->where('tenant_id', $tenant->id)->where('id', $id);
@@ -54,9 +59,12 @@ class CashController extends Controller
         $registerNames = $registers->pluck('name', 'id');
         $open = DB::table('cash_sessions')->where('tenant_id', $tenant->id)->where('status', 'open')->get()->keyBy('cash_register_id');
 
+        $user = $request->user();
+        $others = $user->allows('cash.others');
         $closed = DB::table('cash_sessions')
             ->where('tenant_id', $tenant->id)
             ->when($limit, fn ($q, $id) => $q->where('branch_id', $id))
+            ->when(!$others, fn ($q) => $q->where('opened_by', $user->id))
             ->where('status', 'closed')
             ->orderByDesc('closed_at')
             ->limit(300)
@@ -70,6 +78,7 @@ class CashController extends Controller
         return response()->json([
             'can_manage' => $request->user()->allows('cash.create'),
             'can_operate' => $request->user()->allows('cash.edit'),
+            'sees_others' => $others,
             'tolerance'  => Sales::rules($tenant)['cash_tolerance'],
             'branches'   => $branches->where('status', 'active')->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values(),
             'registers'  => $registers->map(fn ($r) => [
@@ -78,7 +87,9 @@ class CashController extends Controller
                 'status'      => $r->status,
                 'branch_id'   => $r->branch_id,
                 'branch_name' => $branchNames[$r->branch_id] ?? null,
-                'session'     => isset($open[$r->id]) ? Cash::present($open[$r->id]) : null,
+                'session'     => !isset($open[$r->id]) ? null : ($others || $open[$r->id]->opened_by === $user->id
+                    ? Cash::present($open[$r->id]) + ['mine' => $open[$r->id]->opened_by === $user->id]
+                    : ['id' => $open[$r->id]->id, 'mine' => false, 'hidden' => true, 'opened_at' => \Illuminate\Support\Carbon::parse($open[$r->id]->opened_at)->toIso8601String(), 'opened_by' => \App\Support\Person::name(DB::table('users')->where('id', $open[$r->id]->opened_by)->first(['first_name', 'last_name']))]),
             ])->values(),
             'sessions'   => $closed->map(fn ($s) => $decorate(Cash::present($s)))->values(),
         ]);
@@ -89,6 +100,7 @@ class CashController extends Controller
         $tenant = $this->tenant($request);
         $session = $this->session($tenant, $session);
         Access::assertBranch($request->user(), $session->branch_id);
+        $this->assertOwn($request->user(), $session);
         $register = DB::table('cash_registers')->where('id', $session->cash_register_id)->first();
 
         return response()->json(Cash::present($session, true) + [
@@ -212,6 +224,7 @@ class CashController extends Controller
         return DB::transaction(function () use ($tenant, $session, $validated, $request) {
             $row = $this->session($tenant, $session, true);
             Access::assertBranch($request->user(), $row->branch_id, true);
+            $this->assertOwn($request->user(), $row);
             abort_if($row->status !== 'open', 409, 'Este turno de caja ya está cerrado.');
 
             $amount = round((float) $validated['amount'], 2);
@@ -251,6 +264,7 @@ class CashController extends Controller
         return DB::transaction(function () use ($tenant, $session, $validated, $request) {
             $row = $this->session($tenant, $session, true);
             Access::assertBranch($request->user(), $row->branch_id, true);
+            $this->assertOwn($request->user(), $row);
             abort_if($row->status !== 'open', 409, 'Este turno de caja ya está cerrado.');
 
             $expected = Cash::present($row)['expected_amount'];
@@ -295,9 +309,9 @@ class CashController extends Controller
             $register = DB::table('cash_registers')->where('id', $session->cash_register_id)->value('name');
             $branch = DB::table('branches')->where('id', $session->branch_id)->value('name');
             $who = \App\Support\Person::name($actor);
-            $body = ($difference < 0 ? 'Faltan' : 'Sobran') . ' S/ ' . number_format(abs($difference), 2) . " en {$register}. La cerró {$who}.";
+            $body = ($difference < 0 ? 'Faltan ' : 'Sobran ') . \App\Support\Currency::format(abs($difference), $session->currency ?? \App\Support\Currency::of($tenant)) . " en {$register}. La cerró {$who}.";
 
-            foreach (Notifier::adminIds($tenant->id) as $userId) {
+            foreach (array_unique([...Notifier::adminIds($tenant->id), ...Notifier::managerIds($tenant->id, $session->branch_id)]) as $userId) {
                 if ($userId !== $actor->id) {
                     Notifier::send($tenant->id, $userId, 'cash.difference', 'Cierre de caja con diferencia', implode(' · ', array_filter([$body, $branch])), '/cash');
                 }

@@ -266,6 +266,12 @@ export default function QuoteDetailDrawer({
           )}
         </section>
 
+        {quote.status === 'accepted' && !quote.plan && !quote.sale_id && quote.sessions_total > 0 && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2" data-quote-no-sale>
+            El plan de tratamiento se crea al pasar a cobro: sin la venta por cobrar no se pueden usar sus sesiones.
+          </p>
+        )}
+
         {quote.plan && (
           <section className="rounded-2xl border border-slate-200 px-4 py-3 flex items-start gap-3" data-quote-plan>
             <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><Boxes size={16} /></span>

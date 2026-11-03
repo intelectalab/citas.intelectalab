@@ -78,7 +78,7 @@ const greeting = () => {
 };
 
 export default function HomePage() {
-  const { user, loading, hasModule } = useAuth();
+  const { user, loading, hasModule, can } = useAuth();
   const vocab = useVocabulary();
   const [taskFilter, setTaskFilter] = useState<'pending' | 'completed'>('pending');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -388,7 +388,7 @@ export default function HomePage() {
 
                 <div className="pt-4 sm:pt-0 sm:pl-4 space-y-3" data-metric="value">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-600">Valor de lo atendido</span>
+                    <span className="text-xs font-bold text-slate-600">{own ? 'Tu producción' : 'Valor de lo atendido'}</span>
                     <div className="p-2 bg-slate-100 text-slate-600 rounded-xl">
                       <Wallet className="w-4 h-4" />
                     </div>
@@ -407,7 +407,10 @@ export default function HomePage() {
                   <span className="font-bold text-brand-ink">Lo más pedido:</span>{' '}
                   {data.month.top_services.length ? data.month.top_services.map((service) => `${service.name} (${service.count})`).join(' · ') : 'aún no hay citas'}
                 </span>
-                <span className="text-slate-400">El valor suma el precio de las citas atendidas; no es lo cobrado.</span>
+                <span className="text-slate-400">{own ? 'Tu producción' : 'El valor'} suma el precio de las citas atendidas; no es lo cobrado.</span>
+                {own && can('reports.own') && (
+                  <Link href="/reports" data-link="my-numbers" className="font-bold text-brand-accent hover:text-brand-ink">Ver mis números →</Link>
+                )}
               </div>
             </div>
           </div>

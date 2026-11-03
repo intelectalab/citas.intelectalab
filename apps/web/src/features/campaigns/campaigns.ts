@@ -15,6 +15,7 @@ export interface Segment {
   group: string;
   service_id?: string;
   branch_id?: string;
+  only_branch?: string;
 }
 
 export interface Campaign {
@@ -82,6 +83,7 @@ export interface CampaignOptions {
   variables: Variable[];
   volume_warning: number;
   email: { state: EmailState; label: string };
+  branch_scope?: { branch_id: string; branch_name: string | null; can_choose: boolean } | null;
 }
 
 export interface Audience {

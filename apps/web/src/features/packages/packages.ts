@@ -39,6 +39,7 @@ export interface PackagePlan extends Conditions {
   price: number;
   currency: string;
   status: 'active' | 'inactive';
+  sell_online?: boolean;
   items: PlanItem[];
   sessions: number;
   normal_total: number;

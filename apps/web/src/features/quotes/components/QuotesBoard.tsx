@@ -69,6 +69,8 @@ export default function QuotesBoard() {
 
   useEffect(() => {
     load();
+    const wanted = new URLSearchParams(window.location.search).get('quote');
+    if (wanted) setSelectedQuoteId(wanted);
   }, [load]);
 
   const handleSaved = (next: QuotesBoardData, message: string) => {

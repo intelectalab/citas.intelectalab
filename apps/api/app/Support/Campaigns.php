@@ -87,11 +87,13 @@ class Campaigns
     {
         $group = self::GROUPS[$segment['group'] ?? 'all']['label'] ?? 'Todos los clientes';
 
-        return match ($segment['group'] ?? null) {
+        $label = match ($segment['group'] ?? null) {
             'service' => $group . ': ' . (DB::table('services')->where('tenant_id', $tenant->id)->where('id', $segment['service_id'] ?? null)->value('name') ?? '—'),
             'branch'  => $group . ': ' . (DB::table('branches')->where('tenant_id', $tenant->id)->where('id', $segment['branch_id'] ?? null)->value('name') ?? '—'),
             default   => $group,
         };
+
+        return empty($segment['only_branch']) ? $label : $label . ' · de ' . (DB::table('branches')->where('id', $segment['only_branch'])->value('name') ?? 'su sede');
     }
 
     public static function customers(Tenant $tenant, array $segment): Builder
@@ -141,6 +143,12 @@ class Campaigns
                 ->where('a.status', 'completed')->where('a.branch_id', $segment['branch_id'] ?? null)),
             default          => $query,
         };
+
+        if (!empty($segment['only_branch'])) {
+            $query->whereExists(fn ($q) => $q->select(DB::raw(1))->from('appointments as b')->whereColumn('b.customer_id', 'c.id')
+                ->where('b.branch_id', $segment['only_branch'])->where('b.status', '!=', 'cancelled')
+                ->where('b.starts_at', '>=', $now->copy()->subMonths(12)->toIso8601String()));
+        }
 
         return $query;
     }

@@ -43,7 +43,7 @@ export interface WalkinSummary {
 
 export interface WalkinContext {
   branches: { id: string; name: string }[];
-  services: { id: string; name: string; duration_minutes: number; price: number }[];
+  services: { id: string; name: string; duration_minutes: number; price: number; branch_ids?: string[] }[];
   professionals: { id: string; display_name: string }[];
   dependents: { enabled: boolean; kind: 'pet' | 'person' | null; required: boolean };
   rules: { self_checkin: boolean; max_wait: number };

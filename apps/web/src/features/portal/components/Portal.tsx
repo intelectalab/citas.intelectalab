@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BellRing, Boxes, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
+import { BellRing, Boxes, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, FileText, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -14,11 +14,13 @@ import PortalAppointments from './PortalAppointments';
 import PortalWaitlist from './PortalWaitlist';
 import PortalPassword from './PortalPassword';
 import PortalPackages, { type PortalPackage } from './PortalPackages';
+import PortalQuotes, { type PortalQuotesData } from './PortalQuotes';
+import PortalShop, { type ShopData } from './PortalShop';
 import PortalPrivacy, { PortalContact } from './PortalPrivacy';
 import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview, type PortalWaitlistEntry } from '../portal';
 import { money, momentOf, type PaymentLink } from '@/features/sales/sales';
 
-type Tab = 'home' | 'book' | 'appointments' | 'packages' | 'profile' | 'privacy';
+type Tab = 'home' | 'book' | 'appointments' | 'packages' | 'quotes' | 'profile' | 'privacy';
 
 export default function Portal() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -74,13 +76,35 @@ export default function Portal() {
   }, [overview, mustChangePassword, loadPayLinks]);
 
   const [packages, setPackages] = useState<PortalPackage[] | null>(null);
+  const [quotes, setQuotes] = useState<PortalQuotesData | null>(null);
+  const [shop, setShop] = useState<ShopData | null>(null);
 
-  useEffect(() => {
-    if (!overview || mustChangePassword) return;
+  const loadPackages = useCallback(() => {
     api.get('/portal/packages')
       .then((res) => setPackages(res.data.packages ?? []))
       .catch(() => setPackages(null));
+  }, []);
+
+  useEffect(() => {
+    if (!overview || mustChangePassword) return;
+    loadPackages();
+  }, [overview, mustChangePassword, loadPackages]);
+
+  useEffect(() => {
+    if (!overview || mustChangePassword) return;
+    api.get<PortalQuotesData>('/portal/quotes')
+      .then((res) => setQuotes(res.data))
+      .catch(() => setQuotes(null));
+    api.get<ShopData>('/portal/shop')
+      .then((res) => setShop(res.data))
+      .catch(() => setShop(null));
   }, [overview, mustChangePassword]);
+
+  const lateWarning = (appointment: PortalAppointment) => {
+    const hours = overview?.policies?.cancel_window_hours ?? 24;
+    const late = (new Date(appointment.starts_at).getTime() - Date.now()) / 3600000 < hours;
+    return late && overview?.policies?.late_cancel_counts && appointment.source === 'online' ? ` Faltan menos de ${hours} horas: cancelar ahora cuenta como una falta.` : '';
+  };
 
   const depositWarning = (appointment: PortalAppointment) => {
     if (appointment.package) {
@@ -102,7 +126,7 @@ export default function Portal() {
     try {
       const res = await api.post(`/portal/payment-links/${link.id}/cancel`);
       setPayLinks(res.data.links ?? []);
-      setNotice('Listo: no se reservó esa cita y no se te cobró nada.');
+      setNotice(link.purpose === 'deposit' ? 'Listo: no se reservó esa cita y no se te cobró nada.' : 'Listo: no se hizo la compra y no se te cobró nada.');
     } catch (err) {
       setError(portalError(err, 'No se pudo cancelar.'));
     }
@@ -184,7 +208,8 @@ export default function Portal() {
     { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
     ...(canBook ? [{ id: 'book' as Tab, label: 'Reservar', icon: <CalendarPlus size={16} /> }] : []),
     { id: 'appointments', label: 'Mis citas', icon: <CalendarDays size={16} /> },
-    ...(packages && packages.length > 0 ? [{ id: 'packages' as Tab, label: 'Mis paquetes', icon: <Boxes size={16} /> }] : []),
+    ...((packages && packages.length > 0) || (shop && shop.packages.length > 0) ? [{ id: 'packages' as Tab, label: 'Paquetes', icon: <Boxes size={16} /> }] : []),
+    ...(quotes && quotes.quotes.length > 0 ? [{ id: 'quotes' as Tab, label: 'Presupuestos', icon: <FileText size={16} /> }] : []),
     { id: 'profile', label: 'Mis datos', icon: <UserRound size={16} /> },
   ];
 
@@ -218,7 +243,7 @@ export default function Portal() {
               data-tab={item.id}
               aria-current={tab === item.id ? 'page' : undefined}
               onClick={() => openTab(item.id)}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 ${tabs.length > 5 ? 'sm:px-3.5' : 'sm:px-4'} py-2.5 text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
                 tab === item.id ? 'border-brand text-brand-ink' : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -242,7 +267,7 @@ export default function Portal() {
             </span>
             <span className="flex gap-2">
               <Link href={`/pay/${link.token}`} data-portal-pay className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">Pagar</Link>
-              {link.purpose === 'deposit' && (
+              {(link.can_drop ?? link.purpose === 'deposit') && (
                 <button type="button" data-portal-pay-drop onClick={() => dropPayLink(link)} className="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-red-600 transition-colors">Ya no quiero</button>
               )}
             </span>
@@ -296,6 +321,21 @@ export default function Portal() {
                   </span>
                 </span>
               </section>
+            )}
+
+            {quotes && quotes.quotes.some((q) => q.can_answer) && (
+              <button
+                type="button"
+                data-action="see-quotes"
+                onClick={() => openTab('quotes')}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left bg-sky-50 border border-sky-200 rounded-2xl hover:border-sky-400 transition-colors"
+              >
+                <span className="p-2 bg-white text-sky-600 rounded-xl shrink-0"><FileText size={18} /></span>
+                <span>
+                  <span className="block text-sm font-bold text-sky-800">Tienes un presupuesto por responder</span>
+                  <span className="block text-xs text-sky-700">Revísalo en &quot;Presupuestos&quot; y acéptalo o cuéntanos por qué no te interesa.</span>
+                </span>
+              </button>
             )}
 
             {waiting.some((entry) => entry.days.length > 0) && (
@@ -363,8 +403,19 @@ export default function Portal() {
           </>
         )}
 
-        {overview && !mustChangePassword && tab === 'packages' && packages && (
-          <PortalPackages packages={packages} onBook={canBook ? () => setTab('book') : undefined} />
+        {overview && !mustChangePassword && tab === 'packages' && (
+          <>
+            {packages && packages.length > 0 && <PortalPackages packages={packages} onBook={canBook ? () => setTab('book') : undefined} />}
+            {shop && shop.packages.length > 0 && <PortalShop data={shop} />}
+          </>
+        )}
+
+        {overview && !mustChangePassword && tab === 'quotes' && quotes && (
+          <PortalQuotes
+            data={quotes}
+            onBook={canBook ? () => setTab('book') : undefined}
+            onChanged={(next, text) => { setQuotes(next); setError(''); setNotice(text); loadPackages(); }}
+          />
         )}
 
         {overview && !mustChangePassword && tab === 'profile' && (
@@ -500,7 +551,7 @@ export default function Portal() {
         type="confirm"
         variant="danger"
         title="¿Cancelar tu cita?"
-        message={cancelling ? `${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.${depositWarning(cancelling)}` : ''}
+        message={cancelling ? `${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.${depositWarning(cancelling)}${lateWarning(cancelling)}` : ''}
         confirmText="Sí, cancelar"
         cancelText="No, mantenerla"
         isLoading={busy}

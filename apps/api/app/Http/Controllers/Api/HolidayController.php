@@ -119,6 +119,7 @@ class HolidayController extends Controller
         ]);
         $holiday = $holiday->fresh('branch:id,name');
         $this->audit($request, 'holiday.created', $holiday, [], array_filter($this->auditable($holiday), fn ($value) => $value !== null));
+        $this->notifyAffected($tenant, $holiday, $request->user()->id);
 
         return response()->json($this->present($holiday, $tenant, now($this->timezone($tenant))->startOfDay(), true), 201);
     }
@@ -137,6 +138,7 @@ class HolidayController extends Controller
 
         if ($from || $to) {
             $this->audit($request, 'holiday.updated', $holiday, $from, $to);
+            $this->notifyAffected($tenant, $holiday, $request->user()->id);
         }
 
         return response()->json($this->present($holiday, $tenant, now($this->timezone($tenant))->startOfDay(), true));
@@ -173,6 +175,12 @@ class HolidayController extends Controller
         $validated = $request->validate(['year' => 'required|integer|min:2000|max:2100']);
         Access::assertBranch($request->user(), null, true);
         $added = Holidays::loadNational($tenant, (int) $validated['year'], $request->user()->id);
+
+        if ($added > 0) {
+            foreach (Holiday::where('tenant_id', $tenant->id)->where('closed', true)->whereYear('date', (int) $validated['year'])->where('date', '>=', now($this->timezone($tenant))->toDateString())->get() as $holiday) {
+                $this->notifyAffected($tenant, $holiday, $request->user()->id);
+            }
+        }
 
         if ($added > 0) {
             Audit::log($request, 'holiday.imported', [
@@ -251,6 +259,17 @@ class HolidayController extends Controller
             'branch_id' => $branchId,
             'closed'    => array_key_exists('closed', $validated) && $validated['closed'] !== null ? (bool) $validated['closed'] : true,
         ];
+    }
+
+    private function notifyAffected(Tenant $tenant, Holiday $holiday, string $actorId): void
+    {
+        if (!$holiday->closed) {
+            return;
+        }
+
+        $what = "El feriado {$holiday->name} (" . $holiday->date->locale('es')->isoFormat('D [de] MMMM') . ')';
+
+        \App\Support\DueNotices::closure($tenant, $this->affectedQuery($tenant, $holiday)->get(['id', 'professional_id', 'branch_id']), $what, '/agenda', $actorId, "holiday:{$holiday->id}:" . $holiday->date->format('Ymd') . ':' . ($holiday->branch_id ?? 'all'));
     }
 
     private function affectedQuery(Tenant $tenant, Holiday $holiday): Builder

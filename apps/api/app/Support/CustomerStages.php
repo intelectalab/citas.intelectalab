@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -25,7 +27,13 @@ class CustomerStages
         ['key' => 'lost', 'name' => 'Perdido', 'description' => 'No desea volver', 'color' => '#EF4444'],
     ];
 
-    public const SOURCES = ['board', 'form', 'detail', 'column_deleted'];
+    public const SOURCES = ['board', 'form', 'detail', 'column_deleted', 'auto'];
+
+    public const MANUAL_SOURCES = ['board', 'form', 'detail'];
+
+    public const AUTO = 'auto';
+
+    public const AUTOMATIC = ['lead', 'booked', 'active', 'loyal', 'recover'];
 
     private static ?bool $ready = null;
 
@@ -34,6 +42,13 @@ class CustomerStages
         return self::$ready ??= Schema::hasColumn('pipelines', 'tenant_id')
             && Schema::hasColumn('pipeline_stages', 'system_key')
             && Schema::hasTable('customer_stage_changes');
+    }
+
+    public static function automatic(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= self::ready() && Schema::hasColumn('customers', 'stage_manual_at');
     }
 
     public static function boardId(Tenant $tenant): string
@@ -143,7 +158,8 @@ class CustomerStages
         $to = $stageId ?? $default;
 
         DB::transaction(function () use ($tenant, $customerId, $stageId, $by, $source, $stages, $from, $to) {
-            DB::table('customers')->where('id', $customerId)->update(['pipeline_stage_id' => $stageId, 'updated_at' => now()]);
+            DB::table('customers')->where('id', $customerId)->update(['pipeline_stage_id' => $stageId, 'updated_at' => now()]
+                + (self::automatic() && in_array($source, self::MANUAL_SOURCES, true) ? ['stage_manual_at' => now()] : []));
 
             if ($from !== $to) {
                 self::record($tenant->id, $customerId, $from, $stages[$from]['name'] ?? null, $to, $stages[$to]['name'] ?? null, $source, $by?->id);
@@ -164,6 +180,129 @@ class CustomerStages
         }
 
         return true;
+    }
+
+    public static function release(Tenant $tenant, string $customerId): void
+    {
+        if (!self::automatic()) {
+            return;
+        }
+
+        DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $customerId)->update(['stage_manual_at' => null]);
+        self::refresh($tenant, [$customerId], true);
+    }
+
+    public static function refreshStale(Tenant $tenant): void
+    {
+        if (self::automatic() && Cache::add('customer-stages:' . $tenant->id . ':' . now($tenant->zone())->toDateString(), true, now()->addDay())) {
+            self::refresh($tenant);
+        }
+    }
+
+    public static function refreshFor(string $tenantId, ?string $customerId): void
+    {
+        if (!$customerId || !self::automatic()) {
+            return;
+        }
+
+        try {
+            if ($tenant = Tenant::find($tenantId)) {
+                self::refresh($tenant, [$customerId]);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    public static function refresh(Tenant $tenant, ?array $customerIds = null, bool $force = false): int
+    {
+        if (!self::automatic()) {
+            return 0;
+        }
+
+        $stages = collect(self::stages($tenant));
+        $byKey = $stages->whereNotNull('system_key')->keyBy('system_key');
+        $byId = $stages->keyBy('id');
+        $default = self::defaultId($stages->all());
+        $rules = Campaigns::rules($tenant);
+        $now = now();
+
+        $visits = DB::table('appointments')
+            ->where('tenant_id', $tenant->id)
+            ->where('status', AppointmentFlow::COMPLETED)
+            ->groupBy('customer_id')
+            ->selectRaw('customer_id, count(*) AS visits, max(starts_at) AS last_visit, count(*) FILTER (WHERE starts_at >= ?) AS recent', [$now->copy()->subDays(90)->toIso8601String()]);
+
+        $spend = DB::table('sales')
+            ->where('tenant_id', $tenant->id)
+            ->whereIn('status', ['paid', 'partial', 'partially_refunded'])
+            ->whereRaw('coalesce(paid_at, created_at) >= ?', [$now->copy()->subMonths(12)->toIso8601String()])
+            ->whereNotNull('customer_id')
+            ->groupBy('customer_id')
+            ->selectRaw('customer_id, sum(paid) AS spent');
+
+        $rows = DB::table('customers as c')
+            ->where('c.tenant_id', $tenant->id)
+            ->whereNull('c.deleted_at')
+            ->when($customerIds !== null, fn ($q) => $q->whereIn('c.id', $customerIds))
+            ->leftJoinSub($visits, 'v', 'v.customer_id', '=', 'c.id')
+            ->leftJoinSub($spend, 's', 's.customer_id', '=', 'c.id')
+            ->select('c.id', 'c.pipeline_stage_id', 'c.stage_manual_at', 'v.visits', 'v.last_visit', 'v.recent', 's.spent')
+            ->selectRaw("EXISTS (SELECT 1 FROM appointments a WHERE a.customer_id = c.id AND a.status IN ('pending', 'confirmed') AND a.starts_at > ?) AS upcoming", [$now->toIso8601String()])
+            ->selectRaw('(c.stage_manual_at IS NOT NULL AND EXISTS (SELECT 1 FROM appointments a WHERE a.customer_id = c.id AND a.created_at > c.stage_manual_at)) AS booked_after')
+            ->selectRaw("(c.stage_manual_at IS NOT NULL AND EXISTS (SELECT 1 FROM appointments a WHERE a.customer_id = c.id AND a.status = 'completed' AND a.completed_at > c.stage_manual_at)) AS attended_after")
+            ->get();
+
+        $moved = 0;
+
+        foreach ($rows as $row) {
+            $current = $row->pipeline_stage_id && $byId->has($row->pipeline_stage_id) ? $byId[$row->pipeline_stage_id] : null;
+
+            if ($row->stage_manual_at) {
+                $released = ($current['system_key'] ?? null) === 'lost' ? $row->booked_after : ($row->booked_after || $row->attended_after);
+
+                if (!$released) {
+                    continue;
+                }
+
+                DB::table('customers')->where('id', $row->id)->update(['stage_manual_at' => null]);
+            } elseif (!$force && $current && !in_array($current['system_key'], self::AUTOMATIC, true)) {
+                continue;
+            }
+
+            $target = $byKey->get(self::targetKey($row, $rules, $now));
+
+            if (!$target || $target['id'] === ($current['id'] ?? null)) {
+                continue;
+            }
+
+            $from = $current['id'] ?? $default;
+            DB::table('customers')->where('id', $row->id)->update(['pipeline_stage_id' => $target['id']]);
+
+            if ($target['id'] !== $from) {
+                self::record($tenant->id, $row->id, $from, $byId[$from]['name'] ?? null, $target['id'], $target['name'], 'auto', null);
+                $moved++;
+            }
+        }
+
+        return $moved;
+    }
+
+    private static function targetKey(object $row, array $rules, Carbon $now): string
+    {
+        if (!(int) $row->visits) {
+            return $row->upcoming ? 'booked' : 'lead';
+        }
+
+        if (!$row->upcoming && $row->last_visit && Carbon::parse($row->last_visit)->lte($now->copy()->subDays($rules['inactive_days']))) {
+            return 'recover';
+        }
+
+        if ((int) $row->recent >= max(1, $rules['frequent_visits']) || (float) $row->spent >= max(0.01, $rules['vip_spend'])) {
+            return 'loyal';
+        }
+
+        return 'active';
     }
 
     public static function save(Tenant $tenant, array $columns, array $moves, User $by): array
@@ -245,7 +384,8 @@ class CustomerStages
                         self::record($tenant->id, $customerId, null, $existing[$removedId]['name'], $target, $names[$target] ?? null, 'column_deleted', $by->id);
                     }
 
-                    DB::table('customers')->whereIn('id', $customers)->update(['pipeline_stage_id' => $target, 'updated_at' => now()]);
+                    $manual = self::automatic() && !in_array($existing[$target]['system_key'] ?? null, self::AUTOMATIC, true) ? ['stage_manual_at' => now()] : [];
+                    DB::table('customers')->whereIn('id', $customers)->update(['pipeline_stage_id' => $target, 'updated_at' => now()] + $manual);
                 }
 
                 DB::table('customers')->where('tenant_id', $tenant->id)->where('pipeline_stage_id', $removedId)->update(['pipeline_stage_id' => null]);

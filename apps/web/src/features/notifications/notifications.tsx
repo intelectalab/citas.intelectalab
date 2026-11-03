@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, CalendarCheck, CalendarClock, CalendarOff, CalendarPlus, CalendarX2, DoorOpen, Globe, Hourglass, PowerOff, Unlock, Wallet, Wrench, type LucideIcon } from 'lucide-react';
+import { BellRing, Boxes, CalendarCheck, CalendarClock, CalendarOff, CalendarPlus, CalendarX2, CreditCard, DoorOpen, FileCheck2, FileText, FileX2, Gauge, Globe, Hourglass, ListOrdered, NotebookPen, PowerOff, ShieldAlert, Stethoscope, Unlock, Wallet, Wrench, type LucideIcon } from 'lucide-react';
 import { api } from '@/lib/axios';
 
 export interface AppNotification {
@@ -35,10 +35,21 @@ const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   'appointment.unconfirmed': { icon: BellRing, tone: 'bg-amber-50 text-amber-600' },
   'appointment.released': { icon: Unlock, tone: 'bg-rose-50 text-rose-600' },
   'waitlist.slot_freed': { icon: Hourglass, tone: 'bg-emerald-50 text-emerald-600' },
+  'walkin.added': { icon: ListOrdered, tone: 'bg-amber-50 text-amber-600' },
   'room.down': { icon: PowerOff, tone: 'bg-rose-50 text-rose-600' },
   'room.observed': { icon: Wrench, tone: 'bg-amber-50 text-amber-600' },
   'room.up': { icon: DoorOpen, tone: 'bg-emerald-50 text-emerald-600' },
   'cash.difference': { icon: Wallet, tone: 'bg-rose-50 text-rose-600' },
+  'quote.accepted': { icon: FileCheck2, tone: 'bg-emerald-50 text-emerald-600' },
+  'quote.rejected': { icon: FileX2, tone: 'bg-rose-50 text-rose-600' },
+  'package.bought': { icon: Boxes, tone: 'bg-brand-soft/25 text-brand-ink' },
+  'block.affected': { icon: CalendarOff, tone: 'bg-amber-50 text-amber-600' },
+  'recall.due': { icon: Stethoscope, tone: 'bg-sky-50 text-sky-600' },
+  'record.draft': { icon: NotebookPen, tone: 'bg-amber-50 text-amber-600' },
+  'record.emergency': { icon: ShieldAlert, tone: 'bg-rose-50 text-rose-600' },
+  'plan.limit': { icon: Gauge, tone: 'bg-amber-50 text-amber-600' },
+  'subscription.ending': { icon: CreditCard, tone: 'bg-rose-50 text-rose-600' },
+  'quote.sent': { icon: FileText, tone: 'bg-brand-soft/25 text-brand-ink' },
 };
 
 export const notificationStyle = (type: string) => STYLES[type] ?? { icon: CalendarCheck, tone: 'bg-slate-100 text-slate-600' };

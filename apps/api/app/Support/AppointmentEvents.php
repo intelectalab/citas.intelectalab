@@ -25,6 +25,8 @@ class AppointmentEvents
             'actor_customer_id' => $actor instanceof Customer ? $actor->id : null,
         ]);
 
+        CustomerStages::refreshFor($appointment->tenant_id, $appointment->customer_id);
+
         if ($actor && !in_array('notify', $skip, true)) {
             Notifier::appointmentStep($appointment, $from, $to, $actor);
         }

@@ -82,7 +82,7 @@ export interface AccessChange {
 
 export const entersModule = (module: GridModule) => {
   const view = module.actions.find((a) => a.action === 'view');
-  return view ? view.on : module.actions.some((a) => a.on && !a.special);
+  return view ? view.on || module.actions.some((a) => a.action === 'own' && a.on) : module.actions.some((a) => a.on && !a.special);
 };
 
 export const levelOf = (module: GridModule): string => {

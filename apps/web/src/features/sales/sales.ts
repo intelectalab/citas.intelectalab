@@ -75,6 +75,7 @@ export interface PaymentLink {
   simulated: boolean;
   token?: string;
   minutes?: number;
+  can_drop?: boolean;
 }
 
 export interface PaymentQr {
@@ -165,6 +166,8 @@ export interface CashMovement {
 }
 
 export interface CashSession {
+  mine?: boolean;
+  hidden?: boolean;
   currency?: string;
   id: string;
   register_id: string;

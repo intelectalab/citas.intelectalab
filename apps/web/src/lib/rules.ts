@@ -67,6 +67,7 @@ export const RULE_GROUPS: RuleGroup[] = [
       { key: 'quotes.validity_days', label: 'Vigencia de presupuestos', hint: 'Días de validez por defecto al armar un presupuesto.', type: 'number', unit: 'días' },
       { key: 'quotes.allow_installments', label: 'Permitir cuotas en presupuestos', hint: 'Habilita cronogramas de cuotas en los planes de tratamiento.', type: 'boolean' },
       { key: 'quotes.auto_create_sale', label: 'Crear venta al aprobar presupuesto', hint: 'Genera la venta por cobrar automáticamente al aprobar el plan.', type: 'boolean' },
+      { key: 'quotes.portal_accept', label: 'Aceptar presupuestos desde el portal', hint: 'El cliente ve los presupuestos enviados en su portal y puede aceptarlos o rechazarlos.', type: 'boolean' },
       { key: 'quotes.track_clinical_zones', label: 'Pieza o zona en planes de tratamiento', hint: 'Muestra el campo de pieza dental, zona o etapa en cada línea.', type: 'boolean' },
       { key: 'quotes.plan_validity_days', label: 'Duración del plan de tratamiento', hint: 'Días que dura el plan que se crea al aprobar un presupuesto. La regla de anulación la elige cada empresa en Configuración.', type: 'number', unit: 'días' },
       { key: 'inventory.consume_on_service', label: 'Descontar insumos al completar el servicio', hint: 'Según los insumos definidos en cada servicio.', type: 'boolean' },

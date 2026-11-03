@@ -52,8 +52,10 @@ class ProfessionalController extends Controller
 
         if ($request->filled('status')) {
             $status = $request->input('status');
-            $query->whereHas('status', function($q) use ($status) {
-                $q->where('slug', $status)->orWhere('name', $status);
+            $query->where(function ($outer) use ($status) {
+                $outer->whereHas('status', function($q) use ($status) {
+                    $q->where('slug', $status)->orWhere('name', $status);
+                })->when($status === 'active', fn ($q) => $q->orWhereNull('status_id'));
             });
         }
 
@@ -221,6 +223,8 @@ class ProfessionalController extends Controller
         $professional = Professional::where('tenant_id', $currentUser->tenant_id)
             ->with(['status', 'specialties', 'user', 'schedules', 'services', 'typeDocument'])
             ->findOrFail($id);
+
+        abort_if(Access::scopeOf($currentUser) === 'own' && $professional->user_id !== $currentUser->id, 403, 'Con tu rol solo puedes ver tu propia página.');
 
         return response()->json($professional);
     }

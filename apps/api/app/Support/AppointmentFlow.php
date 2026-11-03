@@ -81,6 +81,9 @@ class AppointmentFlow
         'booking.deposit_refund_hours' => 24,
         'session.idle_minutes'        => 30,
         'session.portal_idle_minutes' => 0,
+        'session.idle_by_role'        => [],
+        'campaigns.manager_scope'     => 'branch',
+        'booking.count_late_cancel'   => false,
         'help.enabled'                => true,
         'crm.inactive_days'           => 60,
         'crm.frequent_visits'         => 4,
@@ -103,6 +106,7 @@ class AppointmentFlow
         'quotes.track_clinical_zones' => true,
         'quotes.plan_validity_days'   => 365,
         'quotes.cancel_policy'        => 'unused_quote',
+        'quotes.portal_accept'        => true,
         'walkin.self_checkin'         => true,
         'walkin.max_wait'             => 90,
     ];

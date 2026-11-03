@@ -104,8 +104,12 @@ class Rooms
                     : ['room.up', 'Equipo de vuelta en uso', "{$equipment->name}, de {$room->name}, ya está en uso."];
             }
 
-            foreach (Notifier::adminIds($tenant->id) as $userId) {
-                Notifier::send($tenant->id, $userId, $type, $title, implode(' · ', array_filter([$body, $branch])), '/rooms');
+            foreach (array_unique([...Notifier::adminIds($tenant->id), ...Notifier::managerIds($tenant->id, $room->branch_id)]) as $userId) {
+                if (Notifier::lastTypeFor($userId, 'room', $equipment->id) === $type) {
+                    continue;
+                }
+
+                Notifier::send($tenant->id, $userId, $type, $title, implode(' · ', array_filter([$body, $branch])), '/rooms', 'room', $equipment->id);
             }
         } catch (\Throwable $e) {
             report($e);

@@ -40,6 +40,7 @@ class PortalController extends AppointmentController
             'auto_confirm'       => (bool) $rule('booking.auto_confirm'),
             'cancel_allowed'     => (bool) $rule('cancel.client_allowed'),
             'cancel_window_hours' => (int) $rule('cancel.window_hours'),
+            'late_cancel_counts' => $tenant->hasModule('booking') && (bool) $rule('booking.count_late_cancel') && \App\Support\OnlineBooking::policy($tenant)['action'] !== \App\Support\OnlineBooking::NONE,
             'reschedule_max'     => (int) $rule('reschedule.max_times'),
             'confirm_deadline_hours' => \App\Support\Confirmations::deadlineHours($tenant),
             'confirm_on_miss'    => \App\Support\Confirmations::mode($tenant),
@@ -144,6 +145,7 @@ class PortalController extends AppointmentController
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
                     'is_virtual'       => $s->is_virtual,
+                    'branch_ids'       => $s->branch_ids,
                     'package'          => ($found = $packaged->get($s->id)) ? ['code' => $found->first()['code'], 'name' => $found->first()['name'], 'available' => $found->sum('available')] : null,
                     'needs_deposit'    => !$packaged->has($s->id) && $depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0,
                     'deposit_amount'   => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositAmount($s) : 0,
@@ -344,10 +346,15 @@ class PortalController extends AppointmentController
     {
         $tenant = $this->tenant($request);
         $customer = $this->customer($request);
-        $row = DB::table('payment_links')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('purpose', 'deposit')->where('id', $link)->first();
-        abort_unless($row, 404);
+        $row = DB::table('payment_links')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->whereIn('purpose', ['deposit', 'sale'])->where('id', $link)->first();
+        $online = $row && $row->purpose === 'sale' && $row->sale_id && DB::table('sales')->where('id', $row->sale_id)->value('notes') === \App\Support\Packages::ONLINE_NOTE;
+        abort_unless($row && ($row->purpose === 'deposit' || $online), 404);
 
-        \App\Support\PaymentLinks::cancel($row, 'El cliente decidió no reservar.');
+        \App\Support\PaymentLinks::cancel($row, $online ? 'El cliente decidió no comprar el paquete.' : 'El cliente decidió no reservar.');
+
+        if ($online) {
+            \App\Support\PaymentLinks::dropAbandoned($tenant->id);
+        }
 
         return response()->json(['links' => \App\Support\PaymentLinks::forCustomer($tenant->id, $customer->id)]);
     }

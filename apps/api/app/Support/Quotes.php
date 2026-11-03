@@ -67,6 +67,7 @@ class Quotes
             'auto_create_sale'     => (bool) AppointmentFlow::rule($tenant, 'quotes.auto_create_sale'),
             'track_clinical_zones' => (bool) AppointmentFlow::rule($tenant, 'quotes.track_clinical_zones'),
             'plan_validity_days'   => max(1, min(3650, (int) AppointmentFlow::rule($tenant, 'quotes.plan_validity_days'))),
+            'portal_accept'        => (bool) AppointmentFlow::rule($tenant, 'quotes.portal_accept'),
             'cancel_policy'        => in_array($policy = (string) AppointmentFlow::rule($tenant, 'quotes.cancel_policy'), array_keys(self::CANCEL_POLICIES), true) ? $policy : 'unused_quote',
         ];
     }
@@ -82,7 +83,7 @@ class Quotes
             return;
         }
 
-        $today = now()->toDateString();
+        $today = self::today($tenantId);
 
         $dueQuotes = DB::table('quotes')
             ->where('tenant_id', $tenantId)
@@ -116,6 +117,69 @@ class Quotes
             ->update(['status' => 'overdue']);
     }
 
+    public static function today(string $tenantId): string
+    {
+        $zone = DB::table('tenants')->where('id', $tenantId)->value('timezone') ?: 'America/Lima';
+
+        return Carbon::now($zone)->toDateString();
+    }
+
+    public static function approvalBlocker(object $quote): ?string
+    {
+        if (!in_array($quote->status, ['draft', 'sent'], true)) {
+            return match ($quote->status) {
+                'accepted'  => "El presupuesto {$quote->code} ya está aprobado.",
+                'expired'   => "El presupuesto {$quote->code} venció: vuelve a emitirlo con una nueva fecha de validez.",
+                'rejected'  => "El presupuesto {$quote->code} fue rechazado: reábrelo como borrador para aprobarlo.",
+                default     => "El presupuesto {$quote->code} está anulado: crea uno nuevo.",
+            };
+        }
+
+        if ($quote->valid_until && (string) $quote->valid_until < self::today($quote->tenant_id)) {
+            return "El presupuesto {$quote->code} venció el " . Carbon::parse($quote->valid_until)->format('d/m/Y') . ': vuelve a emitirlo con una nueva fecha de validez.';
+        }
+
+        return null;
+    }
+
+    public static function approve(Tenant $tenant, object $quote, ?User $user, string $via, bool $createSale, ?string $note = null, ?string $customerId = null): object
+    {
+        if ($blocker = self::approvalBlocker($quote)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['status' => $blocker]);
+        }
+
+        DB::table('quotes')->where('id', $quote->id)->update([
+            'status'       => 'accepted',
+            'accepted_at'  => now(),
+            'accepted_via' => $via,
+            'updated_at'   => now(),
+        ]);
+
+        DB::table('quote_status_history')->insert([
+            'id'            => (string) Str::uuid(),
+            'tenant_id'     => $tenant->id,
+            'quote_id'      => $quote->id,
+            'from_status'   => $quote->status,
+            'to_status'     => 'accepted',
+            'actor_user_id' => $user?->id,
+            'note'          => $note ?: ($via === 'portal' ? 'El cliente aprobó el presupuesto desde el portal.' : 'Presupuesto aprobado por el cliente.'),
+            'created_at'    => now(),
+        ]);
+
+        $fresh = DB::table('quotes')->where('id', $quote->id)->first();
+
+        if ($createSale && Sales::ready()) {
+            self::ensureSale($tenant, $fresh, $user);
+            $fresh = DB::table('quotes')->where('id', $quote->id)->first();
+        }
+
+        if ($fresh->sale_id || !Sales::ready()) {
+            self::createPlan($tenant, $fresh, $user);
+        }
+
+        return DB::table('quotes')->where('id', $quote->id)->first();
+    }
+
     public static function syncInstallmentsWithSale(string $tenantId, object $quote): void
     {
         if (!$quote->sale_id) {
@@ -141,17 +205,24 @@ class Quotes
         $outside = max(0, round((float) $sale->total - (float) $installments->sum('amount'), 2));
         $paidAmount = round((float) $sale->paid - $outside, 2);
 
-        if ($paidAmount <= 0) {
-            return;
-        }
-
+        $today = self::today($tenantId);
         $accumulated = 0.0;
+
         foreach ($installments as $inst) {
             $accumulated = round($accumulated + (float) $inst->amount, 2);
-            if ($paidAmount + 0.009 >= $accumulated && $inst->status !== 'paid') {
+            $covered = $paidAmount > 0 && $paidAmount + 0.009 >= $accumulated;
+
+            if ($covered && $inst->status !== 'paid') {
                 DB::table('quote_installments')->where('id', $inst->id)->update([
                     'status'  => 'paid',
                     'paid_at' => now(),
+                ]);
+            }
+
+            if (!$covered && $inst->status === 'paid') {
+                DB::table('quote_installments')->where('id', $inst->id)->update([
+                    'status'  => (string) $inst->due_date < $today ? 'overdue' : 'pending',
+                    'paid_at' => null,
                 ]);
             }
         }
@@ -275,6 +346,13 @@ class Quotes
                 $lines[] = ['item' => $item, 'parts' => [['service_id' => $item->reference_id, 'sessions' => (int) $item->sessions_total]]];
             }
 
+            $meta = is_string($item->metadata ?? null) ? (json_decode($item->metadata, true) ?: []) : (array) ($item->metadata ?? []);
+
+            if ($item->item_type === 'package' && !empty($meta['parts'])) {
+                $lines[] = ['item' => $item, 'parts' => $meta['parts']];
+                continue;
+            }
+
             if ($item->item_type === 'package') {
                 $times = max(1, (int) round((float) $item->quantity));
                 $parts = (Packages::planItems([$item->reference_id])[$item->reference_id] ?? collect())
@@ -294,6 +372,10 @@ class Quotes
     public static function createPlan(Tenant $tenant, object $quote, ?User $user): ?object
     {
         if (!self::plansReady() || ($existing = self::planOf($quote->id))) {
+            if ($existing && !$existing->sale_id && $quote->sale_id) {
+                DB::table('customer_packages')->where('id', $existing->id)->update(['sale_id' => $quote->sale_id, 'updated_at' => now()]);
+            }
+
             return $existing ?? null;
         }
 
@@ -302,6 +384,17 @@ class Quotes
         if (!$lines) {
             return null;
         }
+
+        foreach ($lines as $line) {
+            if ($line['item']->item_type === 'package') {
+                $meta = is_string($line['item']->metadata ?? null) ? (json_decode($line['item']->metadata, true) ?: []) : (array) ($line['item']->metadata ?? []);
+                DB::table('quote_items')->where('id', $line['item']->id)->update(['metadata' => json_encode(['parts' => $line['parts']] + $meta)]);
+            }
+        }
+
+        $allLines = (float) DB::table('quote_items')->where('quote_id', $quote->id)->sum('total');
+        $sessionsValue = (float) collect($lines)->sum(fn ($l) => (float) $l['item']->total);
+        $planPrice = $allLines > 0 ? round((float) $quote->total * $sessionsValue / $allLines, 2) : round((float) $quote->total, 2);
 
         $byService = [];
 
@@ -351,7 +444,7 @@ class Quotes
             'sale_id'         => $quote->sale_id,
             'quote_id'        => $quote->id,
             'name'            => "Plan de tratamiento {$quote->code}",
-            'price'           => round((float) $quote->total, 2),
+            'price'           => $planPrice,
             'currency'        => $currency,
             'conditions'      => json_encode($conditions),
             'professional_id' => $quote->professional_id,
@@ -529,6 +622,7 @@ class Quotes
                 'method'          => $data['method'],
                 'reason'          => "Anulación del presupuesto {$quote->code}: {$reason}",
                 'cash_session_id' => $data['cash_session_id'] ?? null,
+                'from_package'    => true,
             ], $user);
 
             $sale = DB::table('sales')->where('id', $sale->id)->first();
@@ -665,5 +759,80 @@ class Quotes
                 );
             }
         }
+    }
+
+    public static function pdf(Tenant $tenant, string $quote, ?string $branchLimit = null, ?string $customerId = null)
+    {
+        $q = DB::table('quotes as q')
+            ->join('customers as c', 'c.id', '=', 'q.customer_id')
+            ->leftJoin('branches as b', 'b.id', '=', 'q.branch_id')
+            ->leftJoin('professionals as p', 'p.id', '=', 'q.professional_id')
+            ->where('q.tenant_id', $tenant->id)
+            ->where('q.id', $quote)
+            ->when($branchLimit, fn ($query, $id) => $query->where(fn ($sub) => $sub->where('q.branch_id', $id)->orWhereNull('q.branch_id')))
+            ->when($customerId, fn ($query, $id) => $query->where('q.customer_id', $id))
+            ->first(['q.*', 'c.first_name', 'c.last_name', 'c.document_number', 'c.phone as customer_phone', 'c.email as customer_email', 'b.name as branch_name', 'b.address as branch_address', 'p.display_name as professional_name', 'p.license_number']);
+        abort_unless($q, 404, 'No se encontró el presupuesto.');
+
+        $currency = Currency::of($tenant);
+        $money = fn ($amount) => Currency::format((float) $amount, $currency);
+        $salesRules = Sales::rules($tenant);
+        $zone = $tenant->zone();
+
+        $items = DB::table('quote_items')->where('tenant_id', $tenant->id)->where('quote_id', $q->id)->orderBy('sort_order')->get()
+            ->map(function ($item) use ($money) {
+                $meta = is_string($item->metadata) ? (json_decode($item->metadata, true) ?: []) : (array) ($item->metadata ?? []);
+
+                return [
+                    'description' => $item->description,
+                    'detail'      => collect([$meta['zone'] ?? null, $meta['phase'] ?? null, $meta['notes'] ?? null])->filter()->implode(' · '),
+                    'quantity'    => rtrim(rtrim(number_format((float) $item->quantity, 2, '.', ''), '0'), '.'),
+                    'unit_price'  => $money($item->unit_price),
+                    'discount'    => (float) $item->discount > 0 ? $money($item->discount) : null,
+                    'total'       => $money($item->total),
+                ];
+            });
+
+        $installments = DB::table('quote_installments')->where('tenant_id', $tenant->id)->where('quote_id', $q->id)->orderBy('number')->get()
+            ->map(fn ($i) => ['number' => (int) $i->number, 'due_date' => Carbon::parse($i->due_date)->format('d/m/Y'), 'amount' => $money($i->amount)]);
+
+        $html = view('quotes.pdf', [
+            'quote' => [
+                'code'         => $q->code,
+                'title'        => $q->title,
+                'status'       => $q->status,
+                'status_label' => Quotes::STATUSES[$q->status] ?? $q->status,
+                'date'         => Carbon::parse($q->created_at)->setTimezone($zone)->format('d/m/Y'),
+                'valid_until'  => $q->valid_until ? Carbon::parse($q->valid_until)->format('d/m/Y') : null,
+                'customer'     => trim("{$q->first_name} {$q->last_name}"),
+                'document'     => $q->document_number,
+                'phone'        => $q->customer_phone,
+                'email'        => $q->customer_email,
+                'branch'       => $q->branch_name,
+                'branch_address' => $q->branch_address,
+                'professional' => $q->professional_name,
+                'license'      => $q->license_number,
+                'notes'        => $q->notes,
+                'subtotal'     => $money($q->subtotal),
+                'discount'     => (float) $q->discount > 0 ? $money($q->discount) : null,
+                'tax'          => (float) $q->tax > 0 ? $money($q->tax) : null,
+                'tax_label'    => 'IGV ' . rtrim(rtrim(number_format((float) $salesRules['tax_rate'], 2, '.', ''), '0'), '.') . '%' . ($salesRules['prices_include_tax'] ? ' (incluido)' : ''),
+                'total'        => $money($q->total),
+            ],
+            'items'        => $items,
+            'installments' => $installments,
+            'company'      => $tenant->name,
+            'client'       => $tenant->vocabulary()['client'],
+            'pro'          => $tenant->vocabulary()['pro'],
+            'document'     => \App\Support\Documents::forPdf($tenant),
+            'printedAt'    => now($zone)->format('d/m/Y H:i'),
+        ])->render();
+
+        $name = trim(preg_replace('/[^\pL\pN \-]+/u', '', "Presupuesto {$q->code} {$q->first_name} {$q->last_name}")) ?: 'Presupuesto';
+
+        return response(\App\Support\Documents::pdf($html), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . Str::ascii($name) . '.pdf"',
+        ]);
     }
 }

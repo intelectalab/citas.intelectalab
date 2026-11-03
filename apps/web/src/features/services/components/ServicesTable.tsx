@@ -26,6 +26,7 @@ interface Status {
 
 interface Service {
   id: string;
+  branch_ids?: string[];
   category_id: string | null;
   category?: ServiceCategory;
   status_id: string | null;
@@ -244,6 +245,7 @@ export default function ServicesTable() {
             <span className={styles.customerName}>{service.name}</span>
             <span className="block text-xs text-slate-400">
               {service.category?.name || 'Sin categoría'}
+              {service.branch_ids?.length ? ` · solo en ${service.branch_ids.length === 1 ? '1 sede' : `${service.branch_ids.length} sedes`}` : ''}
             </span>
           </div>
         </div>

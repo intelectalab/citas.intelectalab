@@ -215,6 +215,7 @@ class Packages
             'price'             => $price,
             'currency'          => $currency,
             'status'            => $plan->status,
+            'sell_online'       => (bool) ($plan->sell_online ?? false),
             'items'             => $rows,
             'sessions'          => array_sum(array_column($rows, 'sessions')),
             'normal_total'      => $normal,
@@ -704,6 +705,13 @@ class Packages
             self::fail('amount', $blocked);
         }
 
+        $sale = $amount > 0 && $package->sale_id ? DB::table('sales')->where('id', $package->sale_id)->first() : null;
+        $max = $sale ? round(min(max(0, (float) $package->price - (float) $package->refunded_amount), Refunds::availability($tenant, $sale)['available']), 2) : 0.0;
+
+        if ($amount > $max + 0.001) {
+            self::fail('amount', "Por el {$package->name} se pagó " . Currency::format((float) $package->price, $package->currency ?? Currency::of($tenant)) . ': se puede devolver hasta ' . Currency::format($max, $package->currency ?? Currency::of($tenant)) . '.');
+        }
+
         $codes = self::cancelAppointments($tenant, $package, "Se anuló el paquete {$package->code}", $user);
 
         DB::table('customer_packages')->where('id', $package->id)->update([
@@ -720,6 +728,7 @@ class Packages
                 'method'          => $data['method'],
                 'reason'          => "Anulación del paquete {$package->code}: {$reason}",
                 'cash_session_id' => $data['cash_session_id'] ?? null,
+                'from_package'    => true,
             ], $user);
         }
 
@@ -730,6 +739,107 @@ class Packages
         }
 
         return ['cancelled_appointments' => $codes, 'refunded' => $amount];
+    }
+
+    public const ONLINE_NOTE = 'Compra en línea desde el portal';
+
+    public static function onlineReady(): bool
+    {
+        return self::ready() && Schema::hasColumn('package_plans', 'sell_online');
+    }
+
+    public static function sellOnline(Tenant $tenant, Customer $customer, object $plan, Branch $branch): object
+    {
+        $c = self::conditionsOf($plan);
+
+        if (!($plan->sell_online ?? false) || $plan->status !== 'active' || $c['booking_mode'] !== 'free') {
+            self::fail('package', 'Este paquete ya no se vende en línea.');
+        }
+
+        if (($plan->currency ?? Currency::of($tenant)) !== Currency::of($tenant)) {
+            self::fail('package', 'Este paquete no está disponible por ahora.');
+        }
+
+        $rules = Sales::rules($tenant);
+        $price = round((float) $plan->price, 2);
+        $totals = Sales::totals($rules, $price);
+        $tax = $totals['tax'];
+        $total = $totals['total'];
+        $id = (string) \Illuminate\Support\Str::uuid();
+
+        DB::table('sales')->insert([
+            'id'                 => $id,
+            'tenant_id'          => $tenant->id,
+            'branch_id'          => $branch->id,
+            'customer_id'        => $customer->id,
+            'code'               => Codes::next($tenant->id, 'sale'),
+            'status'             => 'pending',
+            'subtotal'           => $price,
+            'discount'           => 0,
+            'tax'                => $tax,
+            'total'              => $total,
+            'paid'               => 0,
+            'balance'            => $total,
+            'tax_rate'           => $rules['tax_rate'],
+            'prices_include_tax' => $rules['prices_include_tax'],
+            'notes'              => self::ONLINE_NOTE,
+            'created_by'         => null,
+            'created_at'         => now(),
+            'updated_at'         => now(),
+        ] + Currency::column($tenant));
+
+        DB::table('sale_items')->insert([
+            'id'           => (string) \Illuminate\Support\Str::uuid(),
+            'tenant_id'    => $tenant->id,
+            'sale_id'      => $id,
+            'item_type'    => 'package',
+            'reference_id' => $plan->id,
+            'description'  => $plan->name,
+            'quantity'     => 1,
+            'unit_price'   => $price,
+            'discount'     => 0,
+            'total'        => $price,
+        ] + (Schema::hasColumn('sale_items', 'position') ? ['position' => 0] : []) + (Schema::hasColumn('sale_items', 'details') ? ['details' => json_encode(['plan' => self::snapshot($plan)])] : []));
+
+        return DB::table('sales')->where('id', $id)->first();
+    }
+
+    public static function heldInSale(string $saleId): array
+    {
+        if (!self::ready()) {
+            return ['amount' => 0.0, 'label' => ''];
+        }
+
+        $packages = DB::table('customer_packages')->where('sale_id', $saleId)->whereIn('status', ['active', 'expired'])->get(['code', 'name', 'price', 'refunded_amount']);
+        $amount = round((float) $packages->sum(fn ($p) => max(0, (float) $p->price - (float) $p->refunded_amount)), 2);
+        $label = $packages->count() === 1
+            ? "del {$packages->first()->name} ({$packages->first()->code})"
+            : 'de los paquetes ' . $packages->pluck('code')->implode(', ');
+
+        return ['amount' => $amount, 'label' => $label];
+    }
+
+    public static function paidShare(object $sale, object $line): float
+    {
+        $lines = (float) DB::table('sale_items')->where('sale_id', $sale->id)->sum('total');
+        $charged = (float) $sale->total - (float) ($sale->tip ?? 0);
+        $factor = $lines > 0 ? min(1, max(0, $charged / $lines)) : 1;
+
+        return round((float) $line->total * $factor / max(1, (int) round((float) $line->quantity)), 2);
+    }
+
+    public static function snapshot(object $plan): array
+    {
+        return [
+            'price'      => round((float) $plan->price, 2),
+            'conditions' => self::conditionsOf($plan),
+            'items'      => (self::planItems([$plan->id])[$plan->id] ?? collect())->map(fn ($i) => [
+                'service_id' => $i->service_id,
+                'sessions'   => (int) $i->sessions,
+                'name'       => $i->name,
+                'price'      => round((float) $i->price, 2),
+            ])->values()->all(),
+        ];
     }
 
     public static function afterSaleRefunded(Tenant $tenant, object $sale, ?User $user): void
@@ -765,9 +875,13 @@ class Packages
                 continue;
             }
 
-            $details = $line->details ? json_decode($line->details, true) : [];
-            $c = self::conditionsOf($plan);
-            $planItems = self::planItems([$plan->id])[$plan->id] ?? collect();
+            $details = isset($line->details) && $line->details ? json_decode($line->details, true) : [];
+            $kept = $details['plan'] ?? null;
+            $c = $kept['conditions'] ?? self::conditionsOf($plan);
+            $planItems = $kept
+                ? collect($kept['items'])->map(fn ($i) => (object) $i)
+                : (self::planItems([$plan->id])[$plan->id] ?? collect());
+            $price = self::paidShare($sale, $line);
             $id = (string) \Illuminate\Support\Str::uuid();
             $purchased = now();
 
@@ -780,7 +894,7 @@ class Packages
                 'branch_id'       => $sale->branch_id,
                 'sale_id'         => $sale->id,
                 'name'            => $plan->name,
-                'price'           => round((float) $line->unit_price, 2),
+                'price'           => $price,
                 'currency'        => $sale->currency ?? Currency::of($tenant),
                 'conditions'      => json_encode($c + ['terms_text' => self::terms($tenant, $c, $planItems->map(fn ($i) => ['name' => $i->name, 'sessions' => (int) $i->sessions, 'price' => (float) $i->price])->all(), $sale->currency ?? Currency::of($tenant))]),
                 'professional_id' => $details['professional_id'] ?? null,
@@ -804,7 +918,12 @@ class Packages
             ])->all());
 
             $package = DB::table('customer_packages')->where('id', $id)->first();
-            self::event($package, 'sold', "Vendido en la venta {$sale->code}.", $user, null, (float) $line->unit_price);
+            self::event($package, 'sold', $sale->notes === self::ONLINE_NOTE ? "Comprado en línea desde el portal (venta {$sale->code})." : "Vendido en la venta {$sale->code}.", $user, null, $price);
+
+            if ($sale->notes === self::ONLINE_NOTE) {
+                Messaging::packageBought($tenant, $package);
+                Notifier::packageBought($tenant, $package, $sale);
+            }
 
             $result = ['id' => $id, 'code' => $package->code, 'name' => $package->name, 'created' => [], 'failed' => []];
 

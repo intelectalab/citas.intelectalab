@@ -165,6 +165,12 @@ class CustomerController extends Controller
             return;
         }
 
+        if ($validated['pipeline_stage_id'] === CustomerStages::AUTO) {
+            CustomerStages::release($request->user()->tenant, $customer->id);
+
+            return;
+        }
+
         CustomerStages::move($request->user()->tenant, $customer->id, $validated['pipeline_stage_id'] ?: null, $request->user(), 'form');
     }
 
@@ -184,7 +190,7 @@ class CustomerController extends Controller
             'emergency_contact_phone' => 'nullable|string|max:50',
             'status_id' => 'nullable|uuid',
             'manager_user_id' => 'nullable|uuid',
-            'pipeline_stage_id' => 'nullable|uuid',
+            'pipeline_stage_id' => ['nullable', 'string', fn ($attribute, $value, $fail) => $value === CustomerStages::AUTO || \Illuminate\Support\Str::isUuid($value) ? null : $fail('Esa columna no es válida.')],
             'address' => 'nullable|string|max:255',
             'district' => 'nullable|string|max:100',
             'department' => 'nullable|string|max:100',
@@ -283,7 +289,7 @@ class CustomerController extends Controller
             'emergency_contact_phone' => 'nullable|string|max:50',
             'status_id' => 'nullable|uuid',
             'manager_user_id' => 'nullable|uuid',
-            'pipeline_stage_id' => 'nullable|uuid',
+            'pipeline_stage_id' => ['nullable', 'string', fn ($attribute, $value, $fail) => $value === CustomerStages::AUTO || \Illuminate\Support\Str::isUuid($value) ? null : $fail('Esa columna no es válida.')],
             'address' => 'nullable|string|max:255',
             'district' => 'nullable|string|max:100',
             'department' => 'nullable|string|max:100',

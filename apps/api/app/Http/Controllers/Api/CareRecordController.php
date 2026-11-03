@@ -120,6 +120,8 @@ class CareRecordController extends Controller
             ],
         ]);
 
+        \App\Support\Notifier::emergencyAccess($tenant, $record, $user, trim($validated['reason']));
+
         return response()->json($this->present($record, $tenant, $user));
     }
 

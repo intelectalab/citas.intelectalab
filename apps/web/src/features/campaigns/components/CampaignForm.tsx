@@ -2,6 +2,8 @@
 
 import Button from '@/app/components/common/Button';
 import Select from '@/app/components/common/Select';
+import Switch from '@/app/components/common/Switch';
+import { useVocabulary } from '@/hooks/useVocabulary';
 import DateField from '@/app/components/common/DateField';
 import TimeField from '@/app/components/common/TimeField';
 import { ErrorAlert } from '@/app/components/common/Alert';
@@ -34,10 +36,12 @@ const localParts = (iso: string) => {
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export default function CampaignForm({ isOpen, onClose, options, editing = null, duplicateFrom = null, onSaved }: CampaignFormProps) {
+  const vocab = useVocabulary();
   const [name, setName] = useState('');
   const [group, setGroup] = useState('all');
   const [serviceId, setServiceId] = useState('');
   const [branchId, setBranchId] = useState('');
+  const [onlyBranch, setOnlyBranch] = useState(true);
   const [couponNotice, setCouponNotice] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -60,6 +64,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
       setGroup(duplicateFrom.segment.group);
       setServiceId(duplicateFrom.segment.service_id ?? '');
       setBranchId(duplicateFrom.segment.branch_id ?? '');
+      setOnlyBranch(Boolean(duplicateFrom.segment.only_branch));
       setSubject(duplicateFrom.subject);
       setBody(duplicateFrom.body);
       setCouponId(duplicateFrom.coupon?.id ?? '');
@@ -71,6 +76,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
       setGroup(editing.segment.group);
       setServiceId(editing.segment.service_id ?? '');
       setBranchId(editing.segment.branch_id ?? '');
+      setOnlyBranch(Boolean(editing.segment.only_branch));
       setSubject(editing.subject);
       setBody(editing.body);
       setCouponId(editing.coupon?.id ?? '');
@@ -112,13 +118,13 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
     }
     setCounting(true);
     const timer = window.setTimeout(() => {
-      api.post('/campaigns/audience', { group, service_id: serviceId || null, branch_id: branchId || null })
+      api.post('/campaigns/audience', { group, service_id: serviceId || null, branch_id: branchId || null, only_branch: onlyBranch })
         .then((res) => setAudience(res.data))
         .catch(() => setAudience(null))
         .finally(() => setCounting(false));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [isOpen, group, serviceId, branchId, segmentReady]);
+  }, [isOpen, group, serviceId, branchId, segmentReady, onlyBranch]);
 
   const send = async () => {
     setConfirmBig(false);
@@ -130,6 +136,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
         group,
         service_id: chosen?.needs === 'service' ? serviceId : null,
         branch_id: chosen?.needs === 'branch' ? branchId : null,
+        only_branch: onlyBranch,
         subject: subject.trim(),
         body: body.trim(),
         coupon_id: couponId || null,
@@ -205,6 +212,24 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
               <div>
                 <span className={labelClass}>Sede *</span>
                 <Select ariaLabel="Sede" placeholder="Elige la sede" options={(options?.branches ?? []).map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={(e) => setBranchId(String(e.target.value))} />
+              </div>
+            )}
+
+            {options?.branch_scope && (
+              <div className="rounded-xl border border-slate-200 px-3 py-2.5" data-branch-scope>
+                {options.branch_scope.can_choose ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">Solo {vocab.clients.toLowerCase()} de mi sede ({options.branch_scope.branch_name})</span>
+                      <span className="block text-xs text-slate-500">Quienes tuvieron una cita ahí en los últimos 12 meses. Apágalo para enviar a toda la empresa.</span>
+                    </span>
+                    <Switch checked={onlyBranch} onChange={setOnlyBranch} label="Solo clientes de mi sede" />
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600">
+                    Llega solo a {vocab.clients.toLowerCase()} de tu sede ({options.branch_scope.branch_name}): quienes tuvieron una cita ahí en los últimos 12 meses.
+                  </p>
+                )}
               </div>
             )}
 

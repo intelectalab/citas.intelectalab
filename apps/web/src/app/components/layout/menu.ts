@@ -5,6 +5,7 @@ import { useVocabulary, type Vocabulary } from '@/hooks/useVocabulary';
 import {
   CircleHelp,
   Home,
+  ChartColumn,
   Users,
   Building2,
   Contact,
@@ -27,6 +28,7 @@ import {
   Mail,
   BadgeCheck,
   Megaphone,
+  Workflow,
   CalendarClock,
   CalendarOff,
   Hourglass,
@@ -80,6 +82,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     id: 'home',
     items: [
       { name: 'Inicio', href: '/home', icon: Home },
+      { name: 'Reportes', href: '/reports', icon: ChartColumn, perm: 'reports.view|reports.own' },
     ]
   },
   {
@@ -170,6 +173,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     groupIcon: Megaphone,
     items: [
       { name: 'Campañas', href: '/campaigns', icon: Megaphone, module: 'marketing', perm: 'campaigns.view' },
+      { name: 'Automatizaciones', href: '/automations', icon: Workflow, module: 'automations', perm: 'automations.view' },
       { name: 'Mensajes', href: '/messages', icon: Mail, perm: 'messages.view' },
       { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
     ]

@@ -213,6 +213,7 @@ class PackageController extends AppointmentController
             'items'             => 'required|array|min:1|max:10',
             'items.*.service_id' => ['required', 'uuid', 'distinct', Rule::exists('services', 'id')->where('tenant_id', $tenant->id)],
             'items.*.sessions'  => 'required|integer|min:1|max:200',
+            'sell_online'       => 'nullable|boolean',
         ], [
             'name.required'          => 'Escribe el nombre del paquete.',
             'price.required'         => 'Escribe el precio del paquete.',
@@ -227,6 +228,10 @@ class PackageController extends AppointmentController
             'custom_days.*.weekday.distinct' => 'Ese día ya está elegido.',
             'custom_days.*.time.regex' => 'Elige la hora con el reloj.',
         ]);
+
+        if ($validated['booking_mode'] === 'scheduled' && !empty($validated['sell_online'])) {
+            throw ValidationException::withMessages(['sell_online' => 'Solo los paquetes de uso libre se venden en línea: los de fechas acordadas necesitan elegir días y profesional en la sede.']);
+        }
 
         if ($validated['booking_mode'] === 'scheduled' && count($validated['items']) > 1) {
             throw ValidationException::withMessages(['items' => 'Con fechas acordadas, el paquete lleva un solo servicio (por ejemplo, 10 sesiones de terapia). Para combinar servicios, elige "Libre".']);
@@ -258,6 +263,10 @@ class PackageController extends AppointmentController
             'terms'             => trim((string) ($data['terms'] ?? '')) ?: null,
             'updated_at'        => now(),
         ];
+
+        if (Packages::onlineReady()) {
+            $values['sell_online'] = $data['booking_mode'] === 'free' && !empty($data['sell_online']);
+        }
 
         return DB::transaction(function () use ($tenant, $data, $values, $id) {
             if ($id) {
@@ -295,6 +304,7 @@ class PackageController extends AppointmentController
             'price'             => round((float) $plan->price, 2),
             'validity_days'     => (int) $plan->validity_days,
             'status'            => $plan->status,
+            'sell_online'       => isset($plan->sell_online) ? ((bool) $plan->sell_online ? 'Sí' : 'No') : null,
             'booking_mode'      => Packages::MODES[$plan->booking_mode] ?? $plan->booking_mode,
             'frequency'         => $plan->booking_mode === 'scheduled' ? (Packages::FREQUENCIES[$plan->frequency] ?? $plan->frequency) : null,
             'professional_mode' => Packages::PROFESSIONAL_MODES[$plan->professional_mode] ?? $plan->professional_mode,

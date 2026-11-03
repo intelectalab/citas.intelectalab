@@ -22,7 +22,7 @@ export interface StageChange {
   id: string;
   from: string | null;
   to: string | null;
-  source: 'board' | 'form' | 'detail' | 'column_deleted';
+  source: 'board' | 'form' | 'detail' | 'column_deleted' | 'auto';
   created_at: string;
   by: { id: string; name: string } | null;
 }
@@ -32,7 +32,10 @@ export const STAGE_SOURCE: Record<StageChange['source'], string> = {
   form: 'desde el formulario',
   detail: 'desde su página',
   column_deleted: 'al borrar su columna',
+  auto: 'solo, según sus citas',
 };
+
+export const AUTO_STAGE = 'auto';
 
 export const stageOf = (info: BoardInfo | null, stageId?: string | null): BoardStage | undefined => {
   if (!info) return undefined;

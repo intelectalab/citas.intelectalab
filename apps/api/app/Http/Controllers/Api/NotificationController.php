@@ -24,6 +24,7 @@ class NotificationController extends Controller
 
         if ($user->tenant) {
             Notifier::upcomingAbsences($user->tenant);
+            \App\Support\DueNotices::run($user->tenant);
             \App\Support\Confirmations::process($user->tenant);
             \App\Support\Messaging::generate($user->tenant);
 

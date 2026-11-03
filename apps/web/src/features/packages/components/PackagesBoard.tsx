@@ -138,6 +138,7 @@ export default function PackagesBoard() {
     { header: 'Paquete', value: (p) => p.name },
     { header: 'Incluye', value: (p) => p.items.map((i) => `${i.sessions} × ${i.name}`).join(', ') },
     { header: 'Cómo se agenda', value: (p) => p.schedule_label },
+    { header: 'Se vende en línea', value: (p) => (p.sell_online ? 'Sí' : 'No') },
     { header: 'Precio', type: 'money', value: (p) => p.price },
     { header: 'Ahorro', type: 'money', value: (p) => p.savings },
     { header: 'Ahorro (%)', type: 'number', value: (p) => p.savings_percent },
@@ -207,6 +208,7 @@ export default function PackagesBoard() {
       cell: (p) => (
         <span key={`mode-${p.id}`} className="flex items-center gap-1.5 text-sm text-slate-700">
           {p.booking_mode === 'scheduled' && <CalendarClock size={14} className="text-brand-accent shrink-0" />}{p.schedule_label}
+          {p.sell_online && <Badge tone="bg-sky-50 text-sky-700" nowrap>En línea</Badge>}
         </span>
       ),
     },

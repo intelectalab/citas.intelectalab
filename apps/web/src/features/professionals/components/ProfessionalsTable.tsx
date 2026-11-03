@@ -19,6 +19,9 @@ interface Professional {
   display_name: string;
   created_at?: string;
   license_number?: string;
+  document_number?: string;
+  phone?: string;
+  type_document?: { name?: string } | null;
   status?: {
     id: string;
     name: string;
@@ -209,7 +212,7 @@ export default function ProfessionalsTable() {
 
   const safeProfessionals = Array.isArray(professionals) ? professionals : [];
 
-  const totalActive = safeProfessionals.filter(p => p.status?.slug === 'active' || p.status?.name?.toLowerCase() === 'activo').length;
+  const totalActive = safeProfessionals.filter(p => !p.status || p.status.slug === 'active' || p.status.name?.toLowerCase() === 'activo').length;
   const totalInactive = safeProfessionals.filter(p => p.status?.slug === 'inactive' || p.status?.name?.toLowerCase() === 'inactivo').length;
 
   const proUsage = planUsage.find((u) => u.key === 'professionals');
@@ -269,14 +272,27 @@ export default function ProfessionalsTable() {
         </div>
       ),
     },
-    usesLicense ? {
-      header: 'Colegiatura',
+    {
+      header: 'Documento',
       cell: (prof) => (
-        <div key={`license-${prof.id}`} className="text-sm font-medium text-slate-700 font-mono">
-          {prof.license_number ? prof.license_number : <span className="text-slate-400 italic font-normal">No registrada</span>}
+        <div key={`document-${prof.id}`} className="text-sm text-slate-700">
+          {prof.document_number ? (
+            <>
+              <span className="block font-medium font-mono">{prof.document_number}</span>
+              {prof.type_document?.name && <span className="block text-xs text-slate-400">{prof.type_document.name}</span>}
+            </>
+          ) : <span className="text-slate-400 italic">Sin registrar</span>}
         </div>
       ),
-    } : null,
+    },
+    {
+      header: 'Celular',
+      cell: (prof) => (
+        <div key={`phone-${prof.id}`} className="text-sm font-medium text-slate-700 font-mono whitespace-nowrap">
+          {prof.phone ? prof.phone : <span className="text-slate-400 italic font-sans font-normal">Sin registrar</span>}
+        </div>
+      ),
+    },
     {
       header: 'Especialidades',
       cell: (prof) => (
@@ -350,6 +366,8 @@ export default function ProfessionalsTable() {
   const exportColumns: ExportColumn<Professional>[] = [
     { header: vocab.pro, value: (p) => p.display_name },
     { header: 'Correo', value: (p) => p.user?.email ?? 'Sin usuario vinculado' },
+    { header: 'Documento', value: (p) => p.document_number ?? '' },
+    { header: 'Celular', value: (p) => p.phone ?? '' },
     ...(usesLicense ? [{ header: 'Colegiatura', value: (p: Professional) => p.license_number ?? 'No registrada' }] : []),
     { header: 'Especialidades', value: (p) => (p.specialties?.length ? p.specialties.map((spec) => spec.name).join(', ') : 'Sin especialidades') },
     { header: 'Estado', value: (p) => p.status?.name || 'Activo' },

@@ -33,6 +33,8 @@ class CustomerBoardController extends Controller
             return $this->notReady();
         }
 
+        CustomerStages::refreshStale($request->user()->tenant);
+
         return response()->json($this->payload($request, CustomerStages::stages($request->user()->tenant)));
     }
 
@@ -69,11 +71,15 @@ class CustomerBoardController extends Controller
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($customer);
 
         $validated = $request->validate([
-            'stage_id' => 'present|nullable|uuid',
+            'stage_id' => ['present', 'nullable', 'string', fn ($attribute, $value, $fail) => $value === null || $value === CustomerStages::AUTO || \Illuminate\Support\Str::isUuid($value) ? null : $fail('Esa columna no es válida.')],
             'source'   => 'sometimes|in:board,detail',
         ]);
 
-        CustomerStages::move($tenant, $customer->id, $validated['stage_id'], $request->user(), $validated['source'] ?? 'board');
+        if ($validated['stage_id'] === CustomerStages::AUTO) {
+            CustomerStages::release($tenant, $customer->id);
+        } else {
+            CustomerStages::move($tenant, $customer->id, $validated['stage_id'], $request->user(), $validated['source'] ?? 'board');
+        }
 
         return response()->json([
             'pipeline_stage_id' => $customer->fresh()->pipeline_stage_id,
@@ -93,6 +99,7 @@ class CustomerBoardController extends Controller
 
         return response()->json($this->payload($request, $stages) + [
             'stage_id' => $customer->pipeline_stage_id,
+            'manual'   => CustomerStages::automatic() ? (bool) $customer->stage_manual_at : null,
             'changes'  => CustomerStages::changes($tenant, $customer->id),
         ]);
     }

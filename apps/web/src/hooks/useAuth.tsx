@@ -242,7 +242,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const can = (permission: string): boolean => {
-    if (user?.permissions) return user.permissions.includes(permission);
+    if (user?.permissions) return permission.split('|').some((name) => user.permissions!.includes(name));
     return Boolean(user?.is_tenant_admin);
   };
 

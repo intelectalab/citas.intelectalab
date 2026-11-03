@@ -78,6 +78,15 @@ class Refunds
             throw ValidationException::withMessages(['amount' => 'El monto debe ser mayor que cero y no pasar de ' . Currency::format($state['available'], $sale->currency ?? null) . ', que es lo que queda por devolver.']);
         }
 
+        if (empty($data['from_package'])) {
+            $held = Packages::heldInSale($sale->id);
+            $free = round(max(0, $state['available'] - $held['amount']), 2);
+
+            if ($held['amount'] > 0 && $amount > $free + 0.001) {
+                throw ValidationException::withMessages(['amount' => 'De esta venta, ' . Currency::format(min($held['amount'], $state['available']), $sale->currency ?? null) . " son {$held['label']}, que sigue vigente: eso se devuelve al anularlo, donde se calcula lo que corresponde. Aquí puedes devolver hasta " . Currency::format($free, $sale->currency ?? null) . '.']);
+            }
+        }
+
         $session = null;
         $gateway = null;
 

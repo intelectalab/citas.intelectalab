@@ -173,7 +173,7 @@ export default function FormWalkin({ isOpen, onClose, initialData, context, onSa
             placeholder="Seleccione..."
             value={serviceId}
             onChange={(e) => setServiceId(String(e.target.value))}
-            options={context.services.map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min · ${formatMoney(s.price)}` }))}
+            options={context.services.filter((s) => !branchId || !s.branch_ids?.length || s.branch_ids.includes(branchId) || s.id === serviceId).map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min · ${formatMoney(s.price)}` }))}
           />
 
           <div>

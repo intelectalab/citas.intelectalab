@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Service;
 use App\Models\Status;
 use App\Support\Audit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -55,6 +56,8 @@ class ServiceController extends Controller
             'buffer_before_minutes' => 'nullable|integer|min:0',
             'buffer_after_minutes' => 'nullable|integer|min:0',
             'price' => 'required|numeric|min:0',
+            'branch_ids' => 'sometimes|nullable|array',
+            'branch_ids.*' => ['uuid', Rule::exists('branches', 'id')->where('tenant_id', $tenantId)],
             'requires_deposit' => 'sometimes|boolean',
             'deposit_type' => ['sometimes', Rule::in(['percent', 'amount'])],
             'deposit_value' => 'sometimes|numeric|min:0|max:99999',
@@ -118,6 +121,17 @@ class ServiceController extends Controller
         return $data;
     }
 
+    private function saveBranches(Service $service, ?array $branchIds): void
+    {
+        if ($branchIds === null || !\Illuminate\Support\Facades\Schema::hasTable('service_branches')) {
+            return;
+        }
+
+        DB::table('service_branches')->where('service_id', $service->id)->delete();
+        DB::table('service_branches')->insert(array_map(fn ($id) => ['tenant_id' => $service->tenant_id, 'service_id' => $service->id, 'branch_id' => $id], array_values(array_unique($branchIds))));
+        Service::forgetBranchMap($service->tenant_id);
+    }
+
     public function store(Request $request)
     {
         $currentUser = $request->user();
@@ -143,7 +157,10 @@ class ServiceController extends Controller
         $validated['buffer_before_minutes'] = $validated['buffer_before_minutes'] ?? 0;
         $validated['buffer_after_minutes'] = $validated['buffer_after_minutes'] ?? 0;
 
+        $branchIds = $validated['branch_ids'] ?? null;
+        unset($validated['branch_ids']);
         $service = Service::create($validated);
+        $this->saveBranches($service, $branchIds);
         $this->audit($request, 'service.created', $service, [], array_filter($this->auditable($service->fresh()), fn ($value) => $value !== null && $value !== false));
 
         return response()->json($service->load('category'), 201);
@@ -163,7 +180,10 @@ class ServiceController extends Controller
         }
 
         $previous = $this->auditable($service);
+        $branchIds = array_key_exists('branch_ids', $validated) ? ($validated['branch_ids'] ?? []) : null;
+        unset($validated['branch_ids']);
         $service->update($this->normalize($validated, $service));
+        $this->saveBranches($service, $branchIds);
         [$before, $after] = Audit::changed($previous, $this->auditable($service->fresh()));
 
         if ($after) {
@@ -210,6 +230,7 @@ class ServiceController extends Controller
             'status'                => $service->status_id ? Status::where('id', $service->status_id)->value('name') : null,
             'online_booking'        => (bool) $service->online_booking,
             'is_virtual'            => (bool) $service->is_virtual,
+            'branches'              => ($ids = Service::branchMap($service->tenant_id)[$service->id] ?? []) ? DB::table('branches')->whereIn('id', $ids)->orderBy('name')->pluck('name')->implode(', ') : 'Todas las sedes',
             'service_kind'          => $service->kind === Service::KIND_GROUP ? 'Grupal' : 'Individual',
             'capacity'              => (int) $service->capacity,
             'deposit'               => $deposit,

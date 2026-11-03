@@ -21,6 +21,7 @@ class Access
         'forgive'   => 'Perdonar faltas',
         'use'       => 'Registrar uso a mano',
         'export'    => 'Exportar',
+        'others'    => 'Turnos de otros',
     ];
 
     public const CATALOG = [
@@ -125,6 +126,7 @@ class Access
             'view'   => 'Ver la caja y sus turnos',
             'create' => 'Agregar una caja, cambiarle el nombre o ponerla fuera de uso',
             'edit'   => 'Abrir la caja, anotar movimientos y cerrarla',
+            'others' => 'Ver y manejar los turnos de caja que abrieron otras personas. Sin este permiso, cada quien ve y cierra solo su propio turno',
         ]],
         'coupons' => ['label' => 'Cupones', 'module' => 'pos', 'actions' => [
             'view'   => 'Ver los cupones',
@@ -167,6 +169,10 @@ class Access
             'create' => 'Crear campañas para enviar ahora o programadas, y duplicar una campaña',
             'edit'   => 'Cambiar o cancelar una campaña programada',
         ]],
+        'automations' => ['label' => 'Automatizaciones', 'module' => 'automations', 'actions' => [
+            'view' => 'Ver las automatizaciones y sus resultados',
+            'edit' => 'Encender o apagar automatizaciones y cambiar su texto, cupón y horario',
+        ]],
         'branches' => ['label' => 'Sucursales', 'module' => null, 'actions' => [
             'view'   => 'Ver las sucursales',
             'create' => 'Crear sucursales',
@@ -186,6 +192,11 @@ class Access
             'edit'   => 'Cambiar usuarios, roles y permisos',
             'delete' => 'Eliminar roles',
         ]],
+        'reports' => ['label' => 'Reportes', 'module' => null, 'actions' => [
+            'view'  => 'Ver los reportes de ventas, citas, {clients}, {pros} y servicios',
+            'money' => 'Ver los montos en los reportes: ingresos, ticket promedio y cuánto gastó cada cliente',
+            'own'   => 'Ver sus propios números: sus citas atendidas, su producción, su ocupación y sus {clients}',
+        ]],
         'audit' => ['label' => 'Auditoría', 'module' => null, 'actions' => [
             'view' => 'Ver la auditoría: quién hizo qué y cuándo en la empresa. Con un rol de una sede, solo lo de su sede',
         ]],
@@ -194,9 +205,10 @@ class Access
         ]],
     ];
 
-    public const SECTIONS = ['agenda' => 'Agenda', 'care' => 'Atención', 'team' => 'Equipo y catálogo', 'sales' => 'Ventas', 'inventory' => 'Inventario', 'loyalty' => 'Fidelización', 'marketing' => 'Marketing', 'company' => 'Tu empresa', 'footer' => 'Al pie del menú', 'other' => 'Fuera del menú'];
+    public const SECTIONS = ['start' => 'Inicio', 'agenda' => 'Agenda', 'care' => 'Atención', 'team' => 'Equipo y catálogo', 'sales' => 'Ventas', 'inventory' => 'Inventario', 'loyalty' => 'Fidelización', 'marketing' => 'Marketing', 'company' => 'Tu empresa', 'footer' => 'Al pie del menú', 'other' => 'Fuera del menú'];
 
     public const LAYOUT = [
+        'reports'          => ['section' => 'start', 'screens' => ['Reportes'], 'short' => ['view' => 'Ver', 'money' => 'Ver montos', 'own' => 'Sus números']],
         'agenda'           => ['section' => 'agenda', 'screens' => ['Agenda', 'Citas'], 'short' => ['view' => 'Ver', 'create' => 'Agendar', 'edit' => 'Confirmar, atender y cancelar']],
         'walkin'           => ['section' => 'agenda', 'screens' => ['Cola sin cita'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Atender o retirar']],
         'waitlist'         => ['section' => 'agenda', 'screens' => ['Lista de espera'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Cambiar o cerrar']],
@@ -216,12 +228,13 @@ class Access
         'pos'              => ['section' => 'sales', 'screens' => ['Punto de venta'], 'short' => ['view' => 'Abrir', 'create' => 'Armar ventas', 'edit' => 'Cambiar una venta por cobrar']],
         'sales'            => ['section' => 'sales', 'screens' => ['Ventas'], 'short' => ['view' => 'Ver', 'create' => 'Cobrar', 'delete' => 'Anular y devolver']],
         'payments'         => ['section' => 'sales', 'screens' => ['Pagos'], 'short' => ['view' => 'Ver']],
-        'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar']],
+        'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar', 'others' => 'Turnos de otros']],
         'products'         => ['section' => 'inventory', 'screens' => ['Productos y stock'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
         'inventory'        => ['section' => 'inventory', 'screens' => ['Kárdex', 'Traslados', 'Compras'], 'short' => ['view' => 'Ver', 'create' => 'Mover, comprar y trasladar', 'edit' => 'Contar, recibir y ajustar', 'delete' => 'Cancelar y eliminar']],
         'packages'         => ['section' => 'loyalty', 'screens' => ['Paquetes'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar más días', 'delete' => 'Anular y devolver']],
         'loyalty'          => ['section' => 'loyalty', 'screens' => ['Puntos', 'Gift cards'], 'short' => ['view' => 'Ver', 'create' => 'Emitir y acreditar', 'edit' => 'Ajustar y canjear', 'delete' => 'Anular']],
         'campaigns'        => ['section' => 'marketing', 'screens' => ['Campañas'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar o cancelar']],
+        'automations'      => ['section' => 'marketing', 'screens' => ['Automatizaciones'], 'short' => ['view' => 'Ver', 'edit' => 'Encender y cambiar']],
         'messages'         => ['section' => 'marketing', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar']],
         'coupons'          => ['section' => 'marketing', 'screens' => ['Cupones'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'branches'         => ['section' => 'company', 'screens' => ['Sucursales'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar']],
@@ -255,9 +268,9 @@ class Access
                 'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'schedules' => ['view', 'edit'], 'rooms' => self::EVERYTHING,
                 'quotes' => self::EVERYTHING, 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING, 'inventory' => self::EVERYTHING,
-                'sales' => self::EVERYTHING, 'payments' => ['view'], 'cash' => self::EVERYTHING, 'coupons' => self::EVERYTHING,
+                'sales' => self::EVERYTHING, 'payments' => ['view'], 'cash' => [...self::EVERYTHING, 'others'], 'coupons' => self::EVERYTHING,
                 'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'loyalty' => self::EVERYTHING, 'messages' => ['view', 'create', 'edit'],
-                'campaigns' => ['view', 'create', 'edit'],
+                'campaigns' => ['view', 'create', 'edit'], 'automations' => ['view'], 'reports' => ['view', 'money'],
                 'branches' => ['view'],
                 'users' => ['view', 'create', 'edit'],
                 'data' => ['export'],
@@ -298,6 +311,7 @@ class Access
                 'customers' => ['view', 'create', 'edit'], 'records' => ['view', 'edit'],
                 'services' => ['view'], 'rooms' => ['view'],
                 'quotes' => ['view', 'create', 'edit'], 'sales' => ['create'],
+                'reports' => ['own'],
             ],
         ],
     ];
@@ -427,6 +441,14 @@ class Access
         }
 
         return $names;
+    }
+
+    public static function idleMinutes(Tenant $tenant, User $user): int
+    {
+        $byRole = (array) AppointmentFlow::rule($tenant, 'session.idle_by_role');
+        $role = self::roleOf($user);
+
+        return (int) ($role && !empty($byRole[$role->id]) ? $byRole[$role->id] : AppointmentFlow::rule($tenant, 'session.idle_minutes'));
     }
 
     public static function roleOf(User $user): ?Role

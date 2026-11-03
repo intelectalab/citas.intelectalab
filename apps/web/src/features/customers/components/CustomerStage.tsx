@@ -8,10 +8,11 @@ import { UserLink } from '@/app/components/common/PersonLink';
 import { PagedList } from '@/app/components/common/Pager';
 import { api } from '@/lib/axios';
 import { apiError, dateOf, formatDate, timeOf } from '@/features/appointments/appointments';
-import { STAGE_SOURCE, stageOf, type BoardInfo, type StageChange } from '../board';
+import { AUTO_STAGE, STAGE_SOURCE, stageOf, type BoardInfo, type StageChange } from '../board';
 
 interface StageData extends BoardInfo {
   stage_id: string | null;
+  manual: boolean | null;
   changes: StageChange[];
 }
 
@@ -58,10 +59,21 @@ export default function CustomerStage({ customerId, refreshKey, onChanged }: { c
           {stage.description && <span className="block text-xs text-slate-500">{stage.description}</span>}
           <span className="block text-xs text-slate-500 mt-1">
             {data?.changes[0]
-              ? <>Desde el {when(data.changes[0].created_at)}{data.changes[0].by ? <>, por <UserLink id={data.changes[0].by.id} className="font-semibold">{data.changes[0].by.name}</UserLink></> : ''}</>
+              ? <>Desde el {when(data.changes[0].created_at)}{data.changes[0].by ? <>, por <UserLink id={data.changes[0].by.id} className="font-semibold">{data.changes[0].by.name}</UserLink></> : data.changes[0].source === 'auto' ? ', solo según sus citas' : ''}</>
               : 'Nadie la ha cambiado todavía.'}
           </span>
+          {data?.manual !== null && data?.manual !== undefined && (
+            <span className={`block text-xs mt-1 font-semibold ${data.manual ? 'text-amber-700' : 'text-slate-500'}`} data-stage-mode={data.manual ? 'manual' : 'auto'}>
+              {data.manual ? 'Movido a mano: se queda aquí hasta su próxima cita.' : 'Se ubica solo según sus citas.'}
+            </span>
+          )}
         </div>
+      )}
+
+      {data?.can_move && data.manual && (
+        <button type="button" data-stage-release disabled={saving} onClick={() => move(AUTO_STAGE)} className="text-xs font-semibold text-brand-ink hover:text-brand-accent underline underline-offset-2 disabled:opacity-50">
+          Que se ubique solo desde ahora
+        </button>
       )}
 
       {data?.can_move && data.stages.length > 1 && (
