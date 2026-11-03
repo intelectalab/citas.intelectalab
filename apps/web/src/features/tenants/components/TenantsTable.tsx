@@ -10,6 +10,7 @@ import { TENANT_STATUS } from '../tenantStatus';
 import { useAuth } from '@/hooks/useAuth';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
+import { BILLING_STATES, type BillingState } from '@/features/billing/billing';
 
 interface Tenant {
   id: string;
@@ -21,6 +22,7 @@ interface Tenant {
   business_type?: { name: string; short_name: string } | null;
   subscription?: { status?: string; plan?: { name?: string; is_public_catalog?: boolean } | null } | null;
   users?: Array<{ is_owner?: boolean; account_type?: string }>;
+  billing_state?: BillingState;
 }
 
 const SUBSCRIPTION_STATUS: Record<string, string> = { active: 'Activa', trialing: 'En prueba', past_due: 'Pago vencido', expired: 'Prueba vencida', canceled: 'Cancelada' };
@@ -268,8 +270,8 @@ export default function TenantsTable() {
             <>
               <span className="font-semibold text-slate-700">{tenant.subscription.plan.name}</span>
               {tenant.subscription.plan.is_public_catalog === false && <span className="text-slate-400"> · a medida</span>}
-              <span className="block text-[11px] text-slate-400">
-                {SUBSCRIPTION_STATUS[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
+              <span className={`block text-[11px] ${tenant.billing_state === 'locked' || tenant.billing_state === 'card_needed' ? 'text-rose-600 font-semibold' : tenant.billing_state === 'grace' ? 'text-amber-700 font-semibold' : 'text-slate-400'}`} data-tenant-billing={tenant.billing_state}>
+                {tenant.billing_state ? BILLING_STATES[tenant.billing_state].label : SUBSCRIPTION_STATUS[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
               </span>
             </>
           ) : (
@@ -336,7 +338,7 @@ export default function TenantsTable() {
     { header: 'Rubro', value: (t) => t.business_type?.name },
     { header: 'Plan', value: (t) => t.subscription?.plan?.name },
     { header: 'Plan a medida', value: (t) => (t.subscription?.plan ? (t.subscription.plan.is_public_catalog === false ? 'Sí' : 'No') : null) },
-    { header: 'Suscripción', value: (t) => (t.subscription?.status ? SUBSCRIPTION_STATUS[t.subscription.status] ?? t.subscription.status : null) },
+    { header: 'Suscripción', value: (t) => (t.billing_state ? BILLING_STATES[t.billing_state].label : t.subscription?.status ? SUBSCRIPTION_STATUS[t.subscription.status] ?? t.subscription.status : null) },
     { header: 'Estado', value: (t) => (TENANT_STATUS[t.status] ?? TENANT_STATUS.inactive).label },
     { header: 'Zona horaria', value: (t) => t.timezone },
     { header: 'Fecha de alta', type: 'date', value: (t) => t.created_at },

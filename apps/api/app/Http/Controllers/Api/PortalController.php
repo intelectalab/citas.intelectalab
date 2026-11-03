@@ -233,7 +233,7 @@ class PortalController extends AppointmentController
         $package = \App\Support\Packages::linkable($tenant) ? (\App\Support\Packages::usable($tenant->id, $customer->id, $service->id, $start)[0] ?? null) : null;
         $needsDeposit = !$package && $service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service) > 0;
 
-        if ($needsDeposit && !\App\Support\PaymentLinks::ready()) {
+        if ($needsDeposit && !\App\Support\PaymentLinks::available($tenant)) {
             throw ValidationException::withMessages(['service_id' => 'Este servicio se reserva con un adelanto. Comunícate con la sede para agendarlo.']);
         }
 

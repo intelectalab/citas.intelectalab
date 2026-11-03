@@ -76,7 +76,11 @@ Route::get('/platform/files/{name}', [PlatformLookController::class, 'file'])->w
 Route::get('/pay/{token}', [PaymentController::class, 'show'])->middleware('throttle:60,1');
 Route::get('/branding/{tenant}/{name}', [BrandingController::class, 'file'])->where('name', 'logo|logo-dark')->middleware('throttle:120,1');
 Route::post('/pay/{token}/simulate', [PaymentController::class, 'simulate'])->middleware('throttle:20,1');
-Route::post('/webhooks/payments/{provider}', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
+Route::get('/plan-payments/{id}', [\App\Http\Controllers\Api\BillingController::class, 'simulatedView'])->whereUuid('id')->middleware('throttle:30,1');
+Route::post('/plan-payments/{id}/simulate', [\App\Http\Controllers\Api\BillingController::class, 'simulate'])->whereUuid('id')->middleware('throttle:20,1');
+Route::post('/pay/{token}/start', [PaymentController::class, 'start'])->middleware('throttle:20,1');
+Route::post('/pay/{token}/check', [PaymentController::class, 'check'])->middleware('throttle:30,1');
+Route::post('/webhooks/payments/{provider}/{owner?}', [PaymentController::class, 'webhook'])->middleware('throttle:240,1');
 Route::get('/promotions/unsubscribe/{recipient}', [CampaignController::class, 'unsubscribeShow'])->middleware('throttle:60,1');
 Route::post('/promotions/unsubscribe/{recipient}', [CampaignController::class, 'unsubscribe'])->middleware('throttle:20,1');
 
@@ -121,6 +125,9 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
 
         Route::apiResource('saas-plans', SaaSPlanController::class);
         Route::get('/admin/platform-settings', [PlatformSettingController::class, 'show']);
+        Route::get('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'show']);
+        Route::put('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'update']);
+        Route::post('/admin/billing/test', [\App\Http\Controllers\Api\PlatformBillingController::class, 'test']);
         Route::get('/admin/currencies', [CurrencyController::class, 'platform']);
         Route::put('/admin/currencies/{code}', [CurrencyController::class, 'toggle']);
         Route::put('/admin/platform-settings', [PlatformSettingController::class, 'update']);
@@ -149,28 +156,28 @@ Route::middleware(['auth:sanctum', 'customer'])->prefix('portal')->group(functio
     Route::middleware('module:quotes')->group(function () {
         Route::get('/quotes', [PortalQuoteController::class, 'index']);
         Route::get('/quotes/{quote}/pdf', [PortalQuoteController::class, 'pdf']);
-        Route::post('/quotes/{quote}/accept', [PortalQuoteController::class, 'accept']);
+        Route::post('/quotes/{quote}/accept', [PortalQuoteController::class, 'accept'])->middleware('plan:portal');
         Route::post('/quotes/{quote}/reject', [PortalQuoteController::class, 'reject']);
     });
 
     Route::middleware('module:packages')->group(function () {
         Route::get('/shop', [PortalShopController::class, 'index']);
-        Route::post('/shop/packages/{plan}', [PortalShopController::class, 'buy']);
+        Route::post('/shop/packages/{plan}', [PortalShopController::class, 'buy'])->middleware('plan:portal');
     });
 
     Route::middleware('module:booking')->group(function () {
         Route::get('/catalog', [PortalController::class, 'catalog']);
         Route::get('/availability', [PortalController::class, 'portalAvailability']);
-        Route::post('/appointments', [PortalController::class, 'book']);
+        Route::post('/appointments', [PortalController::class, 'book'])->middleware('plan:portal');
         Route::post('/appointments/{appointment}/confirm', [PortalController::class, 'confirm']);
         Route::post('/appointments/{appointment}/cancel', [PortalController::class, 'cancel']);
-        Route::post('/appointments/{appointment}/reschedule', [PortalController::class, 'move']);
+        Route::post('/appointments/{appointment}/reschedule', [PortalController::class, 'move'])->middleware('plan:portal');
 
         Route::get('/payment-links', [PortalController::class, 'paymentLinks']);
         Route::post('/payment-links/{link}/cancel', [PortalController::class, 'cancelPaymentLink']);
 
         Route::get('/waitlist', [PortalController::class, 'waitlist']);
-        Route::post('/waitlist', [PortalController::class, 'joinWaitlist']);
+        Route::post('/waitlist', [PortalController::class, 'joinWaitlist'])->middleware('plan:portal');
         Route::delete('/waitlist/{entry}', [PortalController::class, 'leaveWaitlist']);
     });
 });
@@ -182,8 +189,13 @@ Route::prefix('kiosk')->middleware('throttle:60,1')->group(function () {
     Route::post('/{code}/queue', [WalkinController::class, 'kioskRegister'])->middleware('throttle:15,1');
 });
 
-Route::middleware(['auth:sanctum', 'staff'])->group(function () {
+Route::middleware(['auth:sanctum', 'staff', 'plan'])->group(function () {
     Route::post('/subscriptions/subscribe', [SubscriptionController::class, 'subscribe']);
+    Route::get('/billing', [\App\Http\Controllers\Api\BillingController::class, 'show']);
+    Route::post('/billing/card', [\App\Http\Controllers\Api\BillingController::class, 'card'])->middleware('throttle:20,1');
+    Route::post('/billing/pay', [\App\Http\Controllers\Api\BillingController::class, 'pay'])->middleware('throttle:20,1');
+    Route::post('/billing/plan', [\App\Http\Controllers\Api\BillingController::class, 'change'])->middleware('throttle:20,1');
+    Route::post('/billing/cancel-card', [\App\Http\Controllers\Api\BillingController::class, 'cancelCard']);
 
     Route::get('/type-documents', [TypeDocumentController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);

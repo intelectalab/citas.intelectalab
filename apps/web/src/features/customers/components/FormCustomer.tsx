@@ -10,6 +10,8 @@ import { User, ChevronDown } from 'lucide-react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
 import { AUTO_STAGE, stageOf, type BoardInfo } from '../board';
+import { ErrorAlert } from '@/app/components/common/Alert';
+import { apiError } from '@/features/appointments/appointments';
 
 interface FormCustomerProps {
   isOpen: boolean;
@@ -26,6 +28,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
   const clinical = Boolean(user?.tenant?.rules?.['customers.clinical_fields']);
   const [pendingDependents, setPendingDependents] = useState<CustomerDependent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [board, setBoard] = useState<BoardInfo | null>(null);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
@@ -130,6 +133,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
     e.preventDefault();
     try {
       setLoading(true);
+      setError('');
       if (initialData?.id) {
         await api.put(`/customers/${initialData.id}`, form);
         onSubmitSuccess();
@@ -139,7 +143,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
       }
       onClose();
     } catch (error) {
-      console.error('Error guardando cliente:', error);
+      setError(apiError(error, `No se pudo guardar. Revisa los datos e inténtalo de nuevo.`));
     } finally {
       setLoading(false);
     }
@@ -400,7 +404,9 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
           })}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex items-center justify-end gap-3 z-10">
+        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 space-y-3 z-10">
+          <ErrorAlert message={error} />
+          <div className="flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -415,6 +421,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
           >
             {loading ? 'Guardando...' : isEditing ? `Actualizar ${clientLower}` : `Crear ${clientLower}`}
           </button>
+          </div>
         </div>
       </form>
     </FormDrawer>

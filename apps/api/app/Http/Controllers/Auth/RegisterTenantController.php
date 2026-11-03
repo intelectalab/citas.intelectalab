@@ -54,6 +54,18 @@ class RegisterTenantController extends Controller
         ]);
 
         $token = $result['user']->createToken('auth_token')->plainTextToken;
+        $cardUrl = null;
+        $subscription = \App\Support\Subscriptions::latest($result['tenant']->id);
+
+        if ($subscription && \App\Support\PlanBilling::enabled() && \App\Support\Subscriptions::price($subscription->plan, $subscription->billing_cycle) > 0) {
+            $subscription->update(['requires_card' => true]);
+
+            try {
+                $cardUrl = \App\Support\PlanBilling::cardUrl($subscription->fresh('plan'), $result['user']);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'message'      => 'Tenant registrado con éxito',
@@ -61,6 +73,7 @@ class RegisterTenantController extends Controller
             'token_type'   => 'Bearer',
             'user'         => $result['user'],
             'installed'    => $result['installed'],
+            'card_url'     => $cardUrl,
         ], 201);
     }
 }

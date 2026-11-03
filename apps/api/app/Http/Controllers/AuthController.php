@@ -30,11 +30,7 @@ class AuthController extends Controller
         $planSlug = null;
 
         if ($user->tenant_id) {
-            $subscription = \App\Models\Subscription::with('plan')
-                ->where('tenant_id', $user->tenant_id)
-                ->whereIn('status', ['active', 'trialing'])
-                ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()))
-                ->first();
+            $subscription = \App\Support\Subscriptions::latest($user->tenant_id);
 
             if ($subscription && $subscription->plan) {
                 $planSlug = $subscription->plan->slug;
@@ -80,6 +76,7 @@ class AuthController extends Controller
                 'appointment_statuses' => \App\Support\AppointmentFlow::forTenant($tenant),
                 'currency' => \App\Support\Currency::present(\App\Support\Currency::of($tenant)),
                 'branding' => \App\Support\Branding::present($tenant),
+                'billing' => \App\Support\Subscriptions::present($tenant, $user),
             ] : null,
             'currencies' => \App\Support\Currency::catalog(),
             'customer' => null,

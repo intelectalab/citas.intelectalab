@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'module' => \App\Http\Middleware\EnsureModuleEnabled::class,
             'saas' => \App\Http\Middleware\EnsurePlatformStaff::class,
             'perm' => \App\Http\Middleware\EnsurePermission::class,
+            'plan' => \App\Http\Middleware\EnsurePlanPaid::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

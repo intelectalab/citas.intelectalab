@@ -52,6 +52,7 @@ export interface PlatformConfig {
   usage_warning_percent: number;
   usage_danger_percent: number;
   allow_tenant_signup: boolean;
+  card_on_signup?: boolean;
   look: PlatformLook;
 }
 

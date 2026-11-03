@@ -9,6 +9,7 @@ use App\Models\Professional;
 use App\Models\Service;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\Payments\MercadoPagoPaymentProvider;
 use App\Support\Payments\PaymentProvider;
 use App\Support\Payments\SimulatedPaymentProvider;
 use Illuminate\Support\Carbon;
@@ -24,8 +25,10 @@ class PaymentLinks
         'culqi'       => ['label' => 'Culqi', 'class' => null],
         'niubiz'      => ['label' => 'Niubiz', 'class' => null],
         'izipay'      => ['label' => 'Izipay', 'class' => null],
-        'mercadopago' => ['label' => 'Mercado Pago', 'class' => null],
+        'mercadopago' => ['label' => 'Mercado Pago', 'class' => MercadoPagoPaymentProvider::class],
     ];
+
+    public const NOT_CONNECTED = 'Tu empresa todavía no recibe pagos en línea: conecta Mercado Pago en Configuración → Integraciones.';
 
     public const STATUS_LABELS = [
         'pending'   => 'Esperando pago',
@@ -54,18 +57,48 @@ class PaymentLinks
         return DB::table('tenant_integrations')->where('tenant_id', $tenantId)->where('kind', 'payments')->first();
     }
 
-    public static function provider(Tenant|string $tenant): PaymentProvider
+    public static function simulationAllowed(): bool
+    {
+        return (bool) config('payments.simulation');
+    }
+
+    public static function provider(Tenant|string $tenant): ?PaymentProvider
     {
         $integration = self::integration($tenant instanceof Tenant ? $tenant->id : $tenant);
         $class = $integration && $integration->status === 'active' && $integration->mode !== 'simulated'
             ? (self::PROVIDERS[$integration->provider]['class'] ?? null)
             : null;
 
-        return $class ? new $class($integration) : new SimulatedPaymentProvider();
+        if ($class && $class !== SimulatedPaymentProvider::class) {
+            return new $class($integration);
+        }
+
+        return self::simulationAllowed() ? new SimulatedPaymentProvider() : null;
+    }
+
+    public static function available(Tenant|string $tenant): bool
+    {
+        return self::ready() && self::provider($tenant) !== null;
+    }
+
+    public static function providerFor(string $tenantId, string $key): ?PaymentProvider
+    {
+        if ($key === 'simulated') {
+            return self::simulationAllowed() ? new SimulatedPaymentProvider() : null;
+        }
+
+        $integration = self::integration($tenantId);
+        $class = self::PROVIDERS[$key]['class'] ?? null;
+
+        return $class && $integration && $integration->provider === $key ? new $class($integration) : null;
     }
 
     public static function providerByKey(string $key): ?PaymentProvider
     {
+        if ($key === 'simulated') {
+            return self::simulationAllowed() ? new SimulatedPaymentProvider() : null;
+        }
+
         $class = self::PROVIDERS[$key]['class'] ?? null;
 
         return $class ? new $class(null) : null;
@@ -141,6 +174,10 @@ class PaymentLinks
 
         $link = DB::table('payment_links')->where('sale_id', $saleId)->orderByRaw("status = 'pending' desc")->orderByDesc('created_at')->first();
 
+        if ($link && self::check($link)) {
+            $link = DB::table('payment_links')->where('id', $link->id)->first();
+        }
+
         if ($link && $link->status === 'pending' && Carbon::parse($link->expires_at)->isPast()) {
             DB::table('payment_links')->where('id', $link->id)->update(['status' => 'expired', 'updated_at' => now()]);
             $link->status = 'expired';
@@ -215,8 +252,16 @@ class PaymentLinks
     {
         $id = (string) Str::uuid();
         $provider = self::provider($tenant);
+
+        if (!$provider) {
+            throw ValidationException::withMessages(['link' => self::NOT_CONNECTED]);
+        }
+
         $values += ['id' => $id, 'tenant_id' => $tenant->id, 'token' => self::token(), 'provider' => $provider->key(), 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()];
-        $values['external_id'] = $provider->checkout((object) $values)['external_id'] ?? null;
+
+        if ($provider->simulated()) {
+            $values['external_id'] = $provider->checkout((object) $values)['external_id'] ?? null;
+        }
 
         DB::table('payment_links')->insert($values);
 
@@ -295,8 +340,14 @@ class PaymentLinks
         }
 
         $tenant = Tenant::with('settings')->find($link->tenant_id);
+        self::check($link);
         self::expireDue($link->tenant_id);
         $link = DB::table('payment_links')->where('id', $link->id)->first();
+
+        if ($link->status === 'pending' && $link->provider === 'simulated' && !self::simulationAllowed()) {
+            self::cancel($link, 'Este link era de prueba y ya no sirve. Pide uno nuevo a la empresa.');
+            $link = DB::table('payment_links')->where('id', $link->id)->first();
+        }
 
         if ($link->status === 'pending' && $link->purpose === 'deposit' && ($taken = self::slotTaken($tenant, $link))) {
             self::cancel($link, $taken);
@@ -336,6 +387,8 @@ class PaymentLinks
             'rejected'     => $link->status === 'pending' && $lastEvent?->event === 'payment.rejected',
             'simulated'    => $link->provider === 'simulated',
             'provider'     => self::PROVIDERS[$link->provider]['label'] ?? $link->provider,
+            'gateway'      => $link->provider,
+            'locked'       => $link->status === 'pending' && $link->purpose === 'deposit' && Subscriptions::lockedFor($link->tenant_id),
             'company'      => [
                 'name'  => $company->trade_name ?? $tenant->name,
                 'color' => $tenant->settings?->brand_color ?? null,
@@ -346,10 +399,102 @@ class PaymentLinks
         ];
     }
 
+    public static function start(string $token): array
+    {
+        $link = DB::table('payment_links')->where('token', $token)->first();
+        abort_unless($link, 404, 'Este link de pago no existe.');
+
+        self::check($link, true);
+        $link = DB::table('payment_links')->where('id', $link->id)->first();
+
+        if ($link->status !== 'pending' || Carbon::parse($link->expires_at)->isPast()) {
+            throw ValidationException::withMessages(['link' => 'Este link ya no está esperando pago.']);
+        }
+
+        if ($link->purpose === 'deposit' && Subscriptions::lockedFor($link->tenant_id)) {
+            throw ValidationException::withMessages(['link' => Subscriptions::PORTAL_LOCKED]);
+        }
+
+        $provider = self::providerFor($link->tenant_id, $link->provider);
+        abort_unless($provider && !$provider->simulated(), 422, self::NOT_CONNECTED);
+
+        if ($link->external_id && $link->checkout_url) {
+            $current = $provider->status($link->external_id);
+
+            if ($current && $current['type'] === 'payment.pending') {
+                return ['checkout_url' => $link->checkout_url];
+            }
+        }
+
+        $email = $link->customer_id ? DB::table('customers')->where('id', $link->customer_id)->value('email') : null;
+        $order = $provider->checkout((object) ((array) $link + ['email' => $email, 'attempt' => Str::lower(Str::random(8))]));
+
+        DB::table('payment_links')->where('id', $link->id)->update([
+            'external_id'  => $order['external_id'],
+            'checkout_url' => $order['checkout_url'],
+            'updated_at'   => now(),
+        ]);
+
+        return ['checkout_url' => $order['checkout_url']];
+    }
+
+    public static function check(object $link, bool $force = false): ?array
+    {
+        if (!in_array($link->status, ['pending', 'expired', 'cancelled'], true) || !$link->external_id || $link->provider === 'simulated') {
+            return null;
+        }
+
+        if (!$force && $link->checked_at && Carbon::parse($link->checked_at)->gt(now()->subSeconds(5))) {
+            return null;
+        }
+
+        DB::table('payment_links')->where('id', $link->id)->update(['checked_at' => now()]);
+        $provider = self::providerFor($link->tenant_id, $link->provider);
+
+        try {
+            $event = $provider?->status($link->external_id);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+
+        if (!$event || $event['type'] === 'payment.pending') {
+            return null;
+        }
+
+        return self::handle($link->provider, $event);
+    }
+
+    public static function checkPending(): int
+    {
+        if (!self::ready()) {
+            return 0;
+        }
+
+        $count = 0;
+
+        DB::table('payment_links')
+            ->whereIn('status', ['pending', 'expired', 'cancelled'])
+            ->where('provider', '!=', 'simulated')
+            ->whereNotNull('external_id')
+            ->where('created_at', '>', now()->subDays(3))
+            ->orderBy('created_at')
+            ->limit(200)
+            ->get()
+            ->each(function ($link) use (&$count) {
+                if (self::check($link, true)) {
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
     public static function simulate(string $token, string $result): array
     {
         $link = DB::table('payment_links')->where('token', $token)->first();
-        abort_unless($link && $link->provider === 'simulated', 404);
+        abort_unless($link && $link->provider === 'simulated' && self::simulationAllowed(), 404);
 
         return self::handle('simulated', [
             'event_id'  => 'evt_' . Str::lower(Str::random(16)),
@@ -376,15 +521,16 @@ class PaymentLinks
         ]);
     }
 
-    public static function handle(string $provider, array $event): array
+    public static function handle(string $provider, array $event, ?string $tenantId = null): array
     {
-        return DB::transaction(function () use ($provider, $event) {
+        return DB::transaction(function () use ($provider, $event, $tenantId) {
             if (DB::table('payment_events')->where('provider', $provider)->where('event_id', $event['event_id'])->exists()) {
                 return ['status' => 'duplicate', 'message' => 'Este aviso ya se había recibido: no se registra dos veces.'];
             }
 
             $link = DB::table('payment_links')
                 ->where('provider', $provider)
+                ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
                 ->where(fn ($q) => $q->where('external_id', $event['reference'])->orWhere('token', $event['reference']))
                 ->lockForUpdate()
                 ->first();
@@ -400,10 +546,22 @@ class PaymentLinks
                 $link->status = 'expired';
             }
 
-            if ($event['type'] !== 'payment.approved') {
+            if ($event['type'] === 'payment.rejected') {
                 self::log($link, $provider, $event, 'processed', 'Pago rechazado: el cliente puede intentarlo de nuevo.');
 
                 return ['status' => 'rejected', 'message' => 'El pago fue rechazado. Puedes intentarlo con otra tarjeta u otro medio.'];
+            }
+
+            if ($event['type'] !== 'payment.approved') {
+                self::log($link, $provider, $event, 'ignored', 'Aviso sin cambios en el pago.');
+
+                return ['status' => 'ignored', 'message' => 'Aviso sin cambios en el pago.'];
+            }
+
+            if (isset($event['amount']) && (float) $event['amount'] + 0.001 < (float) $link->amount) {
+                self::log($link, $provider, $event, 'ignored', 'El monto pagado (' . Currency::format((float) $event['amount'], $link->currency) . ') es menor que el del link: no se registró.');
+
+                return ['status' => 'ignored', 'message' => 'El monto pagado no coincide con el del link.'];
             }
 
             $tenant = Tenant::with(['settings', 'activeSubscription.plan'])->find($link->tenant_id);
@@ -422,9 +580,12 @@ class PaymentLinks
 
     private static function refundUnexpected(Tenant $tenant, object $link, string $provider, array $event, string $why): array
     {
-        $refund = self::provider($tenant)->refund((object) ['external_reference' => $event['reference']], (float) ($event['amount'] ?? $link->amount));
+        $gateway = self::providerFor($tenant->id, $provider);
+        $refund = $gateway
+            ? $gateway->refund((object) ['external_reference' => $event['external_id'] ?? $event['reference']], (float) ($event['amount'] ?? $link->amount))
+            : ['ok' => false];
         $message = "{$why}: se devolvió el pago automáticamente.";
-        self::log($link, $provider, $event, 'refunded', $message . ($refund['ok'] ? '' : ' La pasarela no confirmó la devolución.'));
+        self::log($link, $provider, $event, 'refunded', $message . ($refund['ok'] ? '' : ' La pasarela no confirmó la devolución: devuélvelo desde tu cuenta de la pasarela.'));
 
         return ['status' => 'refunded', 'message' => $message];
     }
@@ -444,7 +605,7 @@ class PaymentLinks
             'status'             => 'confirmed',
             'amount'             => round((float) $link->amount, 2),
             'change_amount'      => 0,
-            'external_reference' => mb_substr((string) $event['reference'], 0, 190),
+            'external_reference' => mb_substr((string) ($event['external_id'] ?? $event['reference']), 0, 190),
             'provider'           => $link->provider,
             'payment_url'        => self::url($link->token),
             'confirmed_at'       => now(),
@@ -703,7 +864,13 @@ class PaymentLinks
         }
 
         $payment = DB::table('payments')->where('sale_id', $sale->id)->whereIn('method', self::GATEWAY_METHODS)->where('status', 'confirmed')->orderByDesc('created_at')->first();
-        $result = self::provider($tenant)->refund($payment, $amount);
+        $gateway = self::providerFor($tenant->id, $payment->provider ?? 'simulated');
+
+        if (!$gateway) {
+            throw ValidationException::withMessages(['amount' => 'Ese pago entró por ' . (self::PROVIDERS[$payment->provider]['label'] ?? $payment->provider) . ', que ya no está conectada: devuélvelo desde la cuenta de esa pasarela y regístralo como devolución en efectivo o transferencia.']);
+        }
+
+        $result = $gateway->refund($payment, $amount);
 
         if (!$result['ok']) {
             throw ValidationException::withMessages(['amount' => 'La pasarela no aceptó la devolución: ' . ($result['message'] ?? 'inténtalo de nuevo.')]);

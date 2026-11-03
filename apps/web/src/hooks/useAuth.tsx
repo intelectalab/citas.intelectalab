@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { api } from '@/lib/axios';
 import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
 import type { TenantBranding } from '@/lib/brand';
+import type { Billing } from '@/features/billing/billing';
 
 export interface UserFeatures {
   crm?: boolean;
@@ -38,6 +39,7 @@ export interface UserTenant {
   appointment_statuses?: AppointmentStatus[];
   currency?: CurrencyInfo;
   branding?: TenantBranding | null;
+  billing?: Billing | null;
 }
 
 export interface AppointmentStatus {

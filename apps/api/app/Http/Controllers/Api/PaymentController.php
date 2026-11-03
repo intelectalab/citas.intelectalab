@@ -91,27 +91,38 @@ class PaymentController extends Controller
             ->limit(60)
             ->get(['e.id', 'e.provider', 'e.event', 'e.status', 'e.message', 'e.created_at', 'l.description', 'l.amount', 'l.currency']);
 
+        $settings = $integration?->settings ? (json_decode($integration->settings, true) ?: []) : [];
+        $simulation = PaymentLinks::simulationAllowed();
+
         return response()->json([
             'payments' => [
-                'active'    => PaymentLinks::provider($tenant)->key(),
-                'chosen'    => $integration?->provider ?? 'simulated',
-                'status'    => $integration?->status ?? 'active',
-                'providers' => collect(PaymentLinks::PROVIDERS)->map(fn ($p, $key) => [
-                    'key'         => $key,
-                    'label'       => $p['label'],
-                    'connectable' => $p['class'] !== null,
-                    'saved'       => $integration && $integration->provider === $key && $key !== 'simulated' ? [
-                        'public_key' => $mask($saved['public_key'] ?? null),
-                        'secret_key' => $mask($saved['secret_key'] ?? null),
-                        'saved_at'   => Carbon::parse($integration->updated_at)->toIso8601String(),
-                    ] : null,
-                ])->values(),
-                'link_hours'      => (int) \App\Support\AppointmentFlow::rule($tenant, 'payments.link_hours'),
+                'active'     => PaymentLinks::provider($tenant)?->key() ?? 'none',
+                'chosen'     => $integration?->provider ?? ($simulation ? 'simulated' : 'none'),
+                'status'     => $integration?->status ?? 'active',
+                'mode'       => $integration?->mode ?? null,
+                'account'    => $settings['account'] ?? null,
+                'currency'   => $settings['currency'] ?? null,
+                'simulation' => $simulation,
+                'webhook_url' => rtrim((string) config('app.url'), '/') . '/api/webhooks/payments/mercadopago/' . $tenant->id,
+                'providers'  => collect(PaymentLinks::PROVIDERS)
+                    ->filter(fn ($p, $key) => $key !== 'simulated' || $simulation)
+                    ->map(fn ($p, $key) => [
+                        'key'         => $key,
+                        'label'       => $p['label'],
+                        'connectable' => $p['class'] !== null,
+                        'saved'       => $integration && $integration->provider === $key && $key !== 'simulated' ? [
+                            'public_key'     => $mask($saved['public_key'] ?? null),
+                            'secret_key'     => $mask($saved['secret_key'] ?? null),
+                            'webhook_secret' => $mask($saved['webhook_secret'] ?? null),
+                            'saved_at'       => Carbon::parse($integration->updated_at)->toIso8601String(),
+                        ] : null,
+                    ])->values(),
+                'link_hours' => (int) \App\Support\AppointmentFlow::rule($tenant, 'payments.link_hours'),
             ],
             'events' => $events->map(fn ($e) => [
                 'id'          => $e->id,
                 'provider'    => PaymentLinks::PROVIDERS[$e->provider]['label'] ?? $e->provider,
-                'event'       => $e->event === 'payment.approved' ? 'Pago aprobado' : ($e->event === 'payment.rejected' ? 'Pago rechazado' : $e->event),
+                'event'       => ['payment.approved' => 'Pago aprobado', 'payment.rejected' => 'Pago rechazado', 'payment.pending' => 'Pago en proceso'][$e->event] ?? $e->event,
                 'status'      => $e->status,
                 'message'     => $e->message,
                 'description' => $e->description,
@@ -128,14 +139,38 @@ class PaymentController extends Controller
         abort_unless($request->user()->allows('settings.edit'), 403, 'Tu cuenta no tiene permiso para cambiar la configuración de la empresa.');
         $tenant = $this->tenant($request);
 
+        $choices = array_merge(['none'], array_keys(PaymentLinks::PROVIDERS));
+
         $validated = $request->validate([
-            'provider'   => ['required', Rule::in(array_keys(PaymentLinks::PROVIDERS))],
-            'public_key' => 'nullable|string|max:255',
-            'secret_key' => 'nullable|string|max:255',
+            'provider'       => ['required', Rule::in($choices)],
+            'mode'           => ['nullable', Rule::in(['sandbox', 'production'])],
+            'public_key'     => 'nullable|string|max:255',
+            'secret_key'     => 'nullable|string|max:255',
+            'webhook_secret' => 'nullable|string|max:255',
         ]);
 
         $provider = $validated['provider'];
         $current = PaymentLinks::integration($tenant->id);
+
+        if ($provider === 'simulated' && !PaymentLinks::simulationAllowed()) {
+            throw ValidationException::withMessages(['provider' => 'La simulación solo está disponible en las pruebas del sistema.']);
+        }
+
+        if ($provider === 'none') {
+            if ($current) {
+                DB::table('tenant_integrations')->where('id', $current->id)->delete();
+                Audit::log($request, 'settings.changed', [
+                    'tenant'       => $tenant->id,
+                    'entity_type'  => 'settings',
+                    'entity_label' => 'Pasarela de pagos',
+                    'before'       => ['payment_provider' => PaymentLinks::PROVIDERS[$current->provider]['label'] ?? $current->provider],
+                    'after'        => ['payment_provider' => 'Sin pagos en línea'],
+                ]);
+            }
+
+            return $this->integrations($request);
+        }
+
         $values = ['provider' => $provider, 'updated_at' => now()];
 
         if ($provider === 'simulated') {
@@ -143,18 +178,38 @@ class PaymentController extends Controller
         } else {
             $old = $current?->credentials && $current->provider === $provider ? json_decode(Crypt::decryptString($current->credentials), true) : [];
             $keys = [
-                'public_key' => trim((string) ($validated['public_key'] ?? '')) ?: ($old['public_key'] ?? null),
-                'secret_key' => trim((string) ($validated['secret_key'] ?? '')) ?: ($old['secret_key'] ?? null),
+                'public_key'     => trim((string) ($validated['public_key'] ?? '')) ?: ($old['public_key'] ?? null),
+                'secret_key'     => trim((string) ($validated['secret_key'] ?? '')) ?: ($old['secret_key'] ?? null),
+                'webhook_secret' => trim((string) ($validated['webhook_secret'] ?? '')) ?: ($old['webhook_secret'] ?? null),
             ];
 
             if (!$keys['public_key'] || !$keys['secret_key']) {
-                throw ValidationException::withMessages(['public_key' => 'Escribe la llave pública y la llave secreta que te dio ' . PaymentLinks::PROVIDERS[$provider]['label'] . '.']);
+                throw ValidationException::withMessages(['public_key' => $provider === 'mercadopago'
+                    ? 'Escribe la Public Key y el Access Token de tu aplicación de Mercado Pago.'
+                    : 'Escribe la llave pública y la llave secreta que te dio ' . PaymentLinks::PROVIDERS[$provider]['label'] . '.']);
+            }
+
+            $settings = [];
+
+            if ($provider === 'mercadopago') {
+                $account = (new \App\Support\Payments\MercadoPagoClient($keys['secret_key']))->account();
+
+                if (!$account['ok']) {
+                    throw ValidationException::withMessages(['secret_key' => $account['message']]);
+                }
+
+                if ($account['currency'] && $account['currency'] !== \App\Support\Currency::of($tenant)) {
+                    throw ValidationException::withMessages(['secret_key' => "Esa cuenta de Mercado Pago cobra en {$account['currency']} y tu empresa trabaja en " . \App\Support\Currency::of($tenant) . ': usa una cuenta del mismo país.']);
+                }
+
+                $settings = ['account' => $account['name'], 'currency' => $account['currency']];
             }
 
             $values += [
-                'mode'        => 'sandbox',
+                'mode'        => $validated['mode'] ?? ($current?->provider === $provider && $current->mode !== 'simulated' ? $current->mode : 'sandbox'),
                 'status'      => PaymentLinks::PROVIDERS[$provider]['class'] ? 'active' : 'pending',
                 'credentials' => Crypt::encryptString(json_encode($keys)),
+                'settings'    => json_encode($settings),
             ];
         }
 
@@ -173,6 +228,12 @@ class PaymentController extends Controller
             }
             if (trim((string) ($validated['secret_key'] ?? '')) !== '') {
                 $to['secret_key'] = 'Cambiada';
+            }
+            if (trim((string) ($validated['webhook_secret'] ?? '')) !== '') {
+                $to['webhook_secret'] = 'Cambiada';
+            }
+            if (($current?->mode ?? null) !== $values['mode']) {
+                $to['payment_mode'] = $values['mode'] === 'production' ? 'Real' : ($values['mode'] === 'sandbox' ? 'Pruebas' : 'Simulación');
             }
         }
         if ($to) {
@@ -194,12 +255,17 @@ class PaymentController extends Controller
         $tenant = $this->tenant($request);
         $provider = PaymentLinks::provider($tenant);
 
-        return response()->json([
-            'ok'      => true,
-            'message' => $provider->simulated()
-                ? 'La simulación responde. Recuerda: con la simulación no se cobra dinero de verdad.'
-                : 'La pasarela respondió correctamente.',
-        ]);
+        if (!$provider) {
+            return response()->json(['ok' => false, 'message' => PaymentLinks::NOT_CONNECTED]);
+        }
+
+        try {
+            $result = $provider->test();
+        } catch (ValidationException $e) {
+            $result = ['ok' => false, 'message' => collect($e->errors())->flatten()->first()];
+        }
+
+        return response()->json(['ok' => $result['ok'], 'message' => $result['message']]);
     }
 
     public function saveQr(Request $request, string $method)
@@ -281,17 +347,54 @@ class PaymentController extends Controller
         return response()->json(['result' => $result, 'link' => PaymentLinks::publicView($token)]);
     }
 
-    public function webhook(Request $request, string $provider)
+    public function start(string $token)
     {
-        $gateway = PaymentLinks::providerByKey($provider);
-        abort_unless($gateway && PaymentLinks::ready(), 404);
+        return response()->json(PaymentLinks::start($token));
+    }
 
-        $event = $gateway->parse($request);
+    public function check(string $token)
+    {
+        $link = DB::table('payment_links')->where('token', $token)->first();
+        abort_unless($link, 404, 'Este link de pago no existe.');
+        PaymentLinks::check($link, true);
 
-        if (!$event) {
-            return response()->json(['message' => 'Firma o contenido no válido.'], 400);
+        return response()->json(PaymentLinks::publicView($token));
+    }
+
+    public function webhook(Request $request, string $provider, ?string $owner = null)
+    {
+        abort_unless(PaymentLinks::ready(), 404);
+
+        if ($provider !== 'mercadopago') {
+            $gateway = PaymentLinks::providerByKey($provider);
+            abort_unless($gateway && $gateway->simulated(), 404);
+            $event = $gateway->parse($request);
+
+            return $event
+                ? response()->json(PaymentLinks::handle($provider, $event))
+                : response()->json(['message' => 'Firma o contenido no válido.'], 400);
         }
 
-        return response()->json(PaymentLinks::handle($provider, $event));
+        if ($owner === 'platform') {
+            return response()->json(\App\Support\PlanBilling::webhook($request));
+        }
+
+        abort_unless($owner && Str::isUuid($owner), 404);
+        $gateway = PaymentLinks::providerFor($owner, 'mercadopago');
+        abort_unless($gateway, 404);
+
+        $notice = $gateway->parse($request);
+
+        if (!$notice) {
+            return response()->json(['message' => 'Firma no válida.'], 400);
+        }
+
+        if ($notice['topic'] !== 'order' || $notice['id'] === '') {
+            return response()->json(['status' => 'ignored']);
+        }
+
+        $event = $gateway->status($notice['id']);
+
+        return response()->json($event ? PaymentLinks::handle($provider, $event, $owner) : ['status' => 'ignored']);
     }
 }

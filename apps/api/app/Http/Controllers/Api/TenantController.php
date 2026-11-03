@@ -37,6 +37,7 @@ class TenantController extends Controller
         }
 
         $tenants = $query->latest()->get();
+        $tenants->each(fn ($tenant) => $tenant->setAttribute('billing_state', \App\Support\Subscriptions::state($tenant)['state']));
 
         return response()->json($tenants);
     }
@@ -363,6 +364,8 @@ class TenantController extends Controller
                 'reference'    => $invoice->external_invoice_id,
                 'notes'        => $invoice->notes,
             ]),
+            'billing' => \App\Support\Subscriptions::present($tenant),
+            'plan_payments' => $subscription ? \App\Support\PlanBilling::history($subscription->id) : [],
             'modules' => $modules,
             'usage'   => $usage,
             'users'   => $tenant->users->values()->map(fn ($user) => [

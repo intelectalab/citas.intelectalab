@@ -107,11 +107,16 @@ export const equipoTopics: HelpTopics = (vocab) => {
       points: [
         { title: 'Editar los datos', text: 'Nombre comercial, razón social, RUC, teléfono y dirección fiscal. La dirección de cada local va en Sucursales.', perm: 'company.edit' },
         { title: 'Uso del plan', text: `Sucursales, ${ps}, usuarios y citas del mes frente al tope de tu plan.` },
-        { title: 'Tu plan', text: 'Si pagas mensual o anual y hasta cuándo vale. El plan y el rubro los cambia el equipo de la plataforma.' },
+        { title: 'Tu plan', text: 'Cuánto pagas, hasta cuándo vale y la tarjeta con la que se cobra solo cada periodo. El rubro lo cambia el equipo de la plataforma.' },
+        { title: 'Si vence sin pagarse', text: 'Tienes unos días de gracia en los que todo funciona igual. Después la empresa pasa a solo lectura: se puede ver y exportar, pero no agendar ni vender, y el portal no recibe reservas.' },
+        { title: 'Pagos del plan', text: '"Ver pagos" muestra los periodos pagados y cada intento con Mercado Pago.', admin: true },
         { title: 'Código de empresa', text: `Tus ${cs} lo usan para registrarse y reservar en línea. "Copiar" lo deja listo para enviarlo.` },
       ],
       tasks: [
         { title: 'Actualizar el RUC o la dirección', perm: 'company.edit', steps: ['Pulsa el lápiz.', 'Cambia los datos.', 'Pulsa "Guardar cambios".'] },
+        { title: 'Autorizar o cambiar tu tarjeta', admin: true, steps: ['En "Tu plan", pulsa "Autorizar tarjeta" o "Cambiar tarjeta".', 'En Mercado Pago, escribe los datos de tu tarjeta y confirma.', 'Vuelves solo a esta pantalla. Desde ahí el plan se cobra solo en cada periodo.'] },
+        { title: 'Pagar tu plan ahora', admin: true, steps: ['En "Tu plan", pulsa "Pagar ahora".', 'Paga en Mercado Pago con tarjeta u otro medio.', 'Al volver, tu plan queda activo por un periodo más.'] },
+        { title: 'Cambiar de plan', admin: true, steps: ['Pulsa "Cambiar plan".', 'Elige el plan y si lo pagas cada mes o cada año.', 'Pulsa "Confirmar plan". Si ya pagaste el periodo, el nuevo empieza en el siguiente.'] },
       ],
     },
 
@@ -189,6 +194,7 @@ export const equipoTopics: HelpTopics = (vocab) => {
       tasks: [
         { title: 'Encender un módulo', perm: 'settings.edit', steps: ['Entra a "Módulos".', 'Enciende el interruptor del módulo.', 'Pulsa "Guardar". Aparece en el menú de tu equipo.'] },
         { title: 'Cambiar el plazo para confirmar citas', perm: 'settings.edit', steps: ['Entra a "Reglas de reserva".', 'Cambia las horas y qué pasa si no se confirma.', 'Pulsa "Guardar".'] },
+        { title: 'Cobrar en línea con Mercado Pago', perm: 'settings.edit', steps: ['Entra a "Integraciones" y elige Mercado Pago.', 'Elige el modo (Pruebas o Real) y pega la Public Key y el Access Token de tu aplicación de Mercado Pago.', 'Copia la dirección de avisos en los Webhooks de tu aplicación y pega aquí su clave secreta.', 'Pulsa "Guardar y conectar". Desde ahí, los links de pago, los adelantos y los paquetes en línea se cobran con tu cuenta.'] },
         { title: 'Dar más tiempo sin actividad a un rol', perm: 'settings.edit', steps: ['Entra a "Cierre de sesión".', 'En "Tiempo distinto por rol", elige el tiempo del rol (por ejemplo, Profesional: 4 horas).', 'Pulsa "Guardar". Se aplica la próxima vez que esas personas entren.'] },
       ],
     },

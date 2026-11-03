@@ -178,7 +178,7 @@ class Tenant extends Model
             return $this->resolvedModules;
         }
 
-        $plan = $this->activeSubscription?->plan;
+        $plan = $this->activeSubscription?->plan ?? \App\Support\Subscriptions::latest($this->id)?->plan;
 
         if (!$plan) {
             return $this->resolvedModules = [];
@@ -382,7 +382,7 @@ class Tenant extends Model
     {
         return $this->hasOne(Subscription::class)
             ->whereIn('status', ['active', 'trialing'])
-            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()))
+            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()->subDays(\App\Support\Subscriptions::graceDays())))
             ->latest('starts_at');
     }
 

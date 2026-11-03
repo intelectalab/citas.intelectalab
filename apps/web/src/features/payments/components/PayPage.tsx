@@ -24,6 +24,8 @@ interface PublicLink {
   rejected: boolean;
   simulated: boolean;
   provider: string;
+  gateway?: string;
+  locked?: boolean;
   company: { name: string; color: string | null; logo: string | null };
   booking: { service: string | null; professional: string | null; branch: string | null; starts_at: string | null; price: number | null } | null;
   appointment: string | null;
@@ -33,6 +35,9 @@ const minutesLeft = (iso: string) => Math.max(0, Math.round((new Date(iso).getTi
 
 export default function PayPage() {
   const params = useParams<{ token: string }>();
+  const [returned, setReturned] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [link, setLink] = useState<PublicLink | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -44,13 +49,45 @@ export default function PayPage() {
     setLink(data);
   };
 
-  const load = useCallback(() => {
-    api.get(`/pay/${params.token}`)
+  const load = useCallback((check = false) => {
+    (check ? api.post(`/pay/${params.token}/check`) : api.get(`/pay/${params.token}`))
       .then((res) => { apply(res.data); setError(''); })
       .catch((err) => setError(apiError(err, 'No se pudo abrir este link de pago.')));
   }, [params.token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const back = new URLSearchParams(window.location.search).get('volver') === '1';
+    setReturned(back);
+    setChecking(back);
+    load(back);
+  }, [load]);
+
+  useEffect(() => {
+    if (!checking || !link || link.status !== 'pending' || link.simulated) {
+      if (link && link.status !== 'pending') setChecking(false);
+      return;
+    }
+    let rounds = 0;
+    const timer = setInterval(() => {
+      rounds += 1;
+      if (rounds > 15) { setChecking(false); clearInterval(timer); return; }
+      load(true);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [checking, link, load]);
+
+  const startPayment = async () => {
+    try {
+      setStarting(true);
+      setError('');
+      const res = await api.post(`/pay/${params.token}/start`);
+      window.location.href = res.data.checkout_url;
+    } catch (err) {
+      setError(apiError(err, 'No se pudo abrir el pago. Inténtalo de nuevo.'));
+      setStarting(false);
+      load();
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setTick((t) => t + 1), 30000);
@@ -156,8 +193,20 @@ export default function PayPage() {
                       {busy === 'rejected' ? 'Enviando...' : 'Simular pago rechazado'}
                     </button>
                   </div>
+                ) : link.locked ? (
+                  <p data-pay-locked className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">Por ahora {link.company.name} no recibe reservas en línea. Comunícate con la sede para agendar.</p>
+                ) : checking ? (
+                  <p data-pay-checking className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <Loader2 size={15} className="animate-spin shrink-0" /> Estamos confirmando tu pago con {link.provider}. No cierres esta página.
+                  </p>
                 ) : (
-                  <p className="text-sm text-slate-600">Paga con tarjeta, Yape o Plin a través de {link.provider}.</p>
+                  <div className="space-y-2" data-pay-gateway>
+                    <button type="button" data-pay-start disabled={starting} onClick={startPayment} className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-white rounded-xl shadow-sm transition-colors disabled:opacity-50" style={{ background: accent }}>
+                      {starting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />} Pagar con {link.provider}
+                    </button>
+                    <p className="text-xs text-slate-500 text-center">Pagas en la página segura de {link.provider} y vuelves aquí. Los datos de tu tarjeta no pasan por {link.company.name}.</p>
+                    {returned && <button type="button" data-pay-recheck onClick={() => { setChecking(true); load(true); }} className="w-full px-5 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition-colors">Ya pagué: revisar otra vez</button>}
+                  </div>
                 )}
               </>
             )}

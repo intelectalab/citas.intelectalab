@@ -10,7 +10,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import FormCompany from './FormCompany';
-import { SUBSCRIPTION_STATUS, type CompanyProfileData } from '../companies';
+import PlanCard from '@/features/billing/components/PlanCard';
+import { type CompanyProfileData } from '../companies';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const smallLabel = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
@@ -37,7 +38,7 @@ export default function CompanyProfile() {
     return <p role={error ? 'alert' : undefined} className={`text-sm ${error ? 'text-red-600' : 'text-slate-500'}`}>{error || 'Cargando datos de la empresa...'}</p>;
   }
 
-  const { tenant, company, subscription } = data;
+  const { tenant, company } = data;
   const place = [company.address, company.district, company.department].filter(Boolean).join(', ');
 
   const facts: [React.ReactNode, string, string | null][] = [
@@ -55,8 +56,6 @@ export default function CompanyProfile() {
     users: { title: 'Usuarios, sin contar al dueño', icon: <KeyRound size={18} /> },
     appointments_month: { title: 'Citas de este mes', icon: <CalendarDays size={18} />, href: '/appointments' },
   };
-
-  const status = subscription ? SUBSCRIPTION_STATUS[subscription.status] ?? { label: subscription.status, badge: 'bg-slate-100 text-slate-600' } : null;
 
   const copyCode = async () => {
     let done = false;
@@ -148,25 +147,7 @@ export default function CompanyProfile() {
           })}
         </div>
 
-        <section className={`${card} p-6 space-y-4`} data-card="plan">
-          <SectionTitle><CreditCard size={16} className="text-brand-accent" /> Tu plan</SectionTitle>
-          {subscription ? (
-            <>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-2xl font-black text-brand-ink tracking-tight">{subscription.plan ?? 'Plan a medida'}</span>
-                <span data-status={subscription.status} className={`px-2.5 py-0.5 text-xs rounded-full font-medium ${status!.badge}`}>{status!.label}</span>
-              </div>
-              <p className="text-sm text-slate-600">
-                {subscription.billing_cycle === 'yearly' ? 'Pago anual.' : 'Pago mensual.'}
-                {subscription.trial_ends_at && ` La prueba termina el ${shortDate(subscription.trial_ends_at)}.`}
-                {subscription.ends_at && ` Vigente hasta el ${shortDate(subscription.ends_at)}.`}
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">Tu empresa no tiene un plan vigente.</p>
-          )}
-          <p className="text-xs text-slate-500">El plan y el rubro los cambia el equipo de la plataforma.</p>
-        </section>
+        <PlanCard />
 
         <section className={`${card} p-6 space-y-4`} data-card="code">
           <SectionTitle><KeyRound size={16} className="text-brand-accent" /> Código de empresa</SectionTitle>

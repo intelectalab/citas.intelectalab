@@ -145,9 +145,9 @@ class SaleController extends AppointmentController
                 'address' => $company->address ?? null,
             ],
             'links'            => [
-                'ready'      => \App\Support\PaymentLinks::ready(),
+                'ready'      => \App\Support\PaymentLinks::available($tenant),
                 'hours'      => (int) AppointmentFlow::rule($tenant, 'payments.link_hours'),
-                'simulated'  => \App\Support\PaymentLinks::ready() && \App\Support\PaymentLinks::provider($tenant)->simulated(),
+                'simulated'  => \App\Support\PaymentLinks::ready() && (bool) \App\Support\PaymentLinks::provider($tenant)?->simulated(),
                 'current'    => $sale && \App\Support\PaymentLinks::ready() ? \App\Support\PaymentLinks::present(\App\Support\PaymentLinks::latestForSale($sale->id)) : null,
             ],
             'qr'               => PaymentController::qrCodes($tenant->id),

@@ -36,52 +36,17 @@ class TenantSubscriptionController extends Controller
             'notes'         => 'nullable|string|max:255',
         ]);
 
-        $plan = $subscription->plan;
-        $cycle = $validated['billing_cycle'];
-        $paidAt = isset($validated['paid_at']) ? Carbon::parse($validated['paid_at']) : now();
-        $wasTrial = $subscription->status === 'trialing';
-
-        $periodStart = !$wasTrial && $subscription->status === 'active' && $subscription->ends_at?->isFuture()
-            ? $subscription->ends_at->copy()
-            : $paidAt->copy();
-        $periodEnd = $cycle === 'yearly' ? $periodStart->copy()->addYear() : $periodStart->copy()->addMonth();
-
-        $paidStatusId = Status::whereHas('module', fn ($q) => $q->where('name', 'payments'))
-            ->whereNull('tenant_id')
-            ->where('slug', 'paid')
-            ->value('id');
-
-        abort_unless($paidStatusId, 500, 'Falta el estado "Pagado" del módulo de pagos.');
-
         $before = $subscription->only(['status', 'billing_cycle', 'ends_at']);
 
-        $invoice = DB::transaction(function () use ($subscription, $tenant, $plan, $cycle, $validated, $paidAt, $periodStart, $periodEnd, $paidStatusId, $wasTrial) {
-            $invoice = SubscriptionInvoice::create([
-                'subscription_id'     => $subscription->id,
-                'tenant_id'           => $tenant->id,
-                'status_id'           => $paidStatusId,
-                'amount'              => $validated['amount'] ?? ($cycle === 'yearly' ? $plan->price_yearly : $plan->price_monthly),
-                'currency'            => substr($plan->currency ?? 'PEN', 0, 3),
-                'billing_reason'      => $wasTrial ? 'subscription_create' : 'manual',
-                'invoice_date'        => $paidAt,
-                'paid_at'             => $paidAt,
-                'period_start'        => $periodStart,
-                'period_end'          => $periodEnd,
-                'external_invoice_id' => $validated['reference'] ?? null,
-                'notes'               => $validated['notes'] ?? null,
-            ]);
-
-            $subscription->update([
-                'status'        => 'active',
-                'billing_cycle' => $cycle,
-                'starts_at'     => $subscription->status === 'active' ? $subscription->starts_at : $periodStart,
-                'ends_at'       => $periodEnd,
-                'trial_ends_at' => null,
-                'canceled_at'   => null,
-            ]);
-
-            return $invoice;
-        });
+        $invoice = \App\Support\Subscriptions::recordPayment($subscription, [
+            'billing_cycle' => $validated['billing_cycle'],
+            'amount'        => $validated['amount'] ?? null,
+            'paid_at'       => isset($validated['paid_at']) ? Carbon::parse($validated['paid_at']) : now(),
+            'reason'        => $subscription->status === 'trialing' ? 'subscription_create' : 'manual',
+            'reference'     => $validated['reference'] ?? null,
+            'notes'         => $validated['notes'] ?? null,
+        ]);
+        $periodEnd = $invoice->period_end;
 
         AuditEvent::record($request, 'subscription.payment_registered', $tenant, $before, [
             'invoice_id' => $invoice->id,
@@ -121,6 +86,7 @@ class TenantSubscriptionController extends Controller
         [$tenant, $subscription] = $this->subscription($tenant);
 
         $before = $subscription->only(['status', 'ends_at']);
+        \App\Support\PlanBilling::cancelCard($subscription);
         $subscription->update(['status' => 'canceled', 'canceled_at' => now()]);
 
         AuditEvent::record($request, 'subscription.canceled', $tenant, $before, ['status' => 'canceled']);

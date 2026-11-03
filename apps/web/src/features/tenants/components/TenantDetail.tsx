@@ -18,6 +18,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import Switch from '@/app/components/common/Switch';
 import { CORE_MODULE_LABELS, MODULE_GROUPS, MODULE_LABELS } from '@/lib/modules';
 import { SUBSCRIPTION_STATUS, TENANT_STATUS } from '../tenantStatus';
+import { BILLING_STATES, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, type Billing, type PlanPayment } from '@/features/billing/billing';
 
 interface TenantModule {
   key: string;
@@ -54,6 +55,8 @@ interface TenantDetailData {
     id: string; amount: number; currency: string; status: string | null; status_slug: string | null;
     invoice_date: string | null; period_start: string | null; period_end: string | null; reference: string | null;
   }>;
+  billing?: Billing;
+  plan_payments?: PlanPayment[];
   modules: TenantModule[];
   usage: Array<{ key: string; used: number; limit: number | null }>;
   users: Array<{ id: string; first_name: string; last_name: string; email: string; status: string; is_owner: boolean; role: string | null }>;
@@ -544,6 +547,36 @@ export default function TenantDetail() {
             </>
           ) : (
             <p className="text-xs text-slate-500">Los cambios de plan y los cobros los hace el administrador SaaS.</p>
+          )}
+
+          {detail.billing && (
+            <div className="space-y-2 pt-4 border-t border-slate-100" data-tenant-billing-detail>
+              <span className={labelClass}>Cobro del plan</span>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={`px-2 py-0.5 rounded-md font-semibold ${BILLING_STATES[detail.billing.state].badge}`}>{BILLING_STATES[detail.billing.state].label}</span>
+                <span className="text-slate-600">
+                  {cardLabel(detail.billing.card) ?? (detail.billing.card?.required ? 'Debe autorizar su tarjeta' : 'Sin tarjeta: paga cada periodo o se registra a mano')}
+                </span>
+                {detail.billing.state === 'grace' && detail.billing.grace_ends_at && <span className="text-amber-700 font-semibold">Pasa a solo lectura el {formatDate(detail.billing.grace_ends_at)}</span>}
+                {detail.billing.card?.failed_at && <span className="text-rose-700 font-semibold">Cobro fallido el {formatDate(detail.billing.card.failed_at)}</span>}
+              </div>
+              {(detail.plan_payments ?? []).length > 0 && (
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {(detail.plan_payments ?? []).map((row) => (
+                    <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                      <span className="min-w-0 truncate">
+                        <span className="font-semibold text-slate-800">{PAYMENT_KINDS[row.kind]}</span>
+                        <span className="text-slate-500"> · {formatDate(row.at)}{row.provider === 'simulated' ? ' · simulado' : ''}{row.message ? ` · ${row.message}` : ''}</span>
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        {row.kind !== 'card' && <span className="font-bold text-slate-800">{row.currency} {row.amount.toFixed(2)}</span>}
+                        <span className={`px-2 py-0.5 rounded-md font-semibold ${PAYMENT_STATUS[row.status].badge}`}>{PAYMENT_STATUS[row.status].label}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
 
           <div className="space-y-2 pt-4 border-t border-slate-100">

@@ -12,7 +12,11 @@ interface PaymentProvider
 
     public function checkout(object $link): array;
 
+    public function status(string $externalId): ?array;
+
     public function refund(object $payment, float $amount): array;
 
     public function parse(Request $request): ?array;
+
+    public function test(): array;
 }

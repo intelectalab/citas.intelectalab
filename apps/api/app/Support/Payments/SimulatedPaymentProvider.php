@@ -22,6 +22,16 @@ class SimulatedPaymentProvider implements PaymentProvider
         return ['external_id' => 'sim_' . Str::lower(Str::random(14))];
     }
 
+    public function status(string $externalId): ?array
+    {
+        return null;
+    }
+
+    public function test(): array
+    {
+        return ['ok' => true, 'message' => 'La simulación responde. Recuerda: con la simulación no se cobra dinero de verdad.'];
+    }
+
     public function refund(object $payment, float $amount): array
     {
         return [

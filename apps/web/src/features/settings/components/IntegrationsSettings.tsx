@@ -6,7 +6,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, FileText, ImagePlus, MessageCircle, Plug, QrCode, ShieldCheck, Trash2 } from 'lucide-react';
+import { CheckCircle2, Copy, FileText, ImagePlus, MessageCircle, Plug, QrCode, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { PagedList } from '@/app/components/common/Pager';
 import { apiError } from '@/features/appointments/appointments';
@@ -16,7 +16,7 @@ interface ProviderOption {
   key: string;
   label: string;
   connectable: boolean;
-  saved: { public_key: string | null; secret_key: string | null; saved_at: string } | null;
+  saved: { public_key: string | null; secret_key: string | null; webhook_secret?: string | null; saved_at: string } | null;
 }
 
 interface PaymentEvent {
@@ -32,7 +32,7 @@ interface PaymentEvent {
 }
 
 interface IntegrationsPayload {
-  payments: { active: string; chosen: string; status: string; providers: ProviderOption[]; link_hours: number };
+  payments: { active: string; chosen: string; status: string; mode: string | null; account: string | null; currency: string | null; simulation: boolean; webhook_url: string; providers: ProviderOption[]; link_hours: number };
   events: PaymentEvent[];
   qr: Partial<Record<'yape' | 'plin', PaymentQr>>;
 }
@@ -51,7 +51,7 @@ const EVENT_TONES: Record<PaymentEvent['status'], string> = {
 const EVENT_STATUS: Record<PaymentEvent['status'], string> = {
   processed: 'Registrado',
   duplicate: 'Repetido',
-  ignored: 'Sin link',
+  ignored: 'Sin cambios',
   refunded: 'Devuelto',
   error: 'Error',
 };
@@ -144,8 +144,10 @@ function QrCard({ method, label, qr, canSave, onSaved }: { method: 'yape' | 'pli
 
 export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSave: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const [data, setData] = useState<IntegrationsPayload | null>(null);
-  const [chosen, setChosen] = useState('simulated');
-  const [keys, setKeys] = useState({ public_key: '', secret_key: '' });
+  const [chosen, setChosen] = useState('none');
+  const [keys, setKeys] = useState({ public_key: '', secret_key: '', webhook_secret: '' });
+  const [mode, setMode] = useState<'sandbox' | 'production'>('sandbox');
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -153,7 +155,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
   const apply = (payload: IntegrationsPayload) => {
     setData(payload);
     setChosen(payload.payments.chosen);
-    setKeys({ public_key: '', secret_key: '' });
+    setMode(payload.payments.mode === 'production' ? 'production' : 'sandbox');
+    setKeys({ public_key: '', secret_key: '', webhook_secret: '' });
   };
 
   useEffect(() => {
@@ -162,7 +165,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
       .catch((err) => setError(apiError(err, 'No se pudieron cargar las integraciones.')));
   }, []);
 
-  const dirty = Boolean(data) && (chosen !== data?.payments.chosen || Boolean(keys.public_key || keys.secret_key));
+  const savedMode = data?.payments.mode === 'production' ? 'production' : 'sandbox';
+  const dirty = Boolean(data) && (chosen !== data?.payments.chosen || Boolean(keys.public_key || keys.secret_key || keys.webhook_secret) || (chosen === 'mercadopago' && data?.payments.chosen === 'mercadopago' && mode !== savedMode));
 
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
@@ -173,18 +177,36 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
   }
 
   const provider = data.payments.providers.find((p) => p.key === chosen);
-  const isReal = chosen !== 'simulated';
+  const isReal = chosen !== 'simulated' && chosen !== 'none';
+  const isMercadoPago = chosen === 'mercadopago';
+  const options: ProviderOption[] = [{ key: 'none', label: 'Sin pagos en línea', connectable: true, saved: null }, ...data.payments.providers];
+
+  const copyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(data.payments.webhook_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const save = async () => {
     try {
       setBusy(true);
       setError('');
       setNotice('');
-      const res = await api.put('/integrations/payments', { provider: chosen, ...(isReal ? keys : {}) });
+      const res = await api.put('/integrations/payments', { provider: chosen, ...(isReal ? { ...keys, mode } : {}) });
       apply(res.data);
-      setNotice(isReal
-        ? `Guardamos las llaves de ${provider?.label}. Todavía no se cobra con ${provider?.label}: falta conectar este proveedor con su documentación y una cuenta de pruebas. Mientras tanto, los links usan la simulación.`
-        : 'Listo: los links de pago usan la simulación.');
+      setNotice(isMercadoPago
+        ? mode === 'production'
+          ? 'Mercado Pago conectado: los links de pago, los adelantos y los paquetes en línea ya cobran de verdad.'
+          : 'Mercado Pago conectado en modo de pruebas: los cobros usan tus credenciales de prueba y no mueven dinero real.'
+        : isReal
+          ? `Guardamos las llaves de ${provider?.label}. Todavía no se cobra con ${provider?.label}: aún no está conectado al sistema.`
+          : chosen === 'none'
+            ? 'Listo: tu empresa no recibe pagos en línea. No se ofrecen links de pago ni adelantos en línea.'
+            : 'Listo: los links de pago usan la simulación.');
     } catch (err) {
       setError(apiError(err, 'No se pudo guardar la pasarela.'));
     } finally {
@@ -197,7 +219,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
       setBusy(true);
       setError('');
       const res = await api.post('/integrations/payments/test');
-      setNotice(res.data.message);
+      if (res.data.ok) setNotice(res.data.message);
+      else setError(res.data.message);
     } catch (err) {
       setError(apiError(err, 'La pasarela no respondió.'));
     } finally {
@@ -218,8 +241,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
 
       <div className="space-y-3">
         <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Pasarela de pagos</span>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2" role="radiogroup" aria-label="Pasarela de pagos">
-          {data.payments.providers.map((option) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2" role="radiogroup" aria-label="Pasarela de pagos">
+          {options.map((option) => {
             const active = chosen === option.key;
             const inUse = data.payments.active === option.key;
             return (
@@ -234,17 +257,63 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
               >
                 <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                 <span className={`block text-xs mt-0.5 ${inUse ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>
-                  {inUse ? 'En uso' : option.key === 'simulated' ? 'Para probar' : option.saved ? 'Llaves guardadas' : 'Lista para conectar'}
+                  {inUse ? (option.key === 'none' ? 'Así está' : 'En uso') : option.key === 'simulated' ? 'Solo para probar' : option.key === 'none' ? 'Solo cobras en la sede' : !option.connectable ? 'Próximamente' : option.saved ? 'Llaves guardadas' : 'Lista para conectar'}
                 </span>
               </OptionCard>
             );
           })}
         </div>
 
-        {isReal ? (
+        {isMercadoPago ? (
+          <div className="rounded-xl border border-slate-200 p-4 space-y-4" data-provider-keys>
+            <p className="text-sm text-slate-600">
+              Copia los datos de tu aplicación en Mercado Pago (Tus integraciones → tu aplicación → Credenciales). El dinero llega a la cuenta de Mercado Pago de tu empresa.
+              {data.payments.account && <span className="block mt-1 font-semibold text-brand-ink" data-mp-account>Cuenta conectada: {data.payments.account}{data.payments.currency ? ` · cobra en ${data.payments.currency}` : ''}</span>}
+            </p>
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Modo</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Modo de cobro">
+                {([
+                  ['sandbox', 'Pruebas', 'Con credenciales de prueba: no se mueve dinero real.'],
+                  ['production', 'Real', 'Con credenciales de producción: se cobra de verdad.'],
+                ] as const).map(([key, label, hint]) => (
+                  <OptionCard key={key} type="button" role="radio" aria-checked={mode === key} data-mode={key} disabled={!canSave} selected={mode === key} onClick={() => { setMode(key); setNotice(''); }} className="text-left rounded-xl border px-3.5 py-3 transition-colors">
+                    <span className="block text-sm font-bold text-brand-ink">{label}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>
+                  </OptionCard>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Public Key</span>
+                <input aria-label="Public Key" maxLength={255} placeholder={provider?.saved?.public_key ?? 'APP_USR-...'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.public_key} onChange={(e) => setKeys({ ...keys, public_key: e.target.value })} />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Access Token</span>
+                <input aria-label="Access Token" type="password" autoComplete="off" maxLength={255} placeholder={provider?.saved?.secret_key ?? 'APP_USR-...'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.secret_key} onChange={(e) => setKeys({ ...keys, secret_key: e.target.value })} />
+              </label>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-2" data-webhook>
+              <span className="block text-xs font-bold text-slate-700">Avisos de pago (recomendado)</span>
+              <p className="text-xs text-slate-600">Para que el pago se confirme al instante, en tu aplicación de Mercado Pago entra a Webhooks, pega esta dirección, marca el evento <span className="font-semibold">Order (Mercado Pago)</span> y guarda. Luego copia aquí la clave secreta que te muestra. Sin esto, el sistema igual revisa los pagos cada pocos minutos.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input readOnly aria-label="Dirección de avisos" value={data.payments.webhook_url} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs flex-1`} />
+                <button type="button" data-webhook-copy onClick={copyWebhook} className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                  <Copy size={14} /> {copied ? '¡Copiada!' : 'Copiar'}
+                </button>
+              </div>
+              <label className="space-y-1 block">
+                <span className="block text-xs font-semibold text-slate-600">Clave secreta de los avisos</span>
+                <input aria-label="Clave secreta de los avisos" type="password" autoComplete="off" maxLength={255} placeholder={provider?.saved?.webhook_secret ?? 'Opcional'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.webhook_secret} onChange={(e) => setKeys({ ...keys, webhook_secret: e.target.value })} />
+              </label>
+            </div>
+            {provider?.saved && <p className="text-xs text-slate-500">Guardadas el {momentOf(provider.saved.saved_at)}. Deja los campos vacíos para no cambiarlos.</p>}
+          </div>
+        ) : isReal ? (
           <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-provider-keys>
             <p className="text-sm text-slate-600">
-              Para cobrar de verdad con {provider?.label} hace falta su documentación y una cuenta de pruebas, para conectarlo y comprobar que el dinero llega. Puedes dejar guardadas las llaves que te dio {provider?.label}; mientras no esté conectado, los links siguen usando la simulación.
+              {provider?.label} todavía no está conectado al sistema. Puedes dejar guardadas las llaves que te dio; mientras tanto no se ofrecen pagos en línea con {provider?.label}. Para cobrar en línea hoy, elige Mercado Pago.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <input aria-label="Llave pública" maxLength={255} placeholder={provider?.saved?.public_key ?? 'Llave pública'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.public_key} onChange={(e) => setKeys({ ...keys, public_key: e.target.value })} />
@@ -252,17 +321,21 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
             </div>
             {provider?.saved && <p className="text-xs text-slate-500">Guardadas el {momentOf(provider.saved.saved_at)}. Déjalas vacías para no cambiarlas.</p>}
           </div>
+        ) : chosen === 'none' ? (
+          <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" data-no-online>
+            Sin pagos en línea no se crean links de pago, los servicios con adelanto no se reservan desde el portal y los paquetes no se venden en línea. Todo lo demás se cobra en la sede como siempre.
+          </p>
         ) : (
           <p className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             <ShieldCheck size={15} className="shrink-0 mt-0.5" />
-            Con la simulación, los links de pago y los adelantos funcionan de punta a punta, pero no se cobra dinero: la página de pago trae botones para simular que el cliente pagó o que su tarjeta fue rechazada.
+            Con la simulación, los links de pago y los adelantos funcionan de punta a punta, pero no se cobra dinero. Solo existe en las pruebas del sistema: en el servidor no aparece.
           </p>
         )}
 
         <div className="flex flex-wrap gap-2">
           {canSave && (
-            <button type="button" data-save-provider disabled={busy || (chosen === data.payments.chosen && !isReal)} onClick={save} className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
-              {busy ? 'Guardando...' : 'Guardar pasarela'}
+            <button type="button" data-save-provider disabled={busy || !dirty} onClick={save} className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
+              {busy ? 'Guardando...' : isMercadoPago ? 'Guardar y conectar' : 'Guardar pasarela'}
             </button>
           )}
           <button type="button" data-test-provider disabled={busy} onClick={test} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 transition-colors">

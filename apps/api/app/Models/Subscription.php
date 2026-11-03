@@ -25,6 +25,14 @@ class Subscription extends Model
         'canceled_at',
         'external_provider',
         'external_subscription_id',
+        'requires_card',
+        'card_status',
+        'card_brand',
+        'card_last4',
+        'card_authorized_at',
+        'last_charge_failed_at',
+        'pending_plan_id',
+        'pending_billing_cycle',
     ];
 
     protected $casts = [
@@ -32,6 +40,9 @@ class Subscription extends Model
         'ends_at' => 'datetime',
         'trial_ends_at' => 'datetime',
         'canceled_at' => 'datetime',
+        'requires_card' => 'boolean',
+        'card_authorized_at' => 'datetime',
+        'last_charge_failed_at' => 'datetime',
     ];
 
     public function isCurrent(): bool

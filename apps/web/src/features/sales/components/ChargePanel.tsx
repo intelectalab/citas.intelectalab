@@ -584,7 +584,7 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
                         </p>
                       )}
                       <p className="text-sm text-slate-600">
-                        Se crea un link para pagar {money(balance, context?.sale?.currency ?? context?.preview.currency)} con tarjeta, Yape o Plin. Vence en {links?.hours ?? 24} horas.
+                        Se crea un link para pagar {money(balance, context?.sale?.currency ?? context?.preview.currency)} en línea, con tarjeta u otro medio que acepte la pasarela. Vence en {links?.hours ?? 24} horas.
                       </p>
                       {links?.simulated && <p className="text-xs text-amber-700">Tu empresa usa la pasarela simulada: el link sirve para probar, no cobra dinero.</p>}
                       <button type="button" data-link-create disabled={saving} onClick={createLink} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">

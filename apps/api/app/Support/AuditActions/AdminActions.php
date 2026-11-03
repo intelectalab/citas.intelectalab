@@ -118,6 +118,8 @@ class AdminActions
         'payment_provider'            => 'Pasarela de pagos',
         'public_key'                  => 'Llave pública',
         'secret_key'                  => 'Llave secreta',
+        'webhook_secret'              => 'Clave secreta de avisos',
+        'payment_mode'                => 'Modo de cobro',
         'qr_image'                    => 'Imagen del QR',
         'qr_holder'                   => 'Titular',
         'phone'                       => 'Teléfono',

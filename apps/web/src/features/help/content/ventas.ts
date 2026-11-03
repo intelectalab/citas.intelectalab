@@ -39,7 +39,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Caja abierta para el efectivo', text: 'Para cobrar en efectivo, la caja de la sede debe estar abierta.', where: 'Configuración → Ventas y caja' },
         { title: 'Vencimiento de los links de pago', text: 'Un link de pago deja de valer pasadas unas horas.', where: 'Configuración → Adelantos y links de pago' },
         { title: 'Comprobantes simulados', text: 'Las boletas y facturas todavía no se envían a SUNAT: salen marcadas como simulación. Sin facturación electrónica se emite un comprobante interno.' },
-        { title: 'Pasarela simulada', text: 'Mientras tu empresa use la pasarela de prueba, los links de pago no cobran dinero de verdad. Yape, Plin, tarjeta y transferencia se cobran fuera del sistema y aquí solo se anota la operación.' },
+        { title: 'Links de pago con Mercado Pago', text: 'Los links de pago se cobran con la cuenta de Mercado Pago de tu empresa. Sin ella conectada, no aparece la opción Link de pago. Yape, Plin, tarjeta y transferencia en la sede se cobran fuera del sistema y aquí solo se anota la operación.', where: 'Configuración → Integraciones' },
       ],
     },
 

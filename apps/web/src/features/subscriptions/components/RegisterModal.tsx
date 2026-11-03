@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
+import { usePlatform } from '@/hooks/usePlatform';
 import { X, ArrowRight, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 interface Plan {
@@ -28,6 +29,7 @@ interface RegisterModalProps {
 
 export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalProps) {
   const router = useRouter();
+  const { platform } = usePlatform();
   const [modalStep, setModalStep] = useState<number>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -87,6 +89,10 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
 
         if (userData) {
           localStorage.setItem('user', JSON.stringify(userData));
+        }
+        if (response.data.card_url) {
+          window.location.href = response.data.card_url;
+          return;
         }
         router.push('/home');
       }
@@ -343,6 +349,12 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
                 </button>
               </div>
             </div>
+
+            {platform.card_on_signup && (
+              <p data-card-note className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                Al terminar pasarás a Mercado Pago para autorizar tu tarjeta. No se cobra nada durante la prueba gratis: el primer cobro es al terminarla, y puedes cancelar antes.
+              </p>
+            )}
 
             <div className="flex items-center justify-between pt-3">
               <button

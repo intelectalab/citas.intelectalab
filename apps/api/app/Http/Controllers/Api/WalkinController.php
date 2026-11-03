@@ -532,6 +532,7 @@ class WalkinController extends Controller
     public function kioskRegister(string $code, Request $request)
     {
         $tenant = $this->publicTenant($code);
+        abort_if(\App\Support\Subscriptions::lockedFor($tenant), 402, 'El registro en la fila no está disponible por ahora. Acércate a recepción.');
         $rules = Walkin::rules($tenant);
 
         $validated = $request->validate([

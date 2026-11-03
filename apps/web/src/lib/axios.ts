@@ -25,6 +25,9 @@ api.interceptors.response.use((response) => response, (error) => {
   if (axios.isAxiosError(error) && error.response?.data?.debug) {
     console.error('Detalle del error del servidor:', error.response.data.debug);
   }
+  if (axios.isAxiosError(error) && error.response?.status === 402 && error.response.data?.code === 'PLAN_LOCKED' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('plan-locked', { detail: error.response.data.message }));
+  }
   if (axios.isAxiosError(error) && !error.response && !axios.isCancel(error)) {
     error.message = error.code === 'ECONNABORTED'
       ? 'El servidor tardó demasiado en responder. Inténtalo de nuevo en unos segundos.'

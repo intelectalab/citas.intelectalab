@@ -49,6 +49,10 @@ const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   'record.emergency': { icon: ShieldAlert, tone: 'bg-rose-50 text-rose-600' },
   'plan.limit': { icon: Gauge, tone: 'bg-amber-50 text-amber-600' },
   'subscription.ending': { icon: CreditCard, tone: 'bg-rose-50 text-rose-600' },
+  'subscription.charged': { icon: CreditCard, tone: 'bg-emerald-50 text-emerald-600' },
+  'subscription.card': { icon: CreditCard, tone: 'bg-sky-50 text-sky-600' },
+  'subscription.charge_failed': { icon: CreditCard, tone: 'bg-rose-50 text-rose-600' },
+  'subscription.grace': { icon: CreditCard, tone: 'bg-amber-50 text-amber-600' },
   'quote.sent': { icon: FileText, tone: 'bg-brand-soft/25 text-brand-ink' },
 };
 

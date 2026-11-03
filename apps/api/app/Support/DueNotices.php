@@ -161,16 +161,39 @@ class DueNotices
         $days = (int) $today->diffInDays($endDay, false);
         $bucket = collect(self::SUBSCRIPTION_DAYS)->filter(fn ($d) => $days <= $d)->min();
 
-        if ($days < 0 || $bucket === null) {
+        $state = Subscriptions::state($tenant);
+
+        if ($days < 0) {
+            if ($state['state'] !== 'grace') {
+                return;
+            }
+
+            $graceDay = Carbon::parse($state['grace_ends_at'])->setTimezone($zone);
+            $title = 'Tu plan venció: paga para no pasar a solo lectura';
+            $body = 'Venció el ' . $endDay->locale('es')->isoFormat('D [de] MMMM') . '. Hasta el ' . $graceDay->locale('es')->isoFormat('D [de] MMMM') . ' todo funciona igual; después tu equipo solo podrá ver y exportar, y el portal dejará de recibir reservas.';
+
+            foreach (Notifier::adminIds($tenant->id) as $userId) {
+                Notifier::send($tenant->id, $userId, 'subscription.grace', $title, $body, '/companies?tab=plan', 'subscription', $subscription->id, "subscription-grace:{$subscription->id}:{$endDay->toDateString()}:{$today->toDateString()}");
+            }
+
+            return;
+        }
+
+        if ($bucket === null) {
             return;
         }
 
         $when = $days === 0 ? 'hoy' : ($days === 1 ? 'mañana' : "en {$days} días");
+        $card = Subscriptions::ready() && $subscription->card_status === 'authorized';
+        $price = Subscriptions::price($subscription->pending_plan_id ? \App\Models\SaaSPlan::find($subscription->pending_plan_id) : $subscription->plan, $subscription->pending_billing_cycle ?? $subscription->billing_cycle);
         $title = $trial ? "Tu periodo de prueba termina {$when}" : "Tu suscripción vence {$when}";
-        $body = ($trial ? 'La prueba' : 'La suscripción') . ' termina el ' . $endDay->locale('es')->isoFormat('D [de] MMMM') . '. Si no se renueva, el sistema deja de estar disponible para tu equipo y tus clientes.';
+        $body = ($trial ? 'La prueba' : 'La suscripción') . ' termina el ' . $endDay->locale('es')->isoFormat('D [de] MMMM') . '. '
+            . ($card
+                ? 'Ese día se cobrará ' . Currency::format($price, $subscription->plan?->currency) . ' a tu tarjeta' . ($subscription->card_last4 ? " terminada en {$subscription->card_last4}" : '') . '.'
+                : 'Paga tu plan en Mi empresa → Plan para que tu equipo y tus clientes sigan usando el sistema.');
 
         foreach (Notifier::adminIds($tenant->id) as $userId) {
-            Notifier::send($tenant->id, $userId, 'subscription.ending', $title, $body, '/companies', 'subscription', $subscription->id, "subscription:{$subscription->id}:{$endDay->toDateString()}:{$bucket}");
+            Notifier::send($tenant->id, $userId, 'subscription.ending', $title, $body, '/companies?tab=plan', 'subscription', $subscription->id, "subscription:{$subscription->id}:{$endDay->toDateString()}:{$bucket}");
         }
     }
 

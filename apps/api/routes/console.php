@@ -11,20 +11,29 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Artisan::command('subscriptions:expire', function () {
+    $limit = now()->subDays(\App\Support\Subscriptions::graceDays());
     $trials = DB::table('subscriptions')
         ->where('status', 'trialing')
-        ->where(fn ($q) => $q->where('ends_at', '<=', now())->orWhere(fn ($q) => $q->whereNull('ends_at')->where('trial_ends_at', '<=', now())))
+        ->where(fn ($q) => $q->where('ends_at', '<=', $limit)->orWhere(fn ($q) => $q->whereNull('ends_at')->where('trial_ends_at', '<=', $limit)))
         ->update(['status' => 'expired', 'updated_at' => now()]);
 
     $pastDue = DB::table('subscriptions')
         ->where('status', 'active')
-        ->where('ends_at', '<=', now())
+        ->where('ends_at', '<=', $limit)
         ->update(['status' => 'past_due', 'updated_at' => now()]);
 
     $this->info("Pruebas vencidas: {$trials}. Suscripciones con pago vencido: {$pastDue}.");
 })->purpose('Marca como vencidas las suscripciones cuya fecha de fin ya pasó');
 
 Schedule::command('subscriptions:expire')->hourly();
+
+Artisan::command('billing:sync', function () {
+    $links = \App\Support\PaymentLinks::checkPending();
+    $plans = \App\Support\PlanBilling::syncAll();
+    $this->info("Links de pago revisados con la pasarela: {$links}. Planes revisados: {$plans}.");
+})->purpose('Consulta a Mercado Pago los pagos en línea y los cobros de planes que no hayan avisado');
+
+Schedule::command('billing:sync')->everyFifteenMinutes()->withoutOverlapping();
 
 Artisan::command('messages:send', function () {
     if (!\App\Support\Messaging::ready()) {
