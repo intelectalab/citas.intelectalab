@@ -638,6 +638,7 @@ class PaymentLinks
             Packages::issueForSale($tenant, $sale, null);
             Inventory::deductForSale($tenant, $sale, null);
             Loyalty::earnForSale($tenant, $sale, null);
+            Commissions::forSale($tenant, $sale);
         }
 
         return $sale;

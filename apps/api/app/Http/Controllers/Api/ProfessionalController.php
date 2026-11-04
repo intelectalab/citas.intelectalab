@@ -80,6 +80,17 @@ class ProfessionalController extends Controller
         return null;
     }
 
+    private function commissionPercent(Request $request, array $validated): float|null|false
+    {
+        if (!array_key_exists('commission_percent', $validated) || !\App\Support\Commissions::ready() || !$request->user()->allows('commissions.rules')) {
+            return false;
+        }
+
+        $value = $validated['commission_percent'];
+
+        return $value === null || $value === '' ? null : round((float) $value, 2);
+    }
+
     private function auditProfessional(Professional $professional): array
     {
         $professional->loadMissing(['user', 'status', 'specialties']);
@@ -90,6 +101,7 @@ class ProfessionalController extends Controller
             'email'          => $professional->user?->email,
             'license_number' => $professional->license_number,
             'phone'          => $professional->phone,
+            'commission'     => $professional->commission_percent !== null ? (float) $professional->commission_percent . ' %' : null,
             'status'         => $professional->status?->name,
             'specialties'    => $professional->specialties->pluck('name')->sort()->values()->all(),
         ];
@@ -151,7 +163,9 @@ class ProfessionalController extends Controller
             'status_id' => 'nullable|exists:statuses,id',
             'specialties' => 'nullable|array',
             'specialties.*' => 'exists:specialties,id',
-        ]);
+            'commission_percent' => 'nullable|numeric|min:0|max:100',
+        ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.']);
+        $commission = $this->commissionPercent($request, $validated);
 
         $rawPassword = $validated['document_number'] ?? \Illuminate\Support\Str::random(8);
 
@@ -198,7 +212,7 @@ class ProfessionalController extends Controller
             'license_number' => $validated['license_number'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'status_id' => $statusId,
-        ]);
+        ] + ($commission !== false ? ['commission_percent' => $commission] : []));
 
         if (isset($validated['specialties'])) {
             $syncData = [];
@@ -258,7 +272,9 @@ class ProfessionalController extends Controller
             'status_id' => 'nullable|exists:statuses,id',
             'specialties' => 'nullable|array',
             'specialties.*' => 'exists:specialties,id',
-        ]);
+            'commission_percent' => 'nullable|numeric|min:0|max:100',
+        ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.']);
+        $commission = $this->commissionPercent($request, $validated);
 
         $auditBefore = $this->auditProfessional($professional);
 
@@ -280,7 +296,7 @@ class ProfessionalController extends Controller
             'license_number' => array_key_exists('license_number', $validated) ? $validated['license_number'] : $professional->license_number,
             'phone' => array_key_exists('phone', $validated) ? $validated['phone'] : $professional->phone,
             'status_id' => $validated['status_id'] ?? $professional->status_id,
-        ]);
+        ] + ($commission !== false ? ['commission_percent' => $commission] : []));
 
         if (isset($validated['specialties'])) {
             $syncData = [];

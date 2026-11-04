@@ -243,6 +243,7 @@ export interface SaleRow {
   customer: { id: string; name: string } | null;
   appointment_code: string | null;
   detail: string;
+  item_types?: string[];
   total: number;
   paid: number;
   balance: number;

@@ -721,6 +721,7 @@ class Quotes
             Invoicing::issue($tenant, $sale, Invoicing::validated($tenant, ['doc_type' => Invoicing::FACTURA === Invoicing::defaultType($tenant) ? Invoicing::types($tenant)[0] : Invoicing::defaultType($tenant)]), $user);
             Inventory::deductForSale($tenant, $sale, $user);
             Loyalty::earnForSale($tenant, $sale, $user);
+            Commissions::forSale($tenant, $sale);
         }
 
         return $sale;

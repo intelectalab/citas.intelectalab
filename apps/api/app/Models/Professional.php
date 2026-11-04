@@ -23,6 +23,7 @@ class Professional extends Model
         'type_document_id',
         'document_number',
         'display_name',
+        'commission_percent',
         'license_number',
         'phone',          
         'signature_url',  

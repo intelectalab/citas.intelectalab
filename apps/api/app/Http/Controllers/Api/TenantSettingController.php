@@ -12,6 +12,7 @@ use App\Support\Confirmations;
 use App\Support\Inventory;
 use App\Support\Loyalty;
 use App\Support\OnlineBooking;
+use App\Support\Commissions;
 use App\Support\Quotes;
 use App\Support\Sales;
 use Illuminate\Http\Request;
@@ -120,6 +121,11 @@ class TenantSettingController extends Controller
             'loyalty_rules.points_validity_days'    => 'required_with:loyalty_rules|integer|min:0|max:3650',
             'loyalty_rules.gift_cards_enabled'      => 'required_with:loyalty_rules|boolean',
             'loyalty_rules.gift_card_validity_days' => 'required_with:loyalty_rules|integer|min:0|max:3650',
+            'commission_rules' => 'sometimes|array',
+            'commission_rules.base'           => 'required_with:commission_rules|in:net,gross',
+            'commission_rules.on_products'    => 'required_with:commission_rules|boolean',
+            'commission_rules.on_package_use' => 'required_with:commission_rules|boolean',
+            'commission_rules.auto_approve'   => 'required_with:commission_rules|boolean',
             'quote_rules' => 'sometimes|array',
             'quote_rules.validity_days'        => 'required_with:quote_rules|integer|min:0|max:3650',
             'quote_rules.allow_installments'   => 'required_with:quote_rules|boolean',
@@ -302,6 +308,15 @@ class TenantSettingController extends Controller
             ]);
         }
 
+        if (isset($validated['commission_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'commission.base'           => (string) $validated['commission_rules']['base'],
+                'commission.on_products'    => (bool) $validated['commission_rules']['on_products'],
+                'commission.on_package_use' => (bool) $validated['commission_rules']['on_package_use'],
+                'commission.auto_approve'   => (bool) $validated['commission_rules']['auto_approve'],
+            ]);
+        }
+
         if (isset($validated['quote_rules'])) {
             $settings->rules = array_merge($settings->rules ?? [], [
                 'quotes.validity_days'        => (int) $validated['quote_rules']['validity_days'],
@@ -397,6 +412,7 @@ class TenantSettingController extends Controller
             'inventory_rules' => Inventory::enabled($tenant) ? Inventory::rules($tenant) : null,
             'loyalty_rules' => Loyalty::enabled($tenant) ? Loyalty::rules($tenant) : null,
             'quote_rules' => Quotes::enabled($tenant) ? Quotes::rules($tenant) : null,
+            'commission_rules' => Commissions::enabled($tenant) ? Commissions::rules($tenant) : null,
             'walkin_rules' => $tenant->hasModule('walkin') ? \App\Support\Walkin::rules($tenant) : null,
             'session_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.idle_minutes'),
             'session_idle_roles'   => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('created_at')->get(['id', 'name'])
@@ -489,6 +505,12 @@ class TenantSettingController extends Controller
                 'points_validity_days'    => $loyalty['points_validity_days'],
                 'gift_cards_enabled'      => $loyalty['gift_cards_enabled'],
                 'gift_card_validity_days' => $loyalty['gift_card_validity_days'],
+            ],
+            'Comisiones' => [
+                'commission_base'           => ($commissions = Commissions::rules($tenant))['base'] === 'gross' ? 'Precio de lista' : 'Neto',
+                'commission_on_products'    => $commissions['on_products'],
+                'commission_on_package_use' => $commissions['on_package_use'],
+                'commission_auto_approve'   => $commissions['auto_approve'],
             ],
             'Adelantos y links de pago' => [
                 'require_deposit'      => (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit'),

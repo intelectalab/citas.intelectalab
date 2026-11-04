@@ -27,13 +27,25 @@ const VIEWS: { id: string; label: string; test: (sale: SaleRow) => boolean }[] =
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export default function SalesTable() {
+export const ITEM_TYPES: Record<string, string> = { service: 'Servicios', product: 'Productos', package: 'Paquetes', deposit: 'Adelantos' };
+
+export interface SalesFilter {
+  item_type?: string;
+  branch_id?: string;
+  from?: string;
+  to?: string;
+}
+
+const typesOf = (sale: SaleRow) => sale.item_types ?? (sale.unbilled ? ['service'] : []);
+
+export default function SalesTable({ initial }: { initial?: SalesFilter } = {}) {
   const router = useRouter();
   const { can, hasModule } = useAuth();
   const [sales, setSales] = useState<SaleRow[] | null>(null);
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, string>>({ branch_id: '', status: '' });
+  const [filters, setFilters] = useState<Record<string, string>>({ branch_id: initial?.branch_id ?? '', status: '', item_type: initial?.item_type ?? '' });
+  const initialRange = initial?.from && initial?.to ? { created_at: { kind: 'range' as const, from: initial.from, to: initial.to } } : undefined;
   const [viewing, setViewing] = useState<string | null>(null);
   const [unbilled, setUnbilled] = useState<SaleRow[] | null>(null);
   const [charging, setCharging] = useState<SaleRow | null>(null);
@@ -65,6 +77,7 @@ export default function SalesTable() {
     (showUnbilled || current.test(sale)) &&
     (!filters.branch_id || sale.branch_id === filters.branch_id) &&
     (!filters.status || sale.status === filters.status) &&
+    (!filters.item_type || typesOf(sale).includes(filters.item_type)) &&
     (!term || normalize(`${sale.code} ${sale.customer?.name ?? ''} ${sale.detail} ${sale.invoice_number ?? ''} ${sale.appointment_code ?? ''}`).includes(term)),
   );
 
@@ -77,7 +90,11 @@ export default function SalesTable() {
 
   const branchOptions = [...new Map(all.map((s) => [s.branch_id, s.branch_name ?? 'Sede'])).entries()].map(([value, label]) => ({ value, label }));
 
+  const usedTypes = new Set(all.flatMap(typesOf));
+  const typeOptions = Object.entries(ITEM_TYPES).filter(([value]) => usedTypes.has(value) || value === filters.item_type).map(([value, label]) => ({ value, label }));
+
   const filterConfigs: FilterConfig[] = [
+    ...(typeOptions.length > 1 || filters.item_type ? [{ id: 'item_type', label: 'Tipo', type: 'select' as const, options: typeOptions }] : []),
     ...(branchOptions.length > 1 ? [{ id: 'branch_id', label: 'Sede', type: 'select' as const, options: branchOptions }] : []),
     {
       id: 'status', label: 'Estado', type: 'select',
@@ -222,6 +239,8 @@ export default function SalesTable() {
         filterValues={filters}
         onFilterChange={(id, value) => setFilters((values) => ({ ...values, [id]: value }))}
         dateFilters={[{ id: 'created_at', label: 'Fecha', value: (s) => s.created_at }]}
+        initialDateValues={initialRange}
+        initialFiltersOpen={Boolean(initialRange || initial?.item_type || initial?.branch_id)}
         sortOptions={[
           { id: 'created_at', label: 'Fecha', type: 'date', value: (s) => s.created_at },
           { id: 'total', label: 'Total', type: 'number', value: (s) => s.total },

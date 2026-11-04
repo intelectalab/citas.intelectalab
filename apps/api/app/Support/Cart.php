@@ -226,6 +226,16 @@ class Cart
                 self::fail($field, 'Un producto se vende como máximo 999 unidades en una venta.');
             }
 
+            $seller = null;
+
+            if (!empty($item['professional_id'])) {
+                $seller = Professional::where('tenant_id', $tenant->id)->find($item['professional_id']);
+
+                if (!$seller || !Access::worksAt($seller->id, $branch->id)) {
+                    self::fail($field, 'Elige a alguien que trabaje en esta sede, o deja el campo vacío.');
+                }
+            }
+
             $lines[] = [
                 'type'            => 'product',
                 'id'              => $product->id,
@@ -234,8 +244,8 @@ class Cart
                 'description'     => $product->name,
                 'quantity'        => $quantity,
                 'unit_price'      => round((float) $product->price, 2),
-                'professional_id' => null,
-                'professional'    => null,
+                'professional_id' => $seller?->id,
+                'professional'    => $seller?->display_name,
                 'appointment_id'  => null,
                 'appointment'     => null,
             ];

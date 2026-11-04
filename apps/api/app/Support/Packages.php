@@ -477,8 +477,10 @@ class Packages
             return false;
         }
 
+        $usageId = (string) \Illuminate\Support\Str::uuid();
+
         DB::table('package_usages')->insert([
-            'id'                  => (string) \Illuminate\Support\Str::uuid(),
+            'id'                  => $usageId,
             'tenant_id'           => $tenant->id,
             'customer_package_id' => $package->id,
             'service_id'          => $serviceId,
@@ -492,6 +494,7 @@ class Packages
         ]);
 
         DB::table('customer_package_items')->where('id', $item->id)->increment('sessions_used');
+        Commissions::forUsage($tenant, DB::table('package_usages')->where('id', $usageId)->first());
         Messaging::packageLow($tenant, $package);
 
         $left = DB::table('customer_package_items')->where('customer_package_id', $package->id)->whereColumn('sessions_used', '<', 'sessions_total')->exists();

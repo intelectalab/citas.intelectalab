@@ -8,6 +8,7 @@ import { Boxes, CalendarClock, CalendarPlus, Minus, Package, Plus, Receipt, Sear
 import SchedulePanel, { type ScheduleSource } from '@/features/packages/components/SchedulePanel';
 import { sessionsLabel, type ScheduleDetails } from '@/features/packages/packages';
 import { api } from '@/lib/axios';
+import { useAuth } from '@/hooks/useAuth';
 import Select from '@/app/components/common/Select';
 import { Pager, usePaged } from '@/app/components/common/Pager';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
@@ -57,6 +58,8 @@ const toLine = ({ type, id, quantity, professional_id, details }: CartItem) => (
 });
 
 export default function PointOfSale() {
+  const { hasModule } = useAuth();
+  const commissionsOn = hasModule('commissions');
   const [board, setBoard] = useState<PosBoard | null>(null);
   const [branchId, setBranchId] = useState<string>('');
   const [tab, setTab] = useState<Tab>('pending');
@@ -721,12 +724,12 @@ export default function PointOfSale() {
                       <button type="button" aria-label="Uno más" data-qty-plus disabled={item.quantity >= (item.type === 'service' ? 99 : 999) || !!cart.editBlocked} onClick={() => changeItem(index, { quantity: item.quantity + 1 })} className={stepButton}><Plus size={13} /></button>
                     </div>
                   )}
-                  {item.type === 'service' && professionals.length > 0 && (
+                  {(item.type === 'service' || (item.type === 'product' && commissionsOn)) && professionals.length > 0 && (
                     <div className="flex-1 min-w-[9rem]">
                       <Select
                         variant="chip"
-                        ariaLabel="Quién lo atendió"
-                        placeholder="¿Quién atendió? (opcional)"
+                        ariaLabel={item.type === 'product' ? 'Quién lo vendió' : 'Quién lo atendió'}
+                        placeholder={item.type === 'product' ? '¿Quién lo vendió? (opcional)' : '¿Quién atendió? (opcional)'}
                         value={item.professional_id ?? ''}
                         disabled={!!cart.editBlocked}
                         onChange={(e) => changeItem(index, { professional_id: String(e.target.value) || null })}
@@ -743,6 +746,12 @@ export default function PointOfSale() {
               </div>
             ))}
           </div>
+
+          {commissionsOn && !cart.editBlocked && cart.items.some((item) => (item.type === 'service' || item.type === 'product') && !item.professional_id) && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-commission-warning>
+              Hay líneas sin quién las atendió o vendió: esas no generan comisión.
+            </p>
+          )}
 
           {cart.items.length > 0 && !cart.editBlocked && (
             <div data-cart-coupon>

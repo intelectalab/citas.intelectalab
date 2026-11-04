@@ -38,6 +38,7 @@ export interface ProRow {
   completed: number;
   income: number | null;
   collected?: number | null;
+  commissions?: number | null;
   occupancy: number | null;
   no_show: number;
   minutes: number | null;
@@ -58,6 +59,7 @@ export interface MineSummary {
   no_show: number;
   minutes: number | null;
   customers: number;
+  commissions?: number | null;
 }
 
 export interface MyCustomer {

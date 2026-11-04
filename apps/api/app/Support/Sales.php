@@ -295,6 +295,7 @@ class Sales
             $packages = Packages::issueForSale($tenant, $sale, $user);
             Inventory::deductForSale($tenant, $sale, $user);
             Loyalty::earnForSale($tenant, $sale, $user);
+            Commissions::forSale($tenant, $sale);
         }
 
         return ['sale' => $sale, 'duplicate' => false, 'change' => $change, 'packages' => $packages];

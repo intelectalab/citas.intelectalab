@@ -47,6 +47,7 @@ import {
   Sparkles,
   CreditCard,
   Palette,
+  Percent,
   LucideIcon
 } from 'lucide-react';
 
@@ -61,6 +62,7 @@ export interface MenuItem {
   alsoModule?: string;
   perm?: string;
   saasAdminOnly?: boolean;
+  tenantOnly?: boolean;
   badge?: 'platform_transfers';
 }
 
@@ -83,7 +85,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     id: 'home',
     items: [
       { name: 'Inicio', href: '/home', icon: Home },
-      { name: 'Reportes', href: '/reports', icon: ChartColumn, perm: 'reports.view|reports.own' },
+      { name: 'Reportes', href: '/reports', icon: ChartColumn, perm: 'reports.view|reports.own', tenantOnly: true },
     ]
   },
   {
@@ -94,6 +96,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     items: [
       { name: 'Tenants', href: '/admin/tenants', icon: Building2 },
       { name: 'Cobros', href: '/admin/cobros', icon: Wallet, saasAdminOnly: true, badge: 'platform_transfers' },
+      { name: 'Reportes', href: '/admin/reports', icon: ChartColumn, saasAdminOnly: true },
       { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket, saasAdminOnly: true },
       { name: 'Plantillas de rubros', href: '/admin/business-types', icon: Layers, saasAdminOnly: true },
       { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },
@@ -145,6 +148,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
       { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', perm: 'sales.view' },
       { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', perm: 'payments.view' },
       { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', perm: 'cash.view' },
+      { name: 'Comisiones', href: '/commissions', icon: Percent, module: 'commissions', perm: 'commissions.view' },
     ]
   },
   {
@@ -245,6 +249,7 @@ export function useMenu() {
 
     const items = group.items.filter((item) => {
       if (item.saasAdminOnly && !isSaasAdmin) return false;
+      if (item.tenantOnly && isSuperAdmin) return false;
       if (item.requireAdmin && !user?.is_tenant_admin) return false;
       if (item.perm && !isSuperAdmin && !can(item.perm)) return false;
       if (item.feature && !hasFeature(item.feature)) return false;

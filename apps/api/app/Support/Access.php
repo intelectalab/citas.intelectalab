@@ -128,6 +128,12 @@ class Access
             'edit'   => 'Abrir la caja, anotar movimientos y cerrarla',
             'others' => 'Ver y manejar los turnos de caja que abrieron otras personas. Sin este permiso, cada quien ve y cierra solo su propio turno',
         ]],
+        'commissions' => ['label' => 'Comisiones', 'module' => 'commissions', 'actions' => [
+            'view'    => 'Ver las comisiones. Con un rol de una sede, solo las de su sede; con "solo lo suyo", solo las propias',
+            'rules'   => 'Crear y cambiar las reglas de comisión, el porcentaje de los {pros} y recalcular un mes',
+            'approve' => 'Aprobar comisiones calculadas',
+            'pay'     => 'Marcar comisiones como pagadas',
+        ]],
         'coupons' => ['label' => 'Cupones', 'module' => 'pos', 'actions' => [
             'view'   => 'Ver los cupones',
             'create' => 'Crear cupones',
@@ -229,6 +235,7 @@ class Access
         'sales'            => ['section' => 'sales', 'screens' => ['Ventas'], 'short' => ['view' => 'Ver', 'create' => 'Cobrar', 'delete' => 'Anular y devolver']],
         'payments'         => ['section' => 'sales', 'screens' => ['Pagos'], 'short' => ['view' => 'Ver']],
         'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar', 'others' => 'Turnos de otros']],
+        'commissions'      => ['section' => 'sales', 'screens' => ['Comisiones'], 'short' => ['view' => 'Ver', 'rules' => 'Reglas', 'approve' => 'Aprobar', 'pay' => 'Marcar pagadas']],
         'products'         => ['section' => 'inventory', 'screens' => ['Productos y stock'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
         'inventory'        => ['section' => 'inventory', 'screens' => ['Kárdex', 'Traslados', 'Compras'], 'short' => ['view' => 'Ver', 'create' => 'Mover, comprar y trasladar', 'edit' => 'Contar, recibir y ajustar', 'delete' => 'Cancelar y eliminar']],
         'packages'         => ['section' => 'loyalty', 'screens' => ['Paquetes'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar más días', 'delete' => 'Anular y devolver']],
@@ -270,7 +277,7 @@ class Access
                 'quotes' => self::EVERYTHING, 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING, 'inventory' => self::EVERYTHING,
                 'sales' => self::EVERYTHING, 'payments' => ['view'], 'cash' => [...self::EVERYTHING, 'others'], 'coupons' => self::EVERYTHING,
                 'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'loyalty' => self::EVERYTHING, 'messages' => ['view', 'create', 'edit'],
-                'campaigns' => ['view', 'create', 'edit'], 'automations' => ['view'], 'reports' => ['view', 'money'],
+                'campaigns' => ['view', 'create', 'edit'], 'automations' => ['view'], 'reports' => ['view', 'money'], 'commissions' => ['view', 'approve'],
                 'branches' => ['view'],
                 'users' => ['view', 'create', 'edit'],
                 'data' => ['export'],
@@ -311,7 +318,7 @@ class Access
                 'customers' => ['view', 'create', 'edit'], 'records' => ['view', 'edit'],
                 'services' => ['view'], 'rooms' => ['view'],
                 'quotes' => ['view', 'create', 'edit'], 'sales' => ['create'],
-                'reports' => ['own'],
+                'reports' => ['own'], 'commissions' => ['view'],
             ],
         ],
     ];

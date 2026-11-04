@@ -87,13 +87,13 @@ class ReportController extends Controller
                 'top'      => $money ? $current->topCustomers() : null,
             ],
             'pros' => [
-                'rows' => collect($current->professionals())->map(fn ($row) => $money ? $row : array_merge($row, ['income' => null, 'collected' => null]))->all(),
+                'rows' => collect($current->professionals())->map(fn ($row) => $money ? $row : array_merge($row, ['income' => null, 'collected' => null, 'commissions' => null]))->all(),
             ],
             'catalog' => collect($current->catalog($tenant->hasModule('inventory')))
                 ->map(fn ($rows) => $rows === null ? null : array_map(fn ($row) => $money ? $row : array_merge($row, ['income' => null, 'collected' => null]), $rows))->all(),
             'mine' => [
-                'summary'   => $money ? $current->mine() : array_merge($current->mine(), ['income' => null]),
-                'previous'  => $money ? $previous->mine() : array_merge($previous->mine(), ['income' => null]),
+                'summary'   => $money ? $current->mine() : array_merge($current->mine(), ['income' => null, 'commissions' => null]),
+                'previous'  => $money ? $previous->mine() : array_merge($previous->mine(), ['income' => null, 'commissions' => null]),
                 'by_day'    => $current->appointmentsDetail(false)['occupancy_by_day'],
                 'services'  => array_map(fn ($row) => $money ? $row : array_merge($row, ['income' => null, 'collected' => null]), $current->catalog(false)['services']),
                 'customers' => array_map(fn ($row) => $money ? $row : array_merge($row, ['income' => null, 'collected' => null]), $current->myCustomers()),

@@ -44,6 +44,12 @@ body {
   --brand-menu: #0b192c;
   --brand-accent-solid: #3f768c;
   --ring-track: #ffffff;
+  --chart-3: #6d4aa8;
+  --chart-4: #c77a1e;
+  --chart-5: #c05785;
+  --chart-6: #1c9bb0;
+  --chart-7: #4f5d75;
+  --chart-8: #a3a9b5;
 }
 
 html[data-theme='dark'] body {

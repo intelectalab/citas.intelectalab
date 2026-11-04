@@ -94,6 +94,8 @@ interface DataTableProps<T> {
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
   primaryActionBlocked?: string;
+  headerActions?: ReactNode;
+  selectionActions?: (rows: T[], clear: () => void) => ReactNode;
   tabs?: TabOption[];
   activeTab?: string;
   onTabChange?: (tabId: string) => void;
@@ -107,6 +109,8 @@ interface DataTableProps<T> {
   extraFilterCount?: number;
   onClearFilters?: () => void;
   dateFilters?: DateFilterConfig<T>[];
+  initialDateValues?: Record<string, DateFilterValue | null>;
+  initialFiltersOpen?: boolean;
   sortOptions?: SortOption<T>[];
 
   columns: Column<T>[];
@@ -132,6 +136,8 @@ export function DataTable<T extends Record<string, any>>({
   primaryActionLabel = 'Nuevo',
   onPrimaryAction,
   primaryActionBlocked,
+  headerActions,
+  selectionActions,
   tabs = [],
   activeTab,
   onTabChange,
@@ -144,6 +150,8 @@ export function DataTable<T extends Record<string, any>>({
   extraFilterCount = 0,
   onClearFilters,
   dateFilters = [],
+  initialDateValues,
+  initialFiltersOpen = false,
   sortOptions = [],
   columns,
   data: allData,
@@ -163,9 +171,9 @@ export function DataTable<T extends Record<string, any>>({
   const showBoard = Boolean(boardView) && view === 'board';
   const { can, user } = useAuth();
   const [selected, setSelected] = useState<Set<string | number>>(new Set());
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(initialFiltersOpen);
   const [showSort, setShowSort] = useState(false);
-  const [dateValues, setDateValues] = useState<Record<string, DateFilterValue | null>>({});
+  const [dateValues, setDateValues] = useState<Record<string, DateFilterValue | null>>(initialDateValues ?? {});
   const [sortId, setSortId] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [searchText, setSearchText] = useState(searchTerm);
@@ -333,6 +341,7 @@ export function DataTable<T extends Record<string, any>>({
           </div>
 
           <div className={styles.actionsGroup}>
+            {headerActions}
             <button className={styles.actionBtnSecondary}>
               <MoreHorizontal size={18} />
             </button>
@@ -689,6 +698,9 @@ export function DataTable<T extends Record<string, any>>({
               {selectedRows.length} {selectedRows.length === 1 ? 'seleccionada' : 'seleccionadas'} ·{' '}
               <button type="button" onClick={() => setSelected(new Set())} className="font-semibold text-brand-accent hover:text-brand-ink">Quitar selección</button>
             </span>
+          )}
+          {selectedRows.length > 0 && selectionActions && (
+            <span className="flex flex-wrap items-center gap-2" data-selection-actions>{selectionActions(selectedRows, () => setSelected(new Set()))}</span>
           )}
         </span>
 

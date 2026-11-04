@@ -14,6 +14,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Paquetes', text: `Para vender un paquete. Si sus sesiones van con fecha, elige primero a ${theClient} y pulsa "Agendar sesiones".`, module: 'packages' },
         { title: 'Agendar para ahora', text: 'Para quien llegó sin cita: lo deja en la agenda ahora mismo o en el próximo horario libre, y lo pasa al carrito.', perm: 'agenda.create', module: 'agenda' },
         { title: 'Carrito', text: `Elige ${theClient} (si no, la boleta sale a nombre de "Cliente varios"), cambia cantidades, indica quién atendió y aplica un cupón.` },
+        { title: 'Quién atendió o vendió', text: 'Con Comisiones encendido, cada servicio y producto puede llevar a quién lo atendió o vendió. Si falta, el carrito avisa: esa línea no genera comisión.', module: 'commissions' },
         { title: 'Dejar por cobrar', text: 'Guarda la venta sin cobrarla, para cobrarla después desde aquí o desde Ventas.', perm: 'pos.create' },
         { title: 'Cobrar', text: 'Abre el cobro: medio de pago, monto, vuelto, número de operación y comprobante.', perm: 'sales.create' },
       ],
@@ -97,6 +98,45 @@ export const ventasTopics: HelpTopics = (vocab) => {
       rules: [
         { title: 'Diferencia permitida al cerrar', text: 'Hasta cuánto puede faltar o sobrar sin tener que explicarlo.', where: 'Configuración → Ventas y caja' },
         { title: 'Una caja por sede nueva', text: 'Cada sucursal nueva puede recibir su "Caja principal".', where: 'Configuración → Ventas y caja' },
+      ],
+    },
+
+    '/commissions': {
+      summary: `Lo que gana cada ${lower(vocab.pro)} por lo que atiende o vende, mes a mes. Se calcula solo al cobrar una venta y al usar una sesión de un paquete, según las reglas.`,
+      points: [
+        { title: 'Mes', text: 'Arriba eliges qué mes ver. Cada comisión cuenta en el mes en que se cobró la venta o se usó la sesión.' },
+        { title: 'Por aprobar, aprobadas y pagadas', text: 'Cada comisión empieza por aprobar; el administrador la aprueba y, cuando le paga, la marca como pagada. Las tarjetas suman cada estado.' },
+        { title: 'Devoluciones', text: 'Si se devuelve dinero de una venta, su comisión baja en la misma proporción: aparece una línea en negativo con "Devolución". Si ya estaba pagada, se descuenta en el mes siguiente.' },
+        { title: 'Aprobar y marcar como pagadas', text: 'Marca las comisiones en la lista y usa los botones que aparecen abajo. El pago se hace por fuera del sistema; aquí solo queda anotado.', perm: 'commissions.approve|commissions.pay' },
+        { title: 'Recalcular el mes', text: 'Vuelve a calcular, con las reglas de hoy, las comisiones por aprobar del mes. Las aprobadas y pagadas no cambian.', perm: 'commissions.rules' },
+        { title: `Resumen por ${lower(vocab.pro)}`, text: 'Cuánto lleva cada uno en el mes. El nombre filtra la lista.' },
+        { title: 'Solo lo suyo', text: `Un ${lower(vocab.pro)} con "solo lo suyo" ve solo sus comisiones, sin poder cambiarlas.` },
+        { title: 'Exportar', text: 'Descarga a Excel o CSV lo que estás viendo.', perm: 'data.export' },
+      ],
+      tasks: [
+        { title: 'Pagar las comisiones del mes', perm: 'commissions.pay', steps: ['Elige el mes.', 'En "Por aprobar", marca las comisiones y pulsa "Aprobar".', 'En "Aprobadas", marca las que pagaste y pulsa "Marcar como pagadas".'] },
+      ],
+      rules: [
+        { title: 'Sobre qué monto se calcula', text: 'Lo cobrado sin IGV (por defecto) o el precio de lista.', where: 'Configuración → Comisiones' },
+        { title: 'Productos, sesiones de paquetes y aprobar solas', text: 'Si se comisionan los productos y las sesiones de paquetes, y si las comisiones se aprueban solas.', where: 'Configuración → Comisiones' },
+      ],
+    },
+
+    '/commissions/rules': {
+      summary: `Aquí se decide cuánto gana cada ${lower(vocab.pro)}, en tres listas que van de lo general a lo particular. Nunca hay dos comisiones para el mismo caso.`,
+      points: [
+        { title: '¿Cuánto gana?', text: `Elige a un ${lower(vocab.pro)} y un servicio o producto: te dice qué comisión se le aplica, por qué y cuánto gana.` },
+        { title: `1. Lo que gana cada ${lower(vocab.pro)}`, text: 'Su porcentaje en todos sus servicios, salvo los de las listas 2 y 3. Vacío, no gana nada por ellos.' },
+        { title: '2. Servicios con otra comisión', text: `Para todos los que atienden ese servicio. Reemplaza el porcentaje de cada ${lower(vocab.pro)}. Cada servicio aparece una sola vez.` },
+        { title: '3. Excepciones de una persona', text: 'Solo para una persona en un servicio. Reemplaza todo lo demás. Cada persona con cada servicio aparece una sola vez.' },
+        { title: 'Porcentaje o monto fijo', text: 'Cada comisión puede dar un porcentaje, un monto fijo por atención o por unidad, o los dos.' },
+        { title: 'Productos', text: 'Una comisión para todos los productos y, si hace falta, otra para un producto en particular. La venta debe decir quién lo vendió.', module: 'inventory' },
+        { title: 'Apagar o quitar', text: 'Apagada o quitada, se usa lo que sigue en la lista: la comisión del servicio o su porcentaje.', perm: 'commissions.rules' },
+      ],
+      tasks: [
+        { title: 'Dar otra comisión a un servicio', perm: 'commissions.rules', steps: ['En la lista 2, pulsa "Agregar servicio".', 'Elige el servicio y escribe el porcentaje, el monto fijo o los dos.', 'Pulsa "Agregar".'] },
+        { title: 'Agregar una excepción', perm: 'commissions.rules', steps: ['En la lista 3, pulsa "Agregar excepción".', `Elige al ${lower(vocab.pro)} y el servicio, y escribe cuánto gana.`, 'Pulsa "Agregar".'] },
+        { title: `Cambiar el porcentaje de un ${lower(vocab.pro)}`, perm: 'commissions.rules', steps: ['En la lista 1, escribe el nuevo porcentaje.', 'Pulsa Enter o sal del campo: se guarda solo.'] },
       ],
     },
 

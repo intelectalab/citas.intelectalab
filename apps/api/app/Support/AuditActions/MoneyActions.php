@@ -13,6 +13,12 @@ class MoneyActions
         'cash.movement'           => ['Registró un movimiento de caja', 'money'],
         'cash_register.created'   => ['Creó una caja', 'money'],
         'cash_register.updated'   => ['Cambió una caja', 'money'],
+        'commission.approved'     => ['Aprobó comisiones', 'money'],
+        'commission.paid'         => ['Marcó comisiones como pagadas', 'money'],
+        'commission.recalculated' => ['Recalculó las comisiones de un mes', 'money'],
+        'commission_rule.created' => ['Creó una regla de comisión', 'money'],
+        'commission_rule.updated' => ['Cambió una regla de comisión', 'money'],
+        'commission_rule.deleted' => ['Eliminó una regla de comisión', 'money'],
         'coupon.created'          => ['Creó un cupón', 'money'],
         'coupon.updated'          => ['Cambió un cupón', 'money'],
         'coupon.deactivated'      => ['Desactivó un cupón que ya se había usado', 'money'],
@@ -36,6 +42,7 @@ class MoneyActions
     ];
 
     public const FIELDS = [
+        'count' => 'Cantidad', 'period' => 'Mes', 'created' => 'Calculadas', 'removed' => 'Quitadas', 'percent' => 'Porcentaje', 'fixed' => 'Monto fijo', 'active' => 'Estado', 'name' => 'Nombre',
         'method' => 'Medio de pago', 'customer' => 'Cliente', 'reference' => 'Operación', 'balance' => 'Saldo', 'total' => 'Total',
         'counted' => 'Contado', 'expected' => 'Esperado', 'difference' => 'Diferencia', 'notes' => 'Notas', 'type' => 'Tipo',
         'points' => 'Puntos', 'code' => 'Código', 'discount' => 'Descuento', 'min_purchase' => 'Compra mínima', 'max_uses' => 'Usos máximos',

@@ -6,6 +6,7 @@ import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import PlanSelection from '@/features/subscriptions/PlanSelection';
+import PlatformHomeCards from '@/features/platform/components/PlatformHomeCards';
 import { formatDateTime, statusStyle, timeOf } from '@/features/appointments/appointments';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { formatMoney } from '@/lib/currency';
@@ -416,6 +417,8 @@ export default function HomePage() {
           </div>
         </>
       )}
+
+      {!hasTenant && currentUser?.is_saas_admin && <PlatformHomeCards />}
 
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4" data-card="quick">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">

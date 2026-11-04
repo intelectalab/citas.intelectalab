@@ -151,6 +151,7 @@ class Refunds
             'created_by' => $user->id, 'created_at' => now(),
         ]);
 
+        Commissions::forRefund($tenant, DB::table('sale_refunds')->where('id', $id)->first());
         PaymentLinks::afterRefund($sale);
         $fresh = DB::table('sales')->where('id', $sale->id)->first();
         Packages::afterSaleRefunded($tenant, $fresh, $user);

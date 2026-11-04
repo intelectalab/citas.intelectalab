@@ -34,9 +34,10 @@ class Reports
     {
     }
 
-    public static function range(Tenant $tenant, string $period, ?string $from = null, ?string $to = null): array
+    public static function range(Tenant|string $tenant, string $period, ?string $from = null, ?string $to = null): array
     {
-        $now = now($tenant->zone());
+        $zone = $tenant instanceof Tenant ? $tenant->zone() : $tenant;
+        $now = now($zone);
         $today = $now->copy()->startOfDay();
 
         [$start, $end] = match ($period) {
@@ -45,8 +46,8 @@ class Reports
             'month'  => [$today->copy()->startOfMonth(), $today->copy()->addDay()],
             'prev'   => [$today->copy()->subMonthNoOverflow()->startOfMonth(), $today->copy()->startOfMonth()],
             'custom' => [
-                Carbon::createFromFormat('Y-m-d', (string) $from, $tenant->zone())->startOfDay(),
-                Carbon::createFromFormat('Y-m-d', (string) $to, $tenant->zone())->startOfDay()->addDay(),
+                Carbon::createFromFormat('Y-m-d', (string) $from, $zone)->startOfDay(),
+                Carbon::createFromFormat('Y-m-d', (string) $to, $zone)->startOfDay()->addDay(),
             ],
             default  => [$today->copy()->subDays(29), $today->copy()->addDay()],
         };
@@ -154,15 +155,25 @@ class Reports
             'by_method' => $this->payments()->groupBy('p.method')->selectRaw('p.method, sum(p.amount) AS amount, count(*) FILTER (WHERE p.amount > 0) AS total')
                 ->orderByDesc('amount')->get()
                 ->map(fn ($row) => ['key' => $row->method, 'label' => $labels[$row->method] ?? $row->method, 'value' => round((float) $row->amount, 2), 'count' => (int) $row->total])->values()->all(),
-            'by_branch' => $this->payments()->join('branches as b', 'b.id', '=', 'p.branch_id')->groupBy('b.id', 'b.name')
-                ->selectRaw('b.name, sum(p.amount) AS amount')->orderByDesc('amount')->get()
-                ->map(fn ($row) => ['label' => $row->name, 'value' => round((float) $row->amount, 2)])->values()->all(),
+            'by_branch' => $this->byBranch(),
             'by_type'   => DB::table('sale_items as i')->joinSub($this->sales()->select('s.id'), 'ss', 'ss.id', '=', 'i.sale_id')
                 ->groupBy('i.item_type')->selectRaw('i.item_type, sum(i.total) AS amount')->orderByDesc('amount')->get()
                 ->map(fn ($row) => ['key' => $row->item_type, 'label' => match ($row->item_type) {
                     'service' => 'Servicios', 'product' => 'Productos', 'package' => 'Paquetes', 'deposit' => 'Adelantos', default => ucfirst($row->item_type),
                 }, 'value' => round((float) $row->amount, 2)])->values()->all(),
         ];
+    }
+
+    private function byBranch(): array
+    {
+        $amounts = $this->payments()->groupBy('p.branch_id')->selectRaw('p.branch_id, sum(p.amount) AS amount')->pluck('amount', 'branch_id');
+
+        return DB::table('branches')->where('tenant_id', $this->tenant->id)
+            ->where(fn ($q) => $q->where('status', 'active')->orWhereIn('id', $amounts->keys()->filter()->all()))
+            ->when($this->branchId, fn ($q, $id) => $q->where('id', $id))
+            ->get(['id', 'name'])
+            ->map(fn ($row) => ['key' => $row->id, 'label' => $row->name, 'value' => round((float) ($amounts[$row->id] ?? 0), 2)])
+            ->sortByDesc('value')->values()->all();
     }
 
     private function scheduledMinutes(?string $professionalId = null): array
@@ -307,6 +318,9 @@ class Reports
             ->get();
 
         $collected = $this->collected('coalesce(i.professional_id, a.professional_id)');
+        $commissions = Commissions::enabled($this->tenant)
+            ? Commissions::byProfessional($this->tenant->id, $this->iso($this->from), $this->iso($this->to), $this->branchId, $this->professionalId)
+            : null;
 
         return $rows->map(fn ($row) => [
             'id'        => $row->id,
@@ -314,6 +328,7 @@ class Reports
             'completed' => (int) $row->completed,
             'income'    => round((float) $row->income, 2),
             'collected' => $collected[$row->id] ?? 0.0,
+            'commissions' => $commissions === null ? null : ($commissions[$row->id] ?? 0.0),
             'occupancy' => ($scheduled[$row->id] ?? 0) > 0 ? min(100, (int) round((float) $row->booked * 100 / $scheduled[$row->id])) : null,
             'no_show'   => (int) $row->no_show,
             'minutes'   => $row->minutes !== null ? (int) round((float) $row->minutes) : null,
@@ -327,6 +342,7 @@ class Reports
         return [
             'completed' => $row['completed'] ?? 0,
             'income'    => $row['income'] ?? 0.0,
+            'commissions' => Commissions::enabled($this->tenant) ? ($row['commissions'] ?? 0.0) : null,
             'occupancy' => $row['occupancy'] ?? null,
             'no_show'   => $row['no_show'] ?? 0,
             'minutes'   => $row['minutes'] ?? null,

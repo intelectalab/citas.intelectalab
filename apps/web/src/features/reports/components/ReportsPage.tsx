@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BadgePercent, CalendarCheck, CalendarX2, Clock, Globe, Lock, Receipt, RotateCcw, Sparkles, TrendingUp, UserCheck, UserPlus, Users, Wallet } from 'lucide-react';
+import { Percent, BadgePercent, CalendarCheck, CalendarX2, Clock, Globe, Lock, Receipt, RotateCcw, Sparkles, TrendingUp, UserCheck, UserPlus, Users, Wallet } from 'lucide-react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
 import { ErrorAlert } from '@/app/components/common/Alert';
@@ -13,172 +13,11 @@ import { formatMoney } from '@/lib/currency';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { addDays, apiError, formatDate, formatMinutes, todayISO } from '@/features/appointments/appointments';
-import { WEEKDAYS, delta, type AppointmentsSummary, type CatalogRow, type CustomersSummary, type MineSummary, type MyCustomer, type ProRow, type ReportPayload, type ReportTab, type SalesSummary, type Serie, type TopCustomer } from '../reports';
-
-const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-
-interface KpiProps {
-  id: string;
-  title: string;
-  value: string;
-  note?: string;
-  change?: number | null;
-  lowerIsBetter?: boolean;
-  icon: React.ReactNode;
-  color: string;
-}
-
-function Kpi({ id, title, value, note, change, lowerIsBetter = false, icon, color }: KpiProps) {
-  const good = change !== null && change !== undefined && (lowerIsBetter ? change < 0 : change > 0);
-  const bad = change !== null && change !== undefined && (lowerIsBetter ? change > 0 : change < 0);
-
-  return (
-    <div data-kpi={id} className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{title}</span>
-          <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900 truncate">{value}</div>
-          {change !== undefined && (
-            <span data-change={change ?? ''} className={`block text-xs font-semibold mt-0.5 ${good ? 'text-emerald-700' : bad ? 'text-rose-700' : 'text-slate-400'}`}>
-              {change === null ? 'Sin comparación' : change === 0 ? 'Igual que el periodo anterior' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change)} % frente al anterior`}
-            </span>
-          )}
-          {note && <span className="block text-xs text-slate-500 mt-0.5">{note}</span>}
-        </div>
-        <div className={`p-2 rounded-xl bg-slate-50 border border-slate-100 ${color}`}>{icon}</div>
-      </div>
-    </div>
-  );
-}
-
-function Section({ title, hint, children, actions, dataKey }: { title: string; hint?: string; children: React.ReactNode; actions?: React.ReactNode; dataKey: string }) {
-  return (
-    <section className={`${cardClass} overflow-hidden`} data-section={dataKey}>
-      <div className="px-6 pt-5 pb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">{title}</h2>
-          {hint && <p className="text-xs text-slate-500 font-medium mt-1">{hint}</p>}
-        </div>
-        {actions}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function DayBars({ points, format, empty }: { points: { day: string; value: number | null }[]; format: (v: number) => string; empty: string }) {
-  const max = Math.max(0, ...points.map((p) => p.value ?? 0));
-  if (max <= 0) return <p className="px-6 pb-6 text-sm text-slate-400">{empty}</p>;
-  const labelEvery = Math.max(1, Math.ceil(points.length / 10));
-
-  return (
-    <div className="px-6 pb-5">
-      <div className="flex items-end gap-[2px] h-40" data-chart="days">
-        {points.map((p) => (
-          <div key={p.day} className="flex-1 h-full flex items-end group relative" title={`${formatDate(p.day, { weekday: 'short', day: 'numeric', month: 'short' })}: ${p.value === null ? 'sin horario' : format(p.value)}`}>
-            <div className={`w-full rounded-t ${p.value === null ? 'bg-slate-100' : 'bg-[var(--accent)] group-hover:opacity-80'}`} style={{ height: `${p.value === null ? 4 : Math.max(2, (p.value / max) * 100)}%` }} />
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-[2px] mt-1">
-        {points.map((p, i) => (
-          <span key={p.day} className="flex-1 text-[10px] text-slate-400 text-center truncate">{i % labelEvery === 0 ? formatDate(p.day, { day: 'numeric', month: 'short' }) : ''}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ListBars({ items, format, empty }: { items: Serie[]; format: (v: number) => string; empty: string }) {
-  const max = Math.max(0, ...items.map((i) => Math.abs(i.value)));
-  if (items.length === 0 || max <= 0) return <p className="px-6 pb-6 text-sm text-slate-400">{empty}</p>;
-
-  return (
-    <ul className="px-6 pb-5 space-y-2.5" data-chart="list">
-      {items.map((item) => (
-        <li key={item.key ?? item.label}>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="font-semibold text-slate-700 truncate">{item.label}</span>
-            <span className="tabular-nums text-slate-800 font-semibold">{format(item.value)}</span>
-          </div>
-          <span className="mt-1 block h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <span className="block h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(3, (Math.abs(item.value) / max) * 100)}%` }} />
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Heatmap({ cells }: { cells: { weekday: number; hour: number; value: number }[] }) {
-  if (cells.length === 0) return <p className="px-6 pb-6 text-sm text-slate-400">Aún no hay citas en este periodo.</p>;
-  const hours = cells.map((c) => c.hour);
-  const from = Math.min(...hours);
-  const to = Math.max(...hours);
-  const max = Math.max(...cells.map((c) => c.value));
-  const value = (weekday: number, hour: number) => cells.find((c) => c.weekday === weekday && c.hour === hour)?.value ?? 0;
-  const range = Array.from({ length: to - from + 1 }, (_, i) => from + i);
-
-  return (
-    <div className="px-6 pb-5 overflow-x-auto" data-chart="heatmap">
-      <table className="text-[11px]">
-        <thead>
-          <tr>
-            <th />
-            {range.map((h) => <th key={h} className="px-0.5 pb-1 font-semibold text-slate-400 text-center w-9">{h}h</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {WEEKDAYS.map((day, index) => (
-            <tr key={day}>
-              <th className="pr-2 text-right font-semibold text-slate-500">{day}</th>
-              {range.map((h) => {
-                const v = value(index + 1, h);
-                return (
-                  <td key={h} className="p-0.5">
-                    <div
-                      title={`${day} ${h}:00 — ${v} ${v === 1 ? 'cita' : 'citas'}`}
-                      className="h-7 w-9 rounded-md flex items-center justify-center font-semibold"
-                      style={{ background: v ? `color-mix(in srgb, var(--accent) ${Math.round(15 + (v / max) * 85)}%, white)` : '#f8fafc', color: v / max > 0.55 ? '#fff' : '#475569' }}
-                    >
-                      {v || ''}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Table<T>({ columns, rows, empty, rowKey }: { columns: { header: string; align?: 'right'; cell: (row: T) => React.ReactNode }[]; rows: T[]; empty: string; rowKey: (row: T) => string }) {
-  if (rows.length === 0) return <p className="px-6 pb-6 text-sm text-slate-400">{empty}</p>;
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider border-y border-slate-100 bg-slate-50">
-            {columns.map((c, i) => <th key={c.header} className={`${i === 0 ? 'px-6' : 'px-4'} py-2.5 ${c.align === 'right' ? 'text-right' : ''}`}>{c.header}</th>)}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((row) => (
-            <tr key={rowKey(row)}>
-              {columns.map((c, i) => <td key={c.header} className={`${i === 0 ? 'px-6 font-semibold text-slate-800' : 'px-4 text-slate-700'} py-3 ${c.align === 'right' ? 'text-right tabular-nums' : ''}`}>{c.cell(row)}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+import { delta, type AppointmentsSummary, type CatalogRow, type CustomersSummary, type MineSummary, type MyCustomer, type ProRow, type ReportPayload, type ReportTab, type SalesSummary, type Serie, type TopCustomer } from '../reports';
+import { Donut, DayBars, Heatmap, Kpi, ListBars, Section, Table, cardClass, isWeekly } from './ReportParts';
 
 export default function ReportsPage() {
-  const { can } = useAuth();
+  const { can, hasModule } = useAuth();
   const vocab = useVocabulary();
   const [tab, setTab] = useState<ReportTab>('sales');
   const [period, setPeriod] = useState('30');
@@ -194,15 +33,16 @@ export default function ReportsPage() {
     let active = true;
     setLoading(true);
     api.get<ReportPayload>('/reports', { params: { tab, period, ...(period === 'custom' ? { from, to } : {}), ...(branchId ? { branch_id: branchId } : {}) } })
-      .then((res) => { if (active) { setData(res.data); setError(''); } })
+      .then((res) => {
+        if (!active) return;
+        setData(res.data);
+        setError('');
+        if (res.data.tab !== tab) setTab(res.data.tab);
+      })
       .catch((err) => active && setError(apiError(err, 'No se pudo cargar el reporte.')))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [tab, period, from, to, branchId]);
-
-  useEffect(() => {
-    if (data && data.tab !== tab) setTab(data.tab);
-  }, [data, tab]);
 
   const money = (v: number | null | undefined) => (v === null || v === undefined ? '—' : formatMoney(v, data?.currency));
   const percent = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${v} %`);
@@ -213,6 +53,16 @@ export default function ReportsPage() {
   const content = data && data.tab === tab ? data.data : null;
   const previous = content?.previous ?? null;
   const change = (key: string) => (previous ? delta((content?.summary as unknown as Record<string, number | null>)?.[key], (previous as unknown as Record<string, number | null>)[key]) : undefined);
+
+  const canPayments = can('payments.view') && hasModule('pos');
+  const paymentsLink = (param: 'method' | 'branch_id') => (item: Serie) => canPayments && data && item.key
+    ? `/payments?${new URLSearchParams({ [param]: item.key, from: data.range.from, to: data.range.to, ...(param === 'method' && data.branch_id ? { branch_id: data.branch_id } : {}) }).toString()}`
+    : undefined;
+
+  const canSales = can('sales.view') && hasModule('pos');
+  const salesLink = (item: Serie) => canSales && data && item.key
+    ? `/sales?${new URLSearchParams({ item_type: item.key, from: data.range.from, to: data.range.to, ...(data.branch_id ? { branch_id: data.branch_id } : {}) }).toString()}`
+    : undefined;
 
   const exportMenu = <T,>(title: string, columns: ExportColumn<T>[], rows: T[]) => canExport && rows.length > 0 ? (
     <ExportMenu title={title} screen="reports" columns={columns} filtered={rows} selected={[]} filters={filters} />
@@ -235,18 +85,18 @@ export default function ReportsPage() {
           <p className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">No tienes permiso para ver los montos. Pídeselo al administrador (Usuarios y roles → Reportes → Ver montos).</p>
         ) : d && (
           <>
-            <Section dataKey="income-by-day" title="Ingresos por día" hint="Lo que entró cada día por cobros, ya restadas las devoluciones.">
-              <DayBars points={d.by_day ?? []} format={(v) => money(v)} empty="Aún no hay cobros en este periodo." />
+            <Section dataKey="income-by-day" title={isWeekly(d.by_day ?? []) ? 'Ingresos por semana' : 'Ingresos por día'} hint={isWeekly(d.by_day ?? []) ? 'Lo que entró cada semana por cobros, ya restadas las devoluciones. Pasa el cursor sobre una barra para ver el monto.' : 'Lo que entró cada día por cobros, ya restadas las devoluciones. Pasa el cursor sobre una barra para ver el monto.'}>
+              <DayBars points={d.by_day ?? []} format={(v) => money(v)} axis={(v) => formatMoney(v, data?.currency, 0)} empty="Aún no hay cobros en este periodo." />
             </Section>
             <div className="grid gap-4 lg:grid-cols-3">
               <Section dataKey="by-method" title="Por medio de pago" actions={exportMenu('Ingresos por medio de pago', [{ header: 'Medio', value: (r: Serie) => r.label }, { header: 'Cobros', type: 'number', value: (r: Serie) => r.count ?? 0 }, { header: 'Monto', type: 'number', value: (r: Serie) => r.value }], d.by_method ?? [])}>
-                <ListBars items={d.by_method ?? []} format={(v) => money(v)} empty="Sin cobros." />
+                <Donut items={d.by_method ?? []} format={(v) => money(v)} unit="Por medio de pago" empty="Sin cobros." hrefOf={paymentsLink('method')} />
               </Section>
               <Section dataKey="by-type" title="Por tipo de venta">
-                <ListBars items={d.by_type ?? []} format={(v) => money(v)} empty="Sin ventas." />
+                <ListBars items={d.by_type ?? []} format={(v) => money(v)} empty="Sin ventas." hrefOf={salesLink} />
               </Section>
               <Section dataKey="by-branch" title="Por sede">
-                <ListBars items={d.by_branch ?? []} format={(v) => money(v)} empty="Sin cobros." />
+                <ListBars items={d.by_branch ?? []} format={(v) => money(v)} empty="Sin cobros." hrefOf={paymentsLink('branch_id')} />
               </Section>
             </div>
           </>
@@ -270,12 +120,12 @@ export default function ReportsPage() {
         </div>
         {d && (
           <>
-            <Section dataKey="occupancy-by-day" title="Ocupación por día" hint="Qué parte del horario de trabajo del equipo estuvo con citas. Los días sin barra no había horario.">
-              <DayBars points={d.occupancy_by_day ?? []} format={(v) => `${v} %`} empty="Aún no hay citas en este periodo." />
+            <Section dataKey="occupancy-by-day" title={isWeekly(d.occupancy_by_day ?? []) ? 'Ocupación por semana' : 'Ocupación por día'} hint={`Qué parte del horario de trabajo del equipo estuvo con citas${isWeekly(d.occupancy_by_day ?? []) ? ', en promedio cada semana' : ''}. Donde no hay barra no había horario o no hubo citas.`}>
+              <DayBars points={d.occupancy_by_day ?? []} aggregate="avg" format={(v) => `${v} %`} empty="Aún no hay citas en este periodo." />
             </Section>
             <div className="grid gap-4 lg:grid-cols-3">
               <Section dataKey="by-source" title="Cómo se reservaron">
-                <ListBars items={d.by_source ?? []} format={(v) => String(v)} empty="Sin citas." />
+                <Donut items={d.by_source ?? []} format={(v) => String(v)} unit="Cómo se reservaron" empty="Sin citas." />
               </Section>
               <div className="lg:col-span-2">
                 {d.heatmap ? (
@@ -306,6 +156,9 @@ export default function ReportsPage() {
           <Kpi id="returning" title="Volvieron" value={String(s.returning)} note="Ya se habían atendido antes" change={change('returning')} icon={<RotateCcw size={18} />} color="text-emerald-600" />
           <Kpi id="rebooked" title="Volvieron a reservar" value={`${s.rebooked} %`} note="Reservaron otra cita después de atenderse" change={change('rebooked')} icon={<CalendarCheck size={18} />} color="text-violet-600" />
         </div>
+        <Section dataKey="first-vs-returning" title="Primera vez y los que volvieron" hint={`De los ${vocab.clients.toLowerCase()} atendidos en el periodo, cuántos venían por primera vez.`}>
+          <Donut items={[{ key: 'first', label: 'Primera vez', value: Math.max(0, s.attended - s.returning) }, { key: 'returning', label: 'Volvieron', value: s.returning }]} format={(v) => String(v)} unit="Atendidos" empty="Aún no hay atenciones en este periodo." />
+        </Section>
         {top && (
           <Section dataKey="top-customers" title={`Los 10 ${vocab.clients.toLowerCase()} que más gastaron`} actions={exportMenu(`${vocab.clients} que más gastaron`, [{ header: vocab.client, value: (r: TopCustomer) => r.name }, { header: 'Atenciones', type: 'number', value: (r: TopCustomer) => r.visits }, { header: 'Ventas', type: 'number', value: (r: TopCustomer) => r.sales }, { header: 'Gastó', type: 'number', value: (r: TopCustomer) => r.spent }], top)}>
             <Table<TopCustomer>
@@ -327,12 +180,14 @@ export default function ReportsPage() {
 
   const renderPros = () => {
     const rows = content?.rows ?? [];
+    const withCommissions = Boolean(data?.money) && rows.some((r) => r.commissions !== null && r.commissions !== undefined);
     return (
       <Section dataKey="pros" title={`Por ${vocab.pro.toLowerCase()}`} hint="Producción es el precio de lo atendido; Cobrado, lo que se pagó por sus servicios, ya restados los descuentos. La ocupación es la parte de su horario que tuvo con citas. El tiempo promedio solo cuenta las atenciones donde se marcó el inicio y el fin."
         actions={exportMenu(`Reporte por ${vocab.pro.toLowerCase()}`, [
           { header: vocab.pro, value: (r: ProRow) => r.name },
           { header: 'Atendidas', type: 'number', value: (r: ProRow) => r.completed },
           ...(data?.money ? [{ header: 'Producción', type: 'number' as const, value: (r: ProRow) => r.income }, { header: 'Cobrado', type: 'number' as const, value: (r: ProRow) => r.collected ?? 0 }] : []),
+          ...(withCommissions ? [{ header: 'Comisiones', type: 'number' as const, value: (r: ProRow) => r.commissions ?? 0 }] : []),
           { header: 'Ocupación (%)', type: 'number', value: (r: ProRow) => r.occupancy },
           { header: 'No asistieron', type: 'number', value: (r: ProRow) => r.no_show },
           { header: 'Minutos promedio', type: 'number', value: (r: ProRow) => r.minutes },
@@ -345,10 +200,11 @@ export default function ReportsPage() {
             { header: vocab.pro, cell: (r) => <ProfessionalLink id={r.id}>{r.name}</ProfessionalLink> },
             { header: 'Atendidas', align: 'right', cell: (r) => r.completed },
             ...(data?.money ? [{ header: 'Producción', align: 'right' as const, cell: (r: ProRow) => money(r.income) }, { header: 'Cobrado', align: 'right' as const, cell: (r: ProRow) => money(r.collected ?? 0) }] : []),
+            ...(withCommissions ? [{ header: 'Comisiones', align: 'right' as const, cell: (r: ProRow) => money(r.commissions ?? 0) }] : []),
             { header: 'Ocupación', cell: (r) => r.occupancy === null ? <span className="text-slate-400">Sin horario</span> : (
               <div className="flex items-center gap-3">
                 <span className="w-12 shrink-0 font-semibold tabular-nums">{r.occupancy} %</span>
-                <span className="flex-1 h-1.5 min-w-16 rounded-full bg-slate-100 overflow-hidden"><span className="block h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(3, r.occupancy)}%` }} /></span>
+                <span className="flex-1 h-1.5 min-w-16 rounded-full bg-slate-100 overflow-hidden"><span className="block h-full rounded-full bg-[var(--brand-link)]" style={{ width: `${Math.max(3, r.occupancy)}%` }} /></span>
               </div>
             ) },
             { header: 'No asistieron', align: 'right', cell: (r) => r.no_show },
@@ -393,10 +249,11 @@ export default function ReportsPage() {
           <Kpi id="mine-occupancy" title="Ocupación" value={percent(s.occupancy)} note="Parte de tu horario con citas" change={diff('occupancy')} icon={<TrendingUp size={18} />} color="text-sky-600" />
           <Kpi id="mine-customers" title={`${vocab.clients} atendidos`} value={String(s.customers)} change={diff('customers')} icon={<Users size={18} />} color="text-slate-500" />
           <Kpi id="mine-no-show" title="No asistieron" value={String(s.no_show)} change={diff('no_show')} lowerIsBetter icon={<CalendarX2 size={18} />} color="text-amber-600" />
+          {s.commissions !== null && s.commissions !== undefined && <Kpi id="mine-commissions" title="Comisiones" value={money(s.commissions)} note="Lo que ganaste en el periodo, ya restadas las devoluciones" change={diff('commissions')} icon={<Percent size={18} />} color="text-violet-600" />}
           <Kpi id="mine-minutes" title="Tiempo promedio" value={formatMinutes(s.minutes)} note="Con inicio y fin marcados" icon={<Clock size={18} />} color="text-violet-600" />
         </div>
-        <Section dataKey="mine-by-day" title="Tu ocupación por día" hint="Qué parte de tu horario estuvo con citas. Los días sin barra no tenías horario.">
-          <DayBars points={content?.by_day ?? []} format={(v) => `${v} %`} empty="Aún no tienes citas en este periodo." />
+        <Section dataKey="mine-by-day" title={isWeekly(content?.by_day ?? []) ? 'Tu ocupación por semana' : 'Tu ocupación por día'} hint="Qué parte de tu horario estuvo con citas. Donde no hay barra no tenías horario o no hubo citas.">
+          <DayBars points={content?.by_day ?? []} aggregate="avg" format={(v) => `${v} %`} empty="Aún no tienes citas en este periodo." />
         </Section>
         <div className="grid gap-4 lg:grid-cols-2">
           {catalogSection('mine-services', 'Tus servicios más atendidos', content?.services ?? [], 'Producción', true)}
@@ -424,6 +281,20 @@ export default function ReportsPage() {
 
   const renderCatalog = () => (
     <>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section dataKey="services-share" title="Qué servicios se atienden más" hint="Parte de las atenciones del periodo que fue de cada servicio.">
+          <Donut items={(content?.services ?? []).map((r) => ({ key: String(r.id ?? r.name), label: r.name, value: r.quantity }))} format={(v) => String(v)} unit="Servicios" empty="Aún no hay atenciones en este periodo." />
+        </Section>
+        {data?.money ? (
+          <Section dataKey="services-income" title="Producción por servicio" hint="El precio de lo atendido de cada servicio.">
+            <ListBars items={(content?.services ?? []).map((r) => ({ key: String(r.id ?? r.name), label: r.name, value: r.income ?? 0 })).sort((a, b) => b.value - a.value).slice(0, 8)} format={(v) => money(v)} empty="Aún no hay atenciones en este periodo." />
+          </Section>
+        ) : content?.products ? (
+          <Section dataKey="products-share" title="Qué productos se venden más">
+            <Donut items={content.products.map((r) => ({ key: String(r.id ?? r.name), label: r.name, value: r.quantity }))} format={(v) => String(v)} unit="Productos" empty="Aún no hay ventas en este periodo." />
+          </Section>
+        ) : null}
+      </div>
       {catalogSection('services', 'Servicios más atendidos', content?.services ?? [], 'Producción', true)}
       {content?.products && catalogSection('products', 'Productos más vendidos', content.products)}
     </>

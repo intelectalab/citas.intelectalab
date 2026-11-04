@@ -138,6 +138,8 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
         Route::post('/tenants/{tenant}/users/{user}/password', [TenantController::class, 'userPassword']);
         Route::post('/tenants/{tenant}/users/{user}/invite', [TenantController::class, 'userInvite'])->middleware('throttle:10,1');
         Route::put('/tenants/{tenant}/users/{user}/email', [TenantController::class, 'userEmail']);
+        Route::get('/admin/reports', [\App\Http\Controllers\Api\PlatformReportController::class, 'show']);
+        Route::get('/admin/reports/summary', [\App\Http\Controllers\Api\PlatformReportController::class, 'summary']);
         Route::get('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'show']);
         Route::put('/admin/billing', [\App\Http\Controllers\Api\PlatformBillingController::class, 'update']);
         Route::post('/admin/billing/test', [\App\Http\Controllers\Api\PlatformBillingController::class, 'test']);
@@ -327,6 +329,17 @@ Route::middleware(['auth:sanctum', 'staff', 'plan'])->group(function () {
         Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum'])->middleware('perm:records.edit');
         Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess'])->middleware('perm:records.emergency');
         Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf'])->middleware('perm:records.view');
+    });
+
+    Route::middleware('module:commissions')->group(function () {
+        Route::get('/commissions', [\App\Http\Controllers\Api\CommissionController::class, 'index'])->middleware('perm:commissions.view');
+        Route::post('/commissions/transition', [\App\Http\Controllers\Api\CommissionController::class, 'transition'])->middleware('perm:commissions.approve|commissions.pay');
+        Route::post('/commissions/recalculate', [\App\Http\Controllers\Api\CommissionController::class, 'recalculate'])->middleware('perm:commissions.rules');
+        Route::get('/commission-rules', [\App\Http\Controllers\Api\CommissionRuleController::class, 'index'])->middleware('perm:commissions.view');
+        Route::get('/commission-rules/preview', [\App\Http\Controllers\Api\CommissionRuleController::class, 'preview'])->middleware('perm:commissions.view');
+        Route::post('/commission-rules', [\App\Http\Controllers\Api\CommissionRuleController::class, 'store'])->middleware('perm:commissions.rules');
+        Route::put('/commission-rules/{rule}', [\App\Http\Controllers\Api\CommissionRuleController::class, 'update'])->middleware('perm:commissions.rules')->whereUuid('rule');
+        Route::delete('/commission-rules/{rule}', [\App\Http\Controllers\Api\CommissionRuleController::class, 'destroy'])->middleware('perm:commissions.rules')->whereUuid('rule');
     });
 
     Route::middleware('module:pos')->group(function () use ($guarded) {

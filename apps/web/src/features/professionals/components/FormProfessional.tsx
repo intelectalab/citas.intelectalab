@@ -19,6 +19,7 @@ interface Professional {
   license_number?: string;
   signature_url?: string | null;
   phone?: string;
+  commission_percent?: string | number | null;
   status_id?: string;
   first_name?: string;
   last_name?: string;
@@ -48,7 +49,8 @@ interface FormProfessionalProps {
 
 export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, initialData }: FormProfessionalProps) {
   const vocab = useVocabulary();
-  const { user } = useAuth();
+  const { user, hasModule, can } = useAuth();
+  const usesCommission = hasModule('commissions') && can('commissions.rules');
   const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
   const [form, setForm] = useState({
     display_name: '',
@@ -59,6 +61,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     document_number: '',
     license_number: '',
     phone: '',
+    commission_percent: '',
     status_id: '',
     specialties: [] as string[],
   });
@@ -123,6 +126,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         document_number: initialData.document_number || '',
         license_number: initialData.license_number || '',
         phone: initialData.phone || '',
+        commission_percent: initialData.commission_percent === null || initialData.commission_percent === undefined ? '' : String(Number(initialData.commission_percent)),
         status_id: initialData.status_id || '',
         specialties: initialData.specialties ? initialData.specialties.map((s: any) => s.id) : [],
       });
@@ -136,6 +140,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         document_number: '',
         license_number: '',
         phone: '',
+        commission_percent: '',
         status_id: '',
         specialties: [],
       });
@@ -157,6 +162,7 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         document_number: form.document_number || null,
         ...(usesLicense ? { license_number: form.license_number || null } : {}),
         phone: form.phone || null,
+        ...(usesCommission ? { commission_percent: form.commission_percent === '' ? null : Number(form.commission_percent) } : {}),
         status_id: form.status_id || null,
         specialties: form.specialties,
       };
@@ -238,6 +244,21 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
                 value={form.license_number}
                 onChange={e => setForm({...form, license_number: e.target.value})}
               />
+            </div>
+          )}
+
+          {usesCommission && (
+            <div>
+              <label htmlFor="pro-commission" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Comisión por defecto (%)</label>
+              <input
+                id="pro-commission"
+                inputMode="decimal"
+                placeholder="Sin comisión"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
+                value={form.commission_percent}
+                onChange={e => { const v = e.target.value.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 6); setForm({...form, commission_percent: Number(v) > 100 ? '100' : v}); }}
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">Lo que gana por los servicios que atiende y que no tienen una regla de comisión. Las reglas están en Comisiones → Reglas.</span>
             </div>
           )}
 

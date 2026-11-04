@@ -29,12 +29,20 @@ const METHOD_ICONS: Record<string, React.ReactNode> = {
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export default function PaymentsTable() {
+export interface PaymentsFilter {
+  method?: string;
+  branch_id?: string;
+  from?: string;
+  to?: string;
+}
+
+export default function PaymentsTable({ initial }: { initial?: PaymentsFilter } = {}) {
   const [payments, setPayments] = useState<PaymentRow[] | null>(null);
   const [methods, setMethods] = useState<{ value: string; label: string }[]>([]);
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, string>>({ method: '', branch_id: '' });
+  const [filters, setFilters] = useState<Record<string, string>>({ method: initial?.method ?? '', branch_id: initial?.branch_id ?? '' });
+  const initialRange = initial?.from && initial?.to ? { at: { kind: 'range' as const, from: initial.from, to: initial.to } } : undefined;
   const [viewing, setViewing] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -177,6 +185,8 @@ export default function PaymentsTable() {
         filterValues={filters}
         onFilterChange={(id, value) => setFilters((values) => ({ ...values, [id]: value }))}
         dateFilters={[{ id: 'at', label: 'Fecha', value: (p) => p.at }]}
+        initialDateValues={initialRange}
+        initialFiltersOpen={Boolean(initialRange || initial?.method || initial?.branch_id)}
         sortOptions={[
           { id: 'at', label: 'Fecha', type: 'date', value: (p) => p.at },
           { id: 'amount', label: 'Monto', type: 'number', value: (p) => p.amount },

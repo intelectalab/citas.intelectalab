@@ -60,7 +60,7 @@ class SalesController extends Controller
             ->get(['s.*', 'c.first_name', 'c.last_name', 'b.name as branch_name', 'a.code as appointment_code']);
 
         $ids = $sales->pluck('id');
-        $items = DB::table('sale_items as i')->leftJoin('appointments as a', 'a.id', '=', 'i.appointment_id')->whereIn('i.sale_id', $ids)->get(['i.sale_id', 'i.description', 'i.quantity', 'a.code as appointment_code'])->groupBy('sale_id');
+        $items = DB::table('sale_items as i')->leftJoin('appointments as a', 'a.id', '=', 'i.appointment_id')->whereIn('i.sale_id', $ids)->get(['i.sale_id', 'i.description', 'i.quantity', 'i.item_type', 'a.code as appointment_code'])->groupBy('sale_id');
         $invoices = DB::table('invoices')->whereIn('sale_id', $ids)->where('status', 'issued')->where('doc_type', '!=', Invoicing::CREDIT_NOTE)->get()->keyBy('sale_id');
         $refunds = DB::table('sale_refunds')->whereIn('sale_id', $ids)->groupBy('sale_id')->selectRaw('sale_id, sum(amount) as total')->pluck('total', 'sale_id');
 
@@ -77,6 +77,7 @@ class SalesController extends Controller
                 'branch_name'      => $s->branch_name,
                 'customer'         => $s->customer_id ? ['id' => $s->customer_id, 'name' => \App\Support\Person::name($s)] : null,
                 'appointment_code' => ($items[$s->id] ?? collect())->pluck('appointment_code')->filter()->implode(', ') ?: $s->appointment_code,
+                'item_types'       => ($items[$s->id] ?? collect())->pluck('item_type')->filter()->unique()->values(),
                 'detail'           => ($items[$s->id] ?? collect())->map(fn ($i) => ((float) $i->quantity > 1 ? (int) $i->quantity . ' × ' : '') . $i->description)->implode(', '),
                 'total'            => round((float) $s->total, 2),
                 'currency'         => $s->currency ?? Currency::DEFAULT,

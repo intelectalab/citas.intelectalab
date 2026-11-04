@@ -6,7 +6,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
-import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
+import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, Percent, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -38,6 +38,7 @@ interface SettingsPayload {
   booking_rules?: BookingRules & { uses_confirmation: boolean };
   resources?: { equipment_down: EquipmentDown } | null;
   sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
+  commission_rules?: { base: 'net' | 'gross'; on_products: boolean; on_package_use: boolean; auto_approve: boolean } | null;
   inventory_rules?: { allow_negative: boolean; consume_on_service: boolean; transfer_two_step: boolean; cost_method: CostMethod; alert_min_stock: boolean } | null;
   loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number } | null;
   quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy; portal_accept?: boolean } | null;
@@ -128,12 +129,12 @@ const LOCK_REASONS: Record<string, string> = {
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
-type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'walkin' | 'ventas' | 'presupuestos' | 'inventario' | 'fidelizacion' | 'adelantos' | 'integraciones' | 'correo' | 'grupos' | 'seguridad' | 'descargas';
+type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'walkin' | 'ventas' | 'presupuestos' | 'inventario' | 'comisiones' | 'fidelizacion' | 'adelantos' | 'integraciones' | 'correo' | 'grupos' | 'seguridad' | 'descargas';
 
 const SECTION_GROUPS: { title: string; sections: { id: SectionId; label: string }[] }[] = [
   { title: 'Tu empresa', sections: [{ id: 'empresa', label: 'Datos y código' }, { id: 'modulos', label: 'Módulos' }, { id: 'moneda', label: 'Moneda' }, { id: 'ayuda', label: 'Autoayuda' }] },
   { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'salas', label: 'Salas y equipos' }, { id: 'walkin', label: 'Cola sin cita' }] },
-  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'presupuestos', label: 'Presupuestos y planes' }, { id: 'inventario', label: 'Inventario y almacenes' }, { id: 'fidelizacion', label: 'Puntos y gift cards' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
+  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'presupuestos', label: 'Presupuestos y planes' }, { id: 'inventario', label: 'Inventario y almacenes' }, { id: 'comisiones', label: 'Comisiones' }, { id: 'fidelizacion', label: 'Puntos y gift cards' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
   { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }] },
   { title: 'Clientes', sections: [{ id: 'grupos', label: 'Grupos de clientes' }] },
   { title: 'Seguridad y registros', sections: [{ id: 'seguridad', label: 'Cierre de sesión' }, { id: 'descargas', label: 'Descargas de datos' }] },
@@ -150,6 +151,7 @@ export default function TenantSettings() {
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
   const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
+  const [commissionRules, setCommissionRules] = useState<{ base: 'net' | 'gross'; onProducts: boolean; onPackageUse: boolean; autoApprove: boolean } | null>(null);
   const [inventoryRules, setInventoryRules] = useState<{ allowNegative: boolean; consumeOnService: boolean; transferTwoStep: boolean; costMethod: CostMethod; alertMinStock: boolean } | null>(null);
   const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string } | null>(null);
   const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy; portalAccept: boolean } | null>(null);
@@ -198,6 +200,12 @@ export default function TenantSettings() {
       refundDays: String(payload.sales_rules.refund_days ?? 30),
       payFirst: payload.sales_rules.pay_before_service ?? true,
       arriveMinutes: String(payload.sales_rules.arrive_minutes ?? 15),
+    } : null);
+    setCommissionRules(payload.commission_rules ? {
+      base: payload.commission_rules.base,
+      onProducts: payload.commission_rules.on_products,
+      onPackageUse: payload.commission_rules.on_package_use,
+      autoApprove: payload.commission_rules.auto_approve,
     } : null);
     setInventoryRules(payload.inventory_rules ? {
       allowNegative: payload.inventory_rules.allow_negative,
@@ -297,6 +305,14 @@ export default function TenantSettings() {
             transfer_two_step: inventoryRules.transferTwoStep,
             cost_method: inventoryRules.costMethod,
             alert_min_stock: inventoryRules.alertMinStock,
+          },
+        } : null;
+      case 'comisiones': return commissionRules ? {
+          commission_rules: {
+            base: commissionRules.base,
+            on_products: commissionRules.onProducts,
+            on_package_use: commissionRules.onPackageUse,
+            auto_approve: commissionRules.autoApprove,
           },
         } : null;
       case 'fidelizacion': return loyaltyRules ? {
@@ -507,6 +523,7 @@ export default function TenantSettings() {
     ventas: Boolean(salesRules),
     presupuestos: Boolean(quoteRules),
     inventario: Boolean(inventoryRules),
+    comisiones: Boolean(commissionRules),
     fidelizacion: Boolean(loyaltyRules),
     adelantos: Boolean(paymentRules),
     integraciones: Boolean(paymentRules),
@@ -1089,6 +1106,68 @@ export default function TenantSettings() {
           </div>
 
           {saveBar('inventario')}
+        </section>
+      )}
+
+      {show('comisiones') && commissionRules && (
+        <section className={cardClass} data-card="commission-rules">
+          <div>
+            <SectionTitle>
+              <Percent className="w-4 h-4 text-brand-accent" /> Comisiones
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Sobre qué monto se calcula la comisión y qué se comisiona. Las reglas de cada {vocab.pro.toLowerCase()} y servicio están en Comisiones → Reglas.
+            </p>
+          </div>
+
+          <div className="space-y-2.5">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">La comisión se calcula sobre</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Base de la comisión">
+              {([
+                ['net', 'Lo cobrado sin IGV', 'Después de descuentos y sin el impuesto. Es lo más común.'],
+                ['gross', 'El precio de lista', 'El precio del servicio o producto, antes de descuentos y con IGV.'],
+              ] as const).map(([id, title, hint]) => {
+                const chosen = commissionRules.base === id;
+                return (
+                  <OptionCard
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={chosen}
+                    data-commission-base={id}
+                    onClick={() => { setMessage(null); setCommissionRules({ ...commissionRules, base: id }); }}
+                    selected={chosen}
+                    className="text-left rounded-xl border px-4 py-3 transition-colors"
+                  >
+                    <span className="block text-sm font-bold text-brand-ink">{title}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{hint}</span>
+                  </OptionCard>
+                );
+              })}
+            </div>
+          </div>
+
+          {([
+            ['onProducts', 'Comisionar la venta de productos', 'Solo si hay una regla de productos y la línea tiene quién la vendió.'],
+            ['onPackageUse', 'Comisionar las sesiones de paquetes', 'Al usarse cada sesión, quien la atendió gana sobre el valor de esa sesión. La venta del paquete no genera comisión.'],
+            ['autoApprove', 'Aprobar las comisiones solas', 'Apagado, el administrador las revisa y aprueba antes de pagarlas.'],
+          ] as const).map(([key, title, hint]) => (
+            <div key={key} className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+              <div>
+                <span className="block text-sm font-semibold text-slate-800">{title}</span>
+                <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{hint}</span>
+              </div>
+              <Switch
+                checked={commissionRules[key]}
+                onChange={(on) => { setMessage(null); setCommissionRules({ ...commissionRules, [key]: on }); }}
+                label={title}
+              />
+            </div>
+          ))}
+
+          {saveBar('comisiones')}
         </section>
       )}
 
