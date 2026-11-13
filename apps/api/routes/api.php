@@ -84,6 +84,7 @@ Route::post('/pay/{token}/simulate', [PaymentController::class, 'simulate'])->mi
 Route::get('/plan-payments/{id}', [\App\Http\Controllers\Api\BillingController::class, 'simulatedView'])->whereUuid('id')->middleware('throttle:30,1');
 Route::post('/plan-payments/{id}/simulate', [\App\Http\Controllers\Api\BillingController::class, 'simulate'])->whereUuid('id')->middleware('throttle:20,1');
 Route::post('/pay/{token}/start', [PaymentController::class, 'start'])->middleware('throttle:20,1');
+Route::post('/pay/{token}/culqi', [PaymentController::class, 'culqi'])->middleware('throttle:10,1');
 Route::post('/pay/{token}/check', [PaymentController::class, 'check'])->middleware('throttle:30,1');
 Route::post('/webhooks/payments/{provider}/{owner?}', [PaymentController::class, 'webhook'])->middleware('throttle:240,1');
 Route::get('/promotions/unsubscribe/{recipient}', [CampaignController::class, 'unsubscribeShow'])->middleware('throttle:60,1');
@@ -145,6 +146,9 @@ Route::middleware(['auth:sanctum', 'saas'])->group(function () {
         Route::post('/admin/billing/test', [\App\Http\Controllers\Api\PlatformBillingController::class, 'test']);
         Route::put('/admin/billing/methods', [\App\Http\Controllers\Api\PlatformBillingController::class, 'methods']);
         Route::get('/admin/billing/transfers', [\App\Http\Controllers\Api\PlatformBillingController::class, 'transfers']);
+        Route::get('/admin/billing/overdue', [\App\Http\Controllers\Api\PlatformBillingController::class, 'overdue']);
+        Route::post('/admin/billing/overdue/{subscription}/{action}', [\App\Http\Controllers\Api\PlatformBillingController::class, 'overdueAction'])->whereUuid('subscription')->whereIn('action', ['retry', 'remind', 'extend']);
+        Route::put('/admin/billing/dunning', [\App\Http\Controllers\Api\PlatformBillingController::class, 'dunning']);
         Route::post('/admin/billing/transfers/{id}/approve', [\App\Http\Controllers\Api\PlatformBillingController::class, 'approveTransfer'])->whereUuid('id');
         Route::post('/admin/billing/transfers/{id}/reject', [\App\Http\Controllers\Api\PlatformBillingController::class, 'rejectTransfer'])->whereUuid('id');
         Route::get('/admin/billing/transfers/{id}/voucher', [\App\Http\Controllers\Api\PlatformBillingController::class, 'transferVoucher'])->whereUuid('id');
@@ -215,6 +219,8 @@ Route::middleware(['auth:sanctum', 'staff', 'plan'])->group(function () {
     Route::get('/billing', [\App\Http\Controllers\Api\BillingController::class, 'show']);
     Route::post('/billing/card', [\App\Http\Controllers\Api\BillingController::class, 'card'])->middleware('throttle:20,1');
     Route::post('/billing/pay', [\App\Http\Controllers\Api\BillingController::class, 'pay'])->middleware('throttle:20,1');
+    Route::post('/billing/activate', [\App\Http\Controllers\Api\BillingController::class, 'activate'])->middleware('throttle:20,1');
+    Route::post('/billing/culqi', [\App\Http\Controllers\Api\BillingController::class, 'confirm'])->middleware('throttle:20,1');
     Route::post('/billing/plan', [\App\Http\Controllers\Api\BillingController::class, 'change'])->middleware('throttle:20,1');
     Route::post('/billing/cancel-card', [\App\Http\Controllers\Api\BillingController::class, 'cancelCard']);
     Route::get('/billing/transfer', [\App\Http\Controllers\Api\BillingController::class, 'transferOptions']);

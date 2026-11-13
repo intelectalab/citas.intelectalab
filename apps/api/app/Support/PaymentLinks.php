@@ -22,13 +22,13 @@ class PaymentLinks
 {
     public const PROVIDERS = [
         'simulated'   => ['label' => 'Simulación', 'class' => SimulatedPaymentProvider::class],
-        'culqi'       => ['label' => 'Culqi', 'class' => null],
+        'culqi'       => ['label' => 'Culqi', 'class' => \App\Support\Payments\CulqiPaymentProvider::class],
         'niubiz'      => ['label' => 'Niubiz', 'class' => null],
         'izipay'      => ['label' => 'Izipay', 'class' => null],
         'mercadopago' => ['label' => 'Mercado Pago', 'class' => MercadoPagoPaymentProvider::class],
     ];
 
-    public const NOT_CONNECTED = 'Tu empresa todavía no recibe pagos en línea: conecta Mercado Pago en Configuración → Integraciones.';
+    public const NOT_CONNECTED = 'Tu empresa todavía no recibe pagos en línea: conecta Culqi o Mercado Pago en Configuración → Integraciones.';
 
     public const STATUS_LABELS = [
         'pending'   => 'Esperando pago',
@@ -52,9 +52,47 @@ class PaymentLinks
             && Schema::hasColumn('sales', 'deposit_outcome') && Schema::hasColumn('services', 'deposit_type');
     }
 
-    public static function integration(string $tenantId): ?object
+    public const PREFERENCE = ['culqi', 'mercadopago'];
+
+    public static function integrations(string $tenantId)
     {
-        return DB::table('tenant_integrations')->where('tenant_id', $tenantId)->where('kind', 'payments')->first();
+        return DB::table('tenant_integrations')->where('tenant_id', $tenantId)->where('kind', 'payments')->get()->keyBy('provider');
+    }
+
+    public static function integration(string $tenantId, ?string $provider = null): ?object
+    {
+        $rows = self::integrations($tenantId);
+
+        if ($provider !== null) {
+            return $rows->get($provider);
+        }
+
+        foreach (self::PREFERENCE as $key) {
+            $row = $rows->get($key);
+
+            if ($row && $row->status === 'active' && $row->mode !== 'simulated') {
+                return $row;
+            }
+        }
+
+        return $rows->first();
+    }
+
+    public static function backupFor(string $tenantId, string $key): ?PaymentProvider
+    {
+        foreach (self::PREFERENCE as $other) {
+            if ($other === $key) {
+                continue;
+            }
+
+            $row = self::integration($tenantId, $other);
+
+            if ($row && $row->status === 'active' && $row->mode !== 'simulated') {
+                return self::providerFor($tenantId, $other);
+            }
+        }
+
+        return null;
     }
 
     public static function simulationAllowed(): bool
@@ -87,10 +125,10 @@ class PaymentLinks
             return self::simulationAllowed() ? new SimulatedPaymentProvider() : null;
         }
 
-        $integration = self::integration($tenantId);
+        $integration = self::integration($tenantId, $key);
         $class = self::PROVIDERS[$key]['class'] ?? null;
 
-        return $class && $integration && $integration->provider === $key ? new $class($integration) : null;
+        return $class && $integration ? new $class($integration) : null;
     }
 
     public static function providerByKey(string $key): ?PaymentProvider
@@ -396,7 +434,70 @@ class PaymentLinks
             ],
             'booking'      => $booking,
             'appointment'  => $link->appointment_id ? DB::table('appointments')->where('id', $link->appointment_id)->value('code') : null,
+            'culqi'        => $link->status === 'pending' && $link->provider === 'culqi' ? self::culqiCheckout($link, $company->trade_name ?? $tenant->name) : null,
         ];
+    }
+
+    private static function culqiCheckout(object $link, string $title): ?array
+    {
+        $provider = self::providerFor($link->tenant_id, 'culqi');
+
+        if (!$provider instanceof \App\Support\Payments\CulqiPaymentProvider || $provider->publicKey() === '') {
+            return null;
+        }
+
+        return [
+            'public_key'  => $provider->publicKey(),
+            'script'      => (string) config('payments.culqi.script'),
+            'title'       => $title,
+            'description' => (string) $link->description,
+            'amount'      => \App\Support\Payments\CulqiClient::cents((float) $link->amount),
+            'currency'    => $link->currency ?? 'PEN',
+            'email'       => $link->customer_id ? DB::table('customers')->where('id', $link->customer_id)->value('email') : null,
+        ];
+    }
+
+    public static function payWithCulqi(string $token, string $culqiToken, ?string $email): array
+    {
+        $link = DB::table('payment_links')->where('token', $token)->first();
+        abort_unless($link, 404, 'Este link de pago no existe.');
+
+        if ($link->status !== 'pending' || Carbon::parse($link->expires_at)->isPast() || $link->provider !== 'culqi') {
+            throw ValidationException::withMessages(['link' => 'Este link ya no está esperando pago.']);
+        }
+
+        if ($link->purpose === 'deposit' && Subscriptions::lockedFor($link->tenant_id)) {
+            throw ValidationException::withMessages(['link' => Subscriptions::PORTAL_LOCKED]);
+        }
+
+        if ($link->purpose === 'deposit' && ($taken = self::slotTaken(Tenant::find($link->tenant_id), $link))) {
+            self::cancel($link, $taken);
+            throw ValidationException::withMessages(['link' => $taken]);
+        }
+
+        $provider = self::providerFor($link->tenant_id, 'culqi');
+        abort_unless($provider instanceof \App\Support\Payments\CulqiPaymentProvider, 422, self::NOT_CONNECTED);
+
+        $email = $email ?: ($link->customer_id ? DB::table('customers')->where('id', $link->customer_id)->value('email') : null);
+        $result = $provider->charge($link, $culqiToken, $email);
+
+        if (\App\Support\Payments\CulqiClient::unavailable($result) && self::backupFor($link->tenant_id, 'culqi')) {
+            DB::table('payment_links')->where('id', $link->id)->update(['provider' => 'mercadopago', 'external_id' => null, 'checkout_url' => null, 'updated_at' => now()]);
+
+            return self::start($token) + ['message' => 'Culqi no respondió. Te llevamos a Mercado Pago para que pagues ahí.'];
+        }
+
+        $event = \App\Support\Payments\CulqiPaymentProvider::event($result, $link->token);
+
+        if ($event['type'] === 'payment.approved') {
+            DB::table('payment_links')->where('id', $link->id)->update(['external_id' => $event['external_id'], 'updated_at' => now()]);
+
+            return self::handle('culqi', $event);
+        }
+
+        self::handle('culqi', $event);
+
+        throw ValidationException::withMessages(['link' => $result['message'] ?? 'El pago fue rechazado. Prueba con otra tarjeta.']);
     }
 
     public static function start(string $token): array

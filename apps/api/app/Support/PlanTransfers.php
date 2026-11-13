@@ -17,6 +17,10 @@ class PlanTransfers
 {
     public const TYPES = ['bank' => 'Cuenta bancaria', 'yape' => 'Yape', 'plin' => 'Plin'];
 
+    public const CYCLES = ['yearly'];
+
+    public const MONTHLY_BLOCKED = 'La transferencia, Yape y Plin son solo para el plan anual. Para pagar cada mes, usa la tarjeta.';
+
     public const MAX_VOUCHER = 5 * 1024 * 1024;
 
     public const MAX_QR = 700 * 1024;
@@ -166,6 +170,10 @@ class PlanTransfers
 
         $plan = !empty($values['plan_id']) ? SaaSPlan::findOrFail($values['plan_id']) : ($subscription->pending_plan_id ? SaaSPlan::find($subscription->pending_plan_id) : $subscription->plan);
         $cycle = $values['billing_cycle'] ?? ($subscription->pending_plan_id ? $subscription->pending_billing_cycle : $subscription->billing_cycle) ?? 'monthly';
+        if (!in_array($cycle, self::CYCLES, true)) {
+            throw ValidationException::withMessages(['method_id' => self::MONTHLY_BLOCKED]);
+        }
+
         $amount = Subscriptions::price($plan, $cycle);
         abort_unless($amount > 0, 422, 'Este plan no tiene costo.');
 

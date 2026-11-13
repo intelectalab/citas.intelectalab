@@ -106,7 +106,7 @@ INSERT INTO saas_plans (
 (
     '33333333-3333-3333-3333-333333333333', 'Empresarial', 'empresarial', 'EMP', 'Todo el producto, con API y webhooks',
     599.00, 5990.00, 'PEN',
-    '{"has_trial": true, "trial_days": 30}'::jsonb,
+    '{"has_trial": true, "trial_days": 14}'::jsonb,
     '{"auto_renew": true, "default_period": "monthly"}'::jsonb,
     '{"agenda": ["booking", "resources", "classes", "walkin"], "sales": ["pos", "invoicing", "quotes", "commissions"], "loyalty": ["packages", "memberships", "loyalty"], "marketing": ["marketing", "automations"], "operations": ["inventory", "records", "multi_branch"], "platform": ["reports_adv", "api"]}'::jsonb,
     '{"users": 100, "branches": 20, "professionals": 100, "appointments_month": 30000, "whatsapp_month": 10000}'::jsonb,

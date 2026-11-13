@@ -33,6 +33,7 @@ class Subscription extends Model
         'last_charge_failed_at',
         'pending_plan_id',
         'pending_billing_cycle',
+        'grace_extra_days',
     ];
 
     protected $casts = [

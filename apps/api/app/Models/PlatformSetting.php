@@ -30,6 +30,8 @@ class PlatformSetting extends Model
         'mfa_tenant_admins'     => false,
         'mfa_platform'          => false,
         'plan_mercadopago'      => true,
+        'plan_primary'          => 'culqi',
+        'dunning'               => null,
     ];
 
     public const PUBLIC_KEYS = [

@@ -1,11 +1,22 @@
-export type BillingState = 'trial' | 'active' | 'grace' | 'locked' | 'card_needed' | 'none';
+import type { CulqiCheckoutConfig } from './culqi';
+
+export type BillingState = 'trial' | 'active' | 'grace' | 'locked' | 'none';
+
+export interface CulqiAction extends CulqiCheckoutConfig {
+  action: 'card' | 'pay';
+  payment_id: string;
+}
 
 export interface Billing {
   state: BillingState;
+  reason?: string | null;
   free: boolean;
   ends_at: string | null;
   grace_ends_at: string | null;
   grace_days: number;
+  trial_days_left?: number | null;
+  overdue?: { day: number | null; readonly_on: string | null; cancel_on: string | null; last_failure: string | null } | null;
+  provider?: 'culqi' | 'mercadopago' | 'simulated' | null;
   message: string | null;
   can_pay: boolean;
   online: boolean;
@@ -14,13 +25,14 @@ export interface Billing {
   billing_cycle: 'monthly' | 'yearly' | null;
   price: number;
   pending_plan: { id: string; name: string; billing_cycle: 'monthly' | 'yearly' | null; price: number } | null;
-  methods?: { card: boolean; transfer: boolean };
+  methods?: { card: boolean; transfer: boolean; transfer_cycles?: string[] };
   next_period?: [string, string] | null;
   review?: TransferPayment | null;
   rejected?: TransferPayment | null;
   card: {
-    required: boolean;
     status: 'authorized' | 'cancelled' | null;
+    saved?: boolean;
+    provider?: string | null;
     brand: string | null;
     last4: string | null;
     authorized_at: string | null;
@@ -101,15 +113,14 @@ export interface BillingPayload {
 export const BILLING_STATES: Record<BillingState, { label: string; badge: string }> = {
   trial: { label: 'En prueba', badge: 'bg-sky-50 text-sky-700' },
   active: { label: 'Activo', badge: 'bg-emerald-50 text-emerald-700' },
-  grace: { label: 'Vencido: días de gracia', badge: 'bg-amber-50 text-amber-800' },
+  grace: { label: 'Pago vencido', badge: 'bg-amber-50 text-amber-800' },
   locked: { label: 'Solo lectura', badge: 'bg-rose-50 text-rose-700' },
-  card_needed: { label: 'Falta la tarjeta', badge: 'bg-rose-50 text-rose-700' },
   none: { label: 'Sin plan', badge: 'bg-slate-100 text-slate-600' },
 };
 
 export const PAYMENT_KINDS: Record<PlanPayment['kind'], string> = {
   link: 'Pago en línea',
-  card: 'Autorización de tarjeta',
+  card: 'Tarjeta guardada',
   charge: 'Cobro automático',
   transfer: 'Transferencia',
 };
@@ -126,7 +137,7 @@ export const PAYMENT_STATUS: Record<PlanPayment['status'], { label: string; badg
 
 export const INVOICE_REASONS: Record<string, string> = {
   subscription_create: 'Primer pago',
-  subscription_cycle: 'Cobro automático',
+  subscription_cycle: 'Cobro a la tarjeta',
   online: 'Pago en línea',
   manual: 'Registrado por la plataforma',
   transfer: 'Transferencia',
@@ -139,3 +150,11 @@ export const cardLabel = (card: Billing['card']) => {
   const brand = card.brand ? card.brand.charAt(0).toUpperCase() + card.brand.slice(1) : 'Tarjeta';
   return card.last4 ? `${brand} terminada en ${card.last4}` : brand;
 };
+
+export const PROVIDER_LABELS: Record<string, string> = { culqi: 'Culqi', mercadopago: 'Mercado Pago', simulated: 'la simulación' };
+
+export const providerLabel = (provider: string | null | undefined) => (provider ? PROVIDER_LABELS[provider] ?? provider : 'la pasarela');
+
+export const transferAllowed = (billing: Billing, cycle: string | null | undefined) => Boolean(billing.methods?.transfer) && (billing.methods?.transfer_cycles ?? ['monthly', 'yearly']).includes(cycle ?? 'monthly');
+
+export const asClause = (text: string) => text.trim().replace(/\.$/, '').replace(/^\p{Lu}(?!\p{Lu})/u, (letter) => letter.toLowerCase());

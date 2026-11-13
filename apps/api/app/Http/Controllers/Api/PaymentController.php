@@ -81,8 +81,25 @@ class PaymentController extends Controller
         abort_unless($request->user()->allows('settings.view'), 403, 'Tu cuenta no tiene permiso para ver la configuración de la empresa.');
         $tenant = $this->tenant($request);
         $integration = PaymentLinks::integration($tenant->id);
-        $saved = $integration?->credentials ? json_decode(Crypt::decryptString($integration->credentials), true) : [];
+        $rows = PaymentLinks::integrations($tenant->id);
         $mask = fn (?string $value) => $value ? str_repeat('•', 8) . mb_substr($value, -4) : null;
+        $savedFor = function (string $key) use ($rows, $mask) {
+            $row = $rows->get($key);
+
+            if (!$row || $key === 'simulated') {
+                return null;
+            }
+
+            $saved = $row->credentials ? (json_decode(Crypt::decryptString($row->credentials), true) ?: []) : [];
+
+            return [
+                'public_key'     => $mask($saved['public_key'] ?? null),
+                'secret_key'     => $mask($saved['secret_key'] ?? null),
+                'webhook_secret' => $mask($saved['webhook_secret'] ?? null),
+                'saved_at'       => Carbon::parse($row->updated_at)->toIso8601String(),
+                'mode'           => $row->mode,
+            ];
+        };
 
         $events = DB::table('payment_events as e')
             ->leftJoin('payment_links as l', 'l.id', '=', 'e.payment_link_id')
@@ -104,18 +121,15 @@ class PaymentController extends Controller
                 'currency'   => $settings['currency'] ?? null,
                 'simulation' => $simulation,
                 'webhook_url' => rtrim((string) config('app.url'), '/') . '/api/webhooks/payments/mercadopago/' . $tenant->id,
+                'culqi_webhook_url' => rtrim((string) config('app.url'), '/') . '/api/webhooks/payments/culqi/' . $tenant->id,
+                'connected'  => $rows->keys()->filter(fn ($key) => in_array($key, PaymentLinks::PREFERENCE, true))->values(),
                 'providers'  => collect(PaymentLinks::PROVIDERS)
                     ->filter(fn ($p, $key) => $key !== 'simulated' || $simulation)
                     ->map(fn ($p, $key) => [
                         'key'         => $key,
                         'label'       => $p['label'],
                         'connectable' => $p['class'] !== null,
-                        'saved'       => $integration && $integration->provider === $key && $key !== 'simulated' ? [
-                            'public_key'     => $mask($saved['public_key'] ?? null),
-                            'secret_key'     => $mask($saved['secret_key'] ?? null),
-                            'webhook_secret' => $mask($saved['webhook_secret'] ?? null),
-                            'saved_at'       => Carbon::parse($integration->updated_at)->toIso8601String(),
-                        ] : null,
+                        'saved'       => $savedFor($key),
                     ])->values(),
                 'link_hours' => (int) \App\Support\AppointmentFlow::rule($tenant, 'payments.link_hours'),
             ],
@@ -147,29 +161,47 @@ class PaymentController extends Controller
             'public_key'     => 'nullable|string|max:255',
             'secret_key'     => 'nullable|string|max:255',
             'webhook_secret' => 'nullable|string|max:255',
+            'disconnect'     => 'nullable|boolean',
         ]);
 
         $provider = $validated['provider'];
-        $current = PaymentLinks::integration($tenant->id);
+        $rows = PaymentLinks::integrations($tenant->id);
+        $current = $rows->get($provider);
 
         if ($provider === 'simulated' && !PaymentLinks::simulationAllowed()) {
             throw ValidationException::withMessages(['provider' => 'La simulación solo está disponible en las pruebas del sistema.']);
         }
 
+        $audit = fn (array $before, array $after) => Audit::log($request, 'settings.changed', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'settings',
+            'entity_label' => 'Pasarela de pagos',
+            'before'       => $before,
+            'after'        => $after,
+        ]);
+
+        if (!empty($validated['disconnect']) && $current) {
+            DB::table('tenant_integrations')->where('id', $current->id)->delete();
+            $audit(['payment_provider' => (PaymentLinks::PROVIDERS[$provider]['label'] ?? $provider) . ': conectada'], ['payment_provider' => (PaymentLinks::PROVIDERS[$provider]['label'] ?? $provider) . ': desconectada']);
+
+            return $this->integrations($request);
+        }
+
         if ($provider === 'none') {
-            if ($current) {
-                DB::table('tenant_integrations')->where('id', $current->id)->delete();
-                Audit::log($request, 'settings.changed', [
-                    'tenant'       => $tenant->id,
-                    'entity_type'  => 'settings',
-                    'entity_label' => 'Pasarela de pagos',
-                    'before'       => ['payment_provider' => PaymentLinks::PROVIDERS[$current->provider]['label'] ?? $current->provider],
-                    'after'        => ['payment_provider' => 'Sin pagos en línea'],
-                ]);
+            if ($rows->isNotEmpty()) {
+                DB::table('tenant_integrations')->where('tenant_id', $tenant->id)->where('kind', 'payments')->delete();
+                $audit(['payment_provider' => $rows->keys()->map(fn ($key) => PaymentLinks::PROVIDERS[$key]['label'] ?? $key)->implode(' y ')], ['payment_provider' => 'Sin pagos en línea']);
             }
 
             return $this->integrations($request);
         }
+
+        $real = in_array($provider, PaymentLinks::PREFERENCE, true);
+        DB::table('tenant_integrations')->where('tenant_id', $tenant->id)->where('kind', 'payments')
+            ->where(fn ($q) => $real
+                ? $q->whereNotIn('provider', PaymentLinks::PREFERENCE)
+                : $q->where('provider', '!=', $provider))
+            ->delete();
 
         $values = ['provider' => $provider, 'updated_at' => now()];
 
@@ -203,6 +235,25 @@ class PaymentController extends Controller
                 }
 
                 $settings = ['account' => $account['name'], 'currency' => $account['currency']];
+            }
+
+            if ($provider === 'culqi') {
+                if (!str_starts_with($keys['public_key'], 'pk_') || !str_starts_with($keys['secret_key'], 'sk_')) {
+                    throw ValidationException::withMessages(['public_key' => 'La llave pública de Culqi empieza con pk_ y la secreta con sk_. Revisa que no estén al revés.']);
+                }
+
+                if (!in_array(\App\Support\Currency::of($tenant), ['PEN', 'USD'], true)) {
+                    throw ValidationException::withMessages(['secret_key' => 'Culqi solo cobra en soles o dólares y tu empresa trabaja en ' . \App\Support\Currency::of($tenant) . '.']);
+                }
+
+                $check = (new \App\Support\Payments\CulqiClient($keys['secret_key']))->account();
+
+                if (!$check['ok']) {
+                    throw ValidationException::withMessages(['secret_key' => $check['message']]);
+                }
+
+                $settings = ['currency' => \App\Support\Currency::of($tenant)];
+                $validated['mode'] = str_contains($keys['secret_key'], '_live_') ? 'production' : 'sandbox';
             }
 
             $values += [
@@ -253,7 +304,8 @@ class PaymentController extends Controller
     {
         abort_unless($request->user()->allows('settings.view'), 403);
         $tenant = $this->tenant($request);
-        $provider = PaymentLinks::provider($tenant);
+        $key = $request->input('provider');
+        $provider = in_array($key, PaymentLinks::PREFERENCE, true) ? PaymentLinks::providerFor($tenant->id, $key) : PaymentLinks::provider($tenant);
 
         if (!$provider) {
             return response()->json(['ok' => false, 'message' => PaymentLinks::NOT_CONNECTED]);
@@ -352,6 +404,18 @@ class PaymentController extends Controller
         return response()->json(PaymentLinks::start($token));
     }
 
+    public function culqi(Request $request, string $token)
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string', 'max:120', 'regex:/^(tkn|ype)_[A-Za-z0-9_]+$/'],
+            'email' => 'nullable|email|max:150',
+        ], ['token.regex' => 'Culqi no devolvió una tarjeta válida. Inténtalo de nuevo.']);
+
+        $result = PaymentLinks::payWithCulqi($token, $validated['token'], $validated['email'] ?? null);
+
+        return response()->json(['result' => $result, 'link' => PaymentLinks::publicView($token)]);
+    }
+
     public function check(string $token)
     {
         $link = DB::table('payment_links')->where('token', $token)->first();
@@ -365,6 +429,20 @@ class PaymentController extends Controller
     {
         abort_unless(PaymentLinks::ready(), 404);
 
+        if ($owner === 'platform' && in_array($provider, ['mercadopago', 'culqi'], true)) {
+            return response()->json(\App\Support\PlanBilling::webhook($request, $provider));
+        }
+
+        if ($provider === 'culqi') {
+            abort_unless($owner && Str::isUuid($owner), 404);
+            $gateway = PaymentLinks::providerFor($owner, 'culqi');
+            abort_unless($gateway, 404);
+            $notice = $gateway->parse($request);
+            $event = $notice ? $gateway->status($notice['id']) : null;
+
+            return response()->json($event ? PaymentLinks::handle('culqi', $event, $owner) : ['status' => 'ignored']);
+        }
+
         if ($provider !== 'mercadopago') {
             $gateway = PaymentLinks::providerByKey($provider);
             abort_unless($gateway && $gateway->simulated(), 404);
@@ -373,10 +451,6 @@ class PaymentController extends Controller
             return $event
                 ? response()->json(PaymentLinks::handle($provider, $event))
                 : response()->json(['message' => 'Firma o contenido no válido.'], 400);
-        }
-
-        if ($owner === 'platform') {
-            return response()->json(\App\Support\PlanBilling::webhook($request));
         }
 
         abort_unless($owner && Str::isUuid($owner), 404);

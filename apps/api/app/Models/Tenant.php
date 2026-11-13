@@ -382,7 +382,7 @@ class Tenant extends Model
     {
         return $this->hasOne(Subscription::class)
             ->whereIn('status', ['active', 'trialing'])
-            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()->subDays(\App\Support\Subscriptions::graceDays())))
+            ->where(fn ($q) => $q->whereNull('ends_at')->orWhereRaw(\App\Support\Subscriptions::graceSql()))
             ->latest('starts_at');
     }
 

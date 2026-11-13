@@ -17,11 +17,11 @@ class Subscriptions
 {
     public const LOCKED = 'Tu empresa está en solo lectura porque el plan no está pagado: puedes ver y exportar tus datos, pero no agendar, vender ni cambiar nada. El administrador puede pagarlo en Mi empresa → Plan.';
 
-    public const CARD_NEEDED = 'Para empezar tu prueba gratis falta autorizar tu tarjeta en Mercado Pago. No se cobra nada hasta que termine la prueba. El administrador lo hace en Mi empresa → Plan.';
+    public const CANCELED = 'Tu plan está cancelado. Tus datos se conservan: puedes verlos y exportarlos, y si el administrador paga el plan en Mi empresa → Plan, tu empresa vuelve a tener todo.';
 
     public const PORTAL_LOCKED = 'La reserva en línea no está disponible por ahora. Comunícate con la empresa.';
 
-    public const LOCKED_STATES = ['locked', 'card_needed', 'none'];
+    public const LOCKED_STATES = ['locked', 'none'];
 
     private static array $states = [];
 
@@ -34,18 +34,19 @@ class Subscriptions
 
     public static function graceDays(): int
     {
-        return max(0, (int) (PlatformSetting::value('grace_days') ?? 3));
-    }
-
-    public static function unpaidTrial(Subscription $subscription): bool
-    {
-        return in_array($subscription->status, ['trialing', 'expired'], true)
-            && !(self::ready() && $subscription->card_status === 'authorized');
+        return Dunning::config()['readonly_day'];
     }
 
     public static function graceFor(Subscription $subscription): int
     {
-        return self::unpaidTrial($subscription) ? 0 : self::graceDays();
+        return self::graceDays() + Dunning::extraDays($subscription);
+    }
+
+    public static function graceSql(string $column = 'ends_at'): string
+    {
+        $extra = Dunning::ready() ? ' + coalesce(grace_extra_days, 0)' : '';
+
+        return "{$column} + make_interval(days => " . self::graceDays() . "{$extra}) > now()";
     }
 
     public static function periodFor(Subscription $subscription, string $cycle, ?Carbon $paidAt = null): array
@@ -107,11 +108,6 @@ class Subscriptions
             return ['state' => 'active', 'free' => true] + $base;
         }
 
-        if (self::ready() && $subscription->status === 'trialing' && $subscription->requires_card
-            && $subscription->card_status === null && PlanBilling::cardEnabled()) {
-            return ['state' => 'card_needed'] + $base;
-        }
-
         if (!$end || $end->isFuture()) {
             return ['state' => $subscription->status === 'trialing' ? 'trial' : 'active'] + $base;
         }
@@ -126,7 +122,7 @@ class Subscriptions
 
     public static function lockMessage(Tenant|string $tenant): string
     {
-        return self::state($tenant)['state'] === 'card_needed' ? self::CARD_NEEDED : self::LOCKED;
+        return (self::state($tenant)['reason'] ?? null) === 'canceled' ? self::CANCELED : self::LOCKED;
     }
 
     public static function recordPayment(Subscription $subscription, array $values): SubscriptionInvoice
@@ -173,6 +169,10 @@ class Subscriptions
             if (self::ready()) {
                 $update += ['last_charge_failed_at' => null];
 
+                if (Dunning::ready()) {
+                    $update += ['grace_extra_days' => 0];
+                }
+
                 if ($subscription->pending_plan_id === $plan->id) {
                     $update += ['pending_plan_id' => null, 'pending_billing_cycle' => null];
                 }
@@ -196,17 +196,32 @@ class Subscriptions
         $zone = $tenant->zone();
         $day = fn ($value) => $value ? Carbon::parse($value)->setTimezone($zone)->format('Y-m-d') : null;
         $pending = $subscription && self::ready() && $subscription->pending_plan_id ? SaaSPlan::find($subscription->pending_plan_id) : null;
+        $overdue = $subscription && in_array($state['state'], ['grace', 'locked'], true) && ($state['reason'] ?? null) !== 'canceled';
+        $lastFailure = $overdue ? DB::table('plan_payments')->where('subscription_id', $subscription->id)->where('kind', 'charge')->where('status', 'failed')->orderByDesc('created_at')->value('message') : null;
 
         return [
             'state'         => $state['state'],
+            'reason'        => $state['reason'] ?? null,
             'free'          => (bool) ($state['free'] ?? false),
             'ends_at'       => $day($state['ends_at']),
             'grace_ends_at' => $day($state['grace_ends_at']),
             'grace_days'    => self::graceDays(),
+            'trial_days_left' => $state['state'] === 'trial' && $state['ends_at'] ? max(0, (int) ceil(now()->diffInSeconds($state['ends_at'], false) / 86400)) : null,
+            'overdue'       => $overdue ? [
+                'day'          => Dunning::dayOf($subscription),
+                'readonly_on'  => $day(Dunning::readOnlyOn($subscription)),
+                'cancel_on'    => $day(Dunning::cancelOn($subscription)),
+                'last_failure' => $lastFailure,
+            ] : null,
             'message'       => in_array($state['state'], self::LOCKED_STATES, true) ? self::lockMessage($tenant) : null,
             'can_pay'       => (bool) ($user?->isTenantAdmin()),
             'online'        => PlanBilling::enabled(),
-            'methods'       => ['card' => PlanBilling::cardEnabled(), 'transfer' => PlanTransfers::enabled()],
+            'provider'      => PlanBilling::active() ?? (PlanBilling::simulated() ? 'simulated' : null),
+            'methods'       => [
+                'card'     => PlanBilling::cardEnabled(),
+                'transfer' => PlanTransfers::enabled(),
+                'transfer_cycles' => PlanTransfers::CYCLES,
+            ],
             'review'        => $subscription && ($pendingTransfer = PlanTransfers::pendingFor($subscription->id)) ? PlanTransfers::present($pendingTransfer) : null,
             'rejected'      => $subscription && ($rejectedTransfer = PlanTransfers::lastRejected($subscription->id)) ? PlanTransfers::present($rejectedTransfer) : null,
             'simulated'     => PlanBilling::simulated(),
@@ -216,8 +231,9 @@ class Subscriptions
             'next_period'   => $subscription ? array_map($day, self::periodFor($subscription, $subscription->pending_billing_cycle ?? $subscription->billing_cycle)) : null,
             'pending_plan'  => $pending ? ['id' => $pending->id, 'name' => $pending->name, 'billing_cycle' => $subscription->pending_billing_cycle, 'price' => self::price($pending, $subscription->pending_billing_cycle ?? 'monthly')] : null,
             'card'          => $subscription && self::ready() ? [
-                'required'      => (bool) $subscription->requires_card,
                 'status'        => $subscription->card_status,
+                'saved'         => PlanBilling::savedCard($subscription),
+                'provider'      => $subscription->external_provider,
                 'brand'         => $subscription->card_brand,
                 'last4'         => $subscription->card_last4,
                 'authorized_at' => $day($subscription->card_authorized_at),

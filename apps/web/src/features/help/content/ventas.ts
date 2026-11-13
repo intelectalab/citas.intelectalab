@@ -40,7 +40,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Caja abierta para el efectivo', text: 'Para cobrar en efectivo, la caja de la sede debe estar abierta.', where: 'Configuración → Ventas y caja' },
         { title: 'Vencimiento de los links de pago', text: 'Un link de pago deja de valer pasadas unas horas.', where: 'Configuración → Adelantos y links de pago' },
         { title: 'Comprobantes simulados', text: 'Las boletas y facturas todavía no se envían a SUNAT: salen marcadas como simulación. Sin facturación electrónica se emite un comprobante interno.' },
-        { title: 'Links de pago con Mercado Pago', text: 'Los links de pago se cobran con la cuenta de Mercado Pago de tu empresa. Sin ella conectada, no aparece la opción Link de pago. Yape, Plin, tarjeta y transferencia en la sede se cobran fuera del sistema y aquí solo se anota la operación.', where: 'Configuración → Integraciones' },
+        { title: 'Links de pago con Culqi o Mercado Pago', text: 'Los links de pago se cobran con la cuenta de Culqi de tu empresa, o con Mercado Pago si es la que conectaste (si están las dos, Culqi primero y Mercado Pago si Culqi no responde). Sin ninguna conectada, no aparece la opción Link de pago. Yape, Plin, tarjeta y transferencia en la sede se cobran fuera del sistema y aquí solo se anota la operación.', where: 'Configuración → Integraciones' },
       ],
     },
 

@@ -90,10 +90,6 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
         if (userData) {
           localStorage.setItem('user', JSON.stringify(userData));
         }
-        if (response.data.card_url) {
-          window.location.href = response.data.card_url;
-          return;
-        }
         router.push('/home');
       }
     } catch (err: any) {
@@ -350,11 +346,9 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
               </div>
             </div>
 
-            {platform.card_on_signup && (
-              <p data-card-note className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                Al terminar pasarás a Mercado Pago para autorizar tu tarjeta. No se cobra nada durante la prueba gratis: el primer cobro es al terminarla, y puedes cancelar antes.
-              </p>
-            )}
+            <p data-trial-note className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+              Empiezas con una prueba gratis, sin tarjeta. Cuando quieras quedarte, activas tu plan desde Mi empresa.
+            </p>
 
             <div className="flex items-center justify-between pt-3">
               <button

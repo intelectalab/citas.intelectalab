@@ -122,15 +122,15 @@ export default function PlatformPayMethods() {
       <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100">
         <div className="flex items-center justify-between gap-4 px-4 py-3.5">
           <span>
-            <span className="block text-sm font-semibold text-slate-800">Mercado Pago</span>
-            <span className="block text-xs text-slate-500 mt-0.5">Tarjeta autorizada que se cobra sola, o pago en línea. Necesita la cuenta conectada abajo.</span>
+            <span className="block text-sm font-semibold text-slate-800">Tarjeta</span>
+            <span className="block text-xs text-slate-500 mt-0.5">Con Culqi o Mercado Pago: la tarjeta guardada se cobra sola cada periodo, o se paga en línea. Necesita una cuenta conectada abajo.</span>
           </span>
-          <Switch checked={mercadopago} onChange={(on) => { setNotice(''); setMercadopago(on); }} label="Aceptar Mercado Pago" />
+          <Switch checked={mercadopago} onChange={(on) => { setNotice(''); setMercadopago(on); }} label="Aceptar tarjeta" />
         </div>
         <div className="flex items-center justify-between gap-4 px-4 py-3.5">
           <span>
             <span className="block text-sm font-semibold text-slate-800">Transferencia, Yape o Plin</span>
-            <span className="block text-xs text-slate-500 mt-0.5">La empresa paga desde su banco o app y sube la foto del comprobante; tú lo apruebas en Cobros.</span>
+            <span className="block text-xs text-slate-500 mt-0.5">Solo para el plan anual. La empresa paga desde su banco o app y sube la foto del comprobante; tú lo apruebas en Cobros.</span>
           </span>
           <Switch checked={transfer} onChange={(on) => { setNotice(''); setTransfer(on); }} label="Aceptar transferencia" />
         </div>

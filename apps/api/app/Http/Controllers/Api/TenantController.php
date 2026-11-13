@@ -89,14 +89,7 @@ class TenantController extends Controller
             'password'         => $password,
         ]);
 
-        $card = ($validated['payment_method'] ?? 'manual') === 'card';
-        $subscription = \App\Support\Subscriptions::latest($result['tenant']->id);
-
-        if ($card && $subscription && \App\Support\Subscriptions::ready()) {
-            $subscription->update(['requires_card' => true]);
-        }
-
-        $invited = \App\Support\AccountSecurity::invite($result['user'], $result['tenant'], $card);
+        $invited = \App\Support\AccountSecurity::invite($result['user'], $result['tenant'], false);
 
         if (!$invited && \Illuminate\Support\Facades\Schema::hasColumn('users', 'must_change_password')) {
             $result['user']->forceFill(['must_change_password' => true])->saveQuietly();
@@ -106,7 +99,6 @@ class TenantController extends Controller
             'plan_id'          => $validated['plan_id'],
             'business_type_id' => $validated['business_type_id'],
             'owner_email'      => $validated['admin_email'],
-            'payment_method'   => $card ? 'Tarjeta en línea' : 'Transferencia o convenio',
             'invited'          => $invited,
         ]);
 
@@ -318,10 +310,7 @@ class TenantController extends Controller
         $tenant = Tenant::findOrFail($tenant);
         $target = \App\Models\User::where('tenant_id', $tenant->id)->findOrFail($user);
         abort_unless(\App\Support\PlatformMail::ready(), 422, 'El correo de la plataforma no está funcionando: dale una contraseña temporal.');
-        $subscription = \App\Support\Subscriptions::latest($tenant->id);
-        $card = $subscription && \App\Support\Subscriptions::ready() && $subscription->requires_card && $subscription->card_status !== 'authorized';
-
-        abort_unless(\App\Support\AccountSecurity::invite($target, $tenant, $card && $target->is_owner), 503, 'No se pudo enviar la invitación. Revisa el correo de la plataforma.');
+        abort_unless(\App\Support\AccountSecurity::invite($target, $tenant, false), 503, 'No se pudo enviar la invitación. Revisa el correo de la plataforma.');
         AuditEvent::record($request, 'tenant.user_invited', $tenant, [], ['user' => $target->email]);
 
         return response()->json(['message' => "Le enviamos la invitación a {$target->email}. El enlace vale " . \App\Support\AccountSecurity::INVITE_DAYS . ' días.']);

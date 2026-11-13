@@ -9,7 +9,7 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { api } from '@/lib/axios';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money } from '@/features/sales/sales';
-import { cycleLabel, type Billing, type TransferAccount } from '../billing';
+import { cycleLabel, transferAllowed, type Billing, type TransferAccount } from '../billing';
 
 const inputClass = 'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none';
 const MAX_VOUCHER = 5 * 1024 * 1024;
@@ -31,7 +31,7 @@ function Row({ label, value }: { label: string; value?: string }) {
   );
 }
 
-export default function PayPlanDrawer({ open, billing, onClose, onCard, onSent }: { open: boolean; billing: Billing; onClose: () => void; onCard: () => void; onSent: (message: string) => void }) {
+export default function PayPlanDrawer({ open, billing, activate = false, onClose, onCard, onSent }: { open: boolean; billing: Billing; activate?: boolean; onClose: () => void; onCard: () => void; onSent: (message: string) => void }) {
   const [accounts, setAccounts] = useState<TransferAccount[] | null>(null);
   const [reviewText, setReviewText] = useState('');
   const [chosen, setChosen] = useState<TransferAccount | null>(null);
@@ -49,20 +49,27 @@ export default function PayPlanDrawer({ open, billing, onClose, onCard, onSent }
     setPaidOn(today());
     setVoucher(null);
     setError('');
-    if (billing.methods?.transfer) {
+    if (transferAllowed(billing, billing.pending_plan?.billing_cycle ?? billing.billing_cycle)) {
       api.get('/billing/transfer')
         .then((res) => { setAccounts(res.data.accounts); setReviewText(res.data.review_text); })
         .catch((err) => setError(apiError(err, 'No se pudieron cargar las cuentas.')));
     } else {
       setAccounts([]);
     }
-  }, [open, billing.methods?.transfer]);
+  }, [open, billing]);
 
   if (!open) return null;
 
   const plan = billing.pending_plan ?? (billing.plan ? { name: billing.plan.name, price: billing.price, billing_cycle: billing.billing_cycle } : null);
   const amount = plan?.price ?? billing.price;
   const currency = billing.plan?.currency;
+  const transferBlocked = Boolean(billing.methods?.transfer) && !transferAllowed(billing, plan?.billing_cycle);
+  const cardTitle = billing.provider === 'mercadopago' ? 'Tarjeta u otros medios con Mercado Pago' : 'Tarjeta de crédito o débito';
+  const cardHint = billing.provider === 'mercadopago'
+    ? 'Pagas en la página de Mercado Pago y se confirma solo.'
+    : billing.provider === 'simulated'
+      ? 'Simulación de las pruebas del sistema: no se cobra dinero.'
+      : activate ? 'La escribes aquí mismo con Culqi: se guarda para los próximos cobros y se cobra el primer periodo.' : 'La escribes aquí mismo con Culqi y se confirma al instante.';
 
   const pick = (file: File | undefined) => {
     setError('');
@@ -91,7 +98,7 @@ export default function PayPlanDrawer({ open, billing, onClose, onCard, onSent }
   const icon = (type: TransferAccount['type']) => (type === 'bank' ? <Building size={16} /> : <Smartphone size={16} />);
 
   return (
-    <FormDrawer isOpen onClose={onClose} title="Pagar tu plan" subtitle={plan ? `Plan ${plan.name} · ${money(amount, currency)} ${cycleLabel(plan.billing_cycle)}` : undefined} icon={<Wallet size={18} />}>
+    <FormDrawer isOpen onClose={onClose} title={activate ? 'Activar tu plan' : 'Pagar tu plan'} subtitle={plan ? `Plan ${plan.name} · ${money(amount, currency)} ${cycleLabel(plan.billing_cycle)}` : undefined} icon={<Wallet size={18} />}>
       <div className="space-y-4" data-pay-plan>
         {billing.next_period && (
           <p data-pay-period className="text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-2.5">
@@ -103,9 +110,9 @@ export default function PayPlanDrawer({ open, billing, onClose, onCard, onSent }
             <p className="text-sm text-slate-600">Elige cómo vas a pagar.</p>
             <div className="space-y-2" role="radiogroup" aria-label="Cómo vas a pagar">
               {billing.methods?.card && (
-                <OptionCard type="button" role="radio" aria-checked={false} selected={false} data-pay-method="mercadopago" onClick={onCard} className="w-full text-left rounded-xl border px-4 py-3">
-                  <span className="flex items-center gap-2 text-sm font-bold text-brand-ink"><CreditCard size={16} /> Tarjeta u otros medios con Mercado Pago</span>
-                  <span className="block text-xs text-slate-500 mt-0.5">Pagas en la página de Mercado Pago y se confirma solo.</span>
+                <OptionCard type="button" role="radio" aria-checked={false} selected={false} data-pay-method="card" onClick={onCard} className="w-full text-left rounded-xl border px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-bold text-brand-ink"><CreditCard size={16} /> {cardTitle}</span>
+                  <span className="block text-xs text-slate-500 mt-0.5">{cardHint}</span>
                 </OptionCard>
               )}
               {(accounts ?? []).map((account) => (
@@ -115,6 +122,7 @@ export default function PayPlanDrawer({ open, billing, onClose, onCard, onSent }
                 </OptionCard>
               ))}
               {accounts === null && <p className="text-xs text-slate-400">Cargando...</p>}
+              {transferBlocked && <p data-transfer-yearly className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">La transferencia, Yape y Plin son solo para el plan anual. Para pagar así, cambia tu plan a &quot;Cada año&quot;.</p>}
             </div>
           </>
         ) : (

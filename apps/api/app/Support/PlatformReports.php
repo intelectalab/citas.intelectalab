@@ -65,7 +65,7 @@ class PlatformReports
             $status = match (true) {
                 $tenant->status !== 'active'                         => 'suspended',
                 $subscription?->status === 'canceled'                => 'canceled',
-                in_array($state['state'], ['trial', 'card_needed'], true) => 'trial',
+                $state['state'] === 'trial'                          => 'trial',
                 default                                              => $state['state'],
             };
 

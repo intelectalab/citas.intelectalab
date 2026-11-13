@@ -12,12 +12,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
 import { PAYMENT_STATUS, cycleLabel, type TransferPayment } from '@/features/billing/billing';
+import PlatformOverdue from './PlatformOverdue';
 
-const TABS: { id: 'review' | 'paid' | 'rejected' | 'all'; label: string }[] = [
+const TABS: { id: 'review' | 'paid' | 'rejected' | 'all' | 'overdue'; label: string }[] = [
   { id: 'review', label: 'Por revisar' },
   { id: 'paid', label: 'Aprobados' },
   { id: 'rejected', label: 'No confirmados' },
   { id: 'all', label: 'Todos' },
+  { id: 'overdue', label: 'Pagos vencidos' },
 ];
 
 const REASONS = ['No encontramos el abono en la cuenta.', 'El monto no coincide con el del plan.', 'El comprobante no se lee bien.'];
@@ -38,6 +40,7 @@ export default function PlatformCollections() {
   const [busy, setBusy] = useState('');
 
   const load = useCallback(() => {
+    if (tab === 'overdue') return;
     api.get('/admin/billing/transfers', { params: { status: tab } })
       .then((res) => { setRows(res.data.transfers); setCounts(res.data.counts ?? {}); setError(''); })
       .catch((err) => setError(apiError(err, 'No se pudieron cargar los cobros.')));
@@ -78,17 +81,19 @@ export default function PlatformCollections() {
     <div className="space-y-5 pb-10 font-sans" data-collections>
       <div>
         <h1 className="text-2xl font-black text-brand-ink tracking-tight">Cobros</h1>
-        <p className="text-sm text-slate-500 font-medium">Los comprobantes de transferencia, Yape o Plin que envían las empresas para pagar su plan. Revisa que el abono esté en la cuenta antes de aprobar.</p>
+        <p className="text-sm text-slate-500 font-medium">Los comprobantes de transferencia, Yape o Plin que envían las empresas para pagar su plan, y las empresas con el plan vencido. Revisa que el abono esté en la cuenta antes de aprobar.</p>
       </div>
 
       <div className="flex flex-wrap gap-2" role="tablist">
         {TABS.map((item) => (
           <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} data-collections-tab={item.id} onClick={() => setTab(item.id)} className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors ${tab === item.id ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
-            {item.label}{item.id !== 'all' && counts[item.id] ? ` (${counts[item.id]})` : ''}
+            {item.label}{item.id !== 'all' && item.id !== 'overdue' && counts[item.id] ? ` (${counts[item.id]})` : ''}
           </button>
         ))}
       </div>
 
+      {tab === 'overdue' ? <PlatformOverdue onChanged={refetchUser} /> : (
+      <>
       <SuccessAlert message={notice} />
       <ErrorAlert message={error} />
 
@@ -115,6 +120,8 @@ export default function PlatformCollections() {
           />
         )}
       </section>
+      </>
+      )}
 
       {open && (
         <FormDrawer isOpen onClose={() => setOpen(null)} title={`Pago de ${open.tenant?.name}`} subtitle={`${money(open.amount, open.currency)} · plan ${open.plan} ${cycleLabel(open.billing_cycle)}`} icon={<ReceiptText size={18} />}>

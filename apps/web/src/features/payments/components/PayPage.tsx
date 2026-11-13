@@ -8,6 +8,7 @@ import { api } from '@/lib/axios';
 import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
+import { CulqiClosed, openCulqi, type CulqiCheckoutConfig } from '@/features/billing/culqi';
 
 interface PublicLink {
   status: 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
@@ -29,6 +30,7 @@ interface PublicLink {
   company: { name: string; color: string | null; logo: string | null };
   booking: { service: string | null; professional: string | null; branch: string | null; starts_at: string | null; price: number | null } | null;
   appointment: string | null;
+  culqi?: CulqiCheckoutConfig | null;
 }
 
 const minutesLeft = (iso: string) => Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
@@ -76,10 +78,40 @@ export default function PayPage() {
     return () => clearInterval(timer);
   }, [checking, link, load]);
 
+  const payWithCulqi = async (culqi: CulqiCheckoutConfig) => {
+    let token: string;
+    try {
+      token = await openCulqi(culqi);
+    } catch (err) {
+      if (!(err instanceof CulqiClosed)) setError(err instanceof Error ? err.message : 'No se pudo abrir el formulario de pago.');
+      setStarting(false);
+      return;
+    }
+    try {
+      setNotice('');
+      const res = await api.post(`/pay/${params.token}/culqi`, { token });
+      if (res.data.result?.checkout_url) {
+        window.location.href = res.data.result.checkout_url;
+        return;
+      }
+      apply(res.data.link);
+      if (res.data.result?.status === 'refunded') setError(res.data.result.message);
+    } catch (err) {
+      setError(apiError(err, 'El pago no se pudo completar. Inténtalo de nuevo.'));
+      load();
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const startPayment = async () => {
     try {
       setStarting(true);
       setError('');
+      if (link?.culqi) {
+        await payWithCulqi(link.culqi);
+        return;
+      }
       const res = await api.post(`/pay/${params.token}/start`);
       window.location.href = res.data.checkout_url;
     } catch (err) {
@@ -204,7 +236,7 @@ export default function PayPage() {
                     <button type="button" data-pay-start disabled={starting} onClick={startPayment} className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-white rounded-xl shadow-sm transition-colors disabled:opacity-50" style={{ background: accent }}>
                       {starting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />} Pagar con {link.provider}
                     </button>
-                    <p className="text-xs text-slate-500 text-center">Pagas en la página segura de {link.provider} y vuelves aquí. Los datos de tu tarjeta no pasan por {link.company.name}.</p>
+                    <p className="text-xs text-slate-500 text-center">{link.culqi ? `Escribes tu tarjeta en el formulario seguro de ${link.provider}, aquí mismo.` : `Pagas en la página segura de ${link.provider} y vuelves aquí.`} Los datos de tu tarjeta no pasan por {link.company.name}.</p>
                     {returned && <button type="button" data-pay-recheck onClick={() => { setChecking(true); load(true); }} className="w-full px-5 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition-colors">Ya pagué: revisar otra vez</button>}
                   </div>
                 )}

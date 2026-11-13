@@ -160,7 +160,7 @@ export default function TenantsTable() {
           message: (
             <span className="block space-y-3 pt-1" data-tenant-invited>
               <span className="block text-sm text-slate-600">
-                {res.data?.data?.name} quedó lista. Le enviamos a <span className="font-semibold text-slate-800">{owner.email}</span> un correo de bienvenida para que cree su contraseña{formData.payment_method === 'card' ? ' y después autorice su tarjeta en Mercado Pago' : ''}.
+                {res.data?.data?.name} quedó lista. Le enviamos a <span className="font-semibold text-slate-800">{owner.email}</span> un correo de bienvenida para que cree su contraseña.
               </span>
               <span className="block text-xs text-slate-500 bg-slate-100/80 border border-slate-200/60 p-3 rounded-xl font-medium">
                 El enlace vale 3 días. Si no le llega, en la página de la empresa (Personal → Acceso) puedes reenviarlo o darle una contraseña temporal.
@@ -287,8 +287,8 @@ export default function TenantsTable() {
             <>
               <span className="font-semibold text-slate-700">{tenant.subscription.plan.name}</span>
               {tenant.subscription.plan.is_public_catalog === false && <span className="text-slate-400"> · a medida</span>}
-              <span className={`block text-[11px] ${tenant.billing_state === 'locked' || tenant.billing_state === 'card_needed' ? 'text-rose-600 font-semibold' : tenant.billing_state === 'grace' ? 'text-amber-700 font-semibold' : 'text-slate-400'}`} data-tenant-billing={tenant.billing_state}>
-                {tenant.billing_state ? BILLING_STATES[tenant.billing_state].label : SUBSCRIPTION_STATUS[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
+              <span className={`block text-[11px] ${tenant.billing_state === 'locked' ? 'text-rose-600 font-semibold' : tenant.billing_state === 'grace' ? 'text-amber-700 font-semibold' : 'text-slate-400'}`} data-tenant-billing={tenant.billing_state}>
+                {tenant.billing_state && BILLING_STATES[tenant.billing_state] ? BILLING_STATES[tenant.billing_state].label : SUBSCRIPTION_STATUS[tenant.subscription.status ?? ''] ?? tenant.subscription.status}
               </span>
             </>
           ) : (

@@ -16,7 +16,7 @@ interface ProviderOption {
   key: string;
   label: string;
   connectable: boolean;
-  saved: { public_key: string | null; secret_key: string | null; webhook_secret?: string | null; saved_at: string } | null;
+  saved: { public_key: string | null; secret_key: string | null; webhook_secret?: string | null; saved_at: string; mode?: string | null } | null;
 }
 
 interface PaymentEvent {
@@ -32,7 +32,7 @@ interface PaymentEvent {
 }
 
 interface IntegrationsPayload {
-  payments: { active: string; chosen: string; status: string; mode: string | null; account: string | null; currency: string | null; simulation: boolean; webhook_url: string; providers: ProviderOption[]; link_hours: number };
+  payments: { active: string; chosen: string; status: string; mode: string | null; account: string | null; currency: string | null; simulation: boolean; webhook_url: string; culqi_webhook_url?: string; connected?: string[]; providers: ProviderOption[]; link_hours: number };
   events: PaymentEvent[];
   qr: Partial<Record<'yape' | 'plin', PaymentQr>>;
 }
@@ -179,11 +179,15 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
   const provider = data.payments.providers.find((p) => p.key === chosen);
   const isReal = chosen !== 'simulated' && chosen !== 'none';
   const isMercadoPago = chosen === 'mercadopago';
+  const isCulqi = chosen === 'culqi';
+  const connected = data.payments.connected ?? [];
+  const both = connected.includes('culqi') && connected.includes('mercadopago');
+  const webhookUrl = isCulqi ? (data.payments.culqi_webhook_url ?? '') : data.payments.webhook_url;
   const options: ProviderOption[] = [{ key: 'none', label: 'Sin pagos en línea', connectable: true, saved: null }, ...data.payments.providers];
 
   const copyWebhook = async () => {
     try {
-      await navigator.clipboard.writeText(data.payments.webhook_url);
+      await navigator.clipboard.writeText(webhookUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -198,7 +202,11 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
       setNotice('');
       const res = await api.put('/integrations/payments', { provider: chosen, ...(isReal ? { ...keys, mode } : {}) });
       apply(res.data);
-      setNotice(isMercadoPago
+      const culqiSaved = (res.data as IntegrationsPayload).payments.providers.find((p) => p.key === 'culqi')?.saved;
+      const withBackup = (res.data as IntegrationsPayload).payments.connected?.includes('mercadopago');
+      setNotice(isCulqi
+        ? `Culqi quedó conectado${culqiSaved?.mode === 'production' ? '' : ' en modo de pruebas: usa las tarjetas de prueba de Culqi, lo que se pague no llega a tu cuenta'}. Los links de pago, los adelantos y los paquetes en línea se pagan con Culqi${withBackup ? ', y con Mercado Pago si Culqi no responde' : ''}.`
+        : isMercadoPago
         ? mode === 'production'
           ? 'Mercado Pago quedó conectado. Los links de pago, los adelantos y los paquetes en línea se pagan con la cuenta de Mercado Pago de tu empresa.'
           : 'Mercado Pago quedó conectado en modo de pruebas. Usa las tarjetas de prueba de Mercado Pago: lo que se pague no llega a tu cuenta.'
@@ -214,11 +222,26 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
     }
   };
 
+  const disconnect = async () => {
+    try {
+      setBusy(true);
+      setError('');
+      setNotice('');
+      const res = await api.put('/integrations/payments', { provider: chosen, disconnect: true });
+      apply(res.data);
+      setNotice(`Listo: ${provider?.label} quedó desconectado.`);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo desconectar.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const test = async () => {
     try {
       setBusy(true);
       setError('');
-      const res = await api.post('/integrations/payments/test');
+      const res = await api.post('/integrations/payments/test', isCulqi || isMercadoPago ? { provider: chosen } : {});
       if (res.data.ok) setNotice(res.data.message);
       else setError(res.data.message);
     } catch (err) {
@@ -245,6 +268,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
           {options.map((option) => {
             const active = chosen === option.key;
             const inUse = data.payments.active === option.key;
+            const backup = both && option.key === 'mercadopago';
             return (
               <OptionCard
                 key={option.key}
@@ -257,14 +281,42 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
               >
                 <span className="block text-sm font-bold text-brand-ink">{option.label}</span>
                 <span className={`block text-xs mt-0.5 ${inUse ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>
-                  {inUse ? (option.key === 'none' ? 'Así está' : 'En uso') : option.key === 'simulated' ? 'Solo para probar' : option.key === 'none' ? 'Solo cobras en la sede' : !option.connectable ? 'Próximamente' : option.saved ? 'Llaves guardadas' : 'Lista para conectar'}
+                  {inUse ? (option.key === 'none' ? 'Así está' : 'En uso') : backup ? 'Respaldo' : option.key === 'simulated' ? 'Solo para probar' : option.key === 'none' ? 'Solo cobras en la sede' : !option.connectable ? 'Próximamente' : option.saved ? 'Llaves guardadas' : 'Lista para conectar'}
                 </span>
               </OptionCard>
             );
           })}
         </div>
 
-        {isMercadoPago ? (
+        {isCulqi ? (
+          <div className="rounded-xl border border-slate-200 p-4 space-y-4" data-provider-keys="culqi">
+            <p className="text-sm text-slate-600">
+              Copia las llaves de tu comercio en Culqi (panel de Culqi → Desarrollo → API Keys). Con las de prueba (pk_test, sk_test) no se mueve dinero; con las de producción (pk_live, sk_live) el dinero llega a tu cuenta de Culqi. Tus clientes escriben su tarjeta en el formulario de Culqi, sin salir de la página de pago.
+            </p>
+            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Si también conectas Mercado Pago, se cobra con Culqi y, si Culqi no responde, el cliente puede pagar con Mercado Pago.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Llave pública</span>
+                <input aria-label="Llave pública de Culqi" maxLength={255} placeholder={provider?.saved?.public_key ?? 'pk_test_...'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.public_key} onChange={(e) => setKeys({ ...keys, public_key: e.target.value })} />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Llave secreta</span>
+                <input aria-label="Llave secreta de Culqi" type="password" autoComplete="off" maxLength={255} placeholder={provider?.saved?.secret_key ?? 'sk_test_...'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.secret_key} onChange={(e) => setKeys({ ...keys, secret_key: e.target.value })} />
+              </label>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-2" data-webhook>
+              <span className="block text-xs font-bold text-slate-700">Avisos de pago (recomendado)</span>
+              <p className="text-xs text-slate-600">En el panel de Culqi entra a Desarrollo → Eventos, pega esta dirección y marca los eventos de cargos. Así un pago se confirma aunque el cliente cierre la página. Cada aviso se comprueba volviendo a preguntar a Culqi.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input readOnly aria-label="Dirección de avisos de Culqi" value={webhookUrl} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs flex-1`} />
+                <button type="button" data-webhook-copy onClick={copyWebhook} className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                  <Copy size={14} /> {copied ? '¡Copiada!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            {provider?.saved && <p className="text-xs text-slate-500">Guardadas el {momentOf(provider.saved.saved_at)}{provider.saved.mode === 'production' ? ' · producción' : ' · pruebas'}. Deja los campos vacíos para no cambiarlas.</p>}
+          </div>
+        ) : isMercadoPago ? (
           <div className="rounded-xl border border-slate-200 p-4 space-y-4" data-provider-keys>
             <p className="text-sm text-slate-600">
               Copia los datos de tu aplicación en Mercado Pago (Tus integraciones → tu aplicación → Credenciales). El dinero llega a la cuenta de Mercado Pago de tu empresa.
@@ -298,7 +350,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
               <span className="block text-xs font-bold text-slate-700">Avisos de pago (recomendado)</span>
               <p className="text-xs text-slate-600">Para que el pago se confirme al instante, en tu aplicación de Mercado Pago entra a Webhooks, pega esta dirección, marca el evento <span className="font-semibold">Order (Mercado Pago)</span> y guarda. Luego copia aquí la clave secreta que te muestra. Sin esto, el sistema igual revisa los pagos cada pocos minutos.</p>
               <div className="flex flex-col sm:flex-row gap-2">
-                <input readOnly aria-label="Dirección de avisos" value={data.payments.webhook_url} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs flex-1`} />
+                <input readOnly aria-label="Dirección de avisos" value={webhookUrl} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs flex-1`} />
                 <button type="button" data-webhook-copy onClick={copyWebhook} className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
                   <Copy size={14} /> {copied ? '¡Copiada!' : 'Copiar'}
                 </button>
@@ -313,7 +365,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
         ) : isReal ? (
           <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-provider-keys>
             <p className="text-sm text-slate-600">
-              {provider?.label} todavía no está conectado al sistema. Puedes dejar guardadas las llaves que te dio; mientras tanto no se ofrecen pagos en línea con {provider?.label}. Para cobrar en línea hoy, elige Mercado Pago.
+              {provider?.label} todavía no está conectado al sistema. Puedes dejar guardadas las llaves que te dio; mientras tanto no se ofrecen pagos en línea con {provider?.label}. Para cobrar en línea hoy, elige Culqi o Mercado Pago.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <input aria-label="Llave pública" maxLength={255} placeholder={provider?.saved?.public_key ?? 'Llave pública'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.public_key} onChange={(e) => setKeys({ ...keys, public_key: e.target.value })} />
@@ -335,7 +387,12 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
         <div className="flex flex-wrap gap-2">
           {canSave && (
             <button type="button" data-save-provider disabled={busy || !dirty} onClick={save} className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
-              {busy ? 'Guardando...' : isMercadoPago ? 'Guardar y conectar' : 'Guardar pasarela'}
+              {busy ? 'Guardando...' : isMercadoPago || isCulqi ? 'Guardar y conectar' : 'Guardar pasarela'}
+            </button>
+          )}
+          {canSave && (isMercadoPago || isCulqi) && provider?.saved && (
+            <button type="button" data-disconnect-provider disabled={busy} onClick={disconnect} className="px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 rounded-xl transition-colors">
+              Desconectar {provider.label}
             </button>
           )}
           <button type="button" data-test-provider disabled={busy} onClick={test} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 transition-colors">

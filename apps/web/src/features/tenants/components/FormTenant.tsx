@@ -4,7 +4,6 @@ import Button from '@/app/components/common/Button';
 import { labelClass } from '@/app/components/ui/forms/styles';
 import { useState, useEffect } from 'react';
 import Select from '@/app/components/common/Select';
-import OptionCard from '@/app/components/common/OptionCard';
 import { Building2 } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
@@ -230,21 +229,6 @@ export default function FormTenant({
                 />
               </div>
             )}
-
-            <div>
-              <label className={labelClass}>¿Cómo pagará su plan?</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Cómo pagará su plan">
-                {([
-                  ['card', 'Con tarjeta en línea', 'Al entrar, la empresa autoriza su propia tarjeta en Mercado Pago; nadie más la ve. Se cobra sola cada periodo.'],
-                  ['manual', 'Por transferencia o convenio', 'La empresa paga y sube su comprobante para que lo apruebes en Cobros, o registras el pago a mano.'],
-                ] as const).map(([key, title, hint]) => (
-                  <OptionCard key={key} type="button" role="radio" aria-checked={formData.payment_method === key} data-payment-method={key} selected={formData.payment_method === key} onClick={() => set('payment_method', key)} className="text-left rounded-xl border px-3.5 py-3">
-                    <span className="block text-sm font-bold text-brand-ink">{title}</span>
-                    <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>
-                  </OptionCard>
-                ))}
-              </div>
-            </div>
 
             <p className={sectionClass}>Datos de la empresa</p>
 

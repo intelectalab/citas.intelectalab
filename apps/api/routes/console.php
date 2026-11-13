@@ -11,28 +11,29 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Artisan::command('subscriptions:expire', function () {
-    $limit = now()->subDays(\App\Support\Subscriptions::graceDays());
-    $withCard = \App\Support\Subscriptions::ready();
     $trials = DB::table('subscriptions')
         ->where('status', 'trialing')
-        ->where(function ($q) use ($limit, $withCard) {
-            $ended = fn ($when) => fn ($c) => $c->where('ends_at', '<=', $when)->orWhere(fn ($n) => $n->whereNull('ends_at')->where('trial_ends_at', '<=', $when));
-            $withCard
-                ? $q->where(fn ($c) => $c->where(fn ($p) => $p->whereNull('card_status')->orWhere('card_status', '!=', 'authorized'))->where($ended(now())))
-                    ->orWhere(fn ($c) => $c->where('card_status', 'authorized')->where($ended($limit)))
-                : $q->where($ended(now()));
-        })
+        ->whereRaw('coalesce(trial_ends_at, ends_at) is not null')
+        ->whereRaw('not (' . \App\Support\Subscriptions::graceSql('coalesce(trial_ends_at, ends_at)') . ')')
         ->update(['status' => 'expired', 'updated_at' => now()]);
 
     $pastDue = DB::table('subscriptions')
         ->where('status', 'active')
-        ->where('ends_at', '<=', $limit)
+        ->whereNotNull('ends_at')
+        ->whereRaw('not (' . \App\Support\Subscriptions::graceSql() . ')')
         ->update(['status' => 'past_due', 'updated_at' => now()]);
 
-    $this->info("Pruebas vencidas: {$trials}. Suscripciones con pago vencido: {$pastDue}.");
-})->purpose('Marca como vencidas las suscripciones cuya fecha de fin ya pasó');
+    $this->info("Pruebas que pasaron a solo lectura: {$trials}. Suscripciones que pasaron a solo lectura: {$pastDue}.");
+})->purpose('Marca en solo lectura las suscripciones que pasaron el plazo para pagar');
 
 Schedule::command('subscriptions:expire')->hourly();
+
+Artisan::command('billing:dunning', function () {
+    $done = \App\Support\Dunning::run();
+    $this->info("Planes vencidos revisados: {$done['revisadas']}. Cobros intentados: {$done['cobros']}. Avisos: {$done['avisos']}. Cancelados: {$done['canceladas']}.");
+})->purpose('Cobra los planes vencidos con la tarjeta guardada, avisa a las empresas y cancela las que pasaron el plazo');
+
+Schedule::command('billing:dunning')->hourly()->withoutOverlapping();
 
 Artisan::command('billing:sync', function () {
     $links = \App\Support\PaymentLinks::checkPending();

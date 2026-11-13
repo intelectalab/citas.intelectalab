@@ -11,6 +11,7 @@ use App\Support\PlanTransfers;
 use App\Support\Subscriptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -98,7 +99,7 @@ class BillingController extends Controller
         $subscription = $this->subscription($request);
         [$plan, $cycle] = $this->choice($request, $subscription);
 
-        return response()->json(['checkout_url' => PlanBilling::cardUrl($subscription, $request->user(), $plan, $cycle)]);
+        return response()->json(PlanBilling::card($subscription, $request->user(), $plan, $cycle));
     }
 
     public function pay(Request $request)
@@ -106,7 +107,62 @@ class BillingController extends Controller
         $subscription = $this->subscription($request);
         [$plan, $cycle] = $this->choice($request, $subscription);
 
-        return response()->json(['checkout_url' => PlanBilling::payUrl($subscription, $request->user(), $plan, $cycle)]);
+        return response()->json(PlanBilling::pay($subscription, $request->user(), $plan, $cycle));
+    }
+
+    public function activate(Request $request)
+    {
+        $subscription = $this->subscription($request);
+        [$plan, $cycle] = $this->choice($request, $subscription);
+        abort_unless(PlanBilling::cardEnabled(), 422, PlanBilling::NOT_CONNECTED);
+
+        if (Subscriptions::price($plan, $cycle) <= 0) {
+            return response()->json(self::changePlan($request, $subscription, $plan, $cycle));
+        }
+
+        if ($plan->id !== $subscription->plan_id || $cycle !== $subscription->billing_cycle) {
+            $before = $subscription->only(['plan_id', 'billing_cycle']);
+            $subscription->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle, 'pending_plan_id' => null, 'pending_billing_cycle' => null]);
+            AuditEvent::record($request, 'subscription.plan_changed', $request->user()->tenant, $before, $subscription->only(['plan_id', 'billing_cycle']));
+            Subscriptions::forget($subscription->tenant_id);
+            $subscription = $subscription->fresh('plan');
+        }
+
+        if (PlanBilling::savedCard($subscription)) {
+            $result = PlanBilling::chargeSaved($subscription, 'activate');
+
+            if (!$result['ok']) {
+                throw ValidationException::withMessages(['plan' => 'El cobro no pasó: ' . rtrim($result['message'], '.') . '. Cambia la tarjeta o paga con otro medio.']);
+            }
+
+            return response()->json(['message' => 'Listo: cobramos el plan a tu tarjeta y tu plan quedó activo.'] + json_decode($this->show($request)->getContent(), true));
+        }
+
+        return response()->json(PlanBilling::card($subscription, $request->user(), $plan, $cycle, 'activate'));
+    }
+
+    public function confirm(Request $request)
+    {
+        $subscription = $this->subscription($request);
+        $validated = $request->validate([
+            'payment_id' => 'required|uuid',
+            'token'      => ['required', 'string', 'max:120', 'regex:/^(tkn|ype)_[A-Za-z0-9_]+$/'],
+        ], ['token.regex' => 'Culqi no devolvió una tarjeta válida. Inténtalo de nuevo.']);
+
+        $kind = DB::table('plan_payments')->where('id', $validated['payment_id'])->where('subscription_id', $subscription->id)->value('kind');
+        abort_unless(in_array($kind, ['card', 'link'], true), 404, 'Este pago no existe.');
+
+        $result = $kind === 'card'
+            ? PlanBilling::confirmCard($subscription, $validated['payment_id'], $validated['token'], $request->user())
+            : PlanBilling::confirmPay($subscription, $validated['payment_id'], $validated['token'], $request->user());
+
+        if (!empty($result['checkout_url'])) {
+            return response()->json($result);
+        }
+
+        AuditEvent::record($request, $kind === 'card' ? 'subscription.card_saved' : 'subscription.paid_online', $request->user()->tenant, [], ['provider' => 'Culqi']);
+
+        return response()->json(['message' => $result['message'], 'charge_failed' => ($result['status'] ?? null) === 'failed'] + json_decode($this->show($request)->getContent(), true));
     }
 
     public function cancelCard(Request $request)
@@ -146,35 +202,34 @@ class BillingController extends Controller
         abort_unless(PlanBilling::enabled(), 422, PlanBilling::NOT_CONNECTED);
 
         if (in_array($state, ['grace', 'locked', 'none'], true) || $subscription->status === 'canceled') {
-            if (!PlanBilling::cardEnabled()) {
+            if (!PlanBilling::cardEnabled() || PlanBilling::savedCard($subscription)) {
                 $subscription->update(['pending_plan_id' => $plan->id, 'pending_billing_cycle' => $cycle]);
                 Subscriptions::forget($subscription->tenant_id);
 
                 return ['message' => "Listo: elegiste el plan {$plan->name}. Ahora págalo con \"Pagar ahora\" para activarlo."];
             }
 
-            return ['checkout_url' => PlanBilling::payUrl($subscription, $user, $plan, $cycle)];
+            return PlanBilling::pay($subscription, $user, $plan, $cycle);
         }
 
-        if ($state === 'trial' || $state === 'card_needed') {
-            if (!$same) {
-                $subscription->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle]);
-                AuditEvent::record($request, 'subscription.plan_changed', $user->tenant, $before, $subscription->only(['plan_id', 'billing_cycle', 'status']));
+        if ($state === 'trial') {
+            if ($same) {
+                return ['message' => "Ya estás en el plan {$plan->name}."];
             }
 
-            if (($subscription->card_status === 'authorized' && $same) || !PlanBilling::cardEnabled()) {
-                return ['message' => $same ? "Ya estás en el plan {$plan->name}." : "Listo: tu prueba sigue con el plan {$plan->name}."];
-            }
+            $subscription->update(['plan_id' => $plan->id, 'billing_cycle' => $cycle]);
+            AuditEvent::record($request, 'subscription.plan_changed', $user->tenant, $before, $subscription->only(['plan_id', 'billing_cycle', 'status']));
+            Subscriptions::forget($subscription->tenant_id);
 
-            return ['checkout_url' => PlanBilling::cardUrl($subscription->fresh('plan'), $user, $plan, $cycle)];
+            return ['message' => "Listo: tu prueba sigue con el plan {$plan->name}. Cuando quieras, actívalo con \"Activar mi plan\"."];
         }
 
         if ($same) {
             return ['message' => "Ya estás en el plan {$plan->name}."];
         }
 
-        if ($subscription->card_status === 'authorized' && PlanBilling::cardEnabled()) {
-            return ['checkout_url' => PlanBilling::cardUrl($subscription, $user, $plan, $cycle)];
+        if ($subscription->card_status === 'authorized' && $subscription->external_provider === 'mercadopago' && PlanBilling::cardEnabled()) {
+            return PlanBilling::card($subscription, $user, $plan, $cycle);
         }
 
         $subscription->update(['pending_plan_id' => $plan->id, 'pending_billing_cycle' => $cycle]);
@@ -248,8 +303,8 @@ class BillingController extends Controller
 
     public function simulate(Request $request, string $id)
     {
-        $validated = $request->validate(['result' => ['required', Rule::in(['approved', 'rejected'])]]);
+        $validated = $request->validate(['result' => ['required', Rule::in(['approved', 'rejected', 'nofunds'])]]);
 
-        return response()->json(PlanBilling::simulate($id, $validated['result'] === 'approved') + ['view' => PlanBilling::simulatedView($id)]);
+        return response()->json(PlanBilling::simulate($id, $validated['result']) + ['view' => PlanBilling::simulatedView($id)]);
     }
 }

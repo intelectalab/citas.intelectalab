@@ -6,4 +6,9 @@ return [
     'mercadopago' => [
         'api' => env('MERCADOPAGO_API', 'https://api.mercadopago.com'),
     ],
+
+    'culqi' => [
+        'api'    => env('CULQI_API', 'https://api.culqi.com/v2'),
+        'script' => env('CULQI_SCRIPT', 'https://js.culqi.com/checkout-js'),
+    ],
 ];

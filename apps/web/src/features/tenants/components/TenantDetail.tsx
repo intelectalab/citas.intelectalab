@@ -555,11 +555,13 @@ export default function TenantDetail() {
             <div className="space-y-2 pt-4 border-t border-slate-100" data-tenant-billing-detail>
               <span className={labelClass}>Cobro del plan</span>
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className={`px-2 py-0.5 rounded-md font-semibold ${BILLING_STATES[detail.billing.state].badge}`}>{BILLING_STATES[detail.billing.state].label}</span>
+                <span className={`px-2 py-0.5 rounded-md font-semibold ${(BILLING_STATES[detail.billing.state] ?? BILLING_STATES.none).badge}`}>{detail.billing.reason === 'canceled' ? 'Cancelado' : (BILLING_STATES[detail.billing.state] ?? BILLING_STATES.none).label}</span>
                 <span className="text-slate-600">
-                  {cardLabel(detail.billing.card) ?? (detail.billing.card?.required ? 'Debe autorizar su tarjeta' : 'Sin tarjeta: paga cada periodo o se registra a mano')}
+                  {cardLabel(detail.billing.card) ?? 'Sin tarjeta guardada: paga cada periodo o se registra a mano'}
                 </span>
-                {detail.billing.state === 'grace' && detail.billing.grace_ends_at && <span className="text-amber-700 font-semibold">Pasa a solo lectura el {formatDate(detail.billing.grace_ends_at)}</span>}
+                {detail.billing.state === 'grace' && (detail.billing.overdue?.readonly_on ?? detail.billing.grace_ends_at) && <span className="text-amber-700 font-semibold">Pasa a solo lectura el {formatDate(detail.billing.overdue?.readonly_on ?? detail.billing.grace_ends_at ?? '')}</span>}
+                {detail.billing.state === 'locked' && detail.billing.overdue?.cancel_on && <span className="text-rose-700 font-semibold">Se cancela el {formatDate(detail.billing.overdue.cancel_on)}</span>}
+                {detail.billing.overdue?.last_failure && <span className="text-rose-700 font-semibold">Último rechazo: {detail.billing.overdue.last_failure}</span>}
                 {detail.billing.card?.failed_at && <span className="text-rose-700 font-semibold">Cobro fallido el {formatDate(detail.billing.card.failed_at)}</span>}
               </div>
               {(detail.plan_payments ?? []).length > 0 && (

@@ -7,16 +7,17 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { PagedList } from '@/app/components/common/Pager';
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CreditCard, History, Loader2, Repeat } from 'lucide-react';
+import { AlertTriangle, CreditCard, History, Loader2, Repeat, Rocket } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
 import PayPlanDrawer from './PayPlanDrawer';
-import { BILLING_STATES, INVOICE_REASONS, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, cycleLabel, type BillingPayload } from '../billing';
+import { CulqiClosed, openCulqi } from '../culqi';
+import { BILLING_STATES, INVOICE_REASONS, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, cycleLabel, providerLabel, asClause, transferAllowed, type BillingPayload, type CulqiAction } from '../billing';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
-const shortDate = (date: string | null) => (date ? formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+const shortDate = (date: string | null | undefined) => (date ? formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 
 export default function PlanCard() {
   const { refetchUser } = useAuth();
@@ -39,22 +40,23 @@ export default function PlanCard() {
     const back = params.get('plan');
     if (params.get('tab') === 'plan' || back) setTimeout(() => document.getElementById('plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
     if (params.get('bienvenida') === '1') {
-      setNotice('Te damos la bienvenida. Último paso: pulsa "Autorizar tarjeta" y escríbela tú en Mercado Pago. No se cobra nada durante la prueba gratis.');
+      setNotice('Te damos la bienvenida. Tu prueba gratis ya empezó y no necesita tarjeta. Cuando quieras quedarte, pulsa "Activar mi plan".');
       window.history.replaceState(null, '', '/companies');
     }
     if (!back) { load(); return; }
 
-    setNotice('Revisando tu pago con Mercado Pago...');
+    setNotice('Revisando tu pago...');
     load(true).then((payload) => {
       refetchUser();
       if (!payload) return;
       const last = payload.history[0];
+      const charged = back === 'tarjeta' && last?.kind === 'charge';
       setNotice(last?.status === 'paid'
-        ? back === 'tarjeta' ? 'Listo: tu tarjeta quedó autorizada.' : 'Listo: recibimos tu pago y tu plan quedó activo.'
+        ? charged ? 'Listo: guardamos tu tarjeta y cobramos el plan. Tu plan quedó al día.' : back === 'tarjeta' ? 'Listo: tu tarjeta quedó guardada.' : 'Listo: recibimos tu pago y tu plan quedó activo.'
         : last?.status === 'failed'
           ? ''
-          : 'Mercado Pago aún no nos confirma. Si ya pagaste, en unos minutos se verá aquí.');
-      if (last?.status === 'failed') setError(back === 'tarjeta' ? 'La tarjeta no se pudo autorizar. Prueba con otra.' : 'El pago fue rechazado. Inténtalo con otro medio.');
+          : 'La pasarela aún no nos confirma. Si ya pagaste, en unos minutos se verá aquí.');
+      if (last?.status === 'failed') setError(charged ? `Guardamos tu tarjeta, pero el cobro no pasó: ${asClause(last.message ?? 'la tarjeta fue rechazada')}.` : last.message ?? (back === 'tarjeta' ? 'La tarjeta no se pudo guardar. Prueba con otra.' : 'El pago fue rechazado. Inténtalo con otro medio.'));
       window.history.replaceState(null, '', '/companies');
     });
   }, [load, refetchUser]);
@@ -69,17 +71,48 @@ export default function PlanCard() {
   }
 
   const { billing } = data;
-  const state = BILLING_STATES[billing.state];
+  const state = BILLING_STATES[billing.state] ?? BILLING_STATES.none;
   const cardText = cardLabel(billing.card);
   const authorized = billing.card?.status === 'authorized';
   const paid = billing.price > 0 && !billing.free;
-  const failed = Boolean(billing.card?.failed_at);
+  const overdue = billing.overdue ?? null;
   const canAct = billing.can_pay && billing.online;
   const cardMethod = billing.methods?.card ?? billing.online;
-  const transferMethod = Boolean(billing.methods?.transfer);
-  const showPay = canAct && paid && !billing.review && (['grace', 'locked'].includes(billing.state) || failed || (!authorized && (billing.state === 'active' || (billing.state === 'trial' && !cardMethod))));
-  const showCard = canAct && paid && cardMethod && billing.state !== 'locked';
-  const startPay = () => (transferMethod ? setPanel('pay') : go('pay', '/billing/pay'));
+  const transferNow = transferAllowed(billing, billing.pending_plan?.billing_cycle ?? billing.billing_cycle);
+  const showActivate = canAct && paid && billing.state === 'trial' && (cardMethod || transferNow);
+  const showPay = canAct && paid && !billing.review && billing.state !== 'trial' && (['grace', 'locked'].includes(billing.state) || (!authorized && billing.state === 'active'));
+  const showCard = canAct && paid && cardMethod && (billing.state !== 'trial' || authorized);
+
+  const finish = async (res: { data: Record<string, unknown> }) => {
+    if (typeof res.data.checkout_url === 'string') {
+      window.location.href = res.data.checkout_url;
+      return true;
+    }
+    if (typeof res.data.message === 'string') {
+      if (res.data.charge_failed) setError(res.data.message);
+      else setNotice(res.data.message);
+    }
+    if (res.data.billing) setData(res.data as unknown as BillingPayload);
+    else await load();
+    setPanel('');
+    await refetchUser();
+    return false;
+  };
+
+  const runCulqi = async (culqi: CulqiAction) => {
+    let token: string;
+    try {
+      token = await openCulqi(culqi);
+    } catch (err) {
+      if (!(err instanceof CulqiClosed)) setError(err instanceof Error ? err.message : 'No se pudo abrir el formulario de Culqi.');
+      await load();
+      return;
+    }
+    setNotice(culqi.action === 'card' ? 'Guardando tu tarjeta...' : 'Confirmando tu pago...');
+    const res = await api.post('/billing/culqi', { payment_id: culqi.payment_id, token });
+    setNotice('');
+    await finish(res);
+  };
 
   const go = async (action: string, path: string, body?: object) => {
     try {
@@ -87,21 +120,22 @@ export default function PlanCard() {
       setError('');
       setNotice('');
       const res = await api.post(path, body ?? {});
-      if (res.data.checkout_url) {
-        window.location.href = res.data.checkout_url;
+      if (res.data.culqi) {
+        setPanel('');
+        await runCulqi(res.data.culqi as CulqiAction);
         return;
       }
-      if (res.data.message) setNotice(res.data.message);
-      if (res.data.billing) setData(res.data);
-      else await load();
-      setPanel('');
-      await refetchUser();
+      await finish(res);
     } catch (err) {
+      setNotice('');
       setError(apiError(err, 'No se pudo completar. Inténtalo de nuevo.'));
     } finally {
       setBusy('');
     }
   };
+
+  const startPay = () => (billing.methods?.transfer ? setPanel('pay') : go('pay', '/billing/pay'));
+  const startActivate = () => (transferNow ? setPanel('pay') : go('activate', '/billing/activate'));
 
   const openPlans = () => {
     setChoice({ plan: billing.pending_plan?.id ?? billing.plan?.id ?? data.plans[0]?.id ?? '', cycle: billing.pending_plan?.billing_cycle ?? billing.billing_cycle ?? 'monthly' });
@@ -111,23 +145,33 @@ export default function PlanCard() {
   const summary = (() => {
     const price = `${money(billing.price, billing.plan?.currency)} ${cycleLabel(billing.billing_cycle)}`;
     switch (billing.state) {
-      case 'trial':
-        return `Prueba gratis hasta el ${shortDate(billing.ends_at)}. ${authorized ? `Ese día se cobran ${price} a tu tarjeta.` : paid && billing.online ? 'Autoriza tu tarjeta para que el plan se cobre solo al terminar la prueba.' : ''}`;
+      case 'trial': {
+        const left = billing.trial_days_left;
+        const days = left === null || left === undefined ? '' : left <= 1 ? ' (último día)' : ` (quedan ${left} días)`;
+        if (!paid) return `Prueba gratis hasta el ${shortDate(billing.ends_at)}${days}.`;
+        return `Prueba gratis hasta el ${shortDate(billing.ends_at)}${days}. ${authorized ? `Ese día se cobran ${price} a tu tarjeta.` : `Para seguir después, activa tu plan de ${price}: no se cobra nada hasta que lo actives.`}`;
+      }
       case 'active':
         return billing.free ? 'Plan sin costo.' : `${price}. Vigente hasta el ${shortDate(billing.ends_at)}. ${authorized ? 'Se renueva solo con tu tarjeta.' : 'Paga antes de esa fecha para que no se interrumpa.'}`;
       case 'grace':
-        return `Venció el ${shortDate(billing.ends_at)}. Págalo antes del ${shortDate(billing.grace_ends_at)} para que tu empresa siga usando el sistema.`;
+        return `Venció el ${shortDate(billing.ends_at)}. Págalo antes del ${shortDate(overdue?.readonly_on ?? billing.grace_ends_at)} para que tu empresa no quede en solo lectura.`;
       default:
         return billing.message ?? '';
     }
   })();
+
+  const plansHint = billing.state === 'trial'
+    ? 'Sigues en tu prueba gratis con el plan que elijas. Se cobra recién cuando lo actives.'
+    : ['grace', 'locked'].includes(billing.state)
+      ? 'Pagas el plan nuevo ahora y empieza de inmediato.'
+      : 'El plan nuevo empieza en el próximo periodo, cuando termine el que ya pagaste.';
 
   return (
     <section id="plan" className={`${card} p-6 space-y-4`} data-card="plan" data-billing-state={billing.state}>
       <SectionTitle><CreditCard size={16} className="text-brand-accent" /> Tu plan</SectionTitle>
       <div className="flex items-center justify-between gap-3">
         <span className="text-2xl font-black text-brand-ink tracking-tight">{billing.plan?.name ?? 'Sin plan'}</span>
-        <Badge tone={state.badge} nowrap>{state.label}</Badge>
+        <Badge tone={state.badge} nowrap>{billing.reason === 'canceled' ? 'Cancelado' : state.label}</Badge>
       </div>
       <p className="text-sm text-slate-600" data-billing-summary>{summary}</p>
 
@@ -140,14 +184,20 @@ export default function PlanCard() {
       {paid && (
         <div className="flex items-center gap-2 text-sm" data-card-status>
           <CreditCard size={15} className="text-slate-400 shrink-0" />
-          {cardText ? <span className="font-semibold text-slate-800">{cardText}</span> : <span className="text-slate-500">Sin tarjeta para el cobro automático</span>}
+          {cardText ? <span className="font-semibold text-slate-800">{cardText}</span> : <span className="text-slate-500">Sin tarjeta guardada para el cobro automático</span>}
         </div>
       )}
 
-      {failed && (
+      {overdue?.last_failure && (
         <p className="flex items-start gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2" data-charge-failed>
           <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-          No se pudo cobrar a tu tarjeta el {shortDate(billing.card?.failed_at ?? null)}. Mercado Pago lo volverá a intentar; también puedes cambiar la tarjeta o pagar ahora.
+          <span>El último intento de cobro no pasó: {asClause(overdue.last_failure)}. {billing.can_pay ? 'Cambia la tarjeta o paga ahora.' : 'El administrador puede cambiar la tarjeta o pagar ahora.'}</span>
+        </p>
+      )}
+
+      {billing.state === 'locked' && overdue?.cancel_on && (
+        <p className="text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2" data-cancel-warning>
+          Si no se paga antes del {shortDate(overdue.cancel_on)}, el plan se cancelará. Tus datos se conservan igual.
         </p>
       )}
 
@@ -173,14 +223,19 @@ export default function PlanCard() {
       {billing.can_pay ? (
         billing.online ? (
           <div className="flex flex-wrap gap-2">
+            {showActivate && (
+              <button type="button" data-billing-activate disabled={busy !== ''} onClick={startActivate} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
+                {busy === 'activate' ? <Loader2 size={15} className="animate-spin" /> : <Rocket size={15} />} Activar mi plan
+              </button>
+            )}
             {showPay && (
               <button type="button" data-billing-pay disabled={busy !== ''} onClick={startPay} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
                 {busy === 'pay' ? <Loader2 size={15} className="animate-spin" /> : null} Pagar ahora
               </button>
             )}
             {showCard && (
-              <button type="button" data-billing-card disabled={busy !== ''} onClick={() => go('card', '/billing/card')} className={`flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl transition-colors disabled:opacity-50 ${authorized ? 'font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50' : 'font-bold bg-brand text-white hover:bg-brand-hover shadow-sm'}`}>
-                {busy === 'card' ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />} {authorized ? 'Cambiar tarjeta' : 'Autorizar tarjeta'}
+              <button type="button" data-billing-card disabled={busy !== ''} onClick={() => go('card', '/billing/card')} className={`flex items-center gap-1.5 px-4 py-2.5 text-sm rounded-xl transition-colors disabled:opacity-50 ${authorized || showPay ? 'font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50' : 'font-bold bg-brand text-white hover:bg-brand-hover shadow-sm'}`}>
+                {busy === 'card' ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />} {authorized ? 'Cambiar tarjeta' : 'Guardar tarjeta'}
               </button>
             )}
             <button type="button" data-billing-plans disabled={busy !== ''} onClick={openPlans} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
@@ -195,6 +250,10 @@ export default function PlanCard() {
         )
       ) : (
         <p className="text-xs text-slate-500">El administrador de la empresa paga y cambia el plan.</p>
+      )}
+
+      {showCard && authorized && ['grace', 'locked'].includes(billing.state) && (
+        <p className="text-xs text-slate-500">Si cambias la tarjeta, cobramos lo vencido al momento.</p>
       )}
 
       {authorized && canAct && (
@@ -212,8 +271,9 @@ export default function PlanCard() {
       <PayPlanDrawer
         open={panel === 'pay'}
         billing={billing}
+        activate={billing.state === 'trial'}
         onClose={() => setPanel('')}
-        onCard={() => { setPanel(''); go('pay', '/billing/pay'); }}
+        onCard={() => { setPanel(''); if (billing.state === 'trial') go('activate', '/billing/activate'); else go('pay', '/billing/pay'); }}
         onSent={async (message) => { setPanel(''); setNotice(message); await load(); await refetchUser(); }}
       />
 
@@ -241,13 +301,7 @@ export default function PlanCard() {
               );
             })}
           </div>
-          <p className="text-xs text-slate-500">
-            {billing.state === 'trial' || billing.state === 'card_needed'
-              ? 'Sigues en tu prueba gratis: el plan nuevo se cobra a tu tarjeta cuando termine.'
-              : ['grace', 'locked'].includes(billing.state)
-                ? 'Pagas el plan nuevo ahora y empieza de inmediato.'
-                : 'El plan nuevo empieza en el próximo periodo, cuando termine el que ya pagaste.'}
-          </p>
+          <p className="text-xs text-slate-500">{plansHint}</p>
           <ErrorAlert message={error} />
           <button type="button" data-plan-confirm disabled={busy !== '' || !choice.plan} onClick={() => go('plan', '/billing/plan', { plan_id: choice.plan, billing_cycle: choice.cycle })} className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
             {busy === 'plan' ? <Loader2 size={15} className="animate-spin" /> : null} Confirmar plan
@@ -255,7 +309,7 @@ export default function PlanCard() {
         </div>
       </FormDrawer>
 
-      <FormDrawer isOpen={panel === 'history'} onClose={() => setPanel('')} title="Pagos del plan" subtitle="Lo pagado y los intentos con Mercado Pago" icon={<History size={18} />}>
+      <FormDrawer isOpen={panel === 'history'} onClose={() => setPanel('')} title="Pagos del plan" subtitle="Lo pagado y los intentos de cobro" icon={<History size={18} />}>
         <div className="space-y-5" data-history-panel>
           <div className="space-y-2">
             <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Periodos pagados</span>
@@ -276,7 +330,7 @@ export default function PlanCard() {
             </div>
           </div>
           <div className="space-y-2">
-            <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Movimientos con Mercado Pago</span>
+            <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Movimientos con la pasarela</span>
             <div className="rounded-xl border border-slate-200 overflow-hidden flex flex-col">
               <PagedList
                 items={data.history}
@@ -285,7 +339,7 @@ export default function PlanCard() {
                   <li key={row.id} className="flex items-center gap-3 px-4 py-3">
                     <Badge tone={PAYMENT_STATUS[row.status].badge} bold className="shrink-0">{PAYMENT_STATUS[row.status].label}</Badge>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold text-slate-800 truncate">{PAYMENT_KINDS[row.kind]}</span>
+                      <span className="block text-sm font-semibold text-slate-800 truncate">{PAYMENT_KINDS[row.kind]}{row.kind !== 'transfer' ? ` · ${providerLabel(row.provider)}` : ''}</span>
                       <span className="block text-xs text-slate-500 truncate">{row.message ?? momentOf(row.at)}</span>
                     </span>
                     {row.kind !== 'card' && <span className="text-sm font-bold text-slate-800 tabular-nums">{money(row.amount, row.currency)}</span>}
