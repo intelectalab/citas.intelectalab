@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Customer;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class Sessions
     public static function idleMinutes(User|Customer $account): int
     {
         $tenant = $account->tenant_id ? $account->tenant : null;
+        $tenant = $tenant instanceof Tenant ? $tenant : null;
 
         if ($account instanceof Customer) {
             return $tenant ? (int) AppointmentFlow::rule($tenant, 'session.portal_idle_minutes') : 0;

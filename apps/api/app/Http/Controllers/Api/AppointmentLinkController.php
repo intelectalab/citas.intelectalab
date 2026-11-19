@@ -33,7 +33,7 @@ class AppointmentLinkController extends PortalController
                     : 'Este enlace venció porque la cita ya pasó. Para ver tus citas anteriores, entra al portal.',
                 'code'    => 'LINK_EXPIRED',
                 'reason'  => $reason,
-                'company' => ['name' => $appointment->tenant->name, 'slug' => $appointment->tenant->slug],
+                'company' => ['name' => $appointment->tenant->getAttribute('name'), 'slug' => $appointment->tenant->getAttribute('slug')],
             ], 410));
         }
 

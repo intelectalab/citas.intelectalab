@@ -12,7 +12,7 @@ class AppointmentLinks
     {
         $end = $appointment->ends_at ?? $appointment->starts_at;
 
-        return $end?->copy()->addDays(self::DAYS_AFTER);
+        return $end->copy()->addDays(self::DAYS_AFTER);
     }
 
     public static function expiredReason(Appointment $appointment): ?string

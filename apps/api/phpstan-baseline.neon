@@ -595,7 +595,7 @@ parameters:
 			path: app/Http/Controllers/Api/CareRecordController.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{note\: string, by\: string\|null, at\: non\-falsy\-string\|null\}, Closure\(App\\Models\\CareRecordAddendum\)\: array\{note\: string, by\: string\|null, at\: non\-falsy\-string\|null\} given\.$#'
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{note\: mixed, by\: string\|null, at\: non\-falsy\-string\|null\}, Closure\(App\\Models\\CareRecordAddendum\)\: array\{note\: mixed, by\: string\|null, at\: non\-falsy\-string\|null\} given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Http/Controllers/Api/CareRecordController.php
