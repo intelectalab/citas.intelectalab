@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import Stopwatch from './Stopwatch';
+import AgendaClassBlock from '@/features/classes/components/AgendaClassBlock';
 import {
   RELEASED, addDays, dateOf, formatDate, fromMinutes, statusStyle, timeOf, toMinutes,
   type Appointment,
@@ -20,7 +21,7 @@ export interface RangePayload {
   now: string;
   holidays: { date: string; name: string; closed: boolean }[];
   professionals: RangeProfessional[];
-  blocks: { professional_id: string | null; starts: string; ends: string; reason: string | null }[];
+  blocks: { professional_id: string | null; starts: string; ends: string; reason: string | null; kind?: string; class_id?: string }[];
   my_professional_id?: string | null;
   appointments: Appointment[];
 }
@@ -229,9 +230,14 @@ export function AgendaWeek({ data, days, appointments, professionalId, colors, i
                   const from = top(dateOf(block.starts) < day ? 0 : toMinutes(timeOf(block.starts)));
                   const to = top(dateOf(block.ends) > day ? 24 * 60 : toMinutes(timeOf(block.ends)));
                   if (to <= from) return null;
+                  if (block.kind === 'class' && block.class_id) {
+                    return <AgendaClassBlock key={index} classId={block.class_id} reason={block.reason} top={from} height={to - from} compact />;
+                  }
                   return (
-                    <div key={index} onClick={(event) => event.stopPropagation()} className="absolute inset-x-0 bg-slate-200 border-y border-slate-300 px-1.5 py-0.5 overflow-hidden cursor-not-allowed" style={{ top: from, height: to - from }}>
-                      <span className="text-[10px] font-semibold text-slate-500">No atiende{block.reason ? ` · ${block.reason}` : ''}</span>
+                    <div key={index} onClick={(event) => event.stopPropagation()} title={block.kind === 'held' ? 'Horario apartado mientras revisan el comprobante del adelanto' : undefined} className={`absolute inset-x-0 border-y px-1.5 py-0.5 overflow-hidden cursor-not-allowed ${block.kind === 'held' ? 'bg-amber-50 border-amber-300 border-dashed' : 'bg-slate-200 border-slate-300'}`} style={{ top: from, height: to - from }}>
+                      {block.kind === 'held'
+                        ? <span className="text-[10px] font-semibold text-amber-700">Reserva por confirmar{block.reason ? ` · ${block.reason}` : ''}</span>
+                        : <span className="text-[10px] font-semibold text-slate-500">No atiende{block.reason ? ` · ${block.reason}` : ''}</span>}
                     </div>
                   );
                 })}

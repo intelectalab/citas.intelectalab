@@ -9,16 +9,16 @@ import { money, momentOf, SUNAT_LABELS, type SaleDetail } from '../sales';
 
 const row = 'flex justify-between gap-4';
 
-export default function SaleReceipt() {
+export default function SaleReceipt({ source = 'staff' }: { source?: 'staff' | 'portal' } = {}) {
   const params = useParams<{ id: string }>();
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get(`/sales/${params.id}`)
+    api.get(source === 'portal' ? `/portal/purchases/${params.id}` : `/sales/${params.id}`)
       .then((res) => setSale(res.data))
       .catch((err) => setError(apiError(err, 'No se pudo cargar el comprobante.')));
-  }, [params.id]);
+  }, [params.id, source]);
 
   if (!sale) {
     return <p className={`p-10 text-sm text-center ${error ? 'text-red-600' : 'text-slate-500'}`}>{error || 'Cargando comprobante...'}</p>;
@@ -30,7 +30,7 @@ export default function SaleReceipt() {
     <div className="min-h-screen bg-[#F2F2F2] print:bg-white py-8 print:py-0">
       <div className="max-w-[340px] mx-auto mb-4 flex justify-end print:hidden">
         <button type="button" data-print onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors">
-          <Printer size={16} /> Imprimir
+          <Printer size={16} /> {source === 'portal' ? 'Imprimir o guardar en PDF' : 'Imprimir'}
         </button>
       </div>
 

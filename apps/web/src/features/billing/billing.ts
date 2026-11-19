@@ -7,6 +7,16 @@ export interface CulqiAction extends CulqiCheckoutConfig {
   payment_id: string;
 }
 
+export interface CancelOffer { percent: number; months: number; price: number; text: string }
+
+export interface CancellationInfo {
+  scheduled: { effective_at: string; reason: string } | null;
+  reasons: { key: string; label: string }[];
+  offers: Record<string, CancelOffer>;
+  effective_at: string;
+  discount: { percent: number; cycles: number } | null;
+}
+
 export interface Billing {
   state: BillingState;
   reason?: string | null;
@@ -21,6 +31,10 @@ export interface Billing {
   can_pay: boolean;
   online: boolean;
   simulated: boolean;
+  cancellation?: CancellationInfo | null;
+  charge?: number;
+  coupon?: { code: string; text: string; cycles_left: number } | null;
+  coupons?: boolean;
   plan: { id: string; name: string; currency: string } | null;
   billing_cycle: 'monthly' | 'yearly' | null;
   price: number;

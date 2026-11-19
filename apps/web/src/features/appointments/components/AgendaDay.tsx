@@ -10,6 +10,7 @@ import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
 import Stopwatch from './Stopwatch';
+import AgendaClassBlock from '@/features/classes/components/AgendaClassBlock';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
@@ -26,7 +27,7 @@ interface DayProfessional {
   display_name: string;
   color_code: string | null;
   schedules: { starts: string; ends: string }[];
-  blocks: { starts: string; ends: string; reason: string | null; kind?: string }[];
+  blocks: { starts: string; ends: string; reason: string | null; kind?: string; class_id?: string }[];
 }
 
 interface PendingMove {
@@ -190,6 +191,26 @@ export default function AgendaDay() {
   const { openNew, openDetail, panels, isOpen: panelOpen } = useAppointmentPanels(load);
 
   useAutoRefresh(load, panelOpen || isDragging || pendingMove !== null);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const customerId = query.get('cliente');
+    if (query.get('nueva') !== '1' || !customerId) return;
+    window.history.replaceState(null, '', '/agenda');
+    const sede = query.get('sede');
+    if (sede) setBranchId(sede);
+
+    api.get(`/customers/${customerId}`)
+      .then((res) => openNew({
+        customer: res.data.customer,
+        customer_dependent_id: query.get('dependiente') ?? undefined,
+        service_id: query.get('servicio') ?? undefined,
+        professional_id: query.get('profesional') ?? undefined,
+        branch_id: sede ?? undefined,
+        origin_label: 'Próxima cita: elige el día y la hora',
+      }))
+      .catch((err) => setError(apiError(err, 'No se pudo abrir la nueva cita.')));
+  }, [openNew]);
 
   useEffect(() => {
     api.get('/appointments/context')
@@ -631,15 +652,22 @@ export default function AgendaDay() {
                       const to = top(block.ends === '24:00' ? 24 * 60 : toMinutes(block.ends));
                       if (to <= from) return null;
 
+                      if (block.kind === 'class' && block.class_id) {
+                        return <AgendaClassBlock key={index} classId={block.class_id} reason={block.reason} top={from} height={to - from} />;
+                      }
+
                       return (
                         <div
                           key={index}
                           data-block
                           onClick={(event) => event.stopPropagation()}
-                          className="absolute inset-x-0 bg-slate-200 border-y border-slate-300 px-2 py-1 overflow-hidden cursor-not-allowed"
+                          title={block.kind === 'held' ? 'Horario apartado mientras revisan el comprobante del adelanto' : undefined}
+                          className={`absolute inset-x-0 border-y px-2 py-1 overflow-hidden cursor-not-allowed ${block.kind === 'held' ? 'bg-amber-50 border-amber-300 border-dashed' : 'bg-slate-200 border-slate-300'}`}
                           style={{ top: from, height: to - from }}
                         >
-                          <span className="text-[11px] font-semibold text-slate-500">No atiende{block.reason ? ` · ${block.reason}` : ''}</span>
+                          {block.kind === 'held'
+                            ? <span className="text-[11px] font-semibold text-amber-700">Reserva por confirmar{block.reason ? ` · ${block.reason}` : ''}</span>
+                            : <span className="text-[11px] font-semibold text-slate-500">No atiende{block.reason ? ` · ${block.reason}` : ''}</span>}
                         </div>
                       );
                     })}

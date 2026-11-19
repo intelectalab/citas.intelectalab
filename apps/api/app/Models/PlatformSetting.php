@@ -32,6 +32,13 @@ class PlatformSetting extends Model
         'plan_mercadopago'      => true,
         'plan_primary'          => 'culqi',
         'dunning'               => null,
+        'cancel_offer'          => null,
+        'support_desk'          => null,
+        'referral'              => null,
+        'legal_name'            => null,
+        'legal_tax_id'          => null,
+        'legal_address'         => null,
+        'site'                  => null,
     ];
 
     public const PUBLIC_KEYS = [

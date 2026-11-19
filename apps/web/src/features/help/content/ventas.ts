@@ -17,6 +17,8 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Quién atendió o vendió', text: 'Con Comisiones encendido, cada servicio y producto puede llevar a quién lo atendió o vendió. Si falta, el carrito avisa: esa línea no genera comisión.', module: 'commissions' },
         { title: 'Dejar por cobrar', text: 'Guarda la venta sin cobrarla, para cobrarla después desde aquí o desde Ventas.', perm: 'pos.create' },
         { title: 'Cobrar', text: 'Abre el cobro: medio de pago, monto, vuelto, número de operación y comprobante.', perm: 'sales.create' },
+        { title: 'Agendar la próxima cita', text: `Al terminar de cobrar un servicio aparece "Agendar la próxima cita": abre la agenda con la cita nueva ya armada con ${theClient}, el servicio y quien atendió. Solo falta elegir el día y la hora.`, perm: 'agenda.create', module: 'agenda' },
+        { title: 'Gift cards', text: 'Para vender una gift card: escribe el monto y, si quieres, para quién es. Se cobra como cualquier venta, con su comprobante, y el código se crea al quedar pagada. Si se devuelve la venta y la gift card no se usó, se anula.', module: 'loyalty' },
       ],
       tasks: [
         {
@@ -31,6 +33,8 @@ export const ventasTopics: HelpTopics = (vocab) => {
           ],
         },
         { title: 'Vender un producto', perm: 'sales.create', module: 'inventory', steps: ['Entra a la pestaña "Productos" y pulsa "Agregar".', `Si quieres, elige a ${theClient} y escribe un cupón.`, 'Pulsa "Cobrar" y termina el cobro.'] },
+        { title: 'Vender una gift card', perm: 'sales.create', module: 'loyalty', steps: ['Entra a la pestaña "Gift cards".', 'Escribe el monto y, si quieres, el nombre y el correo de quien la recibe.', 'Pulsa "Agregar al carrito" y cobra.', 'Entrega el código que aparece al terminar.'] },
+        { title: 'Agendar la próxima cita al cobrar', perm: 'agenda.create', module: 'agenda', steps: ['Cobra la venta con el servicio.', 'Pulsa "Agendar la próxima cita".', 'Elige el día y la hora y guarda la cita.'] },
         { title: 'Atender a quien llegó sin cita', perm: 'agenda.create', module: 'agenda', steps: ['Pulsa "Agendar para ahora".', 'Elige el servicio y pulsa "Agendar y pasar al carrito".', 'Cobra como cualquier cita.'] },
         { title: 'Enviar un link de pago', perm: 'sales.create', steps: ['Pulsa "Cobrar" y elige "Link de pago".', 'Pulsa "Crear link de pago".', 'Pulsa "Enviar por correo", o "Copiar" para mandarlo por WhatsApp.', 'Cuando pague, la venta queda pagada sola. "¿Ya pagó?" lo revisa al momento.'] },
       ],
@@ -39,7 +43,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Pagos por partes', text: 'Apagado, se cobra el total de una vez. Encendido, se puede cobrar una parte y dejar saldo.', where: 'Configuración → Ventas y caja' },
         { title: 'Caja abierta para el efectivo', text: 'Para cobrar en efectivo, la caja de la sede debe estar abierta.', where: 'Configuración → Ventas y caja' },
         { title: 'Vencimiento de los links de pago', text: 'Un link de pago deja de valer pasadas unas horas.', where: 'Configuración → Adelantos y links de pago' },
-        { title: 'Comprobantes simulados', text: 'Las boletas y facturas todavía no se envían a SUNAT: salen marcadas como simulación. Sin facturación electrónica se emite un comprobante interno.' },
+        { title: 'Comprobantes ante SUNAT', text: 'Si tu empresa conectó Nubefact, las boletas, facturas y notas de crédito se envían solas a SUNAT; si no, salen marcadas como simulación. Sin facturación electrónica se emite un comprobante interno.', where: 'Configuración → Integraciones' },
         { title: 'Links de pago con Culqi o Mercado Pago', text: 'Los links de pago se cobran con la cuenta de Culqi de tu empresa, o con Mercado Pago si es la que conectaste (si están las dos, Culqi primero y Mercado Pago si Culqi no responde). Sin ninguna conectada, no aparece la opción Link de pago. Yape, Plin, tarjeta y transferencia en la sede se cobran fuera del sistema y aquí solo se anota la operación.', where: 'Configuración → Integraciones' },
       ],
     },
@@ -53,6 +57,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Imprimir o enviar', text: 'Imprime el comprobante o lo manda por correo a quien compró.' },
         { title: 'Cambiar en el punto de venta', text: 'Una venta sin pagos se puede cambiar en el punto de venta.', perm: 'pos.edit' },
         { title: 'Devolver', text: 'Devuelve todo o una parte de lo pagado, en efectivo desde la caja o por otro medio. Si tenía comprobante, se emite una nota de crédito.', perm: 'sales.delete' },
+        { title: 'Devoluciones que se aprueban', text: 'Si tu empresa lo pidió, una devolución de más de cierto monto queda pedida: otra persona con el permiso "Aprobar devoluciones" la aprueba (y se registra en ese momento) o la rechaza con un motivo. Quien la pidió recibe un aviso.', perm: 'sales.delete|sales.approve' },
         { title: 'Anular', text: 'Solo una venta sin dinero cobrado. La cita vuelve a "por cobrar" y el cupón recupera su uso.', perm: 'sales.delete' },
         { title: 'Exportar', text: 'Descarga a Excel las ventas que estás viendo.', perm: 'data.export' },
       ],
@@ -62,6 +67,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
       ],
       rules: [
         { title: 'Plazo para devolver', text: 'Una venta se puede devolver hasta cierta cantidad de días después.', where: 'Configuración → Ventas y caja' },
+        { title: 'Aprobar devoluciones grandes', text: 'Desde qué monto una devolución la pide una persona y la aprueba otra. Con 0 (así viene) cada quien devuelve directo.', where: 'Configuración → Ventas y caja' },
         { title: 'Cobrar antes de atender', text: 'Si está apagado, las citas atendidas sin pagar aparecen en "Atendidas sin cobrar".', where: 'Configuración → Ventas y caja' },
       ],
     },
@@ -79,6 +85,36 @@ export const ventasTopics: HelpTopics = (vocab) => {
       ],
     },
 
+    '/invoices': {
+      summary: 'Todos los comprobantes emitidos en tus ventas: boletas, facturas, tickets y notas de crédito, con su estado ante SUNAT.',
+      points: [
+        { title: 'Por enviar o rechazados', text: 'Pendiente de envío: el proveedor no respondió y el sistema lo vuelve a intentar solo. Esperando respuesta de SUNAT: ya llegó al proveedor y falta la confirmación. Rechazado: SUNAT dijo que no; lee el motivo, anúlalo y emite otro. Si quieres, ábrelo y pulsa "Volver a enviar".' },
+        { title: 'PDF, XML y constancia', text: 'Con Nubefact conectado, el detalle del comprobante tiene los enlaces al PDF, al XML y a la constancia de SUNAT (CDR).' },
+        { title: 'Anular', text: 'Para un comprobante emitido por error (por ejemplo, con el nombre mal escrito). Con Nubefact, dentro de los 7 días siguientes a la emisión se comunica la baja a SUNAT; después, se emite una nota de crédito por el total. La venta y su pago no cambian; luego emites uno nuevo desde la venta. No se anula si la venta ya tiene devoluciones con nota de crédito.', perm: 'sales.delete' },
+        { title: 'Prueba', text: 'Mientras no haya un proveedor de facturación conectado, los comprobantes son de prueba y no llegan a SUNAT. Se conecta en Configuración → Integraciones.' },
+      ],
+      tasks: [
+        { title: 'Corregir una boleta con datos mal escritos', perm: 'sales.delete', steps: ['Busca la boleta por su número o el nombre.', 'Ábrela y pulsa "Anular comprobante". Elige o escribe el motivo y confirma.', 'Corrige los datos del cliente y emite el comprobante otra vez desde la venta.'] },
+      ],
+    },
+
+    '/payments/vouchers': {
+      summary: 'Aquí llegan los comprobantes de transferencia, Yape o Plin que mandan los clientes al pagar un link, un adelanto o un paquete en línea. Al aprobarlo, el pago queda registrado como si hubiera entrado por la pasarela.',
+      points: [
+        { title: 'Por revisar', text: 'El número del menú dice cuántos esperan. También llega un aviso a quien tiene el permiso "Revisar comprobantes".' },
+        { title: 'Horario apartado', text: 'En un adelanto, el horario queda apartado mientras revisas, hasta las horas que elegiste en Configuración. En la agenda se ve en ámbar como «Reserva por confirmar» con el nombre del cliente. Si se pasa ese tiempo y alguien toma el horario, no se puede aprobar.' },
+        { title: 'Rechazar', text: 'El cliente lee el motivo tal cual y puede enviar otro comprobante o pagar de otra forma.' },
+        { title: 'Devoluciones', text: 'Un pago aprobado por comprobante se devuelve a mano: devuélvelo tú al cliente y regístralo como devolución en efectivo o transferencia.' },
+      ],
+      tasks: [
+        { title: 'Aprobar un comprobante', perm: 'payments.review', steps: ['Abre el comprobante de la lista.', 'Revisa en tu banco o app que el abono esté, con el monto y el número de operación.', 'Pulsa "Aprobar: el abono está en la cuenta".'] },
+        { title: 'Rechazar un comprobante', perm: 'payments.review', steps: ['Abre el comprobante.', 'Pulsa "Rechazar".', 'Elige o escribe el motivo y pulsa "Rechazar".'] },
+      ],
+      rules: [
+        { title: 'Recibir comprobantes', text: 'Enciéndelo y escribe tus cuentas, Yape o Plin, las horas que se aparta el horario y cuánto demoran en revisar.', where: 'Configuración → Integraciones' },
+      ],
+    },
+
     '/cash': {
       summary: 'Lleva el efectivo de cada caja por turno: con cuánto se abre, lo cobrado en efectivo, los gastos y retiros, y el cierre, comparando lo contado con lo que debería haber.',
       points: [
@@ -89,6 +125,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
         { title: 'Turnos cerrados', text: 'Cada cierre con su resultado: cuadró, faltaron o sobraron.' },
         { title: 'Cada quien su turno', text: 'Sin el permiso "Turnos de otros", cada persona ve y cierra solo el turno que abrió. Una caja abierta por otra persona sale con su nombre, sin montos. El gerente trae ese permiso de fábrica.' },
         { title: 'Nueva caja', text: 'Para agregar otra caja en una sede.', perm: 'cash.create' },
+        { title: 'Cierres en revisión', text: 'Si tu empresa lo pidió, un cierre con una diferencia mayor a cierto monto queda "En revisión". Quien tiene el permiso "Aprobar cierres" recibe un aviso, abre el turno y lo aprueba u observa con una nota. La tarjeta "En revisión" filtra los pendientes.', perm: 'cash.edit|cash.approve' },
       ],
       tasks: [
         { title: 'Abrir la caja', perm: 'cash.edit', steps: ['Pulsa "Abrir caja".', 'Escribe con cuánto efectivo empiezas.', 'Pulsa "Abrir caja".'] },
@@ -97,6 +134,7 @@ export const ventasTopics: HelpTopics = (vocab) => {
       ],
       rules: [
         { title: 'Diferencia permitida al cerrar', text: 'Hasta cuánto puede faltar o sobrar sin tener que explicarlo.', where: 'Configuración → Ventas y caja' },
+        { title: 'Cierre en revisión', text: 'Desde qué diferencia un cierre queda en revisión hasta que alguien lo apruebe. Con 0 (así viene) no se pide revisión.', where: 'Configuración → Ventas y caja' },
         { title: 'Una caja por sede nueva', text: 'Cada sucursal nueva puede recibir su "Caja principal".', where: 'Configuración → Ventas y caja' },
       ],
     },

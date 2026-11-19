@@ -9,12 +9,24 @@ export const api = axios.create({
   },
 });
 
+const NO_IDEMPOTENCY = /^\/?(login|logout|password|webhooks)(\/|$)/;
+
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12);
+}
+
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+  }
+  if ((config.method ?? 'get').toLowerCase() === 'post' && !NO_IDEMPOTENCY.test(config.url ?? '') && !config.headers['Idempotency-Key']) {
+    config.headers['Idempotency-Key'] = newIdempotencyKey();
   }
   return config;
 }, (error) => {

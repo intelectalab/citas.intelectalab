@@ -165,6 +165,72 @@ class BillingController extends Controller
         return response()->json(['message' => $result['message'], 'charge_failed' => ($result['status'] ?? null) === 'failed'] + json_decode($this->show($request)->getContent(), true));
     }
 
+    public function receipt(Request $request, string $invoice)
+    {
+        $user = $request->user();
+        abort_unless($user->tenant_id && $user->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede descargar las constancias del plan.');
+        $row = \App\Models\SubscriptionInvoice::where('tenant_id', $user->tenant_id)->findOrFail($invoice);
+
+        return response(\App\Support\PlanReceipts::pdf($row), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . \App\Support\PlanReceipts::fileName($row) . '"',
+            'Cache-Control'       => 'private, no-store',
+        ]);
+    }
+
+    public function requestCancel(Request $request)
+    {
+        $subscription = $this->subscription($request);
+        $validated = $request->validate([
+            'reason'       => ['required', Rule::in(array_keys(\App\Support\Cancellations::REASONS))],
+            'details'      => 'nullable|string|max:500',
+            'accept_offer' => 'boolean',
+            'confirm'      => 'boolean',
+        ], [
+            'reason.required' => 'Elige por qué te vas.',
+        ]);
+
+        if (!($validated['accept_offer'] ?? false) && !($validated['confirm'] ?? false)) {
+            throw ValidationException::withMessages(['confirm' => 'Confirma que entiendes qué pasa al dar de baja.']);
+        }
+
+        $result = \App\Support\Cancellations::request($subscription, $request->user(), $validated['reason'], $validated['details'] ?? null, (bool) ($validated['accept_offer'] ?? false));
+        AuditEvent::record($request, $result['kept'] ? 'subscription.offer_accepted' : 'subscription.cancel_requested', $request->user()->tenant, [], array_filter([
+            'reason' => \App\Support\Cancellations::REASONS[$validated['reason']],
+            'offer'  => $result['offer']['text'] ?? null,
+        ]));
+
+        return $this->show($request);
+    }
+
+    public function resumeCancel(Request $request)
+    {
+        $subscription = $this->subscription($request);
+        \App\Support\Cancellations::resume($subscription);
+        AuditEvent::record($request, 'subscription.cancel_resumed', $request->user()->tenant, [], []);
+
+        return $this->show($request);
+    }
+
+    public function exportAll(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user->tenant_id && $user->isTenantAdmin(), 403, 'Solo el administrador de la empresa puede descargar todos los datos.');
+        $tenant = $user->tenant;
+
+        AuditEvent::create([
+            'tenant_id'     => $tenant->id,
+            'actor_user_id' => $user->id,
+            'action'        => \App\Http\Controllers\Api\DataExportController::ACTION,
+            'entity_type'   => 'Todos los datos',
+            'ip_address'    => $request->ip(),
+            'user_agent'    => mb_substr((string) $request->userAgent(), 0, 500),
+            'after_data'    => ['title' => 'Todos los datos de la empresa', 'format' => 'xlsx', 'scope' => 'all', 'rows' => 0],
+        ]);
+
+        return response()->json(['company' => $tenant->name, 'sheets' => \App\Support\DataBackup::sheets($tenant)]);
+    }
+
     public function cancelCard(Request $request)
     {
         $subscription = $this->subscription($request);
@@ -172,6 +238,17 @@ class BillingController extends Controller
         AuditEvent::record($request, 'subscription.card_cancelled', $request->user()->tenant, [], ['card_status' => 'cancelled']);
 
         return $this->show($request);
+    }
+
+    public function coupon(Request $request)
+    {
+        $subscription = $this->subscription($request);
+        $code = $request->validate(['code' => 'required|string|max:30'], ['code.required' => 'Escribe el cupón.'])['code'];
+        $redemption = \App\Support\PlanCoupons::redeem($subscription, $code, 'billing');
+        \App\Support\Audit::log($request, 'plan_coupon.redeemed', ['tenant' => $subscription->tenant_id, 'entity_type' => 'plan_coupon', 'entity_id' => $redemption->coupon_id, 'entity_label' => $redemption->code]);
+        Subscriptions::forget($subscription->tenant_id);
+
+        return response()->json(['message' => "Listo: el cupón {$redemption->code} quedó aplicado. Lo verás en tu próximo cobro."] + json_decode($this->show($request)->getContent(), true));
     }
 
     public function change(Request $request)

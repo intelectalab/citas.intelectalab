@@ -24,7 +24,7 @@ class DueNotices
             return;
         }
 
-        foreach (['recalls', 'drafts', 'planLimits', 'subscription'] as $step) {
+        foreach (['recalls', 'drafts', 'planLimits', 'subscription', 'complaints', 'memberships'] as $step) {
             try {
                 self::$step($tenant);
             } catch (\Throwable $e) {
@@ -41,6 +41,16 @@ class DueNotices
     private static function plural(int $count, string $one, string $many): string
     {
         return $count === 1 ? "1 {$one}" : "{$count} {$many}";
+    }
+
+    public static function memberships(Tenant $tenant): void
+    {
+        Memberships::notices($tenant);
+    }
+
+    public static function complaints(Tenant $tenant): void
+    {
+        Complaints::notices($tenant);
     }
 
     public static function recalls(Tenant $tenant): void

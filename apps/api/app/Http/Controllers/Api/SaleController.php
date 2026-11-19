@@ -57,7 +57,31 @@ class SaleController extends AppointmentController
         $applied = !$sale && $couponCode ? Coupons::check($tenant->id, $couponCode, (float) $appointment->price, Currency::of($tenant)) : null;
 
         return $this->chargeContext($tenant, $sale, $appointment->branch_id, $appointment->customer, $appointment->service?->name, (float) $appointment->price, $applied, $sale ? null : $this->blocked($tenant, $appointment))
-            + ['package' => $this->packageContext($tenant, $appointment, $sale)];
+            + ['package' => $this->packageContext($tenant, $appointment, $sale), 'membership' => $sale ? null : $this->membershipContext($tenant, $appointment)];
+    }
+
+    private function membershipContext(Tenant $tenant, Appointment $appointment): ?array
+    {
+        $current = \App\Support\Memberships::current($tenant, $appointment->customer_id);
+
+        if (!$current || $appointment->customer_package_id) {
+            return null;
+        }
+
+        $summary = \App\Support\Memberships::summary($tenant, $current);
+        $left = collect($summary['included'])->firstWhere('service_id', $appointment->service_id)['left'] ?? 0;
+
+        if ($left <= 0 && $summary['discount_percent'] <= 0) {
+            return null;
+        }
+
+        return [
+            'code'     => $summary['code'],
+            'name'     => $summary['name'],
+            'included' => $left > 0,
+            'percent'  => $summary['discount_percent'],
+            'pos_url'  => '/pos?cita=' . $appointment->id,
+        ];
     }
 
     private function packageContext(Tenant $tenant, Appointment $appointment, ?object $sale): ?array

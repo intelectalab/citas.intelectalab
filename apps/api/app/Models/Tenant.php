@@ -239,7 +239,8 @@ class Tenant extends Model
             'appointments_month' => DB::table('appointments')->where('tenant_id', $this->id)->where('starts_at', '>=', $monthStart->toIso8601String())->where('starts_at', '<', $monthEnd->toIso8601String())
                 ->when(Schema::hasColumn('appointments', 'status'), fn ($q) => $q->where('status', '!=', 'cancelled'))
                 ->count(),
-            'whatsapp_month'     => DB::table('customer_messages')->where('tenant_id', $this->id)->where('channel', 'whatsapp')->where('created_at', '>=', $monthStart->toIso8601String())->count(),
+            'whatsapp_month'        => \App\Support\MessageQuota::used($this, 'whatsapp'),
+            'campaign_emails_month' => \App\Support\MessageQuota::used($this, 'campaign_email'),
         ];
     }
 

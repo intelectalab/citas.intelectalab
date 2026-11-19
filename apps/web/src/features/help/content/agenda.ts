@@ -20,6 +20,7 @@ export const agendaTopics: HelpTopics = (vocab) => {
         { title: 'Montos', text: 'Los ingresos y gastos solo se ven con el permiso "Ver montos".' },
         { title: 'Exportar', text: 'Cada tabla se descarga a Excel con su botón.', perm: 'data.export' },
         { title: 'Mis números', text: `Tus citas atendidas, tu producción (el precio de lo que atendiste, no lo cobrado), tu ocupación, tus inasistencias, tu tiempo promedio, tus servicios y tus ${cs} más frecuentes, comparados con el periodo anterior.`, perm: 'reports.own' },
+        { title: 'Tu meta del mes', text: `Está en la tarjeta "Comisiones y meta" de tu página de ${p}. Cuenta la misma producción de aquí: el precio de las citas que atendiste este mes, también las sesiones de paquetes ya pagados, más los productos que vendiste si tu empresa vende productos. No cuentan las citas canceladas ni las inasistencias.`, module: 'commissions', perm: 'reports.own' },
       ],
       tasks: [
         { title: 'Ver mis números', perm: 'reports.own', steps: ['Entra a Reportes, o pulsa "Ver mis números" en Inicio.', 'Elige el periodo y, si atiendes en varias sedes, la sede.', 'La flecha de cada número dice si subió o bajó frente al periodo anterior.'] },
@@ -63,14 +64,15 @@ export const agendaTopics: HelpTopics = (vocab) => {
           steps: [
             'Pulsa "Nueva cita" o haz clic en un espacio libre.',
             `Busca ${theClient} por nombre, documento, celular o código. Si es nuevo, pulsa "+" para registrarlo ahí mismo.`,
+            'Al elegirlo, debajo aparecen sus avisos si los tiene: saldo por cobrar, faltas recientes, un paquete o membresía que cubre el servicio, o su alerta personal.',
             `Elige el servicio y, si quieres, ${vocab.pick('pro', 'el', 'la')} ${p}. Con "Cualquiera disponible" el sistema busca a quien esté libre.`,
-            'Elige uno de los "Horarios libres" y pulsa "Agendar cita".',
+            'Elige uno de los "Horarios libres" y pulsa "Agendar cita". Si alguien tomó ese horario mientras llenabas, se vuelven a mostrar los horarios libres sin perder lo que escribiste.',
             { text: 'Si no queda ningún horario, pulsa "Anotar en lista de espera" para avisarle cuando se libere uno.', perm: 'waitlist.create' },
           ],
         },
         {
           title: 'Atender una cita, paso a paso',
-          perm: 'agenda.edit',
+          perm: 'agenda.start',
           steps: [
             'Haz clic en la cita.',
             'Pulsa "Confirmar" cuando la persona confirme que vendrá.',
@@ -82,9 +84,9 @@ export const agendaTopics: HelpTopics = (vocab) => {
         },
         {
           title: 'Cancelar una cita o marcar que no vino',
-          perm: 'agenda.edit',
+          perm: 'agenda.cancel',
           steps: [
-            'Haz clic en la cita.',
+            'Haz clic en la cita y abre "Más acciones".',
             'Para cancelar, pulsa "Cancelar cita", escribe el motivo y pulsa "Cancelar la cita".',
             'Si reservó en línea, falta poco y lo pide el cliente, marca "Lo pidió…": el panel te dice con cuántas faltas queda para que se lo avises. Sale solo si tu empresa cuenta la cancelación a última hora como falta.',
             'Si la persona no llegó, pulsa "No asistió". Se puede marcar pasados unos minutos de la hora de la cita.',
@@ -94,7 +96,12 @@ export const agendaTopics: HelpTopics = (vocab) => {
         {
           title: 'Cambiar la hora de una cita',
           perm: 'agenda.edit',
-          steps: ['Arrastra la cita a la nueva hora y pulsa "Sí, mover".', 'O ábrela, pulsa "Reprogramar", elige el nuevo horario y escribe el motivo del cambio.'],
+          steps: ['Arrastra la cita a la nueva hora y pulsa "Sí, mover".', 'O ábrela, entra a "Más acciones", pulsa "Reprogramar", elige el nuevo horario y escribe el motivo del cambio.'],
+        },
+        {
+          title: 'Enviar un recordatorio',
+          perm: 'agenda.confirm',
+          steps: ['Abre una cita pendiente o confirmada que aún no empieza.', 'Pulsa "Enviar recordatorio": le llega el mismo recordatorio de siempre a su correo.', 'Si no tiene correo o falta configurar el envío, la cita te lo dice.'],
         },
       ],
       rules: [
@@ -118,7 +125,7 @@ export const agendaTopics: HelpTopics = (vocab) => {
       ],
       tasks: [
         { title: 'Encontrar una cita', steps: [`Escribe en el buscador el nombre ${vocab.pick('client', 'del', 'de la')} ${c} o el código de la cita.`, 'Si no aparece, cambia el periodo o la fecha.', 'Pulsa el ojo para abrirla.'] },
-        { title: 'Confirmar las citas de mañana', perm: 'agenda.edit', steps: ['Elige "Próximos 7 días" y la tarjeta "Pendientes".', 'Abre cada cita y pulsa "Confirmar" cuando la persona lo confirme.'] },
+        { title: 'Confirmar las citas de mañana', perm: 'agenda.confirm', steps: ['Elige "Próximos 7 días" y la tarjeta "Pendientes".', 'Abre cada cita y pulsa "Confirmar" cuando la persona lo confirme.'] },
       ],
     },
 
@@ -131,6 +138,8 @@ export const agendaTopics: HelpTopics = (vocab) => {
         { title: 'Ya se le avisó', text: 'El teléfono marca que ya la llamaste o le escribiste.', perm: 'waitlist.edit' },
         { title: 'Retirar de la lista', text: 'Para quien ya no necesita la cita. Se puede volver a poner en espera.', perm: 'waitlist.edit' },
         { title: 'Vence sola', text: 'Cuando pasa la última fecha que le servía, deja la lista sola.' },
+        { title: 'Avisar a todos o de uno en uno', text: 'Por defecto se avisa a todos a los que les sirve el horario. Tu empresa puede elegir avisar solo al primero en orden: debajo de su estado ves hasta cuándo tiene para tomarlo; si no lo toma, se avisa al siguiente.', where: 'Configuración → Lista de espera' },
+        { title: 'Apagar la lista', text: 'Si se apaga, nadie recibe avisos y en el portal ya no aparece. Lo anotado se conserva.', where: 'Configuración → Lista de espera' },
         { title: 'Exportar', text: 'Descarga a Excel o CSV lo que estás viendo, en el orden de la lista. Eliges cuántas filas y qué columnas.', perm: 'data.export' },
       ],
       tasks: [
@@ -211,8 +220,23 @@ export const agendaTopics: HelpTopics = (vocab) => {
       ],
     },
 
-    '/modules/classes': {
-      summary: 'Servirá para clases grupales con cupos, como yoga o pilates. Esta pantalla está en construcción: todavía no se puede usar.',
+    '/classes': {
+      summary: `Clases grupales con cupos, como yoga o pilates. Cada clase tiene su ${p}, su sala, su fecha y hora y un número de cupos; ${cs} se inscriben hasta llenarla y luego quedan en lista de espera.`,
+      points: [
+        { title: 'Pestañas', text: 'Próximas muestra lo que viene y lo que está en curso. Pasadas y canceladas guarda lo que ya pasó.' },
+        { title: 'Tarjetas', text: 'Filtran las clases de los próximos 7 días, las que están completas y las que tienen gente esperando. La asistencia del último mes es el porcentaje de inscritos que vino.' },
+        { title: 'En la agenda', text: `La clase ocupa ${vocab.pick('pro', 'al', 'a la')} ${p} y a su sala. Mientras dura, la agenda no deja poner una cita encima, y no se puede programar una clase encima de una cita.` },
+        { title: 'Lista de espera', text: 'Si la clase se llena, quien quiere entrar queda en espera. Cuando alguien sale, el primero de la lista entra solo y recibe un aviso. Ambas cosas se cambian en Configuración, Clases.' },
+        { title: 'Cobro', text: `Cada inscrito se cobra aparte: "Cobrar" crea su venta en el punto de venta con el precio del servicio. Si tiene una membresía que incluye la clase, la venta sale sin cobro; si tiene un paquete con esa clase, "Usar su paquete" descuenta una sesión.` },
+        { title: 'Página de cada clase', text: 'Muestra sus inscritos (y cómo llegó cada uno: panel, portal o reserva en línea), si ya pagaron y con qué, la lista de espera y las siguientes de la serie. Desde ahí se cambia la fecha, la sala o el cupo: si subes el cupo, entran los primeros en espera.' },
+        { title: 'Portal y reservas en línea', text: `Si la clase tiene encendida la inscripción en línea, ${cs} la ven en su portal y en la página de reservas y se inscriben solos. Pueden salir desde el portal hasta unas horas antes (Configuración, Clases).` },
+      ],
+      tasks: [
+        { title: 'Programar una clase cada semana', steps: ['Primero crea el servicio en Servicios y marca que es grupal, con su cupo.', 'Pulsa "Programar clase".', `Elige la clase, ${vocab.pick('pro', 'el', 'la')} ${p}, la sala, la fecha y la hora.`, 'En "Repetir", elige cuántas semanas. Las fechas que chocan con otra cosa se saltan y te avisamos cuáles.'] },
+        { title: 'Inscribir a alguien', steps: ['Abre la clase con su nombre o con el ojo.', `En "Inscritos", busca ${theClient}. Si es nuevo, pulsa "+".`, 'Pulsa "Inscribir". Si ya no hay cupos, queda en la lista de espera.'] },
+        { title: 'Tomar asistencia', steps: ['Cuando la clase empieza, abre la clase.', 'Marca "Asistió" o "No asistió" en cada inscrito, o "Todos asistieron".'] },
+        { title: 'Cancelar una clase', steps: ['Abre la clase y pulsa "Cancelar clase".', 'Escribe el motivo: va en el mensaje que reciben los inscritos y quienes esperaban.', 'Las clases descontadas de un paquete se devuelven solas. Lo cobrado en una venta se devuelve desde Ventas.'] },
+      ],
     },
 
     '/notifications': {

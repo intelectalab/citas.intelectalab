@@ -19,7 +19,7 @@ export default function NotificationsBell() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
 
-  const enabled = Boolean(user?.tenant) && user?.account_type !== 'customer';
+  const enabled = (Boolean(user?.tenant) || Boolean(user?.is_saas_admin)) && user?.account_type !== 'customer';
   const { unread, total, items, loaded, load, markRead, markAllRead } = useNotifications(BELL_LIMIT, enabled);
   const { openDetail, panels, isOpen: panelOpen } = useAppointmentPanels(load);
 

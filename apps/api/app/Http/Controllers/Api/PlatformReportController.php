@@ -57,6 +57,7 @@ class PlatformReportController extends Controller
             'data'     => match ($tab) {
                 'tenants' => $reports->tenantsTab(),
                 'usage'   => $reports->usage(),
+                'metrics' => $reports->metrics(),
                 default   => $reports->income(),
             },
         ]);

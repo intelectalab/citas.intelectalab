@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, Boxes, CalendarCheck, CalendarClock, CalendarOff, CalendarPlus, CalendarX2, CreditCard, DoorOpen, FileCheck2, FileText, FileX2, Gauge, Globe, Hourglass, ListOrdered, NotebookPen, PowerOff, ShieldAlert, Stethoscope, Unlock, Wallet, Wrench, type LucideIcon } from 'lucide-react';
+import { BadgeCheck, BellRing, Boxes, CalendarCheck, CalendarClock, CalendarOff, CalendarPlus, CalendarX2, CreditCard, DoorOpen, FileCheck2, FileText, FileX2, Gauge, Globe, Hourglass, ListOrdered, NotebookPen, PowerOff, ShieldAlert, Stethoscope, Unlock, Wallet, Wrench, type LucideIcon } from 'lucide-react';
 import { api } from '@/lib/axios';
 
 export interface AppNotification {
@@ -43,6 +43,8 @@ const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   'quote.accepted': { icon: FileCheck2, tone: 'bg-emerald-50 text-emerald-600' },
   'quote.rejected': { icon: FileX2, tone: 'bg-rose-50 text-rose-600' },
   'package.bought': { icon: Boxes, tone: 'bg-brand-soft/25 text-brand-ink' },
+  'membership.due': { icon: BadgeCheck, tone: 'bg-amber-50 text-amber-600' },
+  'membership.grace': { icon: Hourglass, tone: 'bg-rose-50 text-rose-600' },
   'block.affected': { icon: CalendarOff, tone: 'bg-amber-50 text-amber-600' },
   'recall.due': { icon: Stethoscope, tone: 'bg-sky-50 text-sky-600' },
   'record.draft': { icon: NotebookPen, tone: 'bg-amber-50 text-amber-600' },

@@ -174,8 +174,8 @@ class PlanTransfers
             throw ValidationException::withMessages(['method_id' => self::MONTHLY_BLOCKED]);
         }
 
-        $amount = Subscriptions::price($plan, $cycle);
-        abort_unless($amount > 0, 422, 'Este plan no tiene costo.');
+        abort_unless(Subscriptions::price($plan, $cycle) > 0, 422, 'Este plan no tiene costo.');
+        $amount = Cancellations::chargeFor($subscription, $plan, $cycle);
 
         $id = (string) Str::uuid();
         $extension = $match[1] === 'application/pdf' ? 'pdf' : ($match[2] === 'jpeg' ? 'jpg' : $match[2]);

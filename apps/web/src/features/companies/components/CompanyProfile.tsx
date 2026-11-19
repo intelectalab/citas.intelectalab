@@ -4,7 +4,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CalendarDays, Check, ChevronRight, Clock, Copy, CreditCard, FileText, KeyRound, MapPin, Pencil, Phone, Settings, Store, Users } from 'lucide-react';
+import { Building2, CalendarDays, Check, ChevronRight, Clock, Copy, CreditCard, FileText, KeyRound, Mail, MapPin, MessageCircle, Pencil, Phone, Settings, Store, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -55,6 +55,8 @@ export default function CompanyProfile() {
     professionals: { title: vocab.pros, icon: <Users size={18} />, href: '/professionals' },
     users: { title: 'Usuarios, sin contar al dueño', icon: <KeyRound size={18} /> },
     appointments_month: { title: 'Citas de este mes', icon: <CalendarDays size={18} />, href: '/appointments' },
+    whatsapp_month: { title: 'WhatsApp de este mes', icon: <MessageCircle size={18} />, href: '/messages' },
+    campaign_emails_month: { title: 'Correos de campañas del mes', icon: <Mail size={18} />, href: '/campaigns' },
   };
 
   const copyCode = async () => {
@@ -117,7 +119,7 @@ export default function CompanyProfile() {
         <div className="xl:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
           {data.usage.map((item) => {
             const meta = usageLabels[item.key];
-            const percent = item.limit ? Math.min(100, Math.round((item.used * 100) / item.limit)) : null;
+            const percent = item.limit ? Math.min(100, Math.round((item.used * 100) / item.limit)) : item.limit === 0 && (item.key === 'whatsapp_month' || item.key === 'campaign_emails_month') ? 100 : null;
             const tone = percent === null ? 'bg-brand-accent' : percent >= 100 ? 'bg-rose-500' : percent >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
             const body = (
               <>

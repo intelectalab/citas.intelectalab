@@ -87,6 +87,8 @@ class TenantSettingController extends Controller
             'sales_rules.refund_days'        => 'sometimes|integer|min:0|max:365',
             'sales_rules.pay_before_service' => 'sometimes|boolean',
             'sales_rules.arrive_minutes'     => 'sometimes|integer|min:0|max:240',
+            'sales_rules.cash_review_over'   => 'sometimes|numeric|min:0|max:9999999',
+            'sales_rules.refund_approval_over' => 'sometimes|numeric|min:0|max:9999999',
             'payment_rules' => 'sometimes|array',
             'payment_rules.require_deposit'      => 'required_with:payment_rules|boolean',
             'payment_rules.deposit_minutes'      => 'required_with:payment_rules|integer|min:5|max:1440',
@@ -134,9 +136,23 @@ class TenantSettingController extends Controller
             'quote_rules.plan_validity_days'   => 'required_with:quote_rules|integer|min:1|max:3650',
             'quote_rules.cancel_policy'        => ['required_with:quote_rules', Rule::in(array_keys(Quotes::CANCEL_POLICIES))],
             'quote_rules.portal_accept'        => 'sometimes|boolean',
+            'penalty_rules' => 'sometimes|array',
+            'penalty_rules.enabled'             => 'required_with:penalty_rules|boolean',
+            'penalty_rules.no_show_percent'     => 'required_with:penalty_rules|numeric|min:0|max:100',
+            'penalty_rules.late_cancel_percent' => 'required_with:penalty_rules|numeric|min:0|max:100',
+            'membership_rules' => 'sometimes|array',
+            'membership_rules.grace_days' => 'required_with:membership_rules|integer|min:0|max:60',
             'walkin_rules' => 'sometimes|array',
             'walkin_rules.self_checkin' => 'required_with:walkin_rules|boolean',
             'walkin_rules.max_wait'     => 'required_with:walkin_rules|integer|min:10|max:300',
+            'classes_rules' => 'sometimes|array',
+            'classes_rules.waitlist'           => 'required_with:classes_rules|boolean',
+            'classes_rules.auto_promote'       => 'required_with:classes_rules|boolean',
+            'classes_rules.portal_leave_hours' => 'required_with:classes_rules|integer|min:0|max:168',
+            'waitlist_rules' => 'sometimes|array',
+            'waitlist_rules.enabled'     => 'required_with:waitlist_rules|boolean',
+            'waitlist_rules.notify_mode' => ['required_with:waitlist_rules', Rule::in(\App\Support\Waitlist::MODES)],
+            'waitlist_rules.reply_hours' => 'required_with:waitlist_rules|integer|min:1|max:72',
             'session_portal_idle_minutes' => ['sometimes', 'integer', 'min:0', 'max:1440', fn ($attribute, $value, $fail) => $value > 0 && $value < 5 ? $fail('El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).') : null],
         ] + collect(array_keys(Tenant::DEFAULT_VOCABULARY))
             ->mapWithKeys(fn ($key) => ["vocabulary.$key" => 'nullable|string|max:40'])
@@ -163,6 +179,8 @@ class TenantSettingController extends Controller
             'session_idle_roles.*.*'               => 'El tiempo sin actividad de cada rol va de 5 a 1440 minutos (24 horas).',
             'customer_groups.inactive_days.*'      => 'Los días para considerar inactivo a un cliente van de 15 a 730.',
             'customer_groups.frequent_visits.*'    => 'Las visitas para ser frecuente van de 2 a 60.',
+            'membership_rules.grace_days.*'        => 'Los días de gracia de las membresías van de 0 a 60.',
+            'waitlist_rules.reply_hours.*'         => 'El plazo para responder va de 1 a 72 horas.',
             'customer_groups.vip_spend.*'          => 'Escribe el monto VIP como un número mayor que 0.',
             'session_portal_idle_minutes.integer'  => 'El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).',
             'session_portal_idle_minutes.min'      => 'El tiempo sin actividad del portal va de 5 a 1440 minutos (24 horas).',
@@ -235,7 +253,9 @@ class TenantSettingController extends Controller
             ] + (array_key_exists('auto_register', $validated['sales_rules']) ? ['cash.auto_register' => (bool) $validated['sales_rules']['auto_register']] : [])
               + (array_key_exists('refund_days', $validated['sales_rules']) ? ['pos.refund_days' => (int) $validated['sales_rules']['refund_days']] : [])
               + (array_key_exists('pay_before_service', $validated['sales_rules']) ? ['pos.pay_before_service' => (bool) $validated['sales_rules']['pay_before_service']] : [])
-              + (array_key_exists('arrive_minutes', $validated['sales_rules']) ? ['pos.arrive_minutes' => (int) $validated['sales_rules']['arrive_minutes']] : []));
+              + (array_key_exists('arrive_minutes', $validated['sales_rules']) ? ['pos.arrive_minutes' => (int) $validated['sales_rules']['arrive_minutes']] : [])
+              + (array_key_exists('cash_review_over', $validated['sales_rules']) ? ['cash.review_over' => round((float) $validated['sales_rules']['cash_review_over'], 2)] : [])
+              + (array_key_exists('refund_approval_over', $validated['sales_rules']) ? ['pos.refund_approval_over' => round((float) $validated['sales_rules']['refund_approval_over'], 2)] : []));
         }
 
         if (isset($validated['payment_rules'])) {
@@ -328,10 +348,40 @@ class TenantSettingController extends Controller
             ] + (array_key_exists('portal_accept', $validated['quote_rules']) ? ['quotes.portal_accept' => (bool) $validated['quote_rules']['portal_accept']] : []));
         }
 
+        if (isset($validated['penalty_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'penalties.enabled'       => (bool) $validated['penalty_rules']['enabled'],
+                'noshow.fee_percent'      => round((float) $validated['penalty_rules']['no_show_percent'], 2),
+                'cancel.late_fee_percent' => round((float) $validated['penalty_rules']['late_cancel_percent'], 2),
+            ]);
+        }
+
+        if (isset($validated['membership_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'membership.grace_days' => (int) $validated['membership_rules']['grace_days'],
+            ]);
+        }
+
+        if (isset($validated['waitlist_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'waitlist.enabled'     => (bool) $validated['waitlist_rules']['enabled'],
+                'waitlist.notify_mode' => $validated['waitlist_rules']['notify_mode'],
+                'waitlist.reply_hours' => (int) $validated['waitlist_rules']['reply_hours'],
+            ]);
+        }
+
         if (isset($validated['walkin_rules'])) {
             $settings->rules = array_merge($settings->rules ?? [], [
                 'walkin.self_checkin' => (bool) $validated['walkin_rules']['self_checkin'],
                 'walkin.max_wait'     => (int) $validated['walkin_rules']['max_wait'],
+            ]);
+        }
+
+        if (isset($validated['classes_rules'])) {
+            $settings->rules = array_merge($settings->rules ?? [], [
+                'classes.waitlist'           => (bool) $validated['classes_rules']['waitlist'],
+                'classes.auto_promote'       => (bool) $validated['classes_rules']['auto_promote'],
+                'classes.portal_leave_hours' => (int) $validated['classes_rules']['portal_leave_hours'],
             ]);
         }
 
@@ -414,6 +464,10 @@ class TenantSettingController extends Controller
             'quote_rules' => Quotes::enabled($tenant) ? Quotes::rules($tenant) : null,
             'commission_rules' => Commissions::enabled($tenant) ? Commissions::rules($tenant) : null,
             'walkin_rules' => $tenant->hasModule('walkin') ? \App\Support\Walkin::rules($tenant) : null,
+            'classes_rules' => $tenant->hasModule('classes') ? \App\Support\ClassSessions::rules($tenant) : null,
+            'waitlist_rules' => $tenant->hasModule('agenda') ? \App\Support\Waitlist::rules($tenant) : null,
+            'membership_rules' => \App\Support\Memberships::enabled($tenant) ? ['grace_days' => \App\Support\Memberships::graceDays($tenant)] : null,
+            'penalty_rules' => $tenant->hasModule('pos') ? \App\Support\Penalties::rules($tenant) : null,
             'session_idle_minutes' => (int) AppointmentFlow::rule($tenant, 'session.idle_minutes'),
             'session_idle_roles'   => DB::table('roles')->where('tenant_id', $tenant->id)->orderBy('created_at')->get(['id', 'name'])
                 ->map(fn ($role) => ['id' => $role->id, 'name' => $role->name, 'minutes' => ((array) AppointmentFlow::rule($tenant, 'session.idle_by_role'))[$role->id] ?? null])->values(),
@@ -462,6 +516,11 @@ class TenantSettingController extends Controller
                 'confirm_release_hours'  => (int) AppointmentFlow::rule($tenant, 'confirm.release_hours'),
                 'cancel_window_hours'    => (int) AppointmentFlow::rule($tenant, 'cancel.window_hours'),
             ],
+            'Penalidades' => [
+                'Activas'                => \App\Support\Penalties::rules($tenant)['enabled'] ? 'Sí' : 'No',
+                'Por no asistir (%)'     => \App\Support\Penalties::rules($tenant)['no_show_percent'],
+                'Por cancelar tarde (%)' => \App\Support\Penalties::rules($tenant)['late_cancel_percent'],
+            ],
             'Si reserva en línea y no asiste' => [
                 'miss_action'     => self::AUDIT_MISS_ACTIONS[$misses['action']] ?? $misses['action'],
                 'miss_limit'      => $misses['limit'],
@@ -480,6 +539,8 @@ class TenantSettingController extends Controller
                 'refund_days'        => $sales['refund_days'],
                 'pay_before_service' => $sales['pay_before_service'],
                 'arrive_minutes'     => $sales['arrive_minutes'],
+                'cash_review_over'   => $sales['cash_review_over'] ?? 0,
+                'refund_approval_over' => $sales['refund_approval_over'] ?? 0,
             ],
             'Presupuestos y planes' => [
                 'quote_validity_days'  => $quotes['validity_days'],
@@ -517,6 +578,14 @@ class TenantSettingController extends Controller
                 'deposit_minutes'      => (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes'),
                 'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
                 'link_hours'           => (int) AppointmentFlow::rule($tenant, 'payments.link_hours'),
+            ],
+            'Membresías' => [
+                'membership_grace_days' => \App\Support\Memberships::graceDays($tenant),
+            ],
+            'Lista de espera' => [
+                'Encendida'             => \App\Support\Waitlist::enabled($tenant) ? 'Sí' : 'No',
+                'A quién avisar'        => \App\Support\Waitlist::mode($tenant) === \App\Support\Waitlist::FIRST ? 'Solo al primero, en orden' : 'A todos los que encajan',
+                'Plazo para responder (horas)' => \App\Support\Waitlist::replyHours($tenant),
             ],
             'Grupos de clientes' => [
                 'inactive_days'   => (int) AppointmentFlow::rule($tenant, 'crm.inactive_days'),

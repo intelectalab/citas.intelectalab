@@ -7,12 +7,14 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { PagedList } from '@/app/components/common/Pager';
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CreditCard, History, Loader2, Repeat, Rocket } from 'lucide-react';
+import { AlertTriangle, CreditCard, History, Loader2, Repeat, Rocket, TicketPercent } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
 import PayPlanDrawer from './PayPlanDrawer';
+import CancelPlan, { DownloadAllButton } from './CancelPlan';
+import ReceiptButton from './ReceiptButton';
 import { CulqiClosed, openCulqi } from '../culqi';
 import { BILLING_STATES, INVOICE_REASONS, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, cycleLabel, providerLabel, asClause, transferAllowed, type BillingPayload, type CulqiAction } from '../billing';
 
@@ -25,7 +27,9 @@ export default function PlanCard() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  const [panel, setPanel] = useState<'' | 'plans' | 'history' | 'pay'>('');
+  const [panel, setPanel] = useState<'' | 'plans' | 'history' | 'pay' | 'coupon'>('');
+  const [couponCode, setCouponCode] = useState('');
+  const [couponError, setCouponError] = useState('');
   const [choice, setChoice] = useState<{ plan: string; cycle: 'monthly' | 'yearly' }>({ plan: '', cycle: 'monthly' });
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -137,6 +141,21 @@ export default function PlanCard() {
   const startPay = () => (billing.methods?.transfer ? setPanel('pay') : go('pay', '/billing/pay'));
   const startActivate = () => (transferNow ? setPanel('pay') : go('activate', '/billing/activate'));
 
+  const applyCoupon = async () => {
+    try {
+      setBusy('coupon');
+      setCouponError('');
+      const res = await api.post('/billing/coupon', { code: couponCode });
+      setData(res.data);
+      setPanel('');
+      setNotice(res.data.message);
+    } catch (err) {
+      setCouponError(apiError(err, 'No se pudo aplicar el cupón.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
   const openPlans = () => {
     setChoice({ plan: billing.pending_plan?.id ?? billing.plan?.id ?? data.plans[0]?.id ?? '', cycle: billing.pending_plan?.billing_cycle ?? billing.billing_cycle ?? 'monthly' });
     setPanel('plans');
@@ -144,6 +163,10 @@ export default function PlanCard() {
 
   const summary = (() => {
     const price = `${money(billing.price, billing.plan?.currency)} ${cycleLabel(billing.billing_cycle)}`;
+    const leaving = billing.cancellation?.scheduled;
+    if (leaving && (billing.state === 'trial' || billing.state === 'active')) {
+      return `${price}. Pediste la baja: todo sigue funcionando hasta el ${new Date(leaving.effective_at).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })} y no se cobra otro periodo.`;
+    }
     switch (billing.state) {
       case 'trial': {
         const left = billing.trial_days_left;
@@ -152,7 +175,9 @@ export default function PlanCard() {
         return `Prueba gratis hasta el ${shortDate(billing.ends_at)}${days}. ${authorized ? `Ese día se cobran ${price} a tu tarjeta.` : `Para seguir después, activa tu plan de ${price}: no se cobra nada hasta que lo actives.`}`;
       }
       case 'active':
-        return billing.free ? 'Plan sin costo.' : `${price}. Vigente hasta el ${shortDate(billing.ends_at)}. ${authorized ? 'Se renueva solo con tu tarjeta.' : 'Paga antes de esa fecha para que no se interrumpa.'}`;
+        if (billing.free) return 'Plan sin costo.';
+        if (!billing.ends_at) return `${price}. Sin fecha de vencimiento por ahora.`;
+        return `${price}. Vigente hasta el ${shortDate(billing.ends_at)}. ${authorized ? 'Se renueva solo con tu tarjeta.' : 'Paga antes de esa fecha para que no se interrumpa.'}`;
       case 'grace':
         return `Venció el ${shortDate(billing.ends_at)}. Págalo antes del ${shortDate(overdue?.readonly_on ?? billing.grace_ends_at)} para que tu empresa no quede en solo lectura.`;
       default:
@@ -268,6 +293,40 @@ export default function PlanCard() {
         )
       )}
 
+      {billing.can_pay && billing.cancellation?.discount && (
+        <p className="text-xs text-emerald-700" data-plan-discount>Tienes {billing.cancellation.discount.percent} % de descuento por {billing.cancellation.discount.cycles} {billing.cancellation.discount.cycles === 1 ? 'mes más' : 'meses más'}.</p>
+      )}
+
+      {billing.coupon ? (
+        <p className="flex items-center gap-1.5 text-xs text-emerald-700" data-plan-coupon><TicketPercent size={14} className="shrink-0" /> Cupón {billing.coupon.code}: {billing.coupon.text} en tus próximos cobros.</p>
+      ) : billing.can_pay && billing.coupons && billing.reason !== 'canceled' && !billing.free && (
+        <button type="button" data-plan-coupon-open onClick={() => { setCouponError(''); setCouponCode(''); setPanel('coupon'); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-accent hover:text-brand-ink cursor-pointer">
+          <TicketPercent size={14} /> Tengo un cupón
+        </button>
+      )}
+
+      <FormDrawer isOpen={panel === 'coupon'} onClose={() => setPanel('')} title="Usar un cupón" subtitle={billing.plan?.name} icon={<TicketPercent size={18} />}>
+        <div className="space-y-4" data-coupon-panel>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="plan-coupon-code">Código del cupón</label>
+            <input id="plan-coupon-code" maxLength={30} value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))} className="w-full px-3.5 py-2.5 text-sm font-mono uppercase border border-slate-200 rounded-xl focus:outline-none focus:border-brand-accent" placeholder="Ej. FERIA20" />
+          </div>
+          <p className="text-xs text-slate-500">El descuento se aplica en tus próximos cobros del plan. Una empresa puede usar un cupón a la vez.</p>
+          <ErrorAlert message={couponError} />
+          <button type="button" data-coupon-apply disabled={busy !== '' || couponCode.length < 4} onClick={applyCoupon} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">
+            {busy === 'coupon' && <Loader2 size={16} className="animate-spin" />} Aplicar cupón
+          </button>
+        </div>
+      </FormDrawer>
+
+      {billing.can_pay && billing.cancellation && (
+        <div className="pt-3 border-t border-slate-100">
+          {billing.reason === 'canceled'
+            ? <DownloadAllButton />
+            : <CancelPlan info={billing.cancellation} currency={billing.plan?.currency} onChanged={async (message) => { setNotice(message); await load(); await refetchUser(); }} />}
+        </div>
+      )}
+
       <PayPlanDrawer
         open={panel === 'pay'}
         billing={billing}
@@ -324,6 +383,7 @@ export default function PlanCard() {
                       <span className="block text-xs text-slate-500">{invoice.period_start && invoice.period_end ? `Del ${shortDate(invoice.period_start)} al ${shortDate(invoice.period_end)}` : shortDate(invoice.paid_at)}</span>
                     </span>
                     <span className="text-sm font-bold text-slate-800 tabular-nums">{money(invoice.amount, invoice.currency)}</span>
+                    {billing.can_pay && <ReceiptButton path={`/billing/invoices/${invoice.id}/receipt`} />}
                   </li>
                 )}
               />

@@ -36,6 +36,15 @@ class Cash
         }
     }
 
+    public const REVIEW_LABELS = ['pending' => 'En revisión', 'approved' => 'Aprobado', 'observed' => 'Observado'];
+
+    public static function reviewReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= \Illuminate\Support\Facades\Schema::hasColumn('cash_sessions', 'review_status');
+    }
+
     public static function openSessions(string $tenantId, string $branchId): Collection
     {
         return DB::table('cash_sessions as s')
@@ -69,7 +78,7 @@ class Cash
             ->values();
 
         $names = DB::table('users')
-            ->whereIn('id', array_filter([$session->opened_by, $session->closed_by, ...$movements->pluck('created_by')->all()]))
+            ->whereIn('id', array_filter([$session->opened_by, $session->closed_by, $session->reviewed_by ?? null, ...$movements->pluck('created_by')->all()]))
             ->get(['id', 'first_name', 'last_name'])
             ->mapWithKeys(fn ($u) => [$u->id => \App\Support\Person::name($u)]);
 
@@ -97,6 +106,11 @@ class Cash
             'closing_notes'   => $session->closing_notes,
             'movement_count'  => $movements->count(),
             'by_method'       => $byMethod,
+            'review_status'   => $session->review_status ?? null,
+            'review_label'    => isset($session->review_status) ? (self::REVIEW_LABELS[$session->review_status] ?? null) : null,
+            'reviewed_by'     => !empty($session->reviewed_by) ? ($names[$session->reviewed_by] ?? null) : null,
+            'reviewed_at'     => $iso($session->reviewed_at ?? null),
+            'review_notes'    => $session->review_notes ?? null,
         ];
 
         if ($withMovements) {

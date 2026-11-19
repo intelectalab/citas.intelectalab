@@ -2,7 +2,7 @@
 
 import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useState } from 'react';
-import { DoorOpen, Gauge, LifeBuoy, Loader2, Lock, Tag } from 'lucide-react';
+import { BookOpenText, DoorOpen, Gauge, LifeBuoy, Loader2, Lock, Tag } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -20,6 +20,9 @@ interface PlatformValues {
   usage_danger_percent: number;
   allow_tenant_signup: boolean;
   impersonation_hours: number;
+  legal_name: string | null;
+  legal_tax_id: string | null;
+  legal_address: string | null;
 }
 
 
@@ -83,6 +86,9 @@ export default function PlatformSettings() {
         usage_danger_percent: values.usage_danger_percent,
         allow_tenant_signup: values.allow_tenant_signup,
         impersonation_hours: values.impersonation_hours,
+        legal_name: values.legal_name?.trim() || null,
+        legal_tax_id: values.legal_tax_id?.trim() || null,
+        legal_address: values.legal_address?.trim() || null,
       };
       const res = await api.put('/admin/platform-settings', { ...general, support_email: values.support_email || null });
       setValues(res.data.values);
@@ -164,6 +170,24 @@ export default function PlatformSettings() {
           <div>
             <label className={labelClass} htmlFor="support">Correo de soporte</label>
             <input id="support" type="email" maxLength={190} value={values.support_email ?? ''} onChange={(e) => set('support_email', e.target.value)} className={inputClass} placeholder="soporte@tuempresa.com" />
+          </div>
+        </section>
+
+        <section className={`xl:col-span-12 ${card}`} data-platform-legal>
+          <Title icon={<BookOpenText size={16} />} title="Datos legales" hint="Salen arriba del Libro de Reclamaciones de la plataforma, como pide la norma." />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className={labelClass} htmlFor="legal_name">Razón social</label>
+              <input id="legal_name" maxLength={200} value={values.legal_name ?? ''} onChange={(e) => set('legal_name', e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="legal_tax_id">RUC</label>
+              <input id="legal_tax_id" maxLength={11} inputMode="numeric" value={values.legal_tax_id ?? ''} onChange={(e) => set('legal_tax_id', e.target.value.replace(/\D/g, ''))} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="legal_address">Dirección</label>
+              <input id="legal_address" maxLength={255} value={values.legal_address ?? ''} onChange={(e) => set('legal_address', e.target.value)} className={inputClass} />
+            </div>
           </div>
         </section>
 

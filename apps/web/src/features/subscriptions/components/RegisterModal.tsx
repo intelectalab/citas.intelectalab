@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
+import Select from '@/app/components/common/Select';
 import { usePlatform } from '@/hooks/usePlatform';
 import { X, ArrowRight, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
@@ -50,11 +51,21 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
     last_name: '',
     email: '',
     password: '',
+    coupon: '',
   });
+  const [couponText, setCouponText] = useState('');
+  const [couponError, setCouponError] = useState('');
 
   useEffect(() => {
     api.get('/business-types')
-      .then((res) => setBusinessTypes(res.data))
+      .then((res) => {
+        setBusinessTypes(res.data);
+        const params = new URLSearchParams(window.location.search);
+        const rubro = params.get('rubro');
+        const match = rubro ? (res.data as BusinessType[]).find((type) => type.slug === rubro) : null;
+        const coupon = (params.get('cupon') ?? '').toUpperCase();
+        setFormData((current) => ({ ...current, business_type_id: current.business_type_id || match?.id || '', coupon: current.coupon || coupon }));
+      })
       .catch((err) => console.error('Error al cargar rubros:', err));
   }, []);
 
@@ -62,8 +73,27 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
 
   const selectedBusinessType = businessTypes.find((type) => type.id === formData.business_type_id);
 
+  const checkCoupon = async () => {
+    setCouponText('');
+    setCouponError('');
+    if (!formData.coupon.trim()) return;
+    try {
+      const res = await api.post('/web/coupon', { code: formData.coupon, plan_id: selectedPlan.id });
+      const preview = res.data.preview;
+      setCouponText(preview
+        ? `${res.data.text}: tu primer cobro mensual sería ${preview.symbol} ${preview.first_charge} en lugar de ${preview.symbol} ${preview.price}.`
+        : `${res.data.text}.`);
+    } catch (err: any) {
+      setCouponError(err.response?.data?.errors?.code?.[0] ?? err.response?.data?.message ?? 'No pudimos revisar el cupón.');
+    }
+  };
+
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.business_type_id) {
+      setErrorMessage('Elige el rubro de tu negocio.');
+      return;
+    }
     setErrorMessage(null);
     setModalStep(2);
   };
@@ -74,9 +104,16 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
     setErrorMessage(null);
 
     try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      let utm: Record<string, string> = {};
+      try { utm = JSON.parse(localStorage.getItem('site_utm') ?? '{}') ?? {}; } catch {}
+      const { coupon, ...rest } = formData;
       const response = await api.post('/register-tenant', {
-        ...formData,
+        ...rest,
         plan_id: selectedPlan.id,
+        ...(ref ? { ref } : {}),
+        ...(coupon.trim() ? { coupon: coupon.trim() } : {}),
+        utm,
       });
 
       const token = response.data.access_token || response.data.token;
@@ -144,17 +181,14 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
           <form onSubmit={handleNextStep} className="space-y-4">
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-ink uppercase">Rubro del negocio</label>
-              <select
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium"
+              <Select
+                ariaLabel="Rubro del negocio"
+                placeholder="Selecciona tu rubro"
+                clearable={false}
                 value={formData.business_type_id}
-                onChange={(e) => setFormData({ ...formData, business_type_id: e.target.value })}
-                required
-              >
-                <option value="" disabled>Selecciona tu rubro</option>
-                {businessTypes.map((type) => (
-                  <option key={type.id} value={type.id}>{type.name}</option>
-                ))}
-              </select>
+                onChange={(e) => setFormData({ ...formData, business_type_id: String(e.target.value) })}
+                options={businessTypes.map((type) => ({ value: type.id, label: type.name }))}
+              />
               <p className="text-[11px] text-slate-500 font-medium">
                 {selectedBusinessType?.description
                   ? `${selectedBusinessType.description} Tu cuenta empieza con servicios y una ficha de ejemplo de este rubro; luego puedes cambiarlos.`
@@ -224,15 +258,13 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-brand-ink uppercase">Departamento</label>
-                <select
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium"
+                <Select
+                  ariaLabel="Departamento"
+                  clearable={false}
                   value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                >
-                  <option value="Lima">Lima</option>
-                  <option value="Arequipa">Arequipa</option>
-                  <option value="Trujillo">Trujillo</option>
-                </select>
+                  onChange={(e) => setFormData({ ...formData, department: String(e.target.value) })}
+                  options={['Lima', 'Arequipa', 'Trujillo'].map((name) => ({ value: name, label: name }))}
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-brand-ink uppercase">Distrito</label>
@@ -344,6 +376,23 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-1" data-register-coupon>
+              <label className="text-[11px] font-bold text-brand-ink uppercase" htmlFor="register-coupon">Cupón (opcional)</label>
+              <div className="flex gap-2">
+                <input
+                  id="register-coupon"
+                  type="text"
+                  placeholder="Ej. FERIA20"
+                  className="flex-1 min-w-0 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 uppercase focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium"
+                  value={formData.coupon}
+                  onChange={(e) => { setFormData({ ...formData, coupon: e.target.value.toUpperCase() }); setCouponText(''); setCouponError(''); }}
+                />
+                <button type="button" onClick={checkCoupon} disabled={!formData.coupon.trim()} className="px-4 py-2 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Aplicar</button>
+              </div>
+              {couponText && <p className="text-[11px] font-semibold text-emerald-700" data-coupon-ok>{couponText}</p>}
+              {couponError && <p className="text-[11px] font-semibold text-rose-600" data-coupon-error>{couponError}</p>}
             </div>
 
             <p data-trial-note className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">

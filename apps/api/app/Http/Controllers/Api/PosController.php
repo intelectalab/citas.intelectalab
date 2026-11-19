@@ -19,6 +19,7 @@ use App\Support\Sales;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -37,6 +38,7 @@ class PosController extends SaleController
             'items.*.id'              => 'required|uuid',
             'items.*.quantity'        => 'nullable|integer|min:1|max:999',
             'items.*.professional_id' => 'nullable|uuid',
+            'items.*.no_membership'   => 'nullable|boolean',
             'items.*.details'         => 'nullable|array',
             'items.*.details.professional_id' => 'nullable|uuid',
             'items.*.details.branch_id'       => 'nullable|uuid',
@@ -44,6 +46,9 @@ class PosController extends SaleController
             'items.*.details.slots.*.date'    => 'nullable|date_format:Y-m-d',
             'items.*.details.slots.*.time'    => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'items.*.details.slots.*.professional_id' => 'nullable|uuid',
+            'items.*.details.amount'          => 'nullable|numeric|min:0|max:999999',
+            'items.*.details.recipient_name'  => 'nullable|string|max:150',
+            'items.*.details.recipient_email' => 'nullable|string|max:250',
         ], [
             'items.max'               => 'Una venta lleva como máximo ' . Cart::MAX_ITEMS . ' líneas.',
             'items.*.quantity.min'    => 'La cantidad debe ser al menos 1.',
@@ -96,6 +101,9 @@ class PosController extends SaleController
                 'packages' => $user->allows('packages.create'),
             ],
             'packages_enabled' => \App\Support\Packages::enabled($tenant),
+            'memberships_enabled' => \App\Support\Memberships::enabled($tenant),
+            'memberships'    => [],
+            'gift_cards_enabled' => \App\Support\Loyalty::enabled($tenant) && \App\Support\Loyalty::rules($tenant)['gift_cards_enabled'],
             'inventory_enabled' => \App\Support\Inventory::enabled($tenant),
             'allow_negative_stock' => (bool) AppointmentFlow::rule($tenant, 'inventory.allow_negative'),
             'pending'        => ['appointments' => [], 'sales' => []],
@@ -145,6 +153,12 @@ class PosController extends SaleController
             $plans = DB::table('package_plans')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('status', 'active')->orderBy('name')->get();
             $planItems = \App\Support\Packages::planItems($plans->pluck('id')->all());
             $payload['packages'] = $plans->map(fn ($p) => \App\Support\Packages::presentPlan($tenant, $p, $planItems[$p->id] ?? collect()))->values();
+        }
+
+        if ($payload['memberships_enabled']) {
+            $plans = DB::table('membership_plans')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('status', 'active')->orderBy('name')->get();
+            $planItems = \App\Support\Memberships::planItems($plans->pluck('id')->all());
+            $payload['memberships'] = $plans->map(fn ($p) => \App\Support\Memberships::presentPlan($tenant, $p, $planItems[$p->id] ?? collect()))->values();
         }
 
         if (Cart::productsEnabled($tenant)) {
@@ -216,7 +230,34 @@ class PosController extends SaleController
         $first = DB::table('sale_items')->where('sale_id', $sale->id)->value('description');
         $item = $count > 1 ? "{$count} líneas" : $first;
 
-        return $this->chargeContext($tenant, $sale, $sale->branch_id, $customer, $item, (float) $sale->subtotal, null, null);
+        return $this->chargeContext($tenant, $sale, $sale->branch_id, $customer, $item, (float) $sale->subtotal, null, null) + ['next_visit' => $this->nextVisit($tenant, $sale)];
+    }
+
+    private function nextVisit(Tenant $tenant, object $sale): ?array
+    {
+        if ($sale->status !== 'paid' || !$sale->customer_id || !request()->user()->allows('agenda.create') || !$tenant->hasModule('agenda')) {
+            return null;
+        }
+
+        $line = DB::table('sale_items as i')
+            ->leftJoin('appointments as a', 'a.id', '=', 'i.appointment_id')
+            ->where('i.sale_id', $sale->id)
+            ->where('i.item_type', 'service')
+            ->when(Schema::hasColumn('sale_items', 'position'), fn ($q) => $q->orderBy('i.position'))
+            ->first(['i.reference_id', 'i.professional_id', 'i.description', 'a.professional_id as appointment_professional_id', 'a.customer_dependent_id']);
+
+        if (!$line || !$line->reference_id) {
+            return null;
+        }
+
+        return [
+            'customer_id'     => $sale->customer_id,
+            'service_id'      => $line->reference_id,
+            'service_name'    => $line->description,
+            'professional_id' => $line->appointment_professional_id ?? $line->professional_id,
+            'branch_id'       => $sale->branch_id,
+            'dependent_id'    => $line->customer_dependent_id,
+        ];
     }
 
     public function chargeShow(Request $request, string $sale)
@@ -258,7 +299,7 @@ class PosController extends SaleController
         $doc = Invoicing::validated($tenant, $validated);
         $result = DB::transaction(fn () => Sales::pay($tenant, $row->id, $validated, $doc, $user));
 
-        return response()->json($this->saleContext($tenant, $result['sale']) + ['change' => $result['change'], 'duplicate' => $result['duplicate'], 'packages' => $result['packages'] ?? []]);
+        return response()->json($this->saleContext($tenant, $result['sale']) + ['change' => $result['change'], 'duplicate' => $result['duplicate'], 'packages' => $result['packages'] ?? [], 'memberships' => $result['memberships'] ?? [], 'gift_cards' => $result['gift_cards'] ?? []]);
     }
 
     public function invoice(Request $request, string $sale)

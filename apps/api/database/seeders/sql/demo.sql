@@ -327,6 +327,15 @@ INSERT INTO membership_plans (id, tenant_id, name, description, price, billing_p
   ('64eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Plan Salud Familiar', 'Descuento en consultas y una consulta general incluida al mes', 89.00, 'monthly', 10, 1)
 ON CONFLICT DO NOTHING;
 
+DO $$
+BEGIN
+  IF to_regclass('public.membership_plan_items') IS NOT NULL THEN
+    INSERT INTO membership_plan_items (tenant_id, membership_plan_id, service_id, sessions, position)
+    VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '64eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', '30eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 1, 0)
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
+
 INSERT INTO customer_tags (id, tenant_id, name, color) VALUES
   ('66eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'VIP', '#7A3FF2'),
   ('66eebc99-9c0b-4ef8-bb6d-6bb9bd380a02', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Nuevo', '#0E9F6E'),

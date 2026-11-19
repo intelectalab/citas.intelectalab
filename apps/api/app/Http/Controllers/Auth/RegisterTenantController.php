@@ -32,26 +32,53 @@ class RegisterTenantController extends Controller
             'email'           => 'required|email|max:190',
             'business_type_id' => ['nullable', 'uuid', Rule::exists('business_types', 'id')->where('status', 'active')],
             'password'        => 'required|string|min:8',
+            'ref'             => 'nullable|string|max:20',
             'plan_id'         => ['required', 'uuid', Rule::exists('saas_plans', 'id')->where('status', 'active')->where('is_public_catalog', true)],
+            'coupon'          => 'nullable|string|max:30',
+            'utm'             => 'nullable|array',
         ]);
 
-        $result = TenantProvisioner::provision([
-            'name'             => $validated['company_name'],
-            'legal_name'       => $validated['company_name'],
-            'trade_name'       => $validated['commercial_name'] ?? $validated['company_name'],
-            'tax_id'           => $validated['ruc'],
-            'phone'            => $validated['phone'] ?? null,
-            'address'          => $validated['address'] ?? null,
-            'department'       => $validated['department'],
-            'district'         => $validated['district'] ?? null,
-            'business_type_id' => $validated['business_type_id'] ?? null,
-            'plan_id'          => $validated['plan_id'],
-            'start_trial'      => true,
-            'first_name'       => $validated['first_name'],
-            'last_name'        => $validated['last_name'],
-            'email'            => $validated['email'],
-            'password'         => $validated['password'],
+        $coupon = trim((string) ($validated['coupon'] ?? ''));
+
+        if ($coupon !== '') {
+            \App\Support\PlanCoupons::check($coupon, $validated['plan_id']);
+        }
+
+        $result = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $coupon) {
+            $result = TenantProvisioner::provision([
+                'name'             => $validated['company_name'],
+                'legal_name'       => $validated['company_name'],
+                'trade_name'       => $validated['commercial_name'] ?? $validated['company_name'],
+                'tax_id'           => $validated['ruc'],
+                'phone'            => $validated['phone'] ?? null,
+                'address'          => $validated['address'] ?? null,
+                'department'       => $validated['department'],
+                'district'         => $validated['district'] ?? null,
+                'business_type_id' => $validated['business_type_id'] ?? null,
+                'plan_id'          => $validated['plan_id'],
+                'start_trial'      => true,
+                'first_name'       => $validated['first_name'],
+                'last_name'        => $validated['last_name'],
+                'email'            => $validated['email'],
+                'password'         => $validated['password'],
+            ]);
+
+            if ($coupon !== '' && ($subscription = \App\Support\Subscriptions::latest($result['tenant']->id))) {
+                \App\Support\PlanCoupons::redeem($subscription, $coupon, 'signup');
+            }
+
+            return $result;
+        });
+
+        \App\Support\WebLeads::fromSignup($result['tenant'], [
+            'name'   => trim($validated['first_name'] . ' ' . $validated['last_name']),
+            'email'  => $validated['email'],
+            'phone'  => $validated['phone'] ?? null,
+            'utm'    => $validated['utm'] ?? [],
+            'coupon' => $coupon !== '' ? \App\Support\PlanCoupons::normalize($coupon) : null,
         ]);
+
+        \App\Support\Referrals::attach($result['tenant'], $validated['ref'] ?? null, $validated['email']);
 
         $token = $result['user']->createToken('auth_token')->plainTextToken;
 

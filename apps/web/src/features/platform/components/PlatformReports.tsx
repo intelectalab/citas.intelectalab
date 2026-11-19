@@ -14,7 +14,41 @@ import { addDays, apiError, formatDate, todayISO } from '@/features/appointments
 import { delta, type Serie } from '@/features/reports/reports';
 import { DayBars, Donut, Kpi, ListBars, Section, Table, isWeekly } from '@/features/reports/components/ReportParts';
 
-type Tab = 'income' | 'tenants' | 'usage';
+type Tab = 'income' | 'tenants' | 'usage' | 'metrics';
+
+interface MetricMonth {
+  day: string;
+  mrr: number;
+  paying: number;
+  new: number;
+  lost: number;
+  canceled: number;
+  start: number;
+  retention: number | null;
+  churn: number | null;
+}
+
+interface MetricsData {
+  ready: { cancellations: boolean };
+  summary: {
+    mrr: Money;
+    arr: Money;
+    arpa: number | null;
+    paying: number;
+    churn: number | null;
+    retention: number | null;
+    ltv: number | null;
+    growth: number;
+    growth_pct: number | null;
+  };
+  months: number;
+  by_month: MetricMonth[];
+  mrr_by_month: { day: string; value: number }[];
+  reasons: Serie[];
+  reason_details: string[];
+  mrr_by_plan: Serie[];
+  mrr_by_business_type: Serie[];
+}
 
 interface Money {
   amount: number;
@@ -109,7 +143,7 @@ interface Payload {
   range: { from: string; to: string; prev_from: string; prev_to: string };
   currency: string;
   ready: { payments: boolean; transfers: boolean };
-  data: IncomeData | TenantsData | UsageData;
+  data: IncomeData | TenantsData | UsageData | MetricsData;
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -143,7 +177,7 @@ const UseCell = ({ limit }: { limit: LimitUse | undefined }) => {
 };
 
 export default function PlatformReports({ initialTab }: { initialTab?: string }) {
-  const [tab, setTab] = useState<Tab>(initialTab === 'tenants' || initialTab === 'usage' ? initialTab : 'income');
+  const [tab, setTab] = useState<Tab>(initialTab === 'tenants' || initialTab === 'usage' || initialTab === 'metrics' ? initialTab : 'income');
   const [period, setPeriod] = useState('30');
   const [from, setFrom] = useState(addDays(todayISO(), -29));
   const [to, setTo] = useState(todayISO());
@@ -333,6 +367,65 @@ export default function PlatformReports({ initialTab }: { initialTab?: string })
     );
   };
 
+  const renderMetrics = (d: MetricsData) => {
+    const s = d.summary;
+    const percent = (v: number | null) => (v === null ? '—' : `${v.toLocaleString('es-PE')} %`);
+    const growthText = s.growth_pct === null ? 'Hace 6 meses no había ingreso mensual para comparar' : `${s.growth >= 0 ? 'Subió' : 'Bajó'} ${Math.abs(s.growth_pct)} % en ${d.months} meses`;
+    return (
+      <>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-metrics>
+          <Kpi id="m-mrr" title="Ingreso mensual (MRR)" value={money(s.mrr.amount)} note={others(s.mrr) ?? 'Lo que pagan por mes las empresas activas y en días de gracia'} icon={<Repeat size={18} />} color="text-sky-600" />
+          <Kpi id="m-arr" title="Ingreso al año (ARR)" value={money(s.arr.amount)} note="El ingreso mensual por 12" icon={<TrendingUp size={18} />} color="text-violet-600" />
+          <Kpi id="m-arpa" title="Promedio por empresa" value={money(s.arpa)} note={`Ingreso mensual entre ${s.paying} ${s.paying === 1 ? 'empresa que paga' : 'empresas que pagan'}`} icon={<Building2 size={18} />} color="text-emerald-600" />
+          <Kpi id="m-growth" title="Crecimiento neto" value={money(s.growth)} note={growthText} icon={<TrendingUp size={18} />} color="text-sky-600" />
+          <Kpi id="m-retention" title="Retención del último mes" value={percent(s.retention)} note="De cada 100 empresas que pagaban al empezar el mes, cuántas siguieron pagando" icon={<Repeat size={18} />} color="text-emerald-600" />
+          <Kpi id="m-churn" title="Bajas por mes" value={percent(s.churn)} note={`Promedio de los últimos ${d.months - 1} meses: empresas que dejaron de pagar`} lowerIsBetter icon={<UserMinus size={18} />} color="text-rose-700" />
+          <Kpi id="m-ltv" title="Valor de vida estimado" value={money(s.ltv)} note={s.ltv === null ? 'Aún no hay bajas para estimarlo' : 'Lo que deja una empresa en todo el tiempo que se queda: promedio por empresa ÷ bajas por mes'} icon={<Wallet size={18} />} color="text-violet-600" />
+          <Kpi id="m-paying" title="Empresas que pagan" value={String(s.paying)} note="Sin contar pruebas ni planes gratis" icon={<CalendarCheck size={18} />} color="text-slate-500" />
+        </div>
+        <Section dataKey="mrr-by-month" title={`Ingreso mensual de los últimos ${d.months} meses`} hint="Calculado con los pagos de cada mes: lo que pagaban por mes las empresas con su plan pagado al cierre del mes (el mes en curso, hasta hoy). Un pago anual cuenta como su doceava parte.">
+          <DayBars points={d.mrr_by_month} format={(v) => money(v)} axis={(v) => formatMoney(v, currency, 0)} empty="Aún no hay pagos de planes." labelOf={monthLabel} titleOf={monthTitle} />
+        </Section>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Section dataKey="moves" title="Movimientos por mes" hint="Nuevas: empezaron a pagar ese mes. Se fueron: pagaban al empezar el mes y al cerrar ya no. Retención: de las que pagaban al empezar, cuántas siguieron.">
+            <Table<MetricMonth>
+              rowKey={(r) => r.day}
+              rows={[...d.by_month].reverse()}
+              empty="Sin datos."
+              columns={[
+                { header: 'Mes', cell: (r) => monthTitle(r.day) },
+                { header: 'Pagan', align: 'right', cell: (r) => r.paying },
+                { header: 'Nuevas', align: 'right', cell: (r) => r.new },
+                { header: 'Se fueron', align: 'right', cell: (r) => r.lost },
+                { header: 'Retención', align: 'right', cell: (r) => percent(r.retention) },
+              ]}
+            />
+          </Section>
+          <Section dataKey="mrr-by-plan" title="Ingreso mensual por plan">
+            <ListBars items={d.mrr_by_plan} format={(v) => money(v)} empty="Ninguna empresa paga un plan todavía." />
+          </Section>
+          <Section dataKey="mrr-by-business-type" title="Ingreso mensual por rubro">
+            <ListBars items={d.mrr_by_business_type} format={(v) => money(v)} empty="Ninguna empresa paga un plan todavía." />
+          </Section>
+        </div>
+        <Section dataKey="reasons" title="Por qué se van" hint="Lo que eligieron las empresas al pedir la baja en el periodo elegido arriba, con lo que escribieron.">
+          {d.ready.cancellations ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Donut items={d.reasons} format={(v) => `${v} ${v === 1 ? 'empresa' : 'empresas'}`} unit="Motivos" empty="Nadie pidió la baja en este periodo." />
+              {d.reason_details.length > 0 && (
+                <ul className="space-y-2 text-sm text-slate-700" data-reason-details>
+                  {d.reason_details.map((text, i) => <li key={i} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">«{text}»</li>)}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Falta actualizar la base de datos para ver los motivos de baja.</p>
+          )}
+        </Section>
+      </>
+    );
+  };
+
   return (
     <div className="space-y-5 pb-8 font-sans" data-platform-reports>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -386,6 +479,7 @@ export default function PlatformReports({ initialTab }: { initialTab?: string })
           {tab === 'income' && renderIncome(content as IncomeData)}
           {tab === 'tenants' && renderTenants(content as TenantsData)}
           {tab === 'usage' && renderUsage(content as UsageData)}
+          {tab === 'metrics' && renderMetrics(content as MetricsData)}
         </div>
       )}
     </div>

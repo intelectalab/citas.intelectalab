@@ -451,6 +451,16 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
             </section>
           )}
 
+          {appointmentId && context.membership && !sale && (
+            <section className="rounded-2xl border border-brand-soft bg-brand-soft/10 px-5 py-4 space-y-2" data-membership-hint={context.membership.code}>
+              <span className="flex items-center gap-2 text-sm font-bold text-brand-ink"><BadgeCheck size={16} /> {context.customer?.name ?? 'El cliente'} tiene la membresía {context.membership.name}</span>
+              <p className="text-sm text-slate-600">
+                {context.membership.included ? 'Este servicio está incluido en su periodo actual.' : `Tiene ${context.membership.percent} % de descuento.`} El beneficio se aplica al cobrar en el punto de venta.
+              </p>
+              <Link href={context.membership.pos_url} data-membership-pos className="inline-block text-xs font-bold text-brand-accent underline underline-offset-2">Cobrar en el punto de venta</Link>
+            </section>
+          )}
+
           {appointmentId && !context.package?.current && (context.package?.usable.length ?? 0) > 0 && canPay && !(sale && sale.paid > 0) && (
             <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 space-y-3" data-package-usable>
               <span className="flex items-center gap-2 text-sm font-bold text-emerald-900"><Boxes size={16} /> {context.customer?.name ?? 'El cliente'} tiene un paquete con sesiones de este servicio</span>

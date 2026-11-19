@@ -28,6 +28,8 @@ class Messaging
         'queued'    => 'Por enviar',
         'sent'      => 'Enviado',
         'simulated' => 'Simulado',
+        'delivered' => 'Entregado',
+        'read'      => 'Leído',
         'failed'    => 'Falló',
         'not_sent'  => 'No enviado',
         'cancelled' => 'Cancelado',
@@ -54,22 +56,25 @@ class Messaging
         'Control'     => 'Nombre del control',
         'Presupuesto' => 'Título del presupuesto',
         'Condiciones' => 'Condiciones del paquete',
+        'Enlace'      => 'Enlace para confirmar o cancelar la cita',
+        'Membresía'   => 'Nombre de la membresía',
+        'Videollamada' => 'Enlace de la videollamada (si la cita es en línea)',
     ];
 
     public const KINDS = [
         'booking_confirmation' => [
             'label' => 'Confirmación de reserva',
             'when'  => 'Al agendar una cita, también desde el portal. No se envía si la cita empieza dentro de la próxima hora (el cliente ya está ahí).',
-            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Código', 'Empresa'],
+            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Código', 'Enlace', 'Videollamada', 'Empresa'],
             'subject' => 'Tu cita del [Fecha] está agendada',
-            'body'  => "Hola [Nombre]:\n\nTu cita de [Servicio] quedó agendada para el [Fecha] a las [Hora] con [Profesional], en [Sede].\n\nCódigo de tu cita: [Código].\n\nSi no puedes asistir, avísanos con anticipación.\n\n[Empresa]",
+            'body'  => "Hola [Nombre]:\n\nTu cita de [Servicio] quedó agendada para el [Fecha] a las [Hora] con [Profesional], en [Sede].\n\nCódigo de tu cita: [Código].\n\nPara confirmar o cancelar tu cita: [Enlace]\n\n[Empresa]",
         ],
         'reminder' => [
             'label' => 'Recordatorio de cita',
             'when'  => 'Antes de cada cita pendiente o confirmada.',
-            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Código', 'Empresa'],
+            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Código', 'Enlace', 'Videollamada', 'Empresa'],
             'subject' => 'Recordatorio: tu cita es el [Fecha] a las [Hora]',
-            'body'  => "Hola [Nombre]:\n\nTe recordamos tu cita de [Servicio] el [Fecha] a las [Hora] con [Profesional], en [Sede].\n\nSi no puedes asistir, avísanos lo antes posible para darle el horario a otra persona.\n\n[Empresa]",
+            'body'  => "Hola [Nombre]:\n\nTe recordamos tu cita de [Servicio] el [Fecha] a las [Hora] con [Profesional], en [Sede].\n\nPara confirmar tu asistencia, o cancelar si no puedes ir y darle el horario a otra persona: [Enlace]\n\n[Empresa]",
             'options' => ['hours' => 24, 'second' => false],
         ],
         'appointment_cancelled' => [
@@ -79,10 +84,24 @@ class Messaging
             'subject' => 'Tu cita del [Fecha] se canceló',
             'body'  => "Hola [Nombre]:\n\nTu cita de [Servicio] del [Fecha] a las [Hora] quedó cancelada.\n\nSi quieres una nueva cita, escríbenos o resérvala en nuestro portal.\n\n[Empresa]",
         ],
+        'class_cancelled' => [
+            'label' => 'Clase cancelada',
+            'when'  => 'Al cancelar una clase grupal: le llega a cada inscrito y a quien estaba en espera.',
+            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Sede', 'Detalle', 'Empresa'],
+            'subject' => 'Se canceló tu clase del [Fecha]',
+            'body'  => "Hola [Nombre]:\n\nLa clase de [Servicio] del [Fecha] a las [Hora] en [Sede] se canceló. [Detalle]\n\nDisculpa las molestias. Puedes inscribirte en otra clase en nuestro portal o escribirnos.\n\n[Empresa]",
+        ],
+        'class_spot' => [
+            'label' => 'Entraste a la clase',
+            'when'  => 'Cuando alguien sale de una clase llena y el primero de la lista de espera toma su cupo.',
+            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Sede', 'Empresa'],
+            'subject' => 'Tienes cupo en la clase del [Fecha]',
+            'body'  => "Hola [Nombre]:\n\nSe liberó un cupo y ya estás inscrito en la clase de [Servicio] del [Fecha] a las [Hora] en [Sede].\n\nSi ya no puedes ir, avísanos para darle el cupo a otra persona.\n\n[Empresa]",
+        ],
         'appointment_rescheduled' => [
             'label' => 'Cita reprogramada',
             'when'  => 'Al cambiar la fecha o la hora de una cita.',
-            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Código', 'Empresa'],
+            'vars'  => ['Nombre', 'Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Código', 'Enlace', 'Videollamada', 'Empresa'],
             'subject' => 'Tu cita cambió al [Fecha] a las [Hora]',
             'body'  => "Hola [Nombre]:\n\nTu cita de [Servicio] ahora es el [Fecha] a las [Hora] con [Profesional], en [Sede].\n\nCódigo de tu cita: [Código].\n\n[Empresa]",
         ],
@@ -114,6 +133,18 @@ class Messaging
             'vars'  => ['Nombre', 'Paquete', 'Sesiones', 'Vence', 'Empresa'],
             'subject' => 'Tu paquete vence el [Vence]',
             'body'  => "Hola [Nombre]:\n\nTu paquete [Paquete] vence el [Vence] y aún te quedan [Sesiones]. Reserva tus citas antes de esa fecha para no perderlas.\n\n[Empresa]",
+            'options' => ['days' => 7],
+        ],
+        'membership_expiring' => [
+            'label' => 'Tu membresía vence pronto',
+            'when'  => 'Unos días antes de que venza una membresía vigente.',
+            'vars'  => ['Nombre', 'Membresía', 'Vence', 'Empresa'],
+            'subject' => 'Tu membresía vence el [Vence]',
+            'body'  => "Hola [Nombre]:
+
+Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita para seguir con tus beneficios.
+
+[Empresa]",
             'options' => ['days' => 7],
         ],
         'waitlist_slot' => [
@@ -261,6 +292,8 @@ class Messaging
             'Profesional' => $appointment->professional?->display_name ?? '',
             'Sede'        => $appointment->branch?->name ?? '',
             'Código'      => $appointment->code,
+            'Enlace'      => AppointmentLinks::url($appointment),
+            'Videollamada' => VideoLinks::for($appointment) ?? '',
             'Empresa'     => self::companyName($tenant),
         ];
     }
@@ -280,7 +313,11 @@ class Messaging
 
             $vars += ['Empresa' => self::companyName($tenant), 'Nombre' => $customer?->first_name ?? '', 'Correo' => $customer?->email ?? ''];
 
-            return self::store($tenant, [
+            if (!empty($vars['Videollamada']) && in_array($kind, ['booking_confirmation', 'reminder', 'appointment_rescheduled'], true) && !str_contains($settings['body'], '[Videollamada]')) {
+                $settings['body'] = RichText::append($settings['body'], 'Enlace de la videollamada: [Videollamada]');
+            }
+
+            $data = [
                 'kind'        => $kind,
                 'customer'    => $customer,
                 'subject'     => self::render($settings['subject'], $vars),
@@ -291,7 +328,23 @@ class Messaging
                 'entity_id'   => $extra['entity_id'] ?? null,
                 'dedupe_key'  => $extra['dedupe_key'] ?? null,
                 'user'        => $extra['user'] ?? null,
-            ]);
+            ];
+
+            $channel = WhatsApp::ready() ? WhatsApp::channel($tenant) : 'email';
+
+            if ($channel !== 'email' && $data['dedupe_key'] && DB::table('messages')->where('tenant_id', $tenant->id)->whereIn('dedupe_key', [$data['dedupe_key'], 'wa:' . $data['dedupe_key']])->exists()) {
+                return null;
+            }
+
+            if ($channel !== 'email' && WhatsApp::blocker($tenant, $customer, $kind) === null) {
+                $whatsapp = WhatsApp::store($tenant, $data + ['vars' => $vars, 'fallback' => $channel === 'whatsapp']);
+
+                if ($channel === 'whatsapp') {
+                    return $whatsapp;
+                }
+            }
+
+            return self::store($tenant, $data);
         } catch (\Throwable $e) {
             report($e);
 
@@ -392,6 +445,10 @@ class Messaging
 
     private static function deliver(object $message): string
     {
+        if ($message->channel === 'whatsapp') {
+            return WhatsApp::deliver($message);
+        }
+
         $config = self::emailConfig($message->tenant_id);
 
         if (!$config || !self::emailReady($message->tenant_id)) {
@@ -400,8 +457,18 @@ class Messaging
             return 'not_sent';
         }
 
+        $capTenant = $message->kind === 'campaign' ? Tenant::find($message->tenant_id) : null;
+
+        if ($capTenant && MessageQuota::reached($capTenant, 'campaign_email')) {
+            DB::table('messages')->where('id', $message->id)->update(['status' => 'not_sent', 'error' => MessageQuota::stopReason($capTenant, 'campaign_email'), 'updated_at' => now()]);
+            MessageQuota::warn($capTenant, 'campaign_email');
+
+            return 'not_sent';
+        }
+
         if ($config['provider'] === 'simulated') {
             DB::table('messages')->where('id', $message->id)->update(['status' => 'simulated', 'provider' => 'simulated', 'sent_at' => now(), 'error' => null, 'updated_at' => now()]);
+            $capTenant && MessageQuota::warn($capTenant, 'campaign_email');
 
             return 'sent';
         }
@@ -409,6 +476,7 @@ class Messaging
         try {
             self::send($config, $message->to_address, $message->to_name, (string) $message->subject, $message->body, $message->tenant_id);
             DB::table('messages')->where('id', $message->id)->update(['status' => 'sent', 'provider' => 'smtp', 'sent_at' => now(), 'error' => null, 'updated_at' => now()]);
+            $capTenant && MessageQuota::warn($capTenant, 'campaign_email');
 
             return 'sent';
         } catch (\Throwable $e) {
@@ -492,6 +560,8 @@ class Messaging
             'body'         => $message->body,
             'scheduled_at' => $iso($message->scheduled_at),
             'sent_at'      => $iso($message->sent_at),
+            'delivered_at' => $iso($message->delivered_at ?? null),
+            'read_at'      => $iso($message->read_at ?? null),
             'created_at'   => $iso($message->created_at),
             'attempts'     => (int) $message->attempts,
             'error'        => $message->error,
@@ -595,7 +665,7 @@ class Messaging
         ]);
     }
 
-    public static function waitlistSlot(Tenant $tenant, Appointment $appointment): void
+    public static function waitlistSlot(Tenant $tenant, Appointment $appointment, ?\App\Models\WaitlistEntry $only = null): void
     {
         try {
             if (!self::ready() || !$appointment->starts_at->isFuture()) {
@@ -603,8 +673,9 @@ class Messaging
             }
 
             $vars = self::appointmentVars($tenant, $appointment);
+            $entries = $only ? collect([$only->loadMissing(['customer', 'service'])]) : Waitlist::matching($tenant, $appointment)->with(['customer', 'service'])->limit(20)->get();
 
-            foreach (Waitlist::matching($tenant, $appointment)->with(['customer', 'service'])->limit(20)->get() as $entry) {
+            foreach ($entries as $entry) {
                 self::queue($tenant, 'waitlist_slot', $entry->customer, ['Servicio' => $entry->service?->name ?? $vars['Servicio']] + $vars, [
                     'branch_id' => $appointment->branch_id, 'entity_type' => 'waitlist', 'entity_id' => $entry->id,
                     'dedupe_key' => "waitlist:{$entry->id}:{$appointment->id}",
@@ -667,7 +738,7 @@ class Messaging
     public static function generate(Tenant $tenant, bool $force = false): void
     {
         try {
-            if (!self::ready() || !self::emailReady($tenant->id) || (!$force && !Cache::add('messaging-generate:' . $tenant->id, 1, 300))) {
+            if (!self::ready() || (!self::emailReady($tenant->id) && !(WhatsApp::connected($tenant->id) && WhatsApp::channel($tenant) !== 'email')) || (!$force && !Cache::add('messaging-generate:' . $tenant->id, 1, 300))) {
                 return;
             }
 
@@ -713,6 +784,19 @@ class Messaging
                         'Sesiones' => Packages::sessions($left),
                         'Vence'    => self::longDate(Carbon::parse($package->expires_at)->setTimezone($timezone)),
                     ], ['entity_type' => 'package', 'entity_id' => $package->id, 'dedupe_key' => "pkgexp:{$package->id}:" . Carbon::parse($package->expires_at)->format('Ymd')]);
+                }
+            }
+
+            if ($settings['membership_expiring']['enabled'] && Memberships::enabled($tenant)) {
+                $days = max(1, (int) ($settings['membership_expiring']['options']['days'] ?? 7));
+                $today = now($timezone)->startOfDay();
+
+                foreach (DB::table('memberships')->where('tenant_id', $tenant->id)->where('status', 'active')
+                    ->whereBetween('ends_at', [$today->toDateString(), $today->copy()->addDays($days)->toDateString()])->limit(300)->get() as $membership) {
+                    self::queue($tenant, 'membership_expiring', Customer::find($membership->customer_id), [
+                        'Membresía' => $membership->name,
+                        'Vence'     => self::longDate(Carbon::parse($membership->ends_at, $timezone)),
+                    ], ['branch_id' => $membership->branch_id, 'entity_type' => 'membership', 'entity_id' => $membership->id, 'dedupe_key' => "memexp:{$membership->id}:" . Carbon::parse($membership->ends_at)->format('Ymd')]);
                 }
             }
 

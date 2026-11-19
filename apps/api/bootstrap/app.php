@@ -19,7 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'saas' => \App\Http\Middleware\EnsurePlatformStaff::class,
             'perm' => \App\Http\Middleware\EnsurePermission::class,
             'plan' => \App\Http\Middleware\EnsurePlanPaid::class,
+            'idempotent' => \App\Http\Middleware\Idempotency::class,
         ]);
+        $middleware->prependToGroup('api', \App\Http\Middleware\SetTenantContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(fn ($request) => $request->is('api/*') || $request->expectsJson());

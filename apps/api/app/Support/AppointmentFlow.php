@@ -48,6 +48,9 @@ class AppointmentFlow
         'cancel.require_reason'       => true,
         'cancel.window_hours'         => 12,
         'noshow.grace_minutes'        => 15,
+        'penalties.enabled'           => false,
+        'noshow.fee_percent'          => 0,
+        'cancel.late_fee_percent'     => 0,
         'records.require_on_complete' => false,
         'records.lock_hours'          => 24,
         'records.private_to_author'   => false,
@@ -68,6 +71,8 @@ class AppointmentFlow
         'pos.require_open_cash'       => true,
         'pos.partial_payments'        => false,
         'cash.tolerance'              => 0,
+        'cash.review_over'            => 0,
+        'pos.refund_approval_over'    => 0,
         'pos.refund_days'             => 30,
         'cash.auto_register'          => true,
         'invoice.default_type'        => 'boleta',
@@ -113,6 +118,17 @@ class AppointmentFlow
         'quotes.portal_accept'        => true,
         'walkin.self_checkin'         => true,
         'walkin.max_wait'             => 90,
+        'classes.waitlist'            => true,
+        'classes.auto_promote'        => true,
+        'classes.portal_leave_hours'  => 2,
+        'waitlist.enabled'            => true,
+        'waitlist.notify_mode'        => 'all',
+        'waitlist.reply_hours'        => 2,
+        'membership.grace_days'       => 5,
+        'whatsapp.channel'            => 'email',
+        'whatsapp.consent'            => 'required',
+        'assistant.enabled'           => false,
+        'assistant.blocked_words'     => 'diagnóstico, diagnostico, receta, medicamento, medicina, pastilla, dosis, síntoma, sintoma, dolor, sangrado, infección, infeccion, fiebre, alergia, embarazo, resultado de examen',
     ];
 
     public static function keys(): array
@@ -134,6 +150,31 @@ class AppointmentFlow
         }
 
         return $next;
+    }
+
+    public static function permission(string $from, string $to): string
+    {
+        return match ($to) {
+            self::PENDING     => 'agenda.confirm',
+            self::CONFIRMED   => $from === self::CHECKED_IN ? 'agenda.checkin' : 'agenda.confirm',
+            self::CHECKED_IN  => 'agenda.checkin',
+            self::IN_PROGRESS => 'agenda.start',
+            self::COMPLETED   => 'agenda.complete',
+            self::NO_SHOW     => 'agenda.noshow',
+            self::CANCELLED   => 'agenda.cancel',
+            default           => 'agenda.edit',
+        };
+    }
+
+    public static function allowedNext(Tenant $tenant, string $status, mixed $user): array
+    {
+        $next = self::next($tenant, $status);
+
+        if (!$user instanceof \App\Models\User) {
+            return $next;
+        }
+
+        return array_values(array_filter($next, fn (string $to) => $user->allows(self::permission($status, $to))));
     }
 
     public static function forTenant(Tenant $tenant): array

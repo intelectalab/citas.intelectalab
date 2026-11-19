@@ -15,7 +15,10 @@ class PlatformReports
         'income'  => 'Ingresos',
         'tenants' => 'Empresas',
         'usage'   => 'Uso',
+        'metrics' => 'Métricas',
     ];
+
+    public const METRIC_MONTHS = 6;
 
     public const ZONE = 'America/Lima';
 
@@ -259,6 +262,100 @@ class PlatformReports
                 'id' => $t->id, 'name' => $t->name, 'plan' => $t->plan, 'status' => $t->status,
                 'status_label' => self::STATUSES[$t->status], 'amount' => $t->price, 'currency' => $t->currency,
             ])->values()->all(),
+        ];
+    }
+
+    private function payingAt(Collection $invoices, Carbon $point): Collection
+    {
+        $iso = $point->copy()->utc();
+
+        return $invoices->filter(fn ($i) => Carbon::parse($i->period_start)->lte($iso) && Carbon::parse($i->period_end)->gt($iso))
+            ->groupBy('tenant_id')->map(fn ($g) => $g->sum(function ($i) {
+                $months = max(1, (int) round(Carbon::parse($i->period_start)->diffInDays(Carbon::parse($i->period_end)) / 30));
+
+                return (float) $i->amount / $months;
+            }));
+    }
+
+    public function metrics(): array
+    {
+        $main = $this->currency();
+        $summary = $this->summary();
+        $paying = $this->recurring()->where('currency', $main);
+        $mrr = (float) $summary['mrr']['amount'];
+        $arpa = $paying->count() ? round($mrr / $paying->count(), 2) : null;
+
+        $current = now(self::ZONE)->startOfMonth();
+        $first = $current->copy()->subMonths(self::METRIC_MONTHS - 1);
+        $invoices = DB::table('subscription_invoices as i')
+            ->join('tenants as t', 't.id', '=', 'i.tenant_id')
+            ->whereNull('t.deleted_at')
+            ->where('i.status_id', $this->paidStatusId())
+            ->where('i.currency', $main)
+            ->where('i.amount', '>', 0)
+            ->whereNotNull('i.period_start')->whereNotNull('i.period_end')
+            ->where('i.period_end', '>', $this->iso($first))
+            ->get(['i.tenant_id', 'i.amount', 'i.period_start', 'i.period_end']);
+
+        $cancelReady = Cancellations::ready();
+        $done = $cancelReady
+            ? DB::table('saas_cancellations')->where('status', 'done')->whereNotNull('effective_at')->where('effective_at', '>=', $this->iso($first))->get(['tenant_id', 'effective_at'])
+            : collect();
+
+        $months = [];
+        for ($month = $first->copy(); $month->lte($current); $month->addMonth()) {
+            $close = $month->copy()->addMonth()->min(now(self::ZONE));
+            $atStart = $this->payingAt($invoices, $month);
+            $atClose = $this->payingAt($invoices, $close);
+            $lost = $atStart->keys()->diff($atClose->keys())->count();
+            $start = $atStart->count();
+
+            $months[] = [
+                'day'       => $month->format('Y-m-01'),
+                'mrr'       => round((float) $atClose->sum(), 2),
+                'paying'    => $atClose->count(),
+                'new'       => $atClose->keys()->diff($atStart->keys())->count(),
+                'lost'      => $lost,
+                'canceled'  => $done->filter(fn ($c) => Carbon::parse($c->effective_at)->setTimezone(self::ZONE)->format('Y-m') === $month->format('Y-m'))->unique('tenant_id')->count(),
+                'start'     => $start,
+                'retention' => $start ? (int) round(($start - $lost) * 100 / $start) : null,
+                'churn'     => $start ? round($lost * 100 / $start, 1) : null,
+            ];
+        }
+
+        $closed = array_values(array_filter(array_slice($months, 0, -1), fn ($m) => $m['start'] > 0));
+        $churn = $closed ? round(array_sum(array_column($closed, 'churn')) / count($closed), 1) : null;
+        $lastClosed = $closed ? end($closed) : null;
+        $ltv = $arpa !== null && $churn ? round($arpa / ($churn / 100), 2) : null;
+        $startMrr = $months[0]['mrr'] ?? 0;
+        $nowMrr = end($months)['mrr'] ?? 0;
+
+        $reasons = $cancelReady
+            ? DB::table('saas_cancellations')->whereIn('status', ['scheduled', 'done'])
+                ->where('created_at', '>=', $this->iso($this->from))->where('created_at', '<', $this->iso($this->to))
+                ->get(['reason', 'details'])
+            : collect();
+
+        return [
+            'ready'   => ['cancellations' => $cancelReady],
+            'summary' => [
+                'mrr'        => $summary['mrr'],
+                'arr'        => $summary['yearly'],
+                'arpa'       => $arpa,
+                'paying'     => $paying->count(),
+                'churn'      => $churn,
+                'retention'  => $lastClosed['retention'] ?? null,
+                'ltv'        => $ltv,
+                'growth'     => round($nowMrr - $startMrr, 2),
+                'growth_pct' => $startMrr > 0 ? (int) round(($nowMrr - $startMrr) * 100 / $startMrr) : null,
+            ],
+            'months'          => self::METRIC_MONTHS,
+            'by_month'        => $months,
+            'mrr_by_month'    => array_map(fn ($m) => ['day' => $m['day'], 'value' => $m['mrr']], $months),
+            'reasons'         => $reasons->groupBy('reason')->map(fn ($g, $key) => ['key' => (string) $key, 'label' => Cancellations::REASONS[$key] ?? 'Otro motivo', 'value' => $g->count()])->sortByDesc('value')->values()->all(),
+            'reason_details'  => $reasons->pluck('details')->filter()->take(10)->values()->all(),
+            'mrr_by_plan'     => $paying->groupBy(fn ($t) => $t->plan ?? 'Sin plan')->map(fn ($g, $name) => ['key' => (string) $name, 'label' => (string) $name, 'value' => round((float) $g->sum('monthly'), 2), 'count' => $g->count()])->sortByDesc('value')->values()->all(),
+            'mrr_by_business_type' => $paying->groupBy(fn ($t) => $t->business_type ?? 'Sin rubro')->map(fn ($g, $name) => ['key' => (string) $name, 'label' => (string) $name, 'value' => round((float) $g->sum('monthly'), 2), 'count' => $g->count()])->sortByDesc('value')->values()->all(),
         ];
     }
 

@@ -127,6 +127,17 @@ class TenantController extends Controller
         ]);
 
         $previousStatus = $tenant->status;
+
+        if (isset($validated['status']) && $validated['status'] !== 'active' && $validated['status'] !== $previousStatus) {
+            $reason = trim((string) $request->input('reason'));
+
+            if (mb_strlen($reason) < 5) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['status' => 'Escribe el motivo (al menos 5 letras) para cambiar el estado de la empresa.']);
+            }
+
+            $validated['suspension_reason'] = mb_substr($reason, 0, 255);
+        }
+
         [$was, $now] = \App\Support\Audit::changed($tenant->only(array_keys($validated)), $validated);
         $tenant->update($validated);
         unset($was['status'], $now['status']);
@@ -159,7 +170,10 @@ class TenantController extends Controller
     public function suspend(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
-        $validated = $request->validate(['reason' => 'nullable|string|max:255']);
+        $validated = $request->validate(['reason' => 'required|string|min:5|max:255'], [
+            'reason.required' => 'Escribe por qué suspendes la empresa.',
+            'reason.min'      => 'Explica un poco más por qué la suspendes.',
+        ]);
 
         $previousStatus = $tenant->status;
         $tenant->update(['status' => 'suspended', 'suspension_reason' => $validated['reason'] ?? null]);

@@ -19,17 +19,26 @@ class Access
         'override'  => 'Forzar horario',
         'emergency' => 'Acceso de emergencia',
         'forgive'   => 'Perdonar faltas',
+        'notes'     => 'Notas privadas',
+        'import'    => 'Importar',
         'use'       => 'Registrar uso a mano',
         'export'    => 'Exportar',
         'others'    => 'Turnos de otros',
+        'review'    => 'Revisar comprobantes',
     ];
 
     public const CATALOG = [
         'agenda' => ['label' => 'Agenda y citas', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver la agenda y las citas',
             'create' => 'Agendar citas',
-            'edit'   => 'Confirmar, registrar la llegada, atender, reprogramar y cancelar citas',
-            'override' => 'Agendar aunque el horario no esté disponible: fuera del horario de atención, en una pausa o sobre un bloqueo. Nunca permite dos citas a la misma hora',
+            'edit'   => 'Reprogramar citas, moverlas en la agenda y cambiar sus notas',
+            'confirm'  => 'Confirmar una cita o volverla a pendiente, y enviarle un recordatorio a quien la tiene',
+            'checkin'  => 'Registrar que la persona llegó, o deshacer la llegada',
+            'start'    => 'Iniciar la atención',
+            'complete' => 'Dar la cita por atendida',
+            'noshow'   => 'Marcar que la persona no asistió',
+            'cancel'   => 'Cancelar citas',
+            'override' =>'Agendar aunque el horario no esté disponible: fuera del horario de atención, en una pausa o sobre un bloqueo. Nunca permite dos citas a la misma hora',
         ]],
         'walkin' => ['label' => 'Cola sin cita', 'module' => 'walkin', 'actions' => [
             'view'   => 'Ver la cola sin cita y el tiempo estimado de espera',
@@ -47,7 +56,10 @@ class Access
             'edit'   => 'Cambiar un control o darlo por realizado',
         ]],
         'classes' => ['label' => 'Clases', 'module' => 'classes', 'actions' => [
-            'view' => 'Entrar a las clases (en construcción)',
+            'view'   => 'Ver las clases y sus inscritos',
+            'create' => 'Programar clases',
+            'edit'   => 'Inscribir, marcar asistencia y cobrar a los inscritos',
+            'cancel' => 'Cancelar una clase avisando a los inscritos',
         ]],
         'blocks' => ['label' => 'Bloqueos y ausencias', 'module' => 'agenda', 'actions' => [
             'view'   => 'Ver bloqueos y ausencias',
@@ -70,6 +82,8 @@ class Access
             'edit'   => 'Cambiar los datos de {clients}',
             'delete' => 'Eliminar {clients}',
             'forgive' => 'Perdonar las inasistencias de quien reservó en línea, para que pueda volver a reservar',
+            'notes'   => 'Ver y escribir las notas privadas de {clients}',
+            'import'  => 'Importar {clients} desde un Excel o CSV',
         ]],
         'records' => ['label' => 'Fichas de atención', 'module' => 'records', 'actions' => [
             'view' => 'Ver fichas de atención',
@@ -118,15 +132,18 @@ class Access
             'view'   => 'Ver las ventas, su detalle y sus pagos',
             'create' => 'Cobrar y emitir el comprobante',
             'delete' => 'Anular una venta o devolver dinero',
+            'approve' => 'Aprobar o rechazar las devoluciones grandes que pide otra persona, cuando la empresa pide aprobación sobre un monto',
         ]],
         'payments' => ['label' => 'Pagos', 'module' => 'pos', 'actions' => [
             'view' => 'Ver todos los pagos: cuánto entró por cada medio (efectivo, tarjeta, transferencia…) y las devoluciones',
+            'review' => 'Revisar los comprobantes de transferencia, Yape o Plin que mandan los clientes al pagar en línea, y aprobarlos o rechazarlos',
         ]],
         'cash' => ['label' => 'Caja', 'module' => 'pos', 'actions' => [
             'view'   => 'Ver la caja y sus turnos',
             'create' => 'Agregar una caja, cambiarle el nombre o ponerla fuera de uso',
             'edit'   => 'Abrir la caja, anotar movimientos y cerrarla',
             'others' => 'Ver y manejar los turnos de caja que abrieron otras personas. Sin este permiso, cada quien ve y cierra solo su propio turno',
+            'approve' => 'Aprobar u observar con una nota los cierres de caja que quedaron en revisión por una diferencia grande',
         ]],
         'commissions' => ['label' => 'Comisiones', 'module' => 'commissions', 'actions' => [
             'view'    => 'Ver las comisiones. Con un rol de una sede, solo las de su sede; con "solo lo suyo", solo las propias',
@@ -159,6 +176,12 @@ class Access
             'delete' => 'Anular un paquete vendido, devolver lo no usado y quitar paquetes del catálogo',
             'use'    => 'Descontar a mano una sesión de un paquete, sin cita (queda registrado quién y por qué)',
         ]],
+        'memberships' => ['label' => 'Membresías', 'module' => 'memberships', 'actions' => [
+            'view'   => 'Ver las membresías de {clients} y los planes de membresía',
+            'create' => 'Crear planes de membresía',
+            'edit'   => 'Cambiar planes de membresía',
+            'delete' => 'Quitar planes de membresía del catálogo',
+        ]],
         'loyalty' => ['label' => 'Puntos y gift cards', 'module' => 'loyalty', 'actions' => [
             'view'   => 'Ver los puntos acumulados por {clients} y las tarjetas de regalo (gift cards)',
             'create' => 'Emitir tarjetas de regalo y registrar puntos por compras o referidos',
@@ -169,6 +192,7 @@ class Access
             'view'   => 'Ver los mensajes enviados y programados a los clientes',
             'create' => 'Escribir un mensaje a un cliente, para ahora o programado',
             'edit'   => 'Cambiar o cancelar un mensaje programado y reintentar los que fallaron',
+            'reply'  => 'Responder las conversaciones de WhatsApp de los clientes y marcarlas como atendidas',
         ]],
         'campaigns' => ['label' => 'Campañas', 'module' => 'marketing', 'actions' => [
             'view'   => 'Ver las campañas y sus resultados',
@@ -187,6 +211,14 @@ class Access
         'company' => ['label' => 'Empresa', 'module' => null, 'actions' => [
             'view' => 'Ver los datos de la empresa',
             'edit' => 'Cambiar los datos de la empresa',
+        ]],
+        'complaints' => ['label' => 'Libro de Reclamaciones', 'module' => null, 'actions' => [
+            'view'   => 'Ver los reclamos y quejas que dejan los {clients} en el Libro de Reclamaciones, y recibir el aviso cuando llega uno o está por vencer',
+            'answer' => 'Responder los reclamos y quejas. La respuesta le llega por correo a quien reclamó y ya no se puede cambiar',
+        ]],
+        'integrations' => ['label' => 'API y webhooks', 'module' => 'api', 'actions' => [
+            'view' => 'Ver las claves de API, los webhooks con sus envíos y los enlaces de calendario',
+            'edit' => 'Crear y revocar claves de API, registrar webhooks y reenviar sus envíos, y crear o cambiar los enlaces de calendario',
         ]],
         'settings' => ['label' => 'Configuración', 'module' => null, 'actions' => [
             'view' => 'Ver la configuración de la empresa',
@@ -215,16 +247,16 @@ class Access
 
     public const LAYOUT = [
         'reports'          => ['section' => 'start', 'screens' => ['Reportes'], 'short' => ['view' => 'Ver', 'money' => 'Ver montos', 'own' => 'Sus números']],
-        'agenda'           => ['section' => 'agenda', 'screens' => ['Agenda', 'Citas'], 'short' => ['view' => 'Ver', 'create' => 'Agendar', 'edit' => 'Confirmar, atender y cancelar']],
+        'agenda'           => ['section' => 'agenda', 'screens' => ['Agenda', 'Citas'], 'short' => ['view' => 'Ver', 'create' => 'Agendar', 'edit' => 'Reprogramar y notas', 'confirm' => 'Confirmar', 'checkin' => 'Marcar llegada', 'start' => 'Empezar atención', 'complete' => 'Completar', 'noshow' => 'No asistió', 'cancel' => 'Cancelar']],
         'walkin'           => ['section' => 'agenda', 'screens' => ['Cola sin cita'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Atender o retirar']],
         'waitlist'         => ['section' => 'agenda', 'screens' => ['Lista de espera'], 'short' => ['view' => 'Ver', 'create' => 'Anotar', 'edit' => 'Cambiar o cerrar']],
         'recalls'          => ['section' => 'agenda', 'screens' => ['Controles y seguimiento'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar o dar por hecho']],
-        'classes'          => ['section' => 'agenda', 'screens' => ['Clases'], 'building' => true, 'short' => ['view' => 'Entrar']],
+        'classes'          => ['section' => 'agenda', 'screens' => ['Clases'], 'short' => ['view' => 'Ver', 'create' => 'Programar', 'edit' => 'Inscribir y asistencia', 'cancel' => 'Cancelar clase']],
         'blocks'           => ['section' => 'agenda', 'screens' => ['Bloqueos y ausencias'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'holidays'         => ['section' => 'agenda', 'screens' => [], 'note' => 'Es la pestaña Feriados de Bloqueos y ausencias.', 'short' => ['view' => 'Ver', 'create' => 'Agregar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'attention'        => ['section' => 'agenda', 'screens' => ['Tiempos de atención'], 'short' => ['view' => 'Ver']],
         'customers'        => ['section' => 'care', 'screens' => ['{Clients}'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar datos', 'delete' => 'Eliminar']],
-        'quotes'           => ['section' => 'care', 'screens' => ['Presupuestos'], 'short' => ['view' => 'Ver', 'create' => 'Crear planes', 'edit' => 'Aprobar y avanzar sesiones', 'delete' => 'Anular']],
+        'quotes'          => ['section' => 'care', 'screens' => ['Presupuestos'], 'short' => ['view' => 'Ver', 'create' => 'Crear planes', 'edit' => 'Aprobar y avanzar sesiones', 'delete' => 'Anular']],
         'records'          => ['section' => 'care', 'screens' => ['Fichas de atención'], 'short' => ['view' => 'Ver', 'edit' => 'Llenar, firmar y corregir']],
         'record_templates' => ['section' => 'care', 'screens' => [], 'note' => 'Se arman dentro de Fichas de atención.', 'short' => ['create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'services'         => ['section' => 'team', 'screens' => ['Servicios'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
@@ -232,31 +264,34 @@ class Access
         'schedules'        => ['section' => 'team', 'screens' => ['Horarios del equipo'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar horarios']],
         'rooms'            => ['section' => 'team', 'screens' => ['Salas y equipos'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'pos'              => ['section' => 'sales', 'screens' => ['Punto de venta'], 'short' => ['view' => 'Abrir', 'create' => 'Armar ventas', 'edit' => 'Cambiar una venta por cobrar']],
-        'sales'            => ['section' => 'sales', 'screens' => ['Ventas'], 'short' => ['view' => 'Ver', 'create' => 'Cobrar', 'delete' => 'Anular y devolver']],
-        'payments'         => ['section' => 'sales', 'screens' => ['Pagos'], 'short' => ['view' => 'Ver']],
-        'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar', 'others' => 'Turnos de otros']],
+        'sales'            => ['section' => 'sales', 'screens' => ['Ventas'], 'short' => ['view' => 'Ver', 'create' => 'Cobrar', 'delete' => 'Anular y devolver', 'approve' => 'Aprobar devoluciones']],
+        'payments'         => ['section' => 'sales', 'screens' => ['Pagos', 'Comprobantes'], 'short' => ['view' => 'Ver', 'review' => 'Revisar comprobantes']],
+        'cash'             => ['section' => 'sales', 'screens' => ['Caja'], 'short' => ['view' => 'Ver', 'create' => 'Agregar cajas', 'edit' => 'Abrir, mover y cerrar', 'others' => 'Turnos de otros', 'approve' => 'Aprobar cierres']],
         'commissions'      => ['section' => 'sales', 'screens' => ['Comisiones'], 'short' => ['view' => 'Ver', 'rules' => 'Reglas', 'approve' => 'Aprobar', 'pay' => 'Marcar pagadas']],
         'products'         => ['section' => 'inventory', 'screens' => ['Productos y stock'], 'short' => ['view' => 'Ver', 'create' => 'Registrar', 'edit' => 'Cambiar y poner precios', 'delete' => 'Eliminar']],
         'inventory'        => ['section' => 'inventory', 'screens' => ['Kárdex', 'Traslados', 'Compras'], 'short' => ['view' => 'Ver', 'create' => 'Mover, comprar y trasladar', 'edit' => 'Contar, recibir y ajustar', 'delete' => 'Cancelar y eliminar']],
+        'memberships'      => ['section' => 'loyalty', 'screens' => ['Membresías'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Quitar del catálogo']],
         'packages'         => ['section' => 'loyalty', 'screens' => ['Paquetes'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar más días', 'delete' => 'Anular y devolver']],
         'loyalty'          => ['section' => 'loyalty', 'screens' => ['Puntos', 'Gift cards'], 'short' => ['view' => 'Ver', 'create' => 'Emitir y acreditar', 'edit' => 'Ajustar y canjear', 'delete' => 'Anular']],
         'campaigns'        => ['section' => 'marketing', 'screens' => ['Campañas'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar o cancelar']],
         'automations'      => ['section' => 'marketing', 'screens' => ['Automatizaciones'], 'short' => ['view' => 'Ver', 'edit' => 'Encender y cambiar']],
-        'messages'         => ['section' => 'marketing', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar']],
+        'messages'         => ['section' => 'marketing', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar', 'reply' => 'Responder WhatsApp']],
         'coupons'          => ['section' => 'marketing', 'screens' => ['Cupones'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'branches'         => ['section' => 'company', 'screens' => ['Sucursales'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar']],
         'company'          => ['section' => 'company', 'screens' => ['Empresa'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
+        'complaints'       => ['section' => 'company', 'screens' => ['Libro de Reclamaciones'], 'short' => ['view' => 'Ver', 'answer' => 'Responder']],
         'users'            => ['section' => 'company', 'screens' => ['Usuarios y roles'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar permisos', 'delete' => 'Eliminar roles']],
         'audit'            => ['section' => 'company', 'screens' => ['Auditoría'], 'short' => ['view' => 'Ver']],
+        'integrations'     => ['section' => 'footer', 'screens' => [], 'note' => 'Está en Configuración → Integraciones.', 'short' => ['view' => 'Ver', 'edit' => 'Crear y revocar']],
         'settings'         => ['section' => 'footer', 'screens' => ['Configuración'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
         'data'             => ['section' => 'other', 'screens' => [], 'note' => 'No es una pantalla: es el botón Exportar de las listas.', 'short' => []],
     ];
 
-    public const ADMIN_ONLY = [
-        ['name' => 'Membresías', 'module' => 'memberships', 'section' => 'loyalty', 'before' => 'packages'],
-    ];
+    public const ADMIN_ONLY = [];
 
     private const EVERYTHING = ['view', 'create', 'edit', 'delete'];
+
+    public const APPOINTMENT_STEPS = ['confirm', 'checkin', 'start', 'complete', 'noshow', 'cancel'];
 
     public const FACTORY = [
         'owner' => [
@@ -270,15 +305,15 @@ class Access
             'description' => 'Lleva el día a día de una sede: agenda, equipo, ventas, caja y su personal.',
             'scope' => 'branch',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit', 'override'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view'], 'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
+                'agenda' => ['view', 'create', 'edit', ...self::APPOINTMENT_STEPS, 'override'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view', 'create', 'edit', 'cancel'],'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
-                'customers' => ['view', 'create', 'edit', 'delete', 'forgive'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
+                'customers' => ['view', 'create', 'edit', 'delete', 'forgive', 'notes', 'import'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'schedules' => ['view', 'edit'], 'rooms' => self::EVERYTHING,
                 'quotes' => self::EVERYTHING, 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING, 'inventory' => self::EVERYTHING,
-                'sales' => self::EVERYTHING, 'payments' => ['view'], 'cash' => [...self::EVERYTHING, 'others'], 'coupons' => self::EVERYTHING,
-                'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'loyalty' => self::EVERYTHING, 'messages' => ['view', 'create', 'edit'],
+                'sales' => [...self::EVERYTHING, 'approve'], 'payments' => ['view', 'review'], 'cash' => [...self::EVERYTHING, 'others', 'approve'], 'coupons' => self::EVERYTHING,
+                'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'memberships' => self::EVERYTHING, 'loyalty' => self::EVERYTHING, 'messages' => ['view', 'create', 'edit', 'reply'],
                 'campaigns' => ['view', 'create', 'edit'], 'automations' => ['view'], 'reports' => ['view', 'money'], 'commissions' => ['view', 'approve'],
-                'branches' => ['view'],
+                'branches' => ['view'], 'complaints' => ['view'],
                 'users' => ['view', 'create', 'edit'],
                 'data' => ['export'],
             ],
@@ -288,13 +323,13 @@ class Access
             'description' => 'Agenda, recibe y cobra a quien llega. No elimina ni devuelve dinero.',
             'scope' => 'branch',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
+                'agenda' => ['view', 'create', 'edit', ...self::APPOINTMENT_STEPS], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view', 'create', 'edit', 'cancel'],'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => ['view'], 'holidays' => ['view'],
                 'customers' => ['view', 'create', 'edit'],
                 'services' => ['view'], 'professionals' => ['view'], 'schedules' => ['view'], 'rooms' => ['view'],
                 'quotes' => ['view', 'create', 'edit'], 'pos' => ['view', 'create', 'edit'], 'products' => ['view'], 'inventory' => ['view', 'create'],
                 'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
-                'packages' => ['view', 'use'], 'loyalty' => ['view', 'create', 'edit'], 'messages' => ['view', 'create', 'edit'],
+                'packages' => ['view', 'use'], 'memberships' => ['view'], 'loyalty' => ['view', 'create', 'edit'], 'messages' => ['view', 'create', 'edit', 'reply'],
             ],
         ],
         'cashier' => [
@@ -304,8 +339,8 @@ class Access
             'permissions' => [
                 'agenda' => ['view'], 'customers' => ['view'],
                 'quotes' => ['view'], 'pos' => ['view', 'create', 'edit'], 'products' => ['view'],
-                'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
-                'packages' => ['view'], 'loyalty' => ['view', 'create'], 'messages' => ['view'],
+                'sales' => ['view', 'create'], 'payments' => ['view', 'review'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
+                'packages' => ['view'], 'memberships' => ['view'], 'loyalty' => ['view', 'create'], 'messages' => ['view'],
             ],
         ],
         'professional' => [
@@ -313,7 +348,7 @@ class Access
             'description' => 'Atiende sus propias citas y llena sus fichas. Solo ve lo suyo.',
             'scope' => 'own',
             'permissions' => [
-                'agenda' => ['view', 'create', 'edit'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view'], 'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
+                'agenda' => ['view', 'create', 'edit', ...self::APPOINTMENT_STEPS], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view', 'create', 'edit', 'cancel'],'waitlist' => ['view', 'create', 'edit'], 'recalls' => ['view', 'create', 'edit'],
                 'blocks' => self::EVERYTHING, 'holidays' => ['view'], 'attention' => ['view'],
                 'customers' => ['view', 'create', 'edit'], 'records' => ['view', 'edit'],
                 'services' => ['view'], 'rooms' => ['view'],

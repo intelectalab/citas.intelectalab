@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormProfessional from './FormProfessional';
 import ProfessionalSchedule from './ProfessionalSchedule';
+import ProfessionalCommissions from './ProfessionalCommissions';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { PagedList } from '@/app/components/common/Pager';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
@@ -79,6 +80,7 @@ export default function ProfessionalDetail() {
 
   const isAdmin = can('professionals.edit');
   const usesAgenda = hasModule('agenda');
+  const [commissionsReload, setCommissionsReload] = useState(0);
   const usesLicense = Boolean(user?.tenant?.rules?.['professionals.license']);
   const today = todayISO();
 
@@ -375,6 +377,10 @@ export default function ProfessionalDetail() {
         </section>
         </div>
 
+        {hasModule('commissions') && (can('commissions.view') || professional.user?.id === user?.id) && (
+          <ProfessionalCommissions professionalId={professional.id} reload={commissionsReload} onEdit={() => setEditing(true)} />
+        )}
+
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">
             <div className="px-6 pt-5 pb-3">
@@ -415,7 +421,7 @@ export default function ProfessionalDetail() {
         isOpen={editing}
         initialData={professional as never}
         onClose={() => setEditing(false)}
-        onSubmitSuccess={loadProfessional}
+        onSubmitSuccess={() => { loadProfessional(); setCommissionsReload((n) => n + 1); }}
       />
 
       <ProfessionalSchedule

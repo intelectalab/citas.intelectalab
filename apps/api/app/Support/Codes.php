@@ -19,6 +19,7 @@ class Codes
         'quote'          => ['label' => 'Presupuestos', 'prefix' => 'PRE', 'digits' => 5, 'sequence' => 'quote', 'module' => 'quotes'],
         'treatment_plan' => ['label' => 'Planes de tratamiento', 'prefix' => 'PT', 'digits' => 4, 'sequence' => 'treatment_plan', 'module' => 'quotes'],
         'package'        => ['label' => 'Paquetes vendidos', 'prefix' => 'PQ', 'digits' => 4, 'sequence' => 'package', 'module' => 'packages'],
+        'membership'     => ['label' => 'Membresías vendidas', 'prefix' => 'MEM', 'digits' => 4, 'sequence' => 'membership', 'module' => 'memberships'],
         'product'        => ['label' => 'Productos (SKU)', 'prefix' => 'P', 'digits' => 4, 'sequence' => 'product', 'module' => 'pos|inventory'],
         'transfer'       => ['label' => 'Traslados', 'prefix' => 'TR', 'digits' => 4, 'table' => 'stock_transfers', 'column' => 'code', 'module' => 'inventory'],
         'purchase'       => ['label' => 'Compras', 'prefix' => 'OC', 'digits' => 4, 'table' => 'purchase_orders', 'column' => 'code', 'module' => 'inventory'],

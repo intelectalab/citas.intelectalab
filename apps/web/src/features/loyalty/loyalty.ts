@@ -35,6 +35,7 @@ export interface PointMovementRow {
   reason: string | null;
   sale_code: string | null;
   expires_at: string | null;
+  expired_points?: number;
   actor: string | null;
   created_at: string | null;
 }

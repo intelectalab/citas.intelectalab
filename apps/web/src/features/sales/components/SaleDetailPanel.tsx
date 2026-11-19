@@ -13,7 +13,7 @@ import { PagedList } from '@/app/components/common/Pager';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { apiError } from '@/features/appointments/appointments';
 import ChargePanel from './ChargePanel';
-import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type SaleDetail, type SalePayment, type SaleRefund } from '../sales';
+import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type RefundRequest, type SaleDetail, type SalePayment, type SaleRefund } from '../sales';
 import { useAuth } from '@/hooks/useAuth';
 import { outcomeOf } from '@/features/messages/messages';
 
@@ -52,6 +52,8 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
   const [method, setMethod] = useState('cash');
   const [sessionId, setSessionId] = useState('');
   const [charging, setCharging] = useState(false);
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [rejectNotes, setRejectNotes] = useState('');
 
   const load = (id: string) =>
     api.get(`/sales/${id}`)
@@ -105,7 +107,11 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
         ? await api.post(`/sales/${sale.id}/void`, { reason: reason.trim() })
         : await api.post(`/sales/${sale.id}/refunds`, { amount: Number(amount || 0), method, reason: reason.trim(), cash_session_id: method === 'cash' && sessionId ? sessionId : null });
       setSale(res.data);
-      setNotice(action === 'void' ? 'La venta quedó anulada.' : `Devolución de ${money(Number(amount || 0), sale?.currency)} registrada.`);
+      setNotice(action === 'void'
+        ? 'La venta quedó anulada.'
+        : res.status === 202
+          ? `La devolución de ${money(Number(amount || 0), sale?.currency)} pasa de ${money(sale.refund_approval_over ?? 0, sale?.currency)}: quedó pedida y otra persona con permiso debe aprobarla.`
+          : `Devolución de ${money(Number(amount || 0), sale?.currency)} registrada.`);
       setAction('');
       onChanged?.();
     } catch (err) {
@@ -115,6 +121,30 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
     }
   };
 
+  const reviewRequest = async (request: RefundRequest, approve: boolean) => {
+    if (!sale) return;
+    if (!approve && !rejectNotes.trim()) {
+      setError('Escribe por qué no apruebas la devolución.');
+      return;
+    }
+    try {
+      setBusy(true);
+      setError('');
+      setNotice('');
+      const res = await api.post(`/refund-requests/${request.id}/${approve ? 'approve' : 'reject'}`, approve ? {} : { notes: rejectNotes.trim() });
+      setSale(res.data);
+      setRejecting(null);
+      setRejectNotes('');
+      setNotice(approve ? `Devolución de ${money(request.amount, request.currency)} aprobada y registrada.` : 'La devolución quedó rechazada. Le avisamos a quien la pidió.');
+      onChanged?.();
+    } catch (err) {
+      setError(apiError(err, 'No se pudo revisar la devolución.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pendingRequest = (sale?.refund_requests ?? []).find((r) => r.status === 'pending') ?? null;
   const refunded = sale?.refunded ?? 0;
   const canCharge = can('sales.create') && Boolean(sale && !sale.deposit_outcome && (sale.status === 'pending' || sale.status === 'partial'));
   const canEdit = can('pos.view') && Boolean(sale?.can_edit);
@@ -189,7 +219,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                   <Mail size={15} /> Enviar comprobante por correo
                 </button>
               )}
-              {sale.can_manage && !sale.refund_blocked && (
+              {sale.can_manage && !sale.refund_blocked && !pendingRequest && (
                 <button type="button" data-action="refund" onClick={() => open('refund')} className={ghostButton}>
                   <RotateCcw size={15} /> Devolver
                 </button>
@@ -230,6 +260,9 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                   <label className={labelClass} htmlFor="refund-amount">Monto a devolver *</label>
                   <input id="refund-amount" inputMode="decimal" required className={inputClass} value={amount} onChange={(e) => setAmount(cleanAmount(e.target.value))} />
                   <p className="text-xs text-slate-500 mt-1.5">Hasta {money(sale.refund_available, sale?.currency)}. Puede ser una parte.</p>
+                  {(sale.refund_approval_over ?? 0) > 0 && Number(amount || 0) > (sale.refund_approval_over ?? 0) && (
+                    <p data-needs-approval className="text-xs text-amber-700 mt-1">Pasa de {money(sale.refund_approval_over ?? 0, sale?.currency)}: quedará pedida hasta que otra persona la apruebe.</p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="refund-reason">Motivo *</label>
@@ -268,6 +301,49 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                 </button>
               </div>
             </form>
+          )}
+
+          {(sale.refund_requests ?? []).length > 0 && (
+            <section className="rounded-2xl border border-slate-200 overflow-hidden" data-refund-requests>
+              <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Devoluciones pedidas</span>
+              </div>
+              <ul className="divide-y divide-slate-100">
+                {(sale.refund_requests ?? []).map((request) => (
+                  <li key={request.id} className="px-5 py-3 space-y-1.5" data-refund-request={request.status}>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-sm font-semibold text-slate-800">{request.reason}</span>
+                      <span className="text-sm font-bold text-slate-800 tabular-nums shrink-0">{money(request.amount, request.currency)}</span>
+                    </div>
+                    <span className="block text-xs text-slate-500">
+                      {request.method_label} · pidió {request.requested_by ?? '—'} · {momentOf(request.requested_at)}
+                    </span>
+                    <span className={`block text-xs font-semibold ${request.status === 'pending' ? 'text-amber-700' : request.status === 'approved' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {request.status_label}{request.reviewed_by ? ` por ${request.reviewed_by}` : ''}{request.review_notes ? `: ${request.review_notes}` : ''}
+                    </span>
+                    {request.status === 'pending' && !request.can_review && (
+                      <span className="block text-xs text-slate-500">{request.mine ? 'La aprueba otra persona con el permiso "Aprobar devoluciones".' : 'Espera a que la apruebe alguien con permiso.'}</span>
+                    )}
+                    {request.can_review && rejecting !== request.id && (
+                      <div className="flex flex-wrap justify-end gap-2 pt-1">
+                        <button type="button" data-request-action="reject" disabled={busy} onClick={() => { setRejecting(request.id); setRejectNotes(''); setError(''); }} className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Rechazar</button>
+                        <button type="button" data-request-action="approve" disabled={busy} onClick={() => reviewRequest(request, true)} className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50">Aprobar y devolver</button>
+                      </div>
+                    )}
+                    {request.can_review && rejecting === request.id && (
+                      <div className="space-y-2 pt-1">
+                        <label className={labelClass} htmlFor="reject-notes">¿Por qué no se aprueba? *</label>
+                        <input id="reject-notes" maxLength={255} className={inputClass} value={rejectNotes} onChange={(e) => setRejectNotes(e.target.value)} />
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => setRejecting(null)} className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Volver</button>
+                          <button type="button" data-request-action="confirm-reject" disabled={busy} onClick={() => reviewRequest(request, false)} className="px-3 py-2 text-sm font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50">Rechazar la devolución</button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {sale.can_manage && sale.refund_blocked && sale.status !== 'void' && sale.status !== 'refunded' && sale.paid > 0 && (

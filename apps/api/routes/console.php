@@ -29,8 +29,9 @@ Artisan::command('subscriptions:expire', function () {
 Schedule::command('subscriptions:expire')->hourly();
 
 Artisan::command('billing:dunning', function () {
+    $bajas = \App\Support\Cancellations::runDue();
     $done = \App\Support\Dunning::run();
-    $this->info("Planes vencidos revisados: {$done['revisadas']}. Cobros intentados: {$done['cobros']}. Avisos: {$done['avisos']}. Cancelados: {$done['canceladas']}.");
+    $this->info("Bajas pedidas que terminaron: {$bajas}. Planes vencidos revisados: {$done['revisadas']}. Cobros intentados: {$done['cobros']}. Avisos: {$done['avisos']}. Cancelados: {$done['canceladas']}.");
 })->purpose('Cobra los planes vencidos con la tarjeta guardada, avisa a las empresas y cancela las que pasaron el plazo');
 
 Schedule::command('billing:dunning')->hourly()->withoutOverlapping();
@@ -42,6 +43,13 @@ Artisan::command('billing:sync', function () {
 })->purpose('Consulta a Mercado Pago los pagos en línea y los cobros de planes que no hayan avisado');
 
 Schedule::command('billing:sync')->everyFifteenMinutes()->withoutOverlapping();
+
+Artisan::command('invoices:retry', function () {
+    $done = \App\Support\Invoicing::retryPending(200);
+    $this->info("Comprobantes reenviados o consultados: {$done['sent']}. Bajas consultadas: {$done['voids']}.");
+})->purpose('Vuelve a enviar al proveedor de facturación los comprobantes pendientes y consulta las bajas en proceso');
+
+Schedule::command('invoices:retry')->everyTenMinutes()->withoutOverlapping();
 
 Artisan::command('messages:send', function () {
     if (!\App\Support\Messaging::ready()) {
@@ -61,6 +69,19 @@ Artisan::command('messages:send', function () {
 })->purpose('Arma los recordatorios y envía los mensajes pendientes o programados');
 
 Schedule::command('messages:send')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('webhooks:send', function () {
+    if (!\App\Support\ApiKeys::ready()) {
+        $this->warn(\App\Support\ApiKeys::NOT_READY);
+
+        return;
+    }
+
+    $done = \App\Support\Webhooks::process(null, 300);
+    $this->info("Avisos entregados: {$done['sent']}. Con error (se reintentan con más espera): {$done['failed']}.");
+})->purpose('Envía los avisos de webhooks pendientes y reintenta los que fallaron, con una espera cada vez mayor');
+
+Schedule::command('webhooks:send')->everyMinute()->withoutOverlapping();
 
 Artisan::command('appointments:confirmations', function () {
     $count = 0;

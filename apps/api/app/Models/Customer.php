@@ -39,6 +39,9 @@ class Customer extends Authenticatable
         'postal_code',
         'medical_notes',
         'last_activity_at',
+        'home_branch_id',
+        'preferred_professional_id',
+        'alert',
     ];
 
     protected $hidden = [
@@ -178,5 +181,15 @@ class Customer extends Authenticatable
     public function pipelineStage()
     {
         return $this->belongsTo(PipelineStage::class, 'pipeline_stage_id');
+    }
+
+    public function homeBranch()
+    {
+        return $this->belongsTo(Branch::class, 'home_branch_id');
+    }
+
+    public function preferredProfessional()
+    {
+        return $this->belongsTo(Professional::class, 'preferred_professional_id');
     }
 }

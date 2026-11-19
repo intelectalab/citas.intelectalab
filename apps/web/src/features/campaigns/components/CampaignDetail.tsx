@@ -10,7 +10,7 @@ import { PagedList } from '@/app/components/common/Pager';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, Ban, CalendarCheck, CalendarClock, Clock, Copy, Loader2, Mail, MailCheck, Megaphone, Pencil, Send, Ticket, User, Users } from 'lucide-react';
+import { AlertTriangle, Ban, CalendarCheck, CalendarClock, Clock, Copy, Loader2, Mail, MailCheck, Megaphone, MessageCircle, Pencil, Send, Ticket, User, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError } from '@/features/appointments/appointments';
@@ -26,7 +26,7 @@ type Filter = 'all' | 'sent' | 'pending' | 'failed' | 'skipped';
 
 const FILTERS: { id: Filter; label: string; match: (r: Recipient) => boolean }[] = [
   { id: 'all', label: 'Todos', match: () => true },
-  { id: 'sent', label: 'Enviados', match: (r) => r.state === 'sent' || r.state === 'simulated' },
+  { id: 'sent', label: 'Enviados', match: (r) => ['sent', 'simulated', 'delivered', 'read'].includes(r.state) },
   { id: 'pending', label: 'Por enviar', match: (r) => r.state === 'pending' },
   { id: 'failed', label: 'Con error', match: (r) => r.state === 'failed' },
   { id: 'skipped', label: 'No se enviaron', match: (r) => r.state === 'skipped' },
@@ -88,16 +88,20 @@ export default function CampaignDetail() {
   const r = data.results;
   const shown = data.recipients.filter(FILTERS.find((f) => f.id === filter)!.match);
   const simulated = (r?.simulated ?? 0) > 0;
+  const withEmail = (data.channel ?? 'email') !== 'whatsapp';
+  const withWhatsApp = (data.channel ?? 'email') !== 'email';
+  const byChannel = withEmail && withWhatsApp ? r?.by_channel : undefined;
 
   const facts: [React.ReactNode, string, React.ReactNode][] = [
     [<Users key="a" size={15} />, 'A quiénes', data.audience],
+    [<Send key="ch" size={15} />, 'Por dónde sale', data.channel_label ?? 'Correo'],
     [<Clock key="w" size={15} />, data.status === 'scheduled' ? 'Sale' : data.sent_at ? 'Salió' : 'Creada', momentOf(data.sent_at ?? data.scheduled_at ?? data.created_at)],
     [<Ticket key="c" size={15} />, 'Cupón', data.coupon ? `${data.coupon.code}${data.coupon.description ? ` · ${data.coupon.description}` : ''}` : 'Sin cupón'],
     [<User key="b" size={15} />, 'La creó', data.by ?? '—'],
   ];
 
   const stats = [
-    { id: 'sent', title: simulated ? 'Simulados' : 'Enviados', value: r?.sent ?? 0, note: simulated ? 'no salen: Probar sin enviar' : 'correos que salieron', icon: <MailCheck size={18} />, color: 'text-emerald-600' },
+    { id: 'sent', title: simulated ? 'Simulados' : 'Enviados', value: r?.sent ?? 0, note: simulated ? 'no salen: Probar sin enviar' : byChannel ? `${byChannel.email?.sent ?? 0} correos y ${byChannel.whatsapp?.sent ?? 0} WhatsApp` : withWhatsApp ? `WhatsApp que salieron${r?.by_channel?.whatsapp?.read ? ` · ${r.by_channel.whatsapp.read} leídos` : ''}` : 'correos que salieron', icon: <MailCheck size={18} />, color: 'text-emerald-600' },
     { id: 'pending', title: 'Por enviar', value: r?.pending ?? 0, note: 'saliendo ahora', icon: <Send size={18} />, color: 'text-sky-600' },
     { id: 'failed', title: 'Con error', value: r?.failed ?? 0, note: 'reintentar en Mensajes', icon: <AlertTriangle size={18} />, color: 'text-rose-600' },
     { id: 'skipped', title: 'No se enviaron', value: r?.skipped ?? 0, note: 'sin permiso o sin correo', icon: <Ban size={18} />, color: 'text-slate-500' },
@@ -160,8 +164,14 @@ export default function CampaignDetail() {
         </section>
 
         <div className="xl:col-span-2 space-y-5">
-          {data.email.state !== 'ok' && (
+          {data.blocked && (
+            <p className="text-sm border rounded-xl px-4 py-2.5 bg-rose-50 text-rose-800 border-rose-200" data-blocked>No salió: {data.blocked}</p>
+          )}
+          {withEmail && data.email.state !== 'ok' && (
             <p className={`text-sm border rounded-xl px-4 py-2.5 ${EMAIL_NOTICE[data.email.state]}`}>{data.email.label}</p>
+          )}
+          {withWhatsApp && data.whatsapp_state && data.whatsapp_state.state !== 'ok' && (
+            <p className={`text-sm border rounded-xl px-4 py-2.5 ${EMAIL_NOTICE[data.whatsapp_state.state === 'simulated' ? 'simulated' : 'none']}`}>{data.whatsapp_state.label}</p>
           )}
 
           {r && (
@@ -181,13 +191,27 @@ export default function CampaignDetail() {
             </div>
           )}
 
-          <section className={`${card} overflow-hidden`} data-card="message">
-            <div className="px-5 pt-5 pb-3"><SectionTitle><Mail className="w-4 h-4 text-brand-accent" /> El correo</SectionTitle></div>
-            <div className="mx-5 mb-5 rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-brand-ink">{data.subject}</div>
-              <RichTextView body={data.body} className="px-5 py-4 text-sm text-slate-700" />
-            </div>
-          </section>
+          {withWhatsApp && data.whatsapp && (
+            <section className={`${card} p-5 space-y-2`} data-card="whatsapp-template">
+              <SectionTitle><MessageCircle className="w-4 h-4 text-brand-accent" /> La plantilla de WhatsApp</SectionTitle>
+              <p className="text-sm text-slate-700"><span className="font-mono font-bold text-brand-ink">{data.whatsapp.template}</span> · idioma {data.whatsapp.language}</p>
+              {data.whatsapp.params.length > 0 ? (
+                <ul className="text-xs text-slate-600 space-y-0.5">
+                  {data.whatsapp.params.map((param, index) => <li key={index}><span className="font-mono font-bold">{`{{${index + 1}}}`}</span> {param}</li>)}
+                </ul>
+              ) : <p className="text-xs text-slate-500">Sin datos.</p>}
+            </section>
+          )}
+
+          {withEmail && (
+            <section className={`${card} overflow-hidden`} data-card="message">
+              <div className="px-5 pt-5 pb-3"><SectionTitle><Mail className="w-4 h-4 text-brand-accent" /> El correo</SectionTitle></div>
+              <div className="mx-5 mb-5 rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-sm font-bold text-brand-ink">{data.subject}</div>
+                <RichTextView body={data.body} className="px-5 py-4 text-sm text-slate-700" />
+              </div>
+            </section>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
             <section className={`${card} overflow-hidden flex flex-col`} data-card="booked">
@@ -229,7 +253,10 @@ export default function CampaignDetail() {
                   <li key={rec.id} className="flex items-center gap-3 px-5 py-2.5" data-recipient={rec.state}>
                     <div className="flex-1 min-w-0">
                       <span className="block text-sm font-semibold text-slate-800 truncate"><CustomerLink id={rec.customer.id}>{rec.customer.name}</CustomerLink></span>
-                      <span className="block text-xs text-slate-500 truncate">{rec.reason ?? rec.email ?? 'Sin correo'}</span>
+                      <span className="block text-xs text-slate-500 truncate">
+                        {withEmail && withWhatsApp && <span className="font-semibold">{rec.channel === 'whatsapp' ? 'WhatsApp' : 'Correo'} · </span>}
+                        {rec.reason ?? rec.to ?? rec.email ?? (rec.channel === 'whatsapp' ? 'Sin celular' : 'Sin correo')}
+                      </span>
                     </div>
                     <Badge tone={RECIPIENT_BADGES[rec.state]} nowrap>{rec.label}</Badge>
                   </li>

@@ -20,6 +20,8 @@ interface SaaSPlan {
   status?: string;
   presentation_order?: number;
   is_public_catalog?: boolean;
+  is_popular?: boolean;
+  tagline?: string | null;
   trial_config?: {
     has_trial?: boolean;
     trial_days?: number;
@@ -36,7 +38,8 @@ interface SaaSPlan {
     professionals?: number;
     appointments_month?: number;
     whatsapp_month?: number;
-    [key: string]: number | undefined;
+    campaign_emails_month?: number | null;
+    [key: string]: number | null | undefined;
   };
   consumption?: {
     storage_gb?: number;
@@ -66,6 +69,8 @@ const defaultFormState = {
   status: 'active',
   presentation_order: 1,
   is_public_catalog: true,
+  is_popular: false,
+  tagline: '',
 
   price_monthly: 0,
   price_yearly: 0,
@@ -84,6 +89,7 @@ const defaultFormState = {
     professionals: 0,
     appointments_month: 0,
     whatsapp_month: 0,
+    campaign_emails_month: '' as number | '',
   },
 
   consumption: {
@@ -186,6 +192,8 @@ export default function FormSaaSPlan({
         status: initialData.status || 'active',
         presentation_order: initialData.presentation_order ?? 1,
         is_public_catalog: initialData.is_public_catalog ?? true,
+        is_popular: initialData.is_popular ?? false,
+        tagline: initialData.tagline ?? '',
         price_monthly: initialData.price_monthly ?? 0,
         price_yearly: initialData.price_yearly ?? 0,
         currency: initialData.currency || 'PEN',
@@ -205,6 +213,7 @@ export default function FormSaaSPlan({
           professionals: initialData.limits?.professionals ?? 0,
           appointments_month: initialData.limits?.appointments_month ?? 0,
           whatsapp_month: initialData.limits?.whatsapp_month ?? 0,
+          campaign_emails_month: typeof initialData.limits?.campaign_emails_month === 'number' ? initialData.limits.campaign_emails_month : ('' as number | ''),
         },
 
         consumption: {
@@ -255,6 +264,8 @@ export default function FormSaaSPlan({
         status: formData.status,
         presentation_order: Number(formData.presentation_order),
         is_public_catalog: formData.is_public_catalog,
+        is_popular: formData.is_popular,
+        tagline: formData.tagline || null,
         price_monthly: Number(formData.price_monthly),
         price_yearly: Number(formData.price_yearly),
         currency: formData.currency,
@@ -274,6 +285,7 @@ export default function FormSaaSPlan({
           professionals: Number(formData.limits.professionals),
           appointments_month: Number(formData.limits.appointments_month),
           whatsapp_month: Number(formData.limits.whatsapp_month),
+          campaign_emails_month: formData.limits.campaign_emails_month === '' ? null : Number(formData.limits.campaign_emails_month),
         },
         consumption: {
           storage_gb: Number(formData.consumption.storage_gb),
@@ -406,6 +418,27 @@ export default function FormSaaSPlan({
                             value={formData.is_public_catalog ? 'yes' : 'no'}
                             onChange={(e) => setFormData({ ...formData, is_public_catalog: e.target.value === 'yes' })}
                             options={[{ value: 'yes', label: 'Sí' }, { value: 'no', label: 'No' }]}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Destacado en la página de precios</label>
+                          <Select
+                            ariaLabel="Destacado en la web"
+                            clearable={false}
+                            value={formData.is_popular ? 'yes' : 'no'}
+                            onChange={(e) => setFormData({ ...formData, is_popular: e.target.value === 'yes' })}
+                            options={[{ value: 'yes', label: 'Sí, marcarlo como «El más elegido»' }, { value: 'no', label: 'No' }]}
+                          />
+                          <p className="text-xs text-slate-500 mt-1">Solo un plan puede estar destacado: al marcar este, se quita del otro.</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Frase comercial (opcional)</label>
+                          <input
+                            maxLength={160}
+                            value={formData.tagline ?? ''}
+                            onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                            placeholder="Ej. Para negocios que crecen"
                           />
                         </div>
                       </div>
@@ -569,7 +602,7 @@ export default function FormSaaSPlan({
                             { key: 'branches', label: 'Sedes' },
                             { key: 'professionals', label: 'Profesionales', hint: 'Los que atienden citas. Cada uno gasta un usuario.' },
                             { key: 'appointments_month', label: 'Citas al mes' },
-                            { key: 'whatsapp_month', label: 'Mensajes de WhatsApp al mes' },
+                            { key: 'whatsapp_month', label: 'Mensajes de WhatsApp al mes', hint: 'Cuenta los avisos automáticos y las campañas por WhatsApp. Al llegar al tope, los avisos salen por correo y las campañas por WhatsApp no salen.' },
                           ].map((limit) => (
                             <div key={limit.key}>
                               <label className="block text-xs text-slate-600 mb-1">{limit.label}</label>
@@ -587,6 +620,24 @@ export default function FormSaaSPlan({
                               />
                             </div>
                           ))}
+                          <div data-limit-field="campaign_emails_month">
+                            <label className="block text-xs text-slate-600 mb-1" htmlFor="plan-campaign-emails">Correos de campañas al mes</label>
+                            <p className="text-[11px] text-slate-500 -mt-0.5 mb-1">Solo las campañas de marketing; los avisos automáticos por correo no cuentan. Déjalo vacío para no poner tope.</p>
+                            <input
+                              id="plan-campaign-emails"
+                              type="number"
+                              min={0}
+                              placeholder="Sin tope"
+                              value={formData.limits.campaign_emails_month}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  limits: { ...formData.limits, campaign_emails_month: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0) },
+                                })
+                              }
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2 bg-white text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}

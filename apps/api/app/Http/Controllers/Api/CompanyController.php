@@ -100,6 +100,8 @@ class CompanyController extends Controller
                 ['key' => 'professionals', 'used' => $usage['professionals'], 'limit' => $limits['professionals'] ?? null],
                 ['key' => 'users', 'used' => $usage['users'], 'limit' => $limits['users'] ?? null],
                 ['key' => 'appointments_month', 'used' => $usage['appointments_month'], 'limit' => $limits['appointments_month'] ?? null],
+                ['key' => 'whatsapp_month', 'used' => $usage['whatsapp_month'], 'limit' => \App\Support\MessageQuota::limit($tenant, 'whatsapp')],
+                ...($tenant->hasModule('marketing') ? [['key' => 'campaign_emails_month', 'used' => $usage['campaign_emails_month'], 'limit' => \App\Support\MessageQuota::limit($tenant, 'campaign_email')]] : []),
             ],
             'totals' => [
                 'customers' => $count('customers')->whereNull('deleted_at')->count(),

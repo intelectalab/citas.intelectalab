@@ -26,6 +26,7 @@ class AppointmentEvents
         ]);
 
         CustomerStages::refreshFor($appointment->tenant_id, $appointment->customer_id);
+        Webhooks::appointmentStep($appointment, $from, $to);
 
         if ($actor && !in_array('notify', $skip, true)) {
             Notifier::appointmentStep($appointment, $from, $to, $actor);

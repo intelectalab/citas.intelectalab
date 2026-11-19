@@ -28,7 +28,7 @@ class PortalController extends AppointmentController
         return $request->user();
     }
 
-    private function policies(Tenant $tenant): array
+    protected function policies(Tenant $tenant): array
     {
         $rule = fn (string $key) => AppointmentFlow::rule($tenant, $key);
 
@@ -50,15 +50,16 @@ class PortalController extends AppointmentController
             'deposit_minutes'    => max(5, (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes')),
             'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
             'miss'               => \App\Support\OnlineBooking::policy($tenant),
+            'waitlist_enabled'   => \App\Support\Waitlist::enabled($tenant),
         ];
     }
 
-    private function assertBookingEnabled(Tenant $tenant): void
+    protected function assertBookingEnabled(Tenant $tenant): void
     {
         abort_unless(AppointmentFlow::rule($tenant, 'booking.enabled'), 403, 'La reserva en línea no está disponible. Comunícate con la sede.');
     }
 
-    private function ownAppointment(Request $request, string $id): Appointment
+    protected function ownAppointment(Request $request, string $id): Appointment
     {
         return Appointment::where('tenant_id', $this->tenant($request)->id)
             ->where('customer_id', $this->customer($request)->id)
@@ -78,6 +79,7 @@ class PortalController extends AppointmentController
         $dependents = $tenant->dependents();
 
         \App\Support\Confirmations::process($tenant);
+        \App\Support\Waitlist::advance($tenant);
 
         $appointments = Appointment::where('tenant_id', $tenant->id)
             ->where('customer_id', $customer->id)
@@ -122,8 +124,8 @@ class PortalController extends AppointmentController
         $assigned = DB::table('service_professionals')->where('tenant_id', $tenant->id)->get()->groupBy('service_id');
         $worksAt = ProfessionalSchedule::where('tenant_id', $tenant->id)->get()->groupBy('professional_id');
         $depositRule = (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::ready();
-        $customer = $this->customer($request);
-        $packaged = \App\Support\Packages::linkable($tenant)
+        $customer = $request->user() instanceof Customer ? $request->user() : null;
+        $packaged = $customer && \App\Support\Packages::linkable($tenant)
             ? collect(\App\Support\Packages::presentMany(DB::table('customer_packages')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('status', 'active')->where('expires_at', '>', now()->toIso8601String())->get(), false))
                 ->flatMap(fn (array $p) => collect($p['items'])->filter(fn ($i) => $i['available'] > 0)->map(fn ($i) => ['service_id' => $i['service_id'], 'available' => $i['available'], 'code' => $p['code'], 'name' => $p['name']]))
                 ->groupBy('service_id')
@@ -154,6 +156,7 @@ class PortalController extends AppointmentController
                 ])->values(),
             'professionals' => Professional::where('tenant_id', $tenant->id)
                 ->whereIn('id', $worksAt->keys())
+                ->when(\App\Support\PublicBooking::professionalsFlag(), fn ($q) => $q->where('online_booking', true))
                 ->with('status')
                 ->orderBy('display_name')
                 ->get()
@@ -222,6 +225,12 @@ class PortalController extends AppointmentController
             return response()->json(['message' => \App\Support\OnlineBooking::blockedMessage($tenant, $strikes), 'code' => 'BOOKING_BLOCKED'], 403);
         }
 
+        return $this->placeBooking($tenant, $customer, $validated);
+    }
+
+    protected function placeBooking(Tenant $tenant, Customer $customer, array $validated, ?string $staffNote = null, ?array $newDependent = null)
+    {
+        $user = $customer;
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
         $branch = Branch::where('tenant_id', $tenant->id)->where('status', 'active')->findOrFail($validated['branch_id']);
 
@@ -237,13 +246,19 @@ class PortalController extends AppointmentController
             throw ValidationException::withMessages(['service_id' => 'Este servicio se reserva con un adelanto. Comunícate con la sede para agendarlo.']);
         }
 
-        $dependentId = $this->resolveDependent($tenant, $customer, $validated['customer_dependent_id'] ?? null);
+        $dependentId = $newDependent ? null : $this->resolveDependent($tenant, $customer, $validated['customer_dependent_id'] ?? null);
 
         $duration = (int) $service->duration_minutes;
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit, $package) {
+        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit, $package, $staffNote, $newDependent) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
+
+            if ($newDependent) {
+                $dependentId = \App\Support\PublicBooking::dependentFor($tenant, $customer, $newDependent);
+            }
+
+            $validated['notes'] = trim(implode("\n", array_filter([$validated['notes'] ?? null, $staffNote]))) ?: null;
 
             if ($response = $this->limitReached($tenant, $start)) {
                 return response()->json(['message' => 'No hay cupos en línea para esa fecha. Comunícate con la sede.', 'code' => 'UNAVAILABLE'], 422);
@@ -484,6 +499,10 @@ class PortalController extends AppointmentController
         $tenant = $this->tenant($request);
         $customer = $this->customer($request);
 
+        if (!\App\Support\Waitlist::enabled($tenant)) {
+            return response()->json([]);
+        }
+
         \App\Support\Waitlist::expire($tenant);
 
         $entries = WaitlistEntry::where('tenant_id', $tenant->id)
@@ -500,6 +519,7 @@ class PortalController extends AppointmentController
     {
         $tenant = $this->tenant($request);
         $this->assertBookingEnabled($tenant);
+        abort_unless(\App\Support\Waitlist::enabled($tenant), 403, 'La lista de espera no está disponible. Comunícate con la sede.');
         $customer = $this->customer($request);
 
         $validated = $request->validate([
@@ -637,6 +657,7 @@ class PortalController extends AppointmentController
             'time_from'    => $entry->time_from ? substr($entry->time_from, 0, 5) : null,
             'time_to'      => $entry->time_to ? substr($entry->time_to, 0, 5) : null,
             'created_at'   => $entry->created_at?->format('Y-m-d'),
+            'offer_until'  => ($offer = \App\Support\Waitlist::openOffer($entry->id)) ? Carbon::parse($offer->expires_at)->setTimezone($timezone)->format('Y-m-d\TH:i') : null,
             'days'         => collect($found['days'])->map(fn (array $day) => [
                 'date'   => $day['date'],
                 'groups' => collect($day['groups'])->map(fn (array $group) => [
@@ -689,7 +710,7 @@ class PortalController extends AppointmentController
         ], ['phone.regex' => 'Escribe un número de celular válido.', 'phone.required' => 'Escribe tu celular.']);
 
         $previous = $customer->phone;
-        $customer->update(['phone' => trim($validated['phone'])]);
+        $customer->update(['phone' => \App\Support\Phones::normalize($validated['phone'], \App\Support\Phones::prefixForTenantId($customer->tenant_id)) ?? trim($validated['phone'])]);
 
         if ($previous !== $customer->phone) {
             \App\Support\Audit::log($request, 'customer.updated', [
@@ -739,7 +760,7 @@ class PortalController extends AppointmentController
         return null;
     }
 
-    private function pickProfessional(Tenant $tenant, AppointmentScheduler $scheduler, Service $service, Branch $branch, Carbon $start, int $duration, ?string $professionalId, ?string $ignoreId = null): array
+    protected function pickProfessional(Tenant $tenant, AppointmentScheduler $scheduler, Service $service, Branch $branch, Carbon $start, int $duration, ?string $professionalId, ?string $ignoreId = null): array
     {
         $candidates = Professional::where('tenant_id', $tenant->id)->with('status')
             ->when($professionalId && AppointmentFlow::rule($tenant, 'booking.choose_professional'), fn ($q) => $q->where('id', $professionalId))
@@ -764,7 +785,7 @@ class PortalController extends AppointmentController
         return [null, $check];
     }
 
-    private function unavailableForCustomer(array $check, string $prefix = ''): JsonResponse
+    protected function unavailableForCustomer(array $check, string $prefix = ''): JsonResponse
     {
         $codes = array_column($check['reasons'], 'code');
 
@@ -864,7 +885,144 @@ class PortalController extends AppointmentController
         })->values()]);
     }
 
-    private function presentForCustomer(Appointment $appointment, Tenant $tenant): array
+    public function memberships(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        abort_unless(\App\Support\Memberships::ready(), 503, \App\Support\Memberships::NOT_READY);
+        \App\Support\Memberships::expireDue($tenant);
+
+        $rows = DB::table('memberships')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)
+            ->orderByRaw("CASE WHEN status IN ('active', 'grace', 'paused') THEN 0 ELSE 1 END")
+            ->orderByDesc('ends_at')->limit(50)->get();
+
+        return response()->json(['memberships' => collect(\App\Support\Memberships::presentMany($tenant, $rows))->map(fn (array $m) => collect($m)->only([
+            'id', 'code', 'name', 'status', 'status_label', 'price', 'currency', 'period_label', 'starts_at', 'ends_at', 'days_left',
+            'benefits_text', 'included', 'period_end', 'grace_until', 'paused_at',
+        ])->all())->values()]);
+    }
+
+    public function benefits(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        $iso = fn ($value) => $value ? Carbon::parse($value)->toIso8601String() : null;
+        $loyalty = \App\Support\Loyalty::enabled($tenant);
+        $rules = $loyalty ? \App\Support\Loyalty::rules($tenant) : null;
+        $points = null;
+        $giftCards = null;
+
+        if ($loyalty && $rules['points_enabled']) {
+            $balance = \App\Support\Loyalty::customerPoints($tenant->id, $customer->id);
+            $rows = DB::table('loyalty_transactions as lt')
+                ->leftJoin('sales as s', 's.id', '=', 'lt.sale_id')
+                ->where('lt.tenant_id', $tenant->id)
+                ->where('lt.customer_id', $customer->id)
+                ->orderByDesc('lt.created_at')
+                ->limit(100)
+                ->get(['lt.id', 'lt.type', 'lt.points', 'lt.balance_after', 'lt.reason', 'lt.expires_at', 'lt.created_at', 's.code as sale_code']);
+            $lots = \App\Support\Loyalty::lotStates($tenant->id, [$customer->id]);
+
+            $points = [
+                'balance'           => $balance,
+                'value'             => round($balance * $rules['point_value'], 2),
+                'amount_per_point'  => $rules['amount_per_point'],
+                'point_value'       => $rules['point_value'],
+                'min_redeem_points' => $rules['min_redeem_points'],
+                'expiring'          => \App\Support\Loyalty::expiringSoon($tenant->id, $customer->id),
+                'movements'         => $rows->map(fn ($m) => [
+                    'id'             => $m->id,
+                    'type'           => $m->type,
+                    'type_label'     => \App\Support\Loyalty::POINT_TYPES[$m->type] ?? $m->type,
+                    'points'         => (int) $m->points,
+                    'balance_after'  => (int) $m->balance_after,
+                    'reason'         => $m->reason,
+                    'sale_code'      => $m->sale_code,
+                    'expires_at'     => $iso($m->expires_at),
+                    'expired_points' => (int) ($lots[$m->id]['expired'] ?? 0),
+                    'created_at'     => $iso($m->created_at),
+                ])->values(),
+            ];
+        }
+
+        if ($loyalty && $rules['gift_cards_enabled']) {
+            \App\Support\Loyalty::expireDue($tenant->id);
+            $giftCards = DB::table('gift_cards')
+                ->where('tenant_id', $tenant->id)
+                ->where(fn ($q) => $q->where('recipient_customer_id', $customer->id)->orWhere('purchaser_customer_id', $customer->id))
+                ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+                ->orderByDesc('created_at')
+                ->limit(50)
+                ->get()
+                ->map(fn ($gc) => [
+                    'id'             => $gc->id,
+                    'code'           => $gc->code,
+                    'initial_amount' => round((float) $gc->initial_amount, 2),
+                    'balance'        => round((float) $gc->balance, 2),
+                    'status'         => $gc->status,
+                    'status_label'   => \App\Support\Loyalty::GIFT_CARD_STATUSES[$gc->status] ?? $gc->status,
+                    'recipient_name' => $gc->recipient_name,
+                    'for_me'         => $gc->recipient_customer_id === $customer->id || (!$gc->recipient_customer_id && !$gc->recipient_name),
+                    'expires_at'     => $iso($gc->expires_at),
+                ])->values();
+        }
+
+        $purchases = [];
+
+        if (\App\Support\Sales::ready()) {
+            $sales = DB::table('sales')
+                ->where('tenant_id', $tenant->id)
+                ->where('customer_id', $customer->id)
+                ->whereIn('status', ['paid', 'partially_refunded', 'refunded', 'partial'])
+                ->orderByDesc('created_at')
+                ->limit(100)
+                ->get();
+            $items = DB::table('sale_items')->whereIn('sale_id', $sales->pluck('id'))->get(['sale_id', 'description', 'quantity'])->groupBy('sale_id');
+            $invoices = DB::table('invoices')->whereIn('sale_id', $sales->pluck('id'))->where('status', 'issued')->where('doc_type', '!=', \App\Support\Invoicing::CREDIT_NOTE)->get()->keyBy('sale_id');
+
+            $purchases = $sales->map(fn ($s) => [
+                'id'             => $s->id,
+                'code'           => $s->code,
+                'created_at'     => $iso($s->paid_at ?? $s->created_at),
+                'status'         => $s->status,
+                'status_label'   => \App\Support\Sales::label($s),
+                'detail'         => ($items[$s->id] ?? collect())->map(fn ($i) => ((float) $i->quantity > 1 ? (int) $i->quantity . ' × ' : '') . $i->description)->implode(', '),
+                'total'          => round((float) $s->total, 2),
+                'currency'       => $s->currency ?? Currency::DEFAULT,
+                'invoice_number' => isset($invoices[$s->id]) ? sprintf('%s-%08d', $invoices[$s->id]->serie, $invoices[$s->id]->number) : null,
+                'invoice_label'  => isset($invoices[$s->id]) ? (\App\Support\Invoicing::LABELS[$invoices[$s->id]->doc_type] ?? null) : null,
+            ])->values()->all();
+        }
+
+        return response()->json(['currency' => Currency::of($tenant), 'points' => $points, 'gift_cards' => $giftCards, 'purchases' => $purchases]);
+    }
+
+    public function purchase(Request $request, string $sale)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        abort_unless(\App\Support\Sales::ready(), 503, \App\Support\Sales::NOT_READY);
+
+        $row = DB::table('sales')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('id', $sale)
+            ->whereIn('status', ['paid', 'partially_refunded', 'refunded', 'partial'])->first();
+        abort_unless($row, 404);
+
+        $company = DB::table('companies')->where('tenant_id', $tenant->id)->orderBy('created_at')->first();
+        $present = \App\Support\Sales::present($row);
+        $present['payments'] = collect($present['payments'])->map(fn ($p) => collect($p)->except(['by', 'register'])->all())->values();
+
+        return response()->json($present + [
+            'branch'   => ['id' => $row->branch_id, 'name' => DB::table('branches')->where('id', $row->branch_id)->value('name')],
+            'customer' => ['id' => $customer->id, 'name' => \App\Support\Person::name($customer)],
+            'issuer'   => [
+                'name'    => $company->legal_name ?? $company->trade_name ?? $tenant->name,
+                'tax_id'  => $company->tax_id ?? null,
+                'address' => $company->address ?? null,
+            ] + \App\Support\Documents::forReceipt($tenant),
+        ]);
+    }
+
+    protected function presentForCustomer(Appointment $appointment, Tenant $tenant): array
     {
         $full = $this->present($appointment, $tenant);
         $policies = $this->policies($tenant);
@@ -894,6 +1052,7 @@ class PortalController extends AppointmentController
             'confirmation_overdue' => $full['confirmation_overdue'],
             'is_upcoming'      => $appointment->starts_at->isFuture() && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true),
             'is_virtual'       => (bool) $appointment->service?->is_virtual,
+            'video_url'        => in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED, AppointmentFlow::CHECKED_IN, AppointmentFlow::IN_PROGRESS], true) ? \App\Support\VideoLinks::for($appointment) : null,
             'pay_on_arrival'   => $upcoming && (float) $appointment->price > 0 && $policies['pay_before_service']
                 && !\App\Support\Sales::appointmentPaid($tenant->id, $appointment->id),
             'deposit'          => $this->depositOf($tenant, $appointment),

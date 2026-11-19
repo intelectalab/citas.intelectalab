@@ -1,0 +1,16 @@
+{
+  "name": "erp-saas-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "node run.mjs",
+    "e2e:up": "node run.mjs --up",
+    "e2e:down": "node run.mjs --down",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "^20",
+    "typescript": "^5.9.3"
+  }
+}

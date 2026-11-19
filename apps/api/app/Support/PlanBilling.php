@@ -212,7 +212,7 @@ class PlanBilling
             'plan_id'       => $plan->id,
             'billing_cycle' => $cycle,
             'kind'          => $kind,
-            'amount'        => Subscriptions::price($plan, $cycle),
+            'amount'        => Cancellations::chargeFor($subscription, $plan, $cycle),
             'currency'      => substr($plan->currency ?? 'PEN', 0, 3),
             'provider'      => $provider,
             'created_by'    => $user->id,
@@ -486,7 +486,7 @@ class PlanBilling
         $planId = $subscription->pending_plan_id ?? $subscription->plan_id;
         $cycle = $subscription->pending_billing_cycle ?? $subscription->billing_cycle;
         $plan = SaaSPlan::find($planId);
-        $amount = Subscriptions::price($plan, $cycle);
+        $amount = Cancellations::chargeFor($subscription, $plan, $cycle);
 
         if ($amount <= 0) {
             return ['ok' => false, 'skipped' => true, 'message' => 'El plan no tiene costo.'];

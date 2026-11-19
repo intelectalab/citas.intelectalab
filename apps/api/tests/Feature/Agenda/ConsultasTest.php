@@ -174,7 +174,7 @@ describe('portal de la clienta', function () {
     it('actualiza sus datos', function () {
         $this->as($this->clienta)->putJson('/api/portal/profile', ['first_name' => 'Lucía', 'last_name' => 'Paredes', 'phone' => '987654321', 'email' => $this->clienta->email])->assertOk();
 
-        expect(DB::table('customers')->where('id', $this->clienta->id)->value('phone'))->toBe('987654321');
+        expect(DB::table('customers')->where('id', $this->clienta->id)->value('phone'))->toBe('+51987654321');
     });
 });
 

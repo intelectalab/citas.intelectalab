@@ -6,15 +6,18 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
-import { BellRing, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, Percent, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
+import { BellRing, Coins, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, Percent, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import Switch from '@/app/components/common/Switch';
 import Select from '@/app/components/common/Select';
 import CurrencySettings from './CurrencySettings';
+import BookingPageSettings from './BookingPageSettings';
 import IntegrationsSettings from './IntegrationsSettings';
+import ApiSettings from '@/features/integrations/components/ApiSettings';
 import MessagingSettings from './MessagingSettings';
+import WhatsAppSettings from './WhatsAppSettings';
 import DataExportsLog from './DataExportsLog';
 import { currencySymbol } from '@/lib/currency';
 import { MODULE_HINTS } from '@/lib/modules';
@@ -37,12 +40,16 @@ interface SettingsPayload {
   appointment_statuses?: AppointmentStatus[];
   booking_rules?: BookingRules & { uses_confirmation: boolean };
   resources?: { equipment_down: EquipmentDown } | null;
-  sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number } | null;
+  sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number; cash_review_over?: number; refund_approval_over?: number } | null;
   commission_rules?: { base: 'net' | 'gross'; on_products: boolean; on_package_use: boolean; auto_approve: boolean } | null;
   inventory_rules?: { allow_negative: boolean; consume_on_service: boolean; transfer_two_step: boolean; cost_method: CostMethod; alert_min_stock: boolean } | null;
   loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number } | null;
   quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy; portal_accept?: boolean } | null;
   walkin_rules?: { self_checkin: boolean; max_wait: number } | null;
+  classes_rules?: { waitlist: boolean; auto_promote: boolean; portal_leave_hours: number } | null;
+  waitlist_rules?: { enabled: boolean; notify_mode: 'all' | 'first'; reply_hours: number; offers_ready?: boolean } | null;
+  membership_rules?: { grace_days: number } | null;
+  penalty_rules?: { enabled: boolean; no_show_percent: number; late_cancel_percent: number; window_hours: number } | null;
   booking_misses?: { action: MissAction; limit: number; block_days: number; count_late_cancel?: boolean; window_hours?: number } | null;
   payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
   session_idle_minutes?: number;
@@ -129,13 +136,13 @@ const LOCK_REASONS: Record<string, string> = {
 
 const cardClass = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4';
 
-type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'reservas' | 'inasistencias' | 'salas' | 'walkin' | 'ventas' | 'presupuestos' | 'inventario' | 'comisiones' | 'fidelizacion' | 'adelantos' | 'integraciones' | 'correo' | 'grupos' | 'seguridad' | 'descargas';
+type SectionId = 'empresa' | 'modulos' | 'moneda' | 'ayuda' | 'fases' | 'pagina' | 'reservas' | 'inasistencias' | 'penalidades' | 'salas' | 'walkin' | 'clases' | 'espera' | 'ventas' | 'presupuestos' | 'inventario' | 'comisiones' | 'fidelizacion' | 'membresias' | 'adelantos' | 'integraciones' | 'correo' | 'whatsapp' | 'grupos' | 'seguridad' | 'descargas';
 
 const SECTION_GROUPS: { title: string; sections: { id: SectionId; label: string }[] }[] = [
   { title: 'Tu empresa', sections: [{ id: 'empresa', label: 'Datos y código' }, { id: 'modulos', label: 'Módulos' }, { id: 'moneda', label: 'Moneda' }, { id: 'ayuda', label: 'Autoayuda' }] },
-  { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'salas', label: 'Salas y equipos' }, { id: 'walkin', label: 'Cola sin cita' }] },
-  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'presupuestos', label: 'Presupuestos y planes' }, { id: 'inventario', label: 'Inventario y almacenes' }, { id: 'comisiones', label: 'Comisiones' }, { id: 'fidelizacion', label: 'Puntos y gift cards' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
-  { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }] },
+  { title: 'Agenda y reservas', sections: [{ id: 'fases', label: 'Fases de la cita' }, { id: 'pagina', label: 'Página de reservas' }, { id: 'reservas', label: 'Reglas de reserva' }, { id: 'inasistencias', label: 'Si reserva en línea y no asiste' }, { id: 'penalidades', label: 'Penalidades' }, { id: 'salas', label: 'Salas y equipos' }, { id: 'walkin', label: 'Cola sin cita' }, { id: 'clases', label: 'Clases' }, { id: 'espera', label: 'Lista de espera' }] },
+  { title: 'Ventas y cobros', sections: [{ id: 'ventas', label: 'Ventas y caja' }, { id: 'presupuestos', label: 'Presupuestos y planes' }, { id: 'inventario', label: 'Inventario y almacenes' }, { id: 'comisiones', label: 'Comisiones' }, { id: 'fidelizacion', label: 'Puntos y gift cards' }, { id: 'membresias', label: 'Membresías' }, { id: 'adelantos', label: 'Adelantos y links de pago' }, { id: 'integraciones', label: 'Integraciones' }] },
+  { title: 'Mensajes', sections: [{ id: 'correo', label: 'Correo de tu empresa' }, { id: 'whatsapp', label: 'WhatsApp y asistente' }] },
   { title: 'Clientes', sections: [{ id: 'grupos', label: 'Grupos de clientes' }] },
   { title: 'Seguridad y registros', sections: [{ id: 'seguridad', label: 'Cierre de sesión' }, { id: 'descargas', label: 'Descargas de datos' }] },
 ];
@@ -150,12 +157,16 @@ export default function TenantSettings() {
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
-  const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string } | null>(null);
+  const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string; reviewOver: string; approvalOver: string } | null>(null);
   const [commissionRules, setCommissionRules] = useState<{ base: 'net' | 'gross'; onProducts: boolean; onPackageUse: boolean; autoApprove: boolean } | null>(null);
   const [inventoryRules, setInventoryRules] = useState<{ allowNegative: boolean; consumeOnService: boolean; transferTwoStep: boolean; costMethod: CostMethod; alertMinStock: boolean } | null>(null);
   const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string } | null>(null);
   const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy; portalAccept: boolean } | null>(null);
   const [walkinRules, setWalkinRules] = useState<{ selfCheckin: boolean; maxWait: string } | null>(null);
+  const [classRules, setClassRules] = useState<{ waitlist: boolean; autoPromote: boolean; leaveHours: string } | null>(null);
+  const [waitlistRules, setWaitlistRules] = useState<{ enabled: boolean; mode: 'all' | 'first'; hours: string; ready: boolean } | null>(null);
+  const [graceDays, setGraceDays] = useState<string | null>(null);
+  const [penaltyRules, setPenaltyRules] = useState<{ enabled: boolean; noShow: string; lateCancel: string; windowHours: number } | null>(null);
   const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string; lateCancel: boolean; windowHours: number } | null>(null);
   const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
   const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
@@ -200,6 +211,8 @@ export default function TenantSettings() {
       refundDays: String(payload.sales_rules.refund_days ?? 30),
       payFirst: payload.sales_rules.pay_before_service ?? true,
       arriveMinutes: String(payload.sales_rules.arrive_minutes ?? 15),
+      reviewOver: String(payload.sales_rules.cash_review_over ?? 0),
+      approvalOver: String(payload.sales_rules.refund_approval_over ?? 0),
     } : null);
     setCommissionRules(payload.commission_rules ? {
       base: payload.commission_rules.base,
@@ -232,9 +245,27 @@ export default function TenantSettings() {
       cancelPolicy: payload.quote_rules.cancel_policy ?? 'unused_quote',
       portalAccept: payload.quote_rules.portal_accept ?? true,
     } : null);
+    setPenaltyRules(payload.penalty_rules ? {
+      enabled: payload.penalty_rules.enabled,
+      noShow: String(payload.penalty_rules.no_show_percent),
+      lateCancel: String(payload.penalty_rules.late_cancel_percent),
+      windowHours: payload.penalty_rules.window_hours,
+    } : null);
+    setGraceDays(payload.membership_rules ? String(payload.membership_rules.grace_days) : null);
     setWalkinRules(payload.walkin_rules ? {
       selfCheckin: payload.walkin_rules.self_checkin,
       maxWait: String(payload.walkin_rules.max_wait),
+    } : null);
+    setClassRules(payload.classes_rules ? {
+      waitlist: payload.classes_rules.waitlist,
+      autoPromote: payload.classes_rules.auto_promote,
+      leaveHours: String(payload.classes_rules.portal_leave_hours),
+    } : null);
+    setWaitlistRules(payload.waitlist_rules ? {
+      enabled: payload.waitlist_rules.enabled,
+      mode: payload.waitlist_rules.notify_mode,
+      hours: String(payload.waitlist_rules.reply_hours),
+      ready: payload.waitlist_rules.offers_ready !== false,
     } : null);
     setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days), lateCancel: Boolean(payload.booking_misses.count_late_cancel), windowHours: payload.booking_misses.window_hours ?? 24 } : null);
     setPaymentRules(payload.payment_rules ? {
@@ -296,6 +327,8 @@ export default function TenantSettings() {
             refund_days: Number(salesRules.refundDays || 0),
             pay_before_service: salesRules.payFirst,
             arrive_minutes: Number(salesRules.arriveMinutes || 0),
+            cash_review_over: Number(salesRules.reviewOver || 0),
+            refund_approval_over: Number(salesRules.approvalOver || 0),
           },
         } : null;
       case 'inventario': return inventoryRules ? {
@@ -337,10 +370,32 @@ export default function TenantSettings() {
             portal_accept: quoteRules.portalAccept,
           },
         } : null;
+      case 'penalidades': return penaltyRules ? {
+          penalty_rules: {
+            enabled: penaltyRules.enabled,
+            no_show_percent: Number(penaltyRules.noShow || 0),
+            late_cancel_percent: Number(penaltyRules.lateCancel || 0),
+          },
+        } : null;
+      case 'membresias': return graceDays !== null ? { membership_rules: { grace_days: Number(graceDays || 0) } } : null;
       case 'walkin': return walkinRules ? {
           walkin_rules: {
             self_checkin: walkinRules.selfCheckin,
             max_wait: Number(walkinRules.maxWait || 90),
+          },
+        } : null;
+      case 'clases': return classRules ? {
+          classes_rules: {
+            waitlist: classRules.waitlist,
+            auto_promote: classRules.autoPromote,
+            portal_leave_hours: Number(classRules.leaveHours || 0),
+          },
+        } : null;
+      case 'espera': return waitlistRules ? {
+          waitlist_rules: {
+            enabled: waitlistRules.enabled,
+            notify_mode: waitlistRules.mode,
+            reply_hours: Number(waitlistRules.hours || 2),
           },
         } : null;
       case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0), count_late_cancel: misses.lateCancel } } : null;
@@ -516,18 +571,24 @@ export default function TenantSettings() {
     moneda: true,
     ayuda: Boolean(user?.is_tenant_admin),
     fases: (data.appointment_statuses?.length ?? 0) > 0,
+    pagina: true,
     reservas: Boolean(bookingRules),
     inasistencias: Boolean(misses),
     salas: Boolean(equipmentDown),
     walkin: Boolean(walkinRules),
+    clases: Boolean(classRules),
+    espera: Boolean(waitlistRules),
+    penalidades: Boolean(penaltyRules),
     ventas: Boolean(salesRules),
     presupuestos: Boolean(quoteRules),
     inventario: Boolean(inventoryRules),
     comisiones: Boolean(commissionRules),
     fidelizacion: Boolean(loyaltyRules),
+    membresias: graceDays !== null,
     adelantos: Boolean(paymentRules),
     integraciones: Boolean(paymentRules),
     correo: true,
+    whatsapp: true,
     grupos: Boolean(groups),
     seguridad: true,
     descargas: can('users.view'),
@@ -894,7 +955,197 @@ export default function TenantSettings() {
         </section>
       )}
 
+      {show('clases') && classRules && (
+        <section className={cardClass} data-card="classes-rules">
+          <div>
+            <SectionTitle>
+              <Users className="w-4 h-4 text-brand-accent" /> Clases
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Para clases grupales con cupos, como yoga o pilates.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Lista de espera cuando la clase se llena</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">Quien quiere entrar a una clase llena queda anotado en orden de llegada. Si está apagado, la clase llena ya no recibe a nadie más.</span>
+            </div>
+            <Switch checked={classRules.waitlist} onChange={(checked) => { setMessage(null); setClassRules({ ...classRules, waitlist: checked }); }} label="Lista de espera cuando la clase se llena" />
+          </div>
+
+          {classRules.waitlist && (
+            <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+              <div>
+                <span className="block text-sm font-semibold text-slate-800">Dar el cupo libre al primero en espera</span>
+                <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">Cuando alguien sale, el primero de la lista entra solo y le llega un aviso. Si está apagado, recepción lo pasa a mano.</span>
+              </div>
+              <Switch checked={classRules.autoPromote} onChange={(checked) => { setMessage(null); setClassRules({ ...classRules, autoPromote: checked }); }} label="Dar el cupo libre al primero en espera" />
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+            <label htmlFor="classes-leave-hours" className="text-sm font-semibold text-slate-800">Desde el portal, se puede salir de una clase hasta</label>
+            <input
+              id="classes-leave-hours"
+              inputMode="numeric"
+              data-rule="portal_leave_hours"
+              value={classRules.leaveHours}
+              onChange={(e) => { setMessage(null); setClassRules({ ...classRules, leaveHours: e.target.value.replace(/\D/g, '').slice(0, 3) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">horas antes.</span>
+            <span className="w-full text-xs text-slate-500">Después, el cliente tiene que avisar a la empresa. Con 0 puede salir hasta que empieza la clase.</span>
+          </div>
+
+          {saveBar('clases')}
+        </section>
+      )}
+
+      {show('espera') && waitlistRules && (
+        <section className={cardClass} data-card="waitlist-rules">
+          <div>
+            <SectionTitle>
+              <Hourglass className="w-4 h-4 text-brand-accent" /> Lista de espera
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Para quien no encontró horario: cuando se libera uno que le sirve, se le avisa por correo para que lo tome.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Usar la lista de espera</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Si la apagas, nadie recibe avisos de horarios libres y en el portal ya no aparece la opción de anotarse. Lo que ya está anotado se conserva.
+              </span>
+            </div>
+            <Switch
+              checked={waitlistRules.enabled}
+              onChange={(checked) => { setMessage(null); setWaitlistRules({ ...waitlistRules, enabled: checked }); }}
+              label="Usar la lista de espera"
+            />
+          </div>
+
+          {waitlistRules.enabled && (
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <span className="block text-sm font-semibold text-slate-800">Cuando se libera un horario, avisar</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="A quién avisar cuando se libera un horario">
+                {[
+                  { id: 'all' as const, title: 'A todos los que encajan', hint: 'Se avisa a la vez a todas las personas a las que les sirve ese horario. Lo toma quien reserve primero.' },
+                  { id: 'first' as const, title: 'Solo al primero, en orden', hint: 'Se avisa a una persona a la vez, según su orden en la lista (primero las marcadas con prioridad). Si no responde a tiempo, se avisa a la siguiente.' },
+                ].map((option) => {
+                  const chosen = waitlistRules.mode === option.id;
+                  return (
+                    <OptionCard
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={chosen}
+                      data-waitlist-mode={option.id}
+                      onClick={() => { setMessage(null); setWaitlistRules({ ...waitlistRules, mode: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-slate-800">{option.title}</span>
+                        <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                      </span>
+                    </OptionCard>
+                  );
+                })}
+              </div>
+
+              {waitlistRules.mode === 'first' && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <label htmlFor="waitlist-reply-hours" className="text-sm font-semibold text-slate-800">Cada persona tiene</label>
+                  <input
+                    id="waitlist-reply-hours"
+                    inputMode="numeric"
+                    data-rule="reply_hours"
+                    value={waitlistRules.hours}
+                    onChange={(e) => { setMessage(null); setWaitlistRules({ ...waitlistRules, hours: e.target.value.replace(/\D/g, '').slice(0, 2) }); }}
+                    className={hoursInput}
+                  />
+                  <span className="text-sm text-slate-600">horas para tomar el horario antes de pasar a la siguiente.</span>
+                  <span className="w-full text-xs text-slate-500">Va de 1 a 72 horas. Si la cita empieza antes, el plazo termina a la hora de la cita.</span>
+                  {!waitlistRules.ready && (
+                    <span className="w-full text-xs font-semibold text-amber-700">Falta actualizar la base de datos para avisar de uno en uno: mientras tanto se avisa a todos.</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {saveBar('espera')}
+        </section>
+      )}
+
+      {show('penalidades') && penaltyRules && (
+        <section className={cardClass} data-card="penalty-rules">
+          <div>
+            <SectionTitle>
+              <Coins className="w-4 h-4 text-brand-accent" /> Penalidades
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Un cobro pendiente que se genera solo cuando alguien no viene o cancela tarde. Queda en Ventas por cobrar y se puede perdonar anulándolo.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">Cobrar penalidades</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Apagado, no pasa nada: nadie recibe un cobro por faltar o cancelar tarde.
+              </span>
+            </div>
+            <Switch
+              checked={penaltyRules.enabled}
+              onChange={(checked) => { setMessage(null); setPenaltyRules({ ...penaltyRules, enabled: checked }); }}
+              label="Cobrar penalidades"
+            />
+          </div>
+
+          {penaltyRules.enabled && (
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="penalty-noshow" className="text-sm font-semibold text-slate-800">Si no asiste, cobrar el</label>
+                <input
+                  id="penalty-noshow"
+                  inputMode="decimal"
+                  data-rule="no_show_percent"
+                  value={penaltyRules.noShow}
+                  onChange={(e) => { setMessage(null); setPenaltyRules({ ...penaltyRules, noShow: e.target.value.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">% del precio del servicio.</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="penalty-late" className="text-sm font-semibold text-slate-800">Si cancela a pedido suyo con menos de {penaltyRules.windowHours} horas, cobrar el</label>
+                <input
+                  id="penalty-late"
+                  inputMode="decimal"
+                  data-rule="late_cancel_percent"
+                  value={penaltyRules.lateCancel}
+                  onChange={(e) => { setMessage(null); setPenaltyRules({ ...penaltyRules, lateCancel: e.target.value.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">% del precio del servicio.</span>
+              </div>
+              <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
+                <li>Ej.: un servicio de S/ 80 con 50 % genera un cobro pendiente de S/ 40.</li>
+                <li>Si pagó un adelanto que se queda la empresa, se descuenta de la penalidad.</li>
+                <li>No se cobra si la cita usaba un paquete (la sesión ya se descuenta).</li>
+                <li>Las horas para cancelar se cambian en &quot;Reglas de reserva&quot;. En 0 %, esa penalidad no se cobra.</li>
+              </ul>
+            </div>
+          )}
+
+          {saveBar('penalidades')}
+        </section>
+      )}
+
       {show('moneda') && <CurrencySettings />}
+
+      {show('pagina') && <BookingPageSettings />}
 
       {show('ayuda') && (
       <section className={cardClass} data-card="help">
@@ -1002,6 +1253,37 @@ export default function TenantSettings() {
             />
             <span className="w-full text-xs text-slate-500">
               Si lo contado difiere en más que eso, quien cierra debe explicarlo y la administración recibe un aviso. Con 0, cualquier diferencia se explica.
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3" data-row="cash-review-over">
+            <label htmlFor="cash-review-over" className="text-sm font-semibold text-slate-800">Un cierre queda en revisión si la diferencia pasa de {currencySymbol()}</label>
+            <input
+              id="cash-review-over"
+              inputMode="decimal"
+              data-rule="cash_review_over"
+              value={salesRules.reviewOver}
+              onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, reviewOver: e.target.value.replace(/[^\d.]/g, '').slice(0, 9) }); }}
+              className={hoursInput}
+            />
+            <span className="w-full text-xs text-slate-500">
+              Quien tenga el permiso &quot;Aprobar cierres&quot; recibe un aviso y lo aprueba u observa con una nota. Con 0 no se pide revisión (así viene).
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3" data-row="refund-approval-over">
+            <label htmlFor="refund-approval-over" className="text-sm font-semibold text-slate-800">Una devolución de más de {currencySymbol()}</label>
+            <input
+              id="refund-approval-over"
+              inputMode="decimal"
+              data-rule="refund_approval_over"
+              value={salesRules.approvalOver}
+              onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, approvalOver: e.target.value.replace(/[^\d.]/g, '').slice(0, 9) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">la pide una persona y la aprueba otra.</span>
+            <span className="w-full text-xs text-slate-500">
+              La aprueba alguien con el permiso &quot;Aprobar devoluciones&quot;, que no sea quien la pidió. Con 0 cada quien devuelve directo (así viene).
             </span>
           </div>
           {saveBar('ventas')}
@@ -1422,6 +1704,37 @@ export default function TenantSettings() {
         </section>
       )}
 
+      {show('membresias') && graceDays !== null && (
+        <section className={cardClass} data-card="membership-rules">
+          <div>
+            <SectionTitle>
+              <Hourglass className="w-4 h-4 text-brand-accent" /> Membresías
+            </SectionTitle>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Qué pasa cuando una membresía vence y el socio todavía no la renueva.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="membership-grace-days" className="text-sm font-semibold text-slate-800">Después de vencer, sigue dando beneficios por</label>
+            <input
+              id="membership-grace-days"
+              inputMode="numeric"
+              data-rule="grace_days"
+              value={graceDays}
+              onChange={(e) => { setMessage(null); setGraceDays(e.target.value.replace(/\D/g, '').slice(0, 2)); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">días.</span>
+            <span className="w-full text-xs text-slate-500">
+              Son los días de gracia: la membresía aparece como «En gracia» y, si la renueva en ese tiempo, el nuevo periodo sigue justo después de su vencimiento. Pasados esos días queda «Vencida» y deja de dar beneficios. Pon 0 para que deje de darlos apenas vence. Va de 0 a 60 días.
+            </span>
+          </div>
+
+          {saveBar('membresias')}
+        </section>
+      )}
+
       {show('adelantos') && paymentRules && (
         <section className={cardClass} data-card="payment-rules">
           <div>
@@ -1478,8 +1791,11 @@ export default function TenantSettings() {
       )}
 
       {show('integraciones') && paymentRules && <IntegrationsSettings canSave={canSave} onDirtyChange={markExternal('integraciones')} />}
+      {show('integraciones') && <ApiSettings />}
 
       {show('correo') && <MessagingSettings part="email" canSave={canSave} company={user?.tenant?.name ?? ''} onDirtyChange={markExternal('correo')} />}
+
+      {show('whatsapp') && <WhatsAppSettings canSave={canSave} onDirtyChange={markExternal('whatsapp')} />}
 
       {show('inasistencias') && misses && (
         <section className={cardClass} data-card="booking-misses">

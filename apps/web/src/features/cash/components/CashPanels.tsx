@@ -308,14 +308,35 @@ export function RegisterPanel({ isOpen, register, branches, onClose, onSaved }: 
   );
 }
 
-export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | null; onClose: () => void }) {
+export function CashSessionPanel({ sessionId, onClose, onChanged }: { sessionId: string | null; onClose: () => void; onChanged?: () => void }) {
   const [session, setSession] = useState<CashSession | null>(null);
   const [error, setError] = useState('');
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewError, setReviewError] = useState('');
+  const [reviewing, setReviewing] = useState(false);
+
+  const review = async (decision: 'approved' | 'observed') => {
+    if (!session) return;
+    try {
+      setReviewing(true);
+      setReviewError('');
+      const res = await api.post(`/cash/sessions/${session.id}/review`, { decision, notes: reviewNotes.trim() || null });
+      setSession({ ...res.data, can_review: false });
+      setReviewNotes('');
+      onChanged?.();
+    } catch (err) {
+      setReviewError(apiError(err, 'No se pudo guardar la revisión.'));
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   useEffect(() => {
     if (!sessionId) return;
     setSession(null);
     setError('');
+    setReviewNotes('');
+    setReviewError('');
     api.get(`/cash/sessions/${sessionId}`)
       .then((res) => setSession(res.data))
       .catch((err) => setError(apiError(err, 'No se pudo cargar el turno.')));
@@ -355,6 +376,40 @@ export function CashSessionPanel({ sessionId, onClose }: { sessionId: string | n
 
           {session.closing_notes && (
             <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{session.closing_notes}</p>
+          )}
+
+          {session.review_status && (
+            <section
+              data-review={session.review_status}
+              className={`rounded-2xl border px-4 py-3 space-y-2 ${session.review_status === 'pending' ? 'border-amber-200 bg-amber-50/60' : session.review_status === 'approved' ? 'border-emerald-200 bg-emerald-50/60' : 'border-rose-200 bg-rose-50/60'}`}
+            >
+              <span className={sectionTitle}>Revisión del cierre</span>
+              <p className="text-sm font-semibold text-slate-800">
+                {session.review_status === 'pending'
+                  ? 'En revisión: la diferencia pasó el monto que la empresa pide revisar.'
+                  : `${session.review_label} por ${session.reviewed_by ?? '—'} · ${momentOf(session.reviewed_at ?? null)}`}
+              </p>
+              {session.review_notes && <p className="text-sm text-slate-700">{session.review_notes}</p>}
+              {session.can_review && (
+                <div className="space-y-2 pt-1">
+                  <label htmlFor="review-notes" className={labelClass}>Nota (obligatoria si lo observas)</label>
+                  <textarea
+                    id="review-notes"
+                    rows={2}
+                    maxLength={500}
+                    value={reviewNotes}
+                    onChange={(e) => { setReviewNotes(e.target.value); setReviewError(''); }}
+                    className={inputClass}
+                    placeholder="Por ejemplo: falta el vale del gasto"
+                  />
+                  {reviewError && <p role="alert" className={errorClass}>{reviewError}</p>}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button type="button" data-review-action="observed" disabled={reviewing} onClick={() => review('observed')} className={cancelButton}>Observar</button>
+                    <button type="button" data-review-action="approved" disabled={reviewing} onClick={() => review('approved')} className={primaryButton}>Aprobar</button>
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           {session.by_method.length > 0 && (

@@ -11,7 +11,9 @@ use App\Support\Campaigns;
 use App\Support\Coupons;
 use App\Support\Currency;
 use App\Support\Messaging;
+use App\Support\MessageQuota;
 use App\Support\Person;
+use App\Support\WhatsApp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +45,26 @@ class CampaignController extends Controller
         };
     }
 
+    private function whatsappState(Tenant $tenant): array
+    {
+        $config = Campaigns::whatsappReady() ? WhatsApp::config($tenant->id) : null;
+
+        return match (true) {
+            !Campaigns::whatsappReady() => ['state' => 'not_ready', 'label' => 'Falta actualizar la base de datos para enviar campañas por WhatsApp: ejecuta php artisan migrate.'],
+            !WhatsApp::connected($tenant->id) => ['state' => 'none', 'label' => 'Tu empresa aún no conecta WhatsApp (Configuración → Mensajes → WhatsApp y asistente): las campañas por WhatsApp no se pueden enviar.'],
+            WhatsApp::simulated($config) => ['state' => 'simulated', 'label' => 'WhatsApp está en "Probar sin enviar": las campañas por WhatsApp se arman pero no salen.'],
+            default => ['state' => 'ok', 'label' => 'Las campañas por WhatsApp salen con una plantilla aprobada por Meta.'],
+        };
+    }
+
+    private function quotaStates(Tenant $tenant): array
+    {
+        return [
+            'email'    => MessageQuota::state($tenant, 'campaign_email'),
+            'whatsapp' => MessageQuota::state($tenant, 'whatsapp'),
+        ];
+    }
+
     private function iso($value): ?string
     {
         return $value ? Carbon::parse($value)->toIso8601String() : null;
@@ -72,6 +94,7 @@ class CampaignController extends Controller
             'group'       => $validated['group'],
             'service_id'  => $validated['group'] === 'service' ? $validated['service_id'] : null,
             'branch_id'   => $validated['group'] === 'branch' ? $validated['branch_id'] : null,
+            'tag_id'      => $validated['group'] === 'tag' ? ($validated['tag_id'] ?? null) : null,
             'only_branch' => $only,
         ]);
     }
@@ -83,13 +106,16 @@ class CampaignController extends Controller
             'service_id' => ['required_if:group,service', 'nullable', 'uuid', Rule::exists('services', 'id')->where('tenant_id', $tenant->id)],
             'branch_id'  => ['required_if:group,branch', 'nullable', 'uuid', Rule::exists('branches', 'id')->where('tenant_id', $tenant->id)],
             'only_branch' => 'nullable|boolean',
-        ];
+        ] + (\App\Support\CustomerProfile::tagsReady() ? [
+            'tag_id' => ['required_if:group,tag', 'nullable', 'uuid', Rule::exists('customer_tags', 'id')->where('tenant_id', $tenant->id)],
+        ] : []);
     }
 
     private const SEGMENT_MESSAGES = [
         'group.required'         => 'Elige a qué grupo de clientes va la campaña.',
         'service_id.required_if' => 'Elige el servicio.',
         'branch_id.required_if'  => 'Elige la sede.',
+        'tag_id.required_if'     => 'Elige la etiqueta.',
     ];
 
     private function present(Tenant $tenant, object $campaign, bool $withResults = true): array
@@ -104,9 +130,13 @@ class CampaignController extends Controller
             'status'       => $campaign->status,
             'status_label' => Campaigns::STATUS_LABELS[$campaign->status] ?? $campaign->status,
             'segment'      => $segment,
+            'channel'      => $campaign->channel ?: 'email',
+            'channel_label' => Campaigns::CHANNELS[$campaign->channel] ?? 'Correo',
+            'whatsapp'     => Campaigns::whatsappReady() ? Campaigns::waConfig($campaign) : null,
+            'blocked'      => $stats['blocked'] ?? null,
             'audience'     => $campaign->audience_label ?: Campaigns::label($tenant, $segment),
-            'subject'      => $campaign->subject,
-            'body'         => $campaign->body,
+            'subject'      => (string) $campaign->subject,
+            'body'         => (string) $campaign->body,
             'coupon'       => $coupon ? ['id' => $coupon->id, 'code' => $coupon->code, 'description' => $coupon->description] : null,
             'scheduled_at' => $this->iso($campaign->scheduled_at),
             'sent_at'      => $this->iso($campaign->sent_at),
@@ -128,6 +158,8 @@ class CampaignController extends Controller
         return response()->json([
             'campaigns' => $campaigns->map(fn ($c) => $this->present($tenant, $c))->values(),
             'email'     => $this->emailState($tenant),
+            'whatsapp'  => $this->whatsappState($tenant),
+            'quota'     => $this->quotaStates($tenant),
         ]);
     }
 
@@ -145,39 +177,75 @@ class CampaignController extends Controller
             'groups'    => Campaigns::groups($tenant),
             'services'  => DB::table('services')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name']),
             'branches'  => DB::table('branches')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name']),
+            'tags'      => \App\Support\CustomerProfile::tags($tenant->id),
             'coupons'   => $coupons,
             'variables' => collect(Campaigns::VARIABLES)->map(fn ($label, $key) => ['token' => "[{$key}]", 'label' => $label])->values(),
             'volume_warning' => Campaigns::VOLUME_WARNING,
             'email'     => $this->emailState($tenant),
+            'whatsapp'  => $this->whatsappState($tenant),
+            'channels'  => collect(Campaigns::CHANNELS)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values(),
+            'wa_variables' => collect(Campaigns::WA_VARIABLES)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values(),
+            'wa_max_params' => Campaigns::WA_MAX_PARAMS,
+            'quota'     => $this->quotaStates($tenant),
             'branch_scope' => $this->branchScope($tenant, $request->user()),
         ]);
+    }
+
+    private function channelRule(): array
+    {
+        return ['channel' => ['nullable', Rule::in(Campaigns::whatsappReady() ? array_keys(Campaigns::CHANNELS) : ['email'])]];
     }
 
     public function audience(Request $request)
     {
         $tenant = $this->tenant($request);
-        $validated = $request->validate($this->segmentRules($tenant), self::SEGMENT_MESSAGES);
+        $validated = $request->validate($this->segmentRules($tenant) + $this->channelRule(), self::SEGMENT_MESSAGES + self::CHANNEL_MESSAGES);
+        $channel = $validated['channel'] ?? 'email';
+        $audience = Campaigns::audience($tenant, $this->segment($tenant, $validated, $request->user()), false, $channel);
 
-        return response()->json(Campaigns::audience($tenant, $this->segment($tenant, $validated, $request->user())));
+        return response()->json($audience + ['quota' => Campaigns::quotas($tenant, $audience, $audience['channel'])]);
     }
+
+    private const CHANNEL_MESSAGES = [
+        'channel.in'           => 'Elige si la campaña sale por correo, por WhatsApp o por los dos. Si WhatsApp no aparece, falta actualizar la base de datos.',
+        'wa_template.required' => 'Escribe el nombre de la plantilla aprobada en Meta.',
+        'wa_template.regex'    => 'El nombre de la plantilla va como en Meta: minúsculas, números y guion bajo (ej. promo_noviembre).',
+        'wa_language.regex'    => 'El idioma va como en Meta (ej. es, es_PE, en_US).',
+        'wa_params.max'        => 'Una plantilla admite hasta 10 datos en esta pantalla.',
+        'wa_params.*.in'       => 'Uno de los datos de la plantilla no es válido: elígelo de la lista.',
+    ];
 
     private function input(Request $request, Tenant $tenant): array
     {
-        $validated = $request->validate($this->segmentRules($tenant) + [
+        $channel = Campaigns::whatsappReady() && in_array($request->input('channel'), array_keys(Campaigns::CHANNELS), true) ? $request->input('channel') : 'email';
+        $channels = Campaigns::channelsOf($channel);
+        $withEmail = in_array('email', $channels, true);
+        $withWhatsApp = in_array('whatsapp', $channels, true);
+
+        $validated = $request->validate($this->segmentRules($tenant) + $this->channelRule() + [
             'name'         => 'required|string|max:150',
-            'subject'      => 'required|string|max:200',
-            'body'         => 'required|string|max:20000',
+            'subject'      => [$withEmail ? 'required' : 'nullable', 'string', 'max:200'],
+            'body'         => [$withEmail ? 'required' : 'nullable', 'string', 'max:20000'],
             'coupon_id'    => ['nullable', 'uuid', Rule::exists('coupons', 'id')->where('tenant_id', $tenant->id)],
             'send'         => ['required', Rule::in(['now', 'scheduled'])],
             'scheduled_at' => 'required_if:send,scheduled|nullable|date_format:' . self::LOCAL_FORMAT,
-        ], self::SEGMENT_MESSAGES + [
+        ] + ($withWhatsApp ? [
+            'wa_template' => ['required', 'string', 'max:512', 'regex:/^[a-z0-9_]+$/'],
+            'wa_language' => ['nullable', 'string', 'max:15', 'regex:/^[A-Za-z]{2,3}(_[A-Za-z]{2,4})?$/'],
+            'wa_params'   => ['nullable', 'array', 'max:' . Campaigns::WA_MAX_PARAMS],
+            'wa_params.*' => ['required', Rule::in(array_keys(Campaigns::WA_VARIABLES))],
+        ] : []), self::SEGMENT_MESSAGES + self::CHANNEL_MESSAGES + [
             'name.required'            => 'Ponle un nombre a la campaña. Solo lo ve tu equipo.',
             'subject.required'         => 'Escribe el asunto del correo.',
             'body.required'            => 'Escribe el mensaje.',
             'scheduled_at.required_if' => 'Elige el día y la hora del envío.',
         ]);
 
-        if (empty($validated['coupon_id']) && (str_contains($validated['body'], '[Cupón]') || str_contains($validated['subject'], '[Cupón]'))) {
+        $params = $withWhatsApp ? array_values($validated['wa_params'] ?? []) : [];
+        $subject = (string) ($validated['subject'] ?? '');
+        $body = (string) ($validated['body'] ?? '');
+
+        if (empty($validated['coupon_id']) && (($withEmail && (str_contains($body, '[Cupón]') || str_contains($subject, '[Cupón]'))) || in_array('Cupón', $params, true))) {
             throw ValidationException::withMessages(['coupon_id' => 'El mensaje usa el dato [Cupón], pero no elegiste un cupón. Elige uno o quita ese dato del mensaje.']);
         }
 
@@ -195,28 +263,50 @@ class CampaignController extends Controller
             }
         }
 
-        if (!Messaging::emailReady($tenant->id)) {
-            throw ValidationException::withMessages(['send' => 'Antes de enviar campañas, configura el correo de tu empresa en Configuración → Correo de tu empresa.']);
+        if ($withEmail && !Messaging::emailReady($tenant->id)) {
+            throw ValidationException::withMessages(['send' => 'Antes de enviar campañas por correo, configura el correo de tu empresa en Configuración → Correo de tu empresa.']);
+        }
+
+        if ($withWhatsApp && !WhatsApp::connected($tenant->id)) {
+            throw ValidationException::withMessages(['channel' => 'Antes de enviar campañas por WhatsApp, conecta WhatsApp en Configuración → Mensajes → WhatsApp y asistente.']);
         }
 
         $segment = $this->segment($tenant, $validated, $request->user());
-        $audience = Campaigns::audience($tenant, $segment);
+        $audience = Campaigns::audience($tenant, $segment, false, $channel);
 
         if ($audience['eligible'] === 0) {
             throw ValidationException::withMessages(['group' => $audience['total'] === 0
                 ? 'Este grupo no tiene clientes por ahora. Elige otro grupo.'
-                : 'Ningún cliente de este grupo aceptó recibir promociones por correo, así que no hay a quién enviarla.']);
+                : match ($channel) {
+                    'whatsapp' => 'Ningún cliente de este grupo puede recibir la campaña por WhatsApp (falta el celular o su permiso, o pidió no recibir promociones), así que no hay a quién enviarla.',
+                    'both'     => 'Ningún cliente de este grupo puede recibir la campaña ni por correo ni por WhatsApp, así que no hay a quién enviarla.',
+                    default    => 'Ningún cliente de este grupo aceptó recibir promociones por correo, así que no hay a quién enviarla.',
+                }]);
+        }
+
+        $sameMonth = !$at || $at->copy()->setTimezone($tenant->zone())->format('Y-m') === now($tenant->zone())->format('Y-m');
+        $shortage = $sameMonth ? Campaigns::shortage(Campaigns::quotas($tenant, $audience, $channel)) : null;
+
+        if ($shortage) {
+            throw ValidationException::withMessages(['send' => $shortage]);
         }
 
         return [
             'name'           => trim($validated['name']),
             'segment'        => json_encode($segment),
             'audience_label' => mb_substr(Campaigns::label($tenant, $segment), 0, 200),
-            'subject'        => $validated['subject'],
-            'body'           => \App\Support\RichText::normalize($validated['body']),
+            'subject'        => $withEmail ? $subject : null,
+            'body'           => $withEmail ? \App\Support\RichText::normalize($body) : null,
             'coupon_id'      => $validated['coupon_id'] ?? null,
             'scheduled_at'   => ($at ?? now())->copy()->utc(),
-        ];
+            'channel'        => $channel,
+        ] + (Campaigns::whatsappReady() ? [
+            'whatsapp' => $withWhatsApp ? json_encode([
+                'template' => $validated['wa_template'],
+                'language' => $validated['wa_language'] ?? null ?: 'es',
+                'params'   => $params,
+            ]) : null,
+        ] : []);
     }
 
     public function store(Request $request)
@@ -228,7 +318,6 @@ class CampaignController extends Controller
         DB::table('marketing_campaigns')->insert($data + [
             'id'         => $id,
             'tenant_id'  => $tenant->id,
-            'channel'    => 'email',
             'status'     => 'scheduled',
             'stats'      => '{}',
             'created_by' => $request->user()->id,
@@ -252,8 +341,12 @@ class CampaignController extends Controller
     {
         $coupon = $campaign->coupon_id ? DB::table('coupons')->where('id', $campaign->coupon_id)->value('code') : null;
 
+        $wa = Campaigns::whatsappReady() ? Campaigns::waConfig($campaign) : null;
+
         return [
             'name'     => $campaign->name,
+            'channel'  => Campaigns::CHANNELS[$campaign->channel] ?? null,
+            'template' => $wa ? $wa['template'] . ' (' . ($wa['language'] ?? 'es') . ')' : null,
             'audience' => $campaign->audience_label,
             'subject'  => $campaign->subject,
             'body'     => mb_strimwidth(trim(preg_replace('/\s+/', ' ', strip_tags((string) $campaign->body))), 0, 160, '…'),
@@ -276,6 +369,13 @@ class CampaignController extends Controller
     private function auditDelivery(Request $request, object $campaign, ?object $previous = null): void
     {
         $fresh = DB::table('marketing_campaigns')->where('id', $campaign->id)->first();
+
+        if ($fresh->status === 'blocked') {
+            $stats = is_string($fresh->stats) ? json_decode($fresh->stats, true) : (array) $fresh->stats;
+            $this->audit($request, 'campaign.blocked', $fresh, [], array_filter(['reason' => $stats['blocked'] ?? null]));
+
+            return;
+        }
 
         if ($request->input('send') === 'now') {
             $stats = is_string($fresh->stats) ? json_decode($fresh->stats, true) : (array) $fresh->stats;
@@ -316,14 +416,16 @@ class CampaignController extends Controller
             ->leftJoin('messages as m', 'm.id', '=', 'r.message_id')
             ->where('r.marketing_campaign_id', $row->id)
             ->orderBy('c.first_name')
-            ->get(['r.id', 'r.status as r_status', 'r.skip_reason', 'c.id as customer_id', 'c.first_name', 'c.last_name', 'c.email', 'm.status as m_status', 'm.error', 'm.sent_at']);
+            ->get(array_merge(['r.id', 'r.status as r_status', 'r.skip_reason', 'c.id as customer_id', 'c.first_name', 'c.last_name', 'c.email', 'c.phone', 'm.status as m_status', 'm.error', 'm.sent_at'], Campaigns::whatsappReady() ? ['r.channel'] : []));
 
         $booked = $row->sent_at ? DB::table('appointments as a')
-            ->join('marketing_campaign_recipients as r', fn ($j) => $j->on('r.customer_id', '=', 'a.customer_id')->where('r.marketing_campaign_id', '=', $row->id))
-            ->join('messages as m', 'm.id', '=', 'r.message_id')
+            ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('marketing_campaign_recipients as r')
+                ->join('messages as m', 'm.id', '=', 'r.message_id')
+                ->whereColumn('r.customer_id', 'a.customer_id')
+                ->where('r.marketing_campaign_id', $row->id)
+                ->whereIn('m.status', Campaigns::REACHED))
             ->join('customers as c', 'c.id', '=', 'a.customer_id')
             ->leftJoin('services as s', 's.id', '=', 'a.service_id')
-            ->whereIn('m.status', ['sent', 'simulated'])
             ->where('a.created_at', '>=', Carbon::parse($row->sent_at)->toIso8601String())
             ->where('a.created_at', '<', Carbon::parse($row->sent_at)->addDays(Campaigns::BOOKED_DAYS)->toIso8601String())
             ->where('a.created_at', '<=', now()->toIso8601String())
@@ -342,17 +444,20 @@ class CampaignController extends Controller
             'recipients' => $recipients->map(function ($r) {
                 $state = match (true) {
                     $r->r_status === 'skipped' => 'skipped',
-                    in_array($r->m_status, ['sent', 'simulated'], true) => $r->m_status,
+                    in_array($r->m_status, ['sent', 'simulated', 'delivered', 'read'], true) => $r->m_status,
                     in_array($r->m_status, ['queued', 'scheduled'], true) => 'pending',
                     default => 'failed',
                 };
+                $channel = $r->channel ?? 'email';
 
                 return [
                     'id'       => $r->id,
                     'customer' => ['id' => $r->customer_id, 'name' => trim($r->first_name . ' ' . $r->last_name)],
+                    'channel'  => $channel,
                     'email'    => $r->email,
+                    'to'       => $channel === 'whatsapp' ? ($r->phone ?: null) : $r->email,
                     'state'    => $state,
-                    'label'    => ['skipped' => 'No se envió', 'sent' => 'Enviado', 'simulated' => 'Simulado', 'pending' => 'Por enviar', 'failed' => 'Falló'][$state],
+                    'label'    => ['skipped' => 'No se envió', 'sent' => 'Enviado', 'simulated' => 'Simulado', 'delivered' => 'Entregado', 'read' => 'Leído', 'pending' => 'Por enviar', 'failed' => 'Falló'][$state],
                     'reason'   => $r->skip_reason ?: $r->error,
                     'sent_at'  => $this->iso($r->sent_at),
                 ];
@@ -360,6 +465,7 @@ class CampaignController extends Controller
             'booked_list' => $booked->values(),
             'booked_days' => Campaigns::BOOKED_DAYS,
             'email'       => $this->emailState($tenant),
+            'whatsapp_state' => $this->whatsappState($tenant),
         ]);
     }
 
@@ -415,7 +521,7 @@ class CampaignController extends Controller
             ->join('customers as c', 'c.id', '=', 'r.customer_id')
             ->join('tenants as t', 't.id', '=', 'r.tenant_id')
             ->where('r.id', $recipient)
-            ->first(['r.id', 'r.tenant_id', 'r.customer_id', 'c.first_name']);
+            ->first(array_merge(['r.id', 'r.tenant_id', 'r.customer_id', 'c.first_name'], Campaigns::whatsappReady() ? ['r.channel'] : []));
 
         if ($row || !\App\Support\Automations::ready()) {
             return $row;
@@ -437,7 +543,9 @@ class CampaignController extends Controller
         return response()->json([
             'company'      => Messaging::companyName(Tenant::find($row->tenant_id)),
             'name'         => $row->first_name,
-            'unsubscribed' => !$consent || !$consent->granted,
+            'unsubscribed' => ($row->channel ?? 'email') === 'whatsapp'
+                ? $consent && !$consent->granted && $consent->source === 'unsubscribe'
+                : !$consent || !$consent->granted,
         ]);
     }
 
@@ -447,6 +555,9 @@ class CampaignController extends Controller
         abort_unless($row, 404, 'Este enlace no es válido o ya no existe.');
 
         MessageController::saveConsents($row->tenant_id, $row->customer_id, ['email' => false], 'unsubscribe');
+        DB::table('customer_consents')->where('customer_id', $row->customer_id)->where('channel', 'email')->where('granted', false)
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', 'unsubscribe'))
+            ->update(['source' => 'unsubscribe', 'revoked_at' => now(), 'updated_at' => now()]);
 
         return response()->json([
             'company'      => Messaging::companyName(Tenant::find($row->tenant_id)),

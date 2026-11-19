@@ -13,6 +13,7 @@ export interface WaitlistEntry {
   time_to: string | null;
   notes: string | null;
   notified_at: string | null;
+  offer_until?: string | null;
   created_at: string;
   days_waiting: number;
   days_left: number | null;

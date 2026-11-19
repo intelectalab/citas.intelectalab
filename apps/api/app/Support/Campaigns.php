@@ -30,6 +30,7 @@ class Campaigns
         'birthday_month' => ['label' => 'Cumpleaños del mes', 'hint' => 'Cumplen años este mes.'],
         'service'        => ['label' => 'Que se hicieron un servicio', 'hint' => 'Se atendieron alguna vez con el servicio que elijas.'],
         'branch'         => ['label' => 'Que se atendieron en una sede', 'hint' => 'Se atendieron alguna vez en la sede que elijas.'],
+        'tag'            => ['label' => 'Con una etiqueta', 'hint' => 'Tienen la etiqueta que elijas.'],
     ];
 
     public const STATUS_LABELS = [
@@ -37,7 +38,82 @@ class Campaigns
         'sending'   => 'Enviando',
         'sent'      => 'Enviada',
         'cancelled' => 'Cancelada',
+        'blocked'   => 'No salió',
     ];
+
+    public const CHANNELS = [
+        'email'    => 'Correo',
+        'whatsapp' => 'WhatsApp',
+        'both'     => 'Correo y WhatsApp',
+    ];
+
+    public const WA_VARIABLES = [
+        'Nombre'   => 'Nombre del cliente',
+        'Apellido' => 'Apellido del cliente',
+        'Empresa'  => 'Tu empresa',
+        'Cupón'    => 'Código del cupón',
+        'Portal'   => 'Dirección del portal',
+        'Baja'     => 'Enlace para dejar de recibir promociones',
+    ];
+
+    public const WA_MAX_PARAMS = 10;
+
+    public const EMAIL_REASONS = [
+        'no_email'   => 'No tiene un correo registrado.',
+        'no_consent' => 'No aceptó recibir promociones por correo.',
+    ];
+
+    public const WA_REASONS = [
+        'not_connected' => 'Tu empresa aún no conecta WhatsApp.',
+        'no_phone'      => 'No tiene un celular registrado.',
+        'unsubscribed'  => 'Pidió no recibir más promociones.',
+        'no_consent'    => 'No aceptó recibir mensajes por WhatsApp.',
+    ];
+
+    public static function whatsappReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= self::ready() && WhatsApp::ready()
+            && Schema::hasColumn('marketing_campaigns', 'whatsapp')
+            && Schema::hasColumn('marketing_campaign_recipients', 'channel');
+    }
+
+    public static function channelsOf(?string $channel): array
+    {
+        return match ($channel) {
+            'whatsapp' => ['whatsapp'],
+            'both'     => ['email', 'whatsapp'],
+            default    => ['email'],
+        };
+    }
+
+    public static function quotaKind(string $channel): string
+    {
+        return $channel === 'whatsapp' ? 'whatsapp' : 'campaign_email';
+    }
+
+    public static function quotas(Tenant $tenant, array $audience, string $channel): array
+    {
+        $result = [];
+
+        foreach (self::channelsOf($channel) as $one) {
+            $result[$one] = MessageQuota::state($tenant, self::quotaKind($one), (int) ($audience['channels'][$one]['eligible'] ?? 0));
+        }
+
+        return $result;
+    }
+
+    public static function shortage(array $quotas): ?string
+    {
+        foreach ($quotas as $state) {
+            if (!$state['enough']) {
+                return MessageQuota::shortage($state);
+            }
+        }
+
+        return null;
+    }
 
     public const VARIABLES = [
         'Nombre'  => 'Nombre del cliente',
@@ -75,11 +151,11 @@ class Campaigns
             '[inactivo]' => $rules['inactive_days'],
         ];
 
-        return collect(self::GROUPS)->map(fn ($group, $key) => [
+        return collect(self::GROUPS)->reject(fn ($group, $key) => $key === 'tag' && !CustomerProfile::tagsReady())->map(fn ($group, $key) => [
             'key'   => $key,
             'label' => $group['label'],
             'hint'  => strtr($group['hint'], $replace),
-            'needs' => in_array($key, ['service', 'branch'], true) ? $key : null,
+            'needs' => in_array($key, ['service', 'branch', 'tag'], true) ? $key : null,
         ])->values()->all();
     }
 
@@ -90,6 +166,7 @@ class Campaigns
         $label = match ($segment['group'] ?? null) {
             'service' => $group . ': ' . (DB::table('services')->where('tenant_id', $tenant->id)->where('id', $segment['service_id'] ?? null)->value('name') ?? '—'),
             'branch'  => $group . ': ' . (DB::table('branches')->where('tenant_id', $tenant->id)->where('id', $segment['branch_id'] ?? null)->value('name') ?? '—'),
+            'tag'     => $group . ': ' . (CustomerProfile::tagsReady() ? DB::table('customer_tags')->where('tenant_id', $tenant->id)->where('id', $segment['tag_id'] ?? null)->value('name') ?? '—' : '—'),
             default   => $group,
         };
 
@@ -141,6 +218,9 @@ class Campaigns
                 ->where('a.status', 'completed')->where('a.service_id', $segment['service_id'] ?? null)),
             'branch'         => $query->whereExists(fn ($q) => $q->select(DB::raw(1))->from('appointments as a')->whereColumn('a.customer_id', 'c.id')
                 ->where('a.status', 'completed')->where('a.branch_id', $segment['branch_id'] ?? null)),
+            'tag'            => CustomerProfile::tagsReady()
+                ? $query->whereExists(fn ($q) => $q->select(DB::raw(1))->from('customer_tag_assignments as t')->whereColumn('t.customer_id', 'c.id')->where('t.customer_tag_id', $segment['tag_id'] ?? null))
+                : $query->whereRaw('false'),
             default          => $query,
         };
 
@@ -153,27 +233,75 @@ class Campaigns
         return $query;
     }
 
-    public static function audience(Tenant $tenant, array $segment, bool $withList = false): array
+    public static function audience(Tenant $tenant, array $segment, bool $withList = false, string $channel = 'email'): array
     {
-        $rows = self::customers($tenant, $segment)
-            ->leftJoin('customer_consents as cc', fn ($j) => $j->on('cc.customer_id', '=', 'c.id')->where('cc.channel', '=', 'email'))
-            ->get(['c.id', 'c.email', 'cc.granted']);
+        $channels = self::channelsOf(self::whatsappReady() ? $channel : 'email');
+        $withWhatsApp = in_array('whatsapp', $channels, true);
 
-        $result = ['total' => $rows->count(), 'eligible' => 0, 'no_consent' => 0, 'no_email' => 0];
-        $groups = ['eligible' => [], 'no_consent' => [], 'no_email' => []];
+        $query = self::customers($tenant, $segment)
+            ->leftJoin('customer_consents as cc', fn ($j) => $j->on('cc.customer_id', '=', 'c.id')->where('cc.channel', '=', 'email'));
 
-        foreach ($rows as $row) {
-            $reason = match (true) {
-                !$row->email || !filter_var(trim($row->email), FILTER_VALIDATE_EMAIL) => 'no_email',
-                !$row->granted => 'no_consent',
-                default => 'eligible',
-            };
-
-            $result[$reason]++;
-            $groups[$reason][] = $row->id;
+        if ($withWhatsApp) {
+            $query->leftJoin('customer_consents as cw', fn ($j) => $j->on('cw.customer_id', '=', 'c.id')->where('cw.channel', '=', 'whatsapp'));
         }
 
-        return $withList ? $result + ['ids' => $groups] : $result;
+        $rows = $query->get(array_merge(['c.id', 'c.email', 'c.phone', 'cc.granted', 'cc.source'], $withWhatsApp ? ['cw.granted as wa_granted', 'cw.id as wa_id'] : []));
+
+        $connected = $withWhatsApp && WhatsApp::connected($tenant->id);
+        $unlessRevoked = AppointmentFlow::rule($tenant, 'whatsapp.consent') === 'unless_revoked';
+        $counts = [];
+        $ids = [];
+        $reach = [];
+
+        foreach ($channels as $one) {
+            $keys = array_merge(['eligible'], array_keys($one === 'email' ? self::EMAIL_REASONS : self::WA_REASONS));
+            $counts[$one] = array_fill_keys($keys, 0);
+            $ids[$one] = array_fill_keys($keys, []);
+        }
+
+        foreach ($rows as $row) {
+            foreach ($channels as $one) {
+                $reason = $one === 'email'
+                    ? match (true) {
+                        !$row->email || !filter_var(trim($row->email), FILTER_VALIDATE_EMAIL) => 'no_email',
+                        !$row->granted => 'no_consent',
+                        default => 'eligible',
+                    }
+                    : match (true) {
+                        !$connected => 'not_connected',
+                        WhatsApp::phone($row->phone) === '' => 'no_phone',
+                        $row->source === 'unsubscribe' && $row->granted !== null && !$row->granted => 'unsubscribed',
+                        !($unlessRevoked ? (!$row->wa_id || $row->wa_granted) : (bool) $row->wa_granted) => 'no_consent',
+                        default => 'eligible',
+                    };
+
+                $counts[$one][$reason]++;
+                $ids[$one][$reason][] = $row->id;
+
+                if ($reason === 'eligible') {
+                    $reach[$row->id] = true;
+                }
+            }
+        }
+
+        $result = [
+            'total'      => $rows->count(),
+            'eligible'   => count($reach),
+            'no_consent' => $counts['email']['no_consent'] ?? 0,
+            'no_email'   => $counts['email']['no_email'] ?? 0,
+            'channel'    => count($channels) === 2 ? 'both' : $channels[0],
+            'channels'   => $counts,
+        ];
+
+        return $withList ? $result + ['ids' => $ids] : $result;
+    }
+
+    public static function waConfig(object $campaign): ?array
+    {
+        $raw = $campaign->whatsapp ?? null;
+        $value = is_string($raw) ? json_decode($raw, true) : (array) $raw;
+
+        return !empty($value['template']) ? $value : null;
     }
 
     public static function dispatch(Tenant $tenant, object $campaign): void
@@ -186,7 +314,27 @@ class Campaigns
         }
 
         $segment = is_string($campaign->segment) ? json_decode($campaign->segment, true) : (array) $campaign->segment;
-        $audience = self::audience($tenant, $segment, true);
+        $channel = self::whatsappReady() ? ($campaign->channel ?: 'email') : 'email';
+        $audience = self::audience($tenant, $segment, true, $channel);
+        $shortage = self::shortage(self::quotas($tenant, $audience, $channel));
+        $stats = ['audience' => $audience['total'], 'eligible' => $audience['eligible'], 'no_consent' => $audience['no_consent'], 'no_email' => $audience['no_email'], 'channels' => $audience['channels']];
+
+        if ($shortage) {
+            DB::table('marketing_campaigns')->where('id', $campaign->id)->update([
+                'status'     => 'blocked',
+                'stats'      => json_encode($stats + ['blocked' => $shortage]),
+                'updated_at' => now(),
+            ]);
+
+            if (Notifier::available()) {
+                foreach (Notifier::adminIds($tenant->id) as $userId) {
+                    Notifier::send($tenant->id, $userId, 'plan.limit', "La campaña «{$campaign->name}» no salió", $shortage, '/campaigns/' . $campaign->id, 'campaign', $campaign->id, "campaign-blocked:{$campaign->id}");
+                }
+            }
+
+            return;
+        }
+
         $coupon = $campaign->coupon_id ? DB::table('coupons')->where('id', $campaign->coupon_id)->first() : null;
         $user = $campaign->created_by ? User::find($campaign->created_by) : null;
         $base = [
@@ -194,11 +342,16 @@ class Campaigns
             'Cupón'   => $coupon->code ?? '',
             'Portal'  => rtrim((string) config('app.frontend_url'), '/') . '/login',
         ];
+        $withChannel = fn (array $row, string $one) => self::whatsappReady() ? $row + ['channel' => $one] : $row;
 
         $skipped = [];
-        foreach (['no_consent' => 'No aceptó recibir promociones por correo.', 'no_email' => 'No tiene un correo registrado.'] as $reason => $text) {
-            foreach ($audience['ids'][$reason] as $customerId) {
-                $skipped[] = ['id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'marketing_campaign_id' => $campaign->id, 'customer_id' => $customerId, 'status' => 'skipped', 'skip_reason' => $text];
+        foreach ($audience['ids'] as $one => $byReason) {
+            $texts = $one === 'email' ? self::EMAIL_REASONS : self::WA_REASONS;
+
+            foreach ($texts as $reason => $text) {
+                foreach ($byReason[$reason] as $customerId) {
+                    $skipped[] = $withChannel(['id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'marketing_campaign_id' => $campaign->id, 'customer_id' => $customerId, 'status' => 'skipped', 'skip_reason' => $text], $one);
+                }
             }
         }
 
@@ -206,8 +359,12 @@ class Campaigns
             DB::table('marketing_campaign_recipients')->insertOrIgnore($chunk);
         }
 
-        Customer::where('tenant_id', $tenant->id)->whereIn('id', $audience['ids']['eligible'])->orderBy('id')
-            ->chunk(200, function ($customers) use ($tenant, $campaign, $base, $coupon, $user) {
+        if (isset($audience['ids']['whatsapp'])) {
+            self::dispatchWhatsApp($tenant, $campaign, $audience['ids']['whatsapp']['eligible'], $base, $user);
+        }
+
+        Customer::where('tenant_id', $tenant->id)->whereIn('id', $audience['ids']['email']['eligible'] ?? [])->orderBy('id')
+            ->chunk(200, function ($customers) use ($tenant, $campaign, $base, $coupon, $user, $withChannel) {
                 foreach ($customers as $customer) {
                     $recipientId = (string) \Illuminate\Support\Str::uuid();
                     $vars = $base + ['Nombre' => $customer->first_name];
@@ -230,7 +387,7 @@ class Campaigns
                         'user'        => $user,
                     ]);
 
-                    DB::table('marketing_campaign_recipients')->insertOrIgnore([
+                    DB::table('marketing_campaign_recipients')->insertOrIgnore($withChannel([
                         'id'                    => $recipientId,
                         'tenant_id'             => $tenant->id,
                         'marketing_campaign_id' => $campaign->id,
@@ -238,16 +395,66 @@ class Campaigns
                         'status'                => $message ? 'pending' : 'failed',
                         'message_id'            => $message->id ?? null,
                         'skip_reason'           => $message ? null : 'No se pudo preparar el correo.',
-                    ]);
+                    ], 'email'));
                 }
             });
 
         DB::table('marketing_campaigns')->where('id', $campaign->id)->update([
             'status'     => 'sent',
             'sent_at'    => now(),
-            'stats'      => json_encode(['audience' => $audience['total'], 'eligible' => $audience['eligible'], 'no_consent' => $audience['no_consent'], 'no_email' => $audience['no_email']]),
+            'stats'      => json_encode($stats),
             'updated_at' => now(),
         ]);
+    }
+
+    private static function dispatchWhatsApp(Tenant $tenant, object $campaign, array $customerIds, array $base, ?User $user): void
+    {
+        $config = self::waConfig($campaign);
+
+        if (!$config || !$customerIds) {
+            return;
+        }
+
+        $template = ['name' => $config['template'], 'language' => $config['language'] ?? 'es'];
+        $params = array_values((array) ($config['params'] ?? []));
+
+        Customer::where('tenant_id', $tenant->id)->whereIn('id', $customerIds)->orderBy('id')
+            ->chunk(200, function ($customers) use ($tenant, $campaign, $base, $user, $template, $params) {
+                foreach ($customers as $customer) {
+                    $recipientId = (string) \Illuminate\Support\Str::uuid();
+                    $vars = $base + ['Nombre' => $customer->first_name, 'Apellido' => (string) $customer->last_name, 'Baja' => self::unsubscribeUrl($recipientId)];
+                    $values = [];
+
+                    foreach ($params as $i => $key) {
+                        $values[(string) ($i + 1)] = (string) ($vars[$key] ?? '');
+                    }
+
+                    $message = WhatsApp::store($tenant, [
+                        'kind'        => 'campaign',
+                        'customer'    => $customer,
+                        'subject'     => $campaign->name,
+                        'body'        => 'Plantilla de WhatsApp «' . $template['name'] . '» (' . $template['language'] . ')' . ($values ? ': ' . implode(' · ', array_filter($values, fn ($v) => $v !== '')) : ''),
+                        'entity_type' => 'campaign',
+                        'entity_id'   => $campaign->id,
+                        'dedupe_key'  => "campaign:{$campaign->id}:{$customer->id}",
+                        'user'        => $user,
+                        'vars'        => $values,
+                        'template'    => $template,
+                        'fallback'    => false,
+                    ]);
+
+                    DB::table('marketing_campaign_recipients')->insertOrIgnore([
+                        'id'                    => $recipientId,
+                        'tenant_id'             => $tenant->id,
+                        'marketing_campaign_id' => $campaign->id,
+                        'customer_id'           => $customer->id,
+                        'channel'               => 'whatsapp',
+                        'status'                => $message ? 'pending' : 'failed',
+                        'message_id'            => $message->id ?? null,
+                        'skip_reason'           => $message ? null : 'No se pudo preparar el WhatsApp.',
+                    ]);
+                }
+            });
     }
 
     public static function dispatchDue(?string $tenantId = null): int
@@ -291,24 +498,40 @@ class Campaigns
 
     public static function results(object $campaign): array
     {
-        $rows = DB::table('marketing_campaign_recipients as r')
+        $byChannel = self::whatsappReady();
+        $query = DB::table('marketing_campaign_recipients as r')
             ->leftJoin('messages as m', 'm.id', '=', 'r.message_id')
             ->where('r.marketing_campaign_id', $campaign->id)
-            ->selectRaw("count(*) FILTER (WHERE m.status IN ('sent', 'simulated')) AS sent")
+            ->selectRaw("count(*) FILTER (WHERE m.status IN ('sent', 'simulated', 'delivered', 'read')) AS sent")
             ->selectRaw("count(*) FILTER (WHERE m.status IN ('queued', 'scheduled')) AS pending")
             ->selectRaw("count(*) FILTER (WHERE m.status IN ('failed', 'not_sent') OR r.status = 'failed') AS failed")
             ->selectRaw("count(*) FILTER (WHERE r.status = 'skipped') AS skipped")
             ->selectRaw("count(*) FILTER (WHERE m.status = 'simulated') AS simulated")
-            ->first();
+            ->selectRaw("count(*) FILTER (WHERE m.status IN ('delivered', 'read')) AS delivered")
+            ->selectRaw("count(*) FILTER (WHERE m.status = 'read') AS read");
+
+        $rows = $byChannel ? $query->addSelect('r.channel')->groupBy('r.channel')->get()->keyBy('channel') : collect(['email' => $query->first()]);
+        $sum = fn (string $key) => (int) $rows->sum(fn ($row) => (int) $row->{$key});
+        $channels = $rows->map(fn ($row) => [
+            'sent'      => (int) $row->sent,
+            'pending'   => (int) $row->pending,
+            'failed'    => (int) $row->failed,
+            'skipped'   => (int) $row->skipped,
+            'simulated' => (int) $row->simulated,
+            'delivered' => (int) $row->delivered,
+            'read'      => (int) $row->read,
+        ])->all();
 
         $booked = ['customers' => 0, 'appointments' => 0];
 
         if ($campaign->sent_at) {
             $from = Carbon::parse($campaign->sent_at);
             $booked = (array) DB::table('appointments as a')
-                ->join('marketing_campaign_recipients as r', fn ($j) => $j->on('r.customer_id', '=', 'a.customer_id')->where('r.marketing_campaign_id', '=', $campaign->id))
-                ->join('messages as m', 'm.id', '=', 'r.message_id')
-                ->whereIn('m.status', ['sent', 'simulated'])
+                ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('marketing_campaign_recipients as r')
+                    ->join('messages as m', 'm.id', '=', 'r.message_id')
+                    ->whereColumn('r.customer_id', 'a.customer_id')
+                    ->where('r.marketing_campaign_id', $campaign->id)
+                    ->whereIn('m.status', self::REACHED))
                 ->where('a.created_at', '>=', $from->toIso8601String())
                 ->where('a.created_at', '<', $from->copy()->addDays(self::BOOKED_DAYS)->toIso8601String())
                 ->where('a.created_at', '<=', now()->toIso8601String())
@@ -317,12 +540,15 @@ class Campaigns
         }
 
         return [
-            'sent'      => (int) $rows->sent,
-            'pending'   => (int) $rows->pending,
-            'failed'    => (int) $rows->failed,
-            'skipped'   => (int) $rows->skipped,
-            'simulated' => (int) $rows->simulated,
-            'booked'    => ['customers' => (int) $booked['customers'], 'appointments' => (int) $booked['appointments']],
+            'sent'       => $sum('sent'),
+            'pending'    => $sum('pending'),
+            'failed'     => $sum('failed'),
+            'skipped'    => $sum('skipped'),
+            'simulated'  => $sum('simulated'),
+            'by_channel' => $channels,
+            'booked'     => ['customers' => (int) $booked['customers'], 'appointments' => (int) $booked['appointments']],
         ];
     }
+
+    public const REACHED = ['sent', 'simulated', 'delivered', 'read'];
 }

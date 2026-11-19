@@ -5,7 +5,7 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CalendarClock, Eye, Mail, MailCheck, RefreshCw, Send } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Eye, Mail, MailCheck, MessageCircle, RefreshCw, Send } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
@@ -116,7 +116,7 @@ export default function MessagesBoard() {
   const all = data?.messages ?? [];
   const term = searchTerm.trim().toLowerCase();
   const inView = (m: Message) => view === 'all'
-    || (view === 'sent' && (m.status === 'sent' || m.status === 'simulated'))
+    || (view === 'sent' && ['sent', 'simulated', 'delivered', 'read'].includes(m.status))
     || (view === 'scheduled' && m.status === 'scheduled')
     || (view === 'pending' && m.status === 'queued')
     || (view === 'problems' && PROBLEMS.includes(m.status));
@@ -154,7 +154,7 @@ export default function MessagesBoard() {
   });
 
   const metricCards: MetricCardItem[] = [
-    card('Enviados', all.filter((m) => m.status === 'sent' || m.status === 'simulated').length, <MailCheck size={18} />, 'sent', 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
+    card('Enviados', all.filter((m) => ['sent', 'simulated', 'delivered', 'read'].includes(m.status)).length, <MailCheck size={18} />, 'sent', 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
     card('Programados', all.filter((m) => m.status === 'scheduled').length, <CalendarClock size={18} />, 'scheduled', 'text-violet-600', 'border-violet-500 ring-2 ring-violet-500/20'),
     card('Por enviar', all.filter((m) => m.status === 'queued').length, <Send size={18} />, 'pending', 'text-sky-600', 'border-sky-500 ring-2 ring-sky-500/20'),
     card('Con problemas', all.filter((m) => PROBLEMS.includes(m.status)).length, <AlertTriangle size={18} />, 'problems', 'text-amber-600', 'border-amber-500 ring-2 ring-amber-500/20'),
@@ -175,7 +175,7 @@ export default function MessagesBoard() {
       cell: (m) => (
         <div key={`to-${m.id}`} className="text-sm">
           <span className="block font-semibold text-slate-700">{m.customer ? <CustomerLink id={m.customer.id}>{m.customer.name}</CustomerLink> : m.to_name ?? '—'}</span>
-          <span className="block text-xs text-slate-400">{m.to ?? 'Sin correo'}</span>
+          <span className="block text-xs text-slate-400">{m.channel === 'whatsapp' ? `WhatsApp · ${m.to ? `+${m.to}` : 'sin celular'}` : m.to ?? 'Sin correo'}</span>
         </div>
       ),
     },
@@ -212,7 +212,8 @@ export default function MessagesBoard() {
     { header: 'Programado para', type: 'datetime', value: (m) => m.scheduled_at },
     { header: 'Enviado', type: 'datetime', value: (m) => m.sent_at },
     { header: 'Cliente', value: (m) => m.customer?.name ?? m.to_name },
-    { header: 'Correo', value: (m) => m.to },
+    { header: 'Canal', value: (m) => (m.channel === 'whatsapp' ? 'WhatsApp' : 'Correo') },
+    { header: 'Correo o celular', value: (m) => m.to },
     { header: 'Asunto', value: (m) => m.subject },
     { header: 'Tipo', value: (m) => m.kind_label },
     { header: 'Estado', value: (m) => m.status_label },
@@ -247,6 +248,7 @@ export default function MessagesBoard() {
 
       <DataTable<Message>
         title="Mensajes"
+        headerActions={<Link href="/messages/whatsapp" data-open-whatsapp className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50"><MessageCircle size={15} /> Conversaciones de WhatsApp</Link>}
         primaryActionLabel="Nuevo mensaje"
         onPrimaryAction={data?.can.create ? () => { setEditing(null); setComposing(true); setNotice(''); } : undefined}
         searchTerm={searchTerm}

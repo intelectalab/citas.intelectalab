@@ -4,23 +4,33 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Hourglass, Loader2, PawPrint, Plus, Search, UserRound, Video } from 'lucide-react';
 import { api } from '@/lib/axios';
-import { useVocabulary } from '@/hooks/useVocabulary';
+import { makeVocabulary, useVocabulary } from '@/hooks/useVocabulary';
 import Select from '@/app/components/common/Select';
 import { addDays, dateOf, formatDate, timeOf, todayISO } from '@/features/appointments/appointments';
 import { portalError, type PortalAppointment, type PortalAvailability, type PortalCatalog, type PortalDependent, type PortalOverview } from '../portal';
 import { money } from '@/features/sales/sales';
+import GuestFields, { emptyGuest, guestReady, type GuestData } from './GuestFields';
+
+export interface GuestBooking {
+  slug: string;
+  vocabulary: Partial<Record<string, string>>;
+  documentTypes: { id: string; name: string; value: string | null; length: number | null; minimum: number | null }[];
+  privacyHtml: string | null;
+  portalSignup: boolean;
+}
 
 interface BookingFlowProps {
   overview: PortalOverview;
   catalog: PortalCatalog;
   reschedule?: PortalAppointment | null;
+  guest?: GuestBooking;
   onDone: () => void;
   onExit: () => void;
   onDependentAdded: (dependent: PortalDependent) => void;
   onWaitlisted: () => void;
 }
 
-type Step = 'who' | 'service' | 'branch' | 'professional' | 'when' | 'review';
+type Step = 'who' | 'service' | 'branch' | 'professional' | 'when' | 'you' | 'review';
 
 const STEP_TITLES: Record<Step, string> = {
   who: '¿Para quién es la cita?',
@@ -28,8 +38,14 @@ const STEP_TITLES: Record<Step, string> = {
   branch: '¿En qué sede?',
   professional: '¿Con quién?',
   when: '¿Cuándo?',
+  you: 'Tus datos',
   review: 'Revisa y confirma',
 };
+
+const newKey = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16));
 
 const DAYS_PER_PAGE = 7;
 const SEARCH_DAYS = 21;
@@ -42,11 +58,16 @@ const optionClass = (active: boolean, disabled = false) =>
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white';
 
-export default function BookingFlow({ overview, catalog, reschedule, onDone, onExit, onDependentAdded, onWaitlisted }: BookingFlowProps) {
-  const vocab = useVocabulary();
+export default function BookingFlow({ overview, catalog, reschedule, guest, onDone, onExit, onDependentAdded, onWaitlisted }: BookingFlowProps) {
+  const ownVocab = useVocabulary();
+  const vocab = useMemo(() => (guest ? makeVocabulary(guest.vocabulary) : ownVocab), [guest, ownVocab]);
   const router = useRouter();
   const policies = overview.policies;
   const isReschedule = Boolean(reschedule);
+  const base = guest ? `/public/booking/${guest.slug}` : '/portal';
+  const [you, setYou] = useState<GuestData>(emptyGuest);
+  const [requestKey, setRequestKey] = useState(newKey);
+  const [portalInfo, setPortalInfo] = useState<{ email: string | null; first_use: boolean } | null>(null);
 
   const [dependentId, setDependentId] = useState(overview.dependents.items.length === 1 ? overview.dependents.items[0].id : '');
   const [serviceId, setServiceId] = useState(reschedule?.service?.id ?? '');
@@ -107,20 +128,22 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
     if (isReschedule) return ['when', 'review'];
 
     const list: Step[] = [];
-    if (overview.dependents.enabled) list.push('who');
+    if (overview.dependents.enabled && !guest) list.push('who');
     list.push('service');
     if (catalog.branches.length > 1) list.push('branch');
     if (policies.choose_professional && professionals.length > 1) list.push('professional');
-    list.push('when', 'review');
+    list.push('when');
+    if (guest) list.push('you');
+    list.push('review');
     return list;
-  }, [isReschedule, overview.dependents.enabled, catalog.branches.length, policies.choose_professional, professionals.length]);
+  }, [isReschedule, guest, overview.dependents.enabled, catalog.branches.length, policies.choose_professional, professionals.length]);
 
   const [stepIndex, setStepIndex] = useState(0);
   const step = steps[Math.min(stepIndex, steps.length - 1)];
   const lastDay = addDays(todayISO(), Math.max(1, policies.max_days_ahead));
 
   const loadTimes = (day: string) =>
-    api.get('/portal/availability', {
+    api.get(`${base}/availability`, {
       params: {
         service_id: serviceId,
         branch_id: branchId,
@@ -195,6 +218,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
       case 'branch': return Boolean(branchId);
       case 'professional': return true;
       case 'when': return Boolean(time);
+      case 'you': return guestReady(you, overview.dependents.enabled && overview.dependents.required);
       default: return true;
     }
   })();
@@ -209,24 +233,53 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
       const startsAt = `${date}T${time}`;
       const res = reschedule
         ? await api.post(`/portal/appointments/${reschedule.id}/reschedule`, { starts_at: startsAt })
-        : await api.post('/portal/appointments', {
-            service_id: serviceId,
-            branch_id: branchId,
-            professional_id: professionalId || null,
-            customer_dependent_id: dependentId || null,
-            starts_at: startsAt,
-            notes: notes.trim() || null,
-          });
+        : guest
+          ? await api.post(`${base}/appointments`, {
+              service_id: serviceId,
+              branch_id: branchId,
+              professional_id: professionalId || null,
+              starts_at: startsAt,
+              notes: notes.trim() || null,
+              first_name: you.first_name.trim(),
+              last_name: you.last_name.trim(),
+              type_document_id: you.type_document_id || null,
+              document_number: you.document_number.trim(),
+              phone: you.phone.trim(),
+              email: you.email.trim(),
+              dependent_name: you.dependent_name.trim() || null,
+              dependent_species: you.dependent_species.trim() || null,
+              accept_privacy: you.accept_privacy,
+              marketing: you.marketing,
+              website: you.website,
+              request_key: requestKey,
+            })
+          : await api.post('/portal/appointments', {
+              service_id: serviceId,
+              branch_id: branchId,
+              professional_id: professionalId || null,
+              customer_dependent_id: dependentId || null,
+              starts_at: startsAt,
+              notes: notes.trim() || null,
+            });
       if (res.status === 202 && res.data?.deposit?.token) {
         router.push(`/pay/${res.data.deposit.token}`);
         return;
       }
+      if (guest) setPortalInfo(res.data?.portal ?? null);
       setDone(res.data);
     } catch (err: any) {
       setError(portalError(err, 'No se pudo completar la reserva.'));
+      if (guest && err?.response?.status !== 409) setRequestKey(newKey());
       if (err?.response?.data?.code === 'SLOT_UNAVAILABLE') {
+        setRequestKey(newKey());
         setTime('');
         setStepIndex(steps.indexOf('when'));
+      }
+      if (guest && err?.response?.status === 422) {
+        const fields = Object.keys(err?.response?.data?.errors ?? {});
+        if (fields.some((field) => !['service_id', 'branch_id', 'professional_id', 'starts_at', 'notes'].includes(field))) {
+          setStepIndex(steps.indexOf('you'));
+        }
       }
     } finally {
       setSaving(false);
@@ -246,20 +299,53 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             {done.service?.name}{done.professional ? ` · ${done.professional.display_name}` : ''} · Código {done.code}
           </p>
         </div>
-        <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
-          {done.status === 'confirmed'
-            ? 'Tu cita quedó confirmada.'
-            : 'Tu cita quedó pendiente: confirma tu asistencia desde "Mis citas" cuando lo tengas claro.'}
-          {policies.cancel_allowed && ` Puedes cambiarla o cancelarla hasta ${policies.cancel_window_hours} horas antes.`}
-        </p>
-        <button
-          type="button"
-          data-action="done"
-          onClick={onDone}
-          className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors"
-        >
-          Ver mis citas
-        </button>
+        {guest ? (
+          <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3 space-y-1.5 text-left" data-guest-done>
+            <p>
+              {done.status === 'confirmed' ? 'Tu cita quedó confirmada.' : 'Tu cita quedó pendiente: la sede la confirmará o podrás confirmarla tú desde el portal.'}
+              {portalInfo?.email ? ` Si la empresa envía avisos por correo, te llegarán a ${portalInfo.email}.` : ''}
+            </p>
+            <p>
+              Para ver, confirmar{policies.cancel_allowed ? `, cambiar o cancelar (hasta ${policies.cancel_window_hours} horas antes)` : ''} tu cita, entra al portal con tu correo.
+              {portalInfo?.first_use ? ' Como es tu primera vez, tu contraseña es tu número de documento; luego te pediremos crear una propia.' : ' Si es tu primera vez, tu contraseña es tu número de documento.'}
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
+            {done.status === 'confirmed'
+              ? 'Tu cita quedó confirmada.'
+              : 'Tu cita quedó pendiente: confirma tu asistencia desde "Mis citas" cuando lo tengas claro.'}
+            {policies.cancel_allowed && ` Puedes cambiarla o cancelarla hasta ${policies.cancel_window_hours} horas antes.`}
+          </p>
+        )}
+        {guest ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            <a
+              href="/login"
+              data-action="go-portal"
+              className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors"
+            >
+              Entrar al portal
+            </a>
+            <button
+              type="button"
+              data-action="book-again"
+              onClick={onDone}
+              className="px-5 py-2.5 text-sm font-bold border border-slate-200 bg-white text-slate-700 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              Reservar otra cita
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-action="done"
+            onClick={onDone}
+            className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors"
+          >
+            Ver mis citas
+          </button>
+        )}
       </section>
     );
   }
@@ -281,9 +367,11 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             {isReschedule ? `Cambiar cita ${reschedule!.code}` : 'Reservar cita'} · Paso {stepIndex + 1} de {steps.length}
           </span>
-          <button type="button" onClick={onExit} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
-            Salir
-          </button>
+          {!guest && (
+            <button type="button" onClick={onExit} className="text-xs font-bold text-brand-accent hover:text-brand-ink transition-colors">
+              Salir
+            </button>
+          )}
         </div>
         <div className="flex gap-1.5">
           {steps.map((item, index) => (
@@ -484,7 +572,7 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
               </div>
             )}
 
-            {!isReschedule && !loadingTimes && (
+            {!isReschedule && !guest && !loadingTimes && policies.waitlist_enabled !== false && (
               <div className="p-4 rounded-2xl border border-dashed border-slate-300 bg-white space-y-3" data-waitlist-box>
                 {!waitOpen ? (
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -556,7 +644,8 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
             <dl className="rounded-2xl border border-slate-200 divide-y divide-slate-100" data-summary>
               {([
                 ['Servicio', reschedule?.service?.name ?? service?.name],
-                [vocab.dependent, isReschedule ? reschedule?.dependent?.name : chosenDependent?.name],
+                ['A nombre de', guest ? `${you.first_name} ${you.last_name}`.trim() : null],
+                [vocab.dependent, isReschedule ? reschedule?.dependent?.name : guest ? you.dependent_name.trim() : chosenDependent?.name],
                 ['Fecha', formatDate(date)],
                 ['Hora', time],
                 [vocab.pro, chosenProfessional?.display_name ?? vocab.pick('pro', 'El primero disponible', 'La primera disponible')],
@@ -629,19 +718,32 @@ export default function BookingFlow({ overview, catalog, reschedule, onDone, onE
 
             {policies.cancel_allowed && (
               <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
-                Podrás cambiar o cancelar tu cita desde aquí hasta {policies.cancel_window_hours} horas antes.
+                Podrás cambiar o cancelar tu cita {guest ? 'desde el portal' : 'desde aquí'} hasta {policies.cancel_window_hours} horas antes.
               </p>
             )}
           </div>
+        )}
+
+        {step === 'you' && guest && (
+          <GuestFields
+            value={you}
+            onChange={setYou}
+            documentTypes={guest.documentTypes}
+            dependents={overview.dependents}
+            dependentLabel={vocab.dependent}
+            privacyHtml={guest.privacyHtml}
+          />
         )}
 
         {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>}
       </div>
 
       <footer className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/60">
-        <button type="button" data-action="back" onClick={goBack} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border border-slate-200 bg-white text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
-          <ArrowLeft size={15} /> {stepIndex === 0 ? 'Salir' : 'Atrás'}
-        </button>
+        {guest && stepIndex === 0 ? <span /> : (
+          <button type="button" data-action="back" onClick={goBack} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border border-slate-200 bg-white text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
+            <ArrowLeft size={15} /> {stepIndex === 0 ? 'Salir' : 'Atrás'}
+          </button>
+        )}
         {step === 'review' ? (
           <button
             type="button"

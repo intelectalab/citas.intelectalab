@@ -27,11 +27,14 @@ class CatalogActions
         'campaign.updated'         => ['Cambió una campaña', 'marketing'],
         'campaign.sent'            => ['Envió una campaña', 'marketing'],
         'campaign.scheduled'       => ['Programó una campaña', 'marketing'],
+        'campaign.blocked'         => ['Una campaña no salió por el tope del plan', 'marketing'],
         'automation.enabled'       => ['Encendió una automatización', 'marketing'],
         'automation.disabled'      => ['Apagó una automatización', 'marketing'],
         'automation.updated'       => ['Cambió una automatización', 'marketing'],
         'message.sent'             => ['Envió un mensaje a un cliente', 'marketing'],
         'message.scheduled'        => ['Programó un mensaje a un cliente', 'marketing'],
+        'whatsapp.replied'         => ['Respondió a un cliente por WhatsApp', 'marketing'],
+        'whatsapp.handled'         => ['Marcó como atendida una conversación de WhatsApp', 'marketing'],
     ];
 
     public const FIELDS = [

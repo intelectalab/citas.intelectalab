@@ -69,6 +69,7 @@ class PlatformBillingController extends Controller
             'simulation' => PaymentLinks::simulationAllowed(),
             'dunning'    => Dunning::config(),
             'dunning_ready' => Dunning::ready(),
+            'cancel_offer' => \App\Support\Cancellations::ready() ? \App\Support\Cancellations::offerConfig() + ['reason_list' => collect(\App\Support\Cancellations::REASONS)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values()] : null,
             'methods'    => [
                 'mercadopago' => (bool) (PlatformSetting::value('plan_mercadopago') ?? true),
                 'transfer'    => \App\Support\PlanTransfers::config(),
@@ -220,6 +221,44 @@ class PlatformBillingController extends Controller
         AuditEvent::record($request, 'platform.billing_changed', null, $text($before), $text($after));
 
         return $this->show();
+    }
+
+    public function cancelOffer(Request $request)
+    {
+        $this->ready();
+        abort_unless(\App\Support\Cancellations::ready(), 503, \App\Support\Cancellations::NOT_READY);
+        $validated = $request->validate([
+            'enabled'   => 'boolean',
+            'percent'   => 'required|integer|min:5|max:100',
+            'months'    => 'required|integer|min:1|max:12',
+            'reasons'   => 'array',
+            'reasons.*' => ['string', Rule::in(array_keys(\App\Support\Cancellations::REASONS))],
+        ], ['percent.min' => 'El descuento debe ser de al menos 5 %.', 'months.max' => 'El descuento puede durar como mucho 12 meses.']);
+
+        $text = fn (array $c) => ['Oferta' => $c['enabled'] ? "{$c['percent']} % por {$c['months']} meses" : 'Apagada'];
+        $before = \App\Support\Cancellations::offerConfig();
+        $after = \App\Support\Cancellations::saveOffer($validated);
+        AuditEvent::record($request, 'subscription.cancel_offer_changed', null, $text($before), $text($after));
+
+        return $this->show();
+    }
+
+    public function receipt(string $invoice)
+    {
+        $row = \App\Models\SubscriptionInvoice::findOrFail($invoice);
+
+        return response(\App\Support\PlanReceipts::pdf($row), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . \App\Support\PlanReceipts::fileName($row) . '"',
+            'Cache-Control'       => 'private, no-store',
+        ]);
+    }
+
+    public function cancellations()
+    {
+        $this->ready();
+
+        return response()->json(['cancellations' => \App\Support\Cancellations::forPlatform()]);
     }
 
     public function overdue()

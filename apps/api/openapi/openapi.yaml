@@ -1,0 +1,952 @@
+openapi: 3.1.0
+info:
+  title: API pública de AGENDA360
+  version: 1.0.0
+  summary: Conecta tus sistemas con la agenda de tu empresa.
+  description: |
+    La API pública permite a otros sistemas de tu empresa (una web propia, un CRM, una app) consultar
+    servicios, sedes, profesionales y horarios libres, agendar y cancelar citas, y registrar clientes.
+
+    **Cómo empezar**
+    1. En **Configuración → Integraciones → Claves de API** crea una clave y elige qué puede hacer.
+    2. La clave empieza con `apk_` y se muestra una sola vez: guárdala en un lugar seguro.
+    3. Envíala en cada solicitud con `Authorization: Bearer <clave>` (o en el encabezado `X-Api-Key`).
+
+    **Reglas generales**
+    - Todo responde en JSON y en español. Las fechas con hora van en ISO 8601 con zona horaria.
+    - La API trabaja con las mismas reglas de la agenda: horarios del equipo, doble reserva, tope del plan
+      y solo lectura si el plan está vencido. Las citas creadas por la API quedan con origen `api`.
+    - Cada clave admite **120 solicitudes por minuto**. Cada respuesta trae `X-RateLimit-Limit` y
+      `X-RateLimit-Remaining`; al pasarte, recibes `429` con `Retry-After` (segundos).
+    - Para no repetir una operación si se corta la conexión, envía en los `POST` el encabezado
+      `Idempotency-Key` (8 a 100 letras, números, `-` o `_`). La misma clave con los mismos datos
+      devuelve la misma respuesta durante 24 horas sin crear nada de nuevo.
+    - Solo ves los datos de la empresa dueña de la clave.
+servers:
+  - url: https://citas.intelectalab.com/api/v1
+    description: Producción
+  - url: http://localhost:8001/api/v1
+    description: Desarrollo local
+security:
+  - bearerAuth: []
+  - apiKeyHeader: []
+tags:
+  - name: Catálogo
+    description: Servicios, sedes y profesionales. Permiso de la clave «Servicios, sedes y profesionales».
+  - name: Horarios libres
+    description: Horarios disponibles para agendar. Permiso «Horarios libres».
+  - name: Citas
+    description: Consultar, agendar y cancelar citas. Permiso «Citas» (leer o escribir).
+  - name: Clientes
+    description: Consultar y registrar clientes. Permiso «Clientes» (leer o escribir).
+paths:
+  /services:
+    get:
+      tags: [Catálogo]
+      operationId: listServices
+      summary: Lista los servicios activos
+      responses:
+        '200':
+          description: Servicios activos, ordenados por nombre.
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Service' }
+              example:
+                data:
+                  - id: 9b1f7c1e-2f7a-4d55-9a62-1c3a8d0f1a01
+                    name: Corte de cabello
+                    category: Cabello
+                    duration_minutes: 45
+                    price: 35
+                    currency: PEN
+                    kind: individual
+                    is_virtual: false
+                    online_booking: true
+                    branch_ids: [3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01]
+                    professional_ids: [7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/NotReady' }
+  /branches:
+    get:
+      tags: [Catálogo]
+      operationId: listBranches
+      summary: Lista las sedes activas
+      responses:
+        '200':
+          description: Sedes activas, ordenadas por nombre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Branch' }
+              example:
+                data:
+                  - id: 3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01
+                    name: Sede Miraflores
+                    address: Av. Larco 123, Miraflores
+                    timezone: America/Lima
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /professionals:
+    get:
+      tags: [Catálogo]
+      operationId: listProfessionals
+      summary: Lista los profesionales activos
+      responses:
+        '200':
+          description: Profesionales activos con las sedes donde atienden.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Professional' }
+              example:
+                data:
+                  - id: 7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801
+                    name: Ana Torres
+                    branch_ids: [3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /availability:
+    get:
+      tags: [Horarios libres]
+      operationId: getAvailability
+      summary: Horarios libres de un servicio en una sede y fecha
+      parameters:
+        - { name: service_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: branch_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: date, in: query, required: true, description: 'Fecha en formato AAAA-MM-DD (hora de la sede).', schema: { type: string, format: date }, example: '2026-11-20' }
+        - { name: professional_id, in: query, required: false, description: 'Solo los horarios de este profesional.', schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Horarios libres por profesional (hora local de la sede, HH:MM).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Availability' }
+              example:
+                date: '2026-11-20'
+                duration_minutes: 45
+                professionals:
+                  - professional: { id: 7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801, display_name: Ana Torres }
+                    slots: ['09:00', '09:45', '10:30']
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /appointments:
+    get:
+      tags: [Citas]
+      operationId: listAppointments
+      summary: Lista las citas de un rango de fechas
+      description: Por defecto, desde hoy y 30 días adelante. Como máximo 93 días por consulta.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date }, description: 'Desde (AAAA-MM-DD).' }
+        - { name: to, in: query, schema: { type: string, format: date }, description: 'Hasta (AAAA-MM-DD), igual o después de from.' }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/AppointmentStatus' } }
+        - { name: branch_id, in: query, schema: { type: string, format: uuid } }
+        - { name: professional_id, in: query, schema: { type: string, format: uuid } }
+        - { name: customer_id, in: query, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/PerPage' }
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Citas ordenadas por hora de inicio.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Appointment' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+              example:
+                data:
+                  - id: 2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f01
+                    code: C-000045
+                    status: confirmed
+                    starts_at: '2026-11-20T09:45:00-05:00'
+                    ends_at: '2026-11-20T10:30:00-05:00'
+                    source: api
+                    price: 35
+                    currency: PEN
+                    notes: null
+                    video_url: null
+                    cancel_reason: null
+                    branch: { id: 3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01, name: Sede Miraflores }
+                    service: { id: 9b1f7c1e-2f7a-4d55-9a62-1c3a8d0f1a01, name: Corte de cabello }
+                    professional: { id: 7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801, name: Ana Torres }
+                    customer: { id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01, first_name: Lucía, last_name: Ramos }
+                meta: { page: 1, per_page: 25, total: 1, last_page: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    post:
+      tags: [Citas]
+      operationId: createAppointment
+      summary: Agenda una cita
+      description: Aplica las reglas de la agenda de la empresa (horario del profesional, doble reserva, tope del plan).
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentInput' }
+            example:
+              customer_id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01
+              service_id: 9b1f7c1e-2f7a-4d55-9a62-1c3a8d0f1a01
+              professional_id: 7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801
+              branch_id: 3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01
+              starts_at: '2026-11-20T09:45'
+              notes: Primera visita
+      responses:
+        '201':
+          description: Cita creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Appointment' }
+              examples:
+                creada: { $ref: '#/components/examples/AppointmentResponseExample' }
+        '200':
+          description: La misma solicitud ya se había hecho (misma request_key); devuelve la cita existente.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Appointment' }
+        '400': { $ref: '#/components/responses/BadIdempotencyKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PlanLocked' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /appointments/{appointment}:
+    get:
+      tags: [Citas]
+      operationId: getAppointment
+      summary: Muestra una cita
+      parameters:
+        - { $ref: '#/components/parameters/AppointmentId' }
+      responses:
+        '200':
+          description: La cita.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Appointment' }
+              examples:
+                cita: { $ref: '#/components/examples/AppointmentResponseExample' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /appointments/{appointment}/cancel:
+    post:
+      tags: [Citas]
+      operationId: cancelAppointment
+      summary: Cancela una cita
+      description: Si la cita ya estaba cancelada, la devuelve sin cambios. Aplica las penalidades de cancelación tardía de la empresa.
+      parameters:
+        - { $ref: '#/components/parameters/AppointmentId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 255, description: 'Motivo de la cancelación.' }
+                by_customer: { type: boolean, default: false, description: 'true si la cancela el cliente.' }
+            example: { reason: 'El cliente pidió cambiar de día', by_customer: true }
+      responses:
+        '200':
+          description: Cita cancelada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Appointment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PlanLocked' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /customers:
+    get:
+      tags: [Clientes]
+      operationId: listCustomers
+      summary: Busca clientes
+      parameters:
+        - { name: search, in: query, schema: { type: string }, description: 'Busca en nombre, correo, teléfono y documento.' }
+        - { name: email, in: query, schema: { type: string, format: email }, description: 'Correo exacto (sin distinguir mayúsculas).' }
+        - { $ref: '#/components/parameters/PerPage' }
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Clientes ordenados por nombre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Customer' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+              example:
+                data:
+                  - id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01
+                    code: CLI-000210
+                    first_name: Lucía
+                    last_name: Ramos
+                    email: lucia.ramos@example.com
+                    phone: '987654321'
+                    document_number: '45678912'
+                    created_at: '2026-11-01T15:20:00-05:00'
+                meta: { page: 1, per_page: 25, total: 1, last_page: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    post:
+      tags: [Clientes]
+      operationId: createCustomer
+      summary: Registra un cliente
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerInput' }
+            example:
+              first_name: Lucía
+              last_name: Ramos
+              email: lucia.ramos@example.com
+              phone: '987654321'
+              document_number: '45678912'
+      responses:
+        '201':
+          description: Cliente registrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Customer' }
+              examples:
+                registrado: { $ref: '#/components/examples/CustomerResponseExample' }
+        '400': { $ref: '#/components/responses/BadIdempotencyKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PlanLocked' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /customers/{customer}:
+    get:
+      tags: [Clientes]
+      operationId: getCustomer
+      summary: Muestra un cliente
+      parameters:
+        - name: customer
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: El cliente.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Customer' }
+              examples:
+                cliente: { $ref: '#/components/examples/CustomerResponseExample' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+webhooks:
+  appointment.created:
+    post:
+      tags: [Citas]
+      operationId: webhookAppointmentCreated
+      summary: Cita creada
+      description: Se envía cuando se agenda una cita desde cualquier canal (agenda, portal, reserva pública, kiosko o API).
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody: { $ref: '#/components/requestBodies/AppointmentEvent' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  appointment.confirmed:
+    post:
+      tags: [Citas]
+      operationId: webhookAppointmentConfirmed
+      summary: Cita confirmada
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody: { $ref: '#/components/requestBodies/AppointmentEvent' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  appointment.rescheduled:
+    post:
+      tags: [Citas]
+      operationId: webhookAppointmentRescheduled
+      summary: Cita reprogramada
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody: { $ref: '#/components/requestBodies/AppointmentEvent' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  appointment.cancelled:
+    post:
+      tags: [Citas]
+      operationId: webhookAppointmentCancelled
+      summary: Cita cancelada
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody: { $ref: '#/components/requestBodies/AppointmentEvent' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  appointment.completed:
+    post:
+      tags: [Citas]
+      operationId: webhookAppointmentCompleted
+      summary: Cita atendida
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody: { $ref: '#/components/requestBodies/AppointmentEvent' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  appointment.no_show:
+    post:
+      tags: [Citas]
+      operationId: webhookAppointmentNoShow
+      summary: No asistió a la cita
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody: { $ref: '#/components/requestBodies/AppointmentEvent' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  sale.paid:
+    post:
+      tags: [Citas]
+      operationId: webhookSalePaid
+      summary: Venta pagada
+      description: Se envía cuando una venta queda pagada (caja, carrito, presupuesto, link de pago o adelanto).
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                    event: { const: sale.paid }
+                    data: { $ref: '#/components/schemas/SalePaid' }
+            example:
+              id: 0f9e8d7c-6b5a-4938-8271-605f4e3d2c01
+              event: sale.paid
+              created_at: '2026-11-20T10:35:12-05:00'
+              data:
+                id: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c01
+                code: V-000123
+                status: paid
+                total: 35
+                paid: 35
+                currency: PEN
+                customer_id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01
+                appointment_id: 2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f01
+                branch_id: 3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01
+                paid_at: '2026-11-20T10:35:10-05:00'
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+  customer.created:
+    post:
+      tags: [Clientes]
+      operationId: webhookCustomerCreated
+      summary: Cliente nuevo
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookEvent'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookDelivery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                    event: { const: customer.created }
+                    data: { $ref: '#/components/schemas/Customer' }
+      responses:
+        '200': { $ref: '#/components/responses/WebhookReceived' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: apk_…
+      description: 'Clave de API de la empresa: `Authorization: Bearer apk_…`.'
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: La misma clave, en el encabezado `X-Api-Key`.
+  headers:
+    RateLimitLimit:
+      description: Solicitudes por minuto que admite la clave.
+      schema: { type: integer, example: 120 }
+    RateLimitRemaining:
+      description: Solicitudes que quedan en este minuto.
+      schema: { type: integer, example: 118 }
+    RetryAfter:
+      description: Segundos que hay que esperar antes de volver a intentar.
+      schema: { type: integer, example: 42 }
+  parameters:
+    AppointmentId:
+      name: appointment
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PerPage:
+      name: per_page
+      in: query
+      description: Resultados por página (1 a 100).
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    WebhookSignature:
+      name: X-Webhook-Signature
+      in: header
+      required: true
+      description: |
+        Firma del aviso: `t=<segundos unix>,v1=<firma>`. La firma es el HMAC-SHA256 (en hexadecimal) de
+        `<t>.<cuerpo tal cual llegó>` con la clave secreta del webhook (`whsec_…`). Calcúlala tú y compárala;
+        rechaza el aviso si no coincide o si `t` tiene más de 5 minutos.
+      schema: { type: string, example: 't=1763593353,v1=5d41402abc4b2a76b9719d911017c592ae2b6f0e1d3c5a7b9e1f3a5c7d9e1f30' }
+    WebhookEvent:
+      name: X-Webhook-Event
+      in: header
+      required: true
+      schema: { type: string, example: appointment.confirmed }
+    WebhookId:
+      name: X-Webhook-Id
+      in: header
+      required: true
+      description: Id del aviso (igual a `id` del cuerpo). Si llega dos veces, procésalo una sola vez.
+      schema: { type: string, format: uuid }
+    WebhookDelivery:
+      name: X-Webhook-Delivery
+      in: header
+      required: true
+      description: Id del intento de envío.
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Clave única por operación para no repetirla si se reintenta (8 a 100 caracteres).
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,100}$' }
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, description: 'Qué pasó, en palabras sencillas.' }
+        code: { type: string, description: 'Código estable para tu programa.' }
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          description: Un arreglo de mensajes por cada campo con problemas.
+          additionalProperties:
+            type: array
+            items: { type: string }
+    PageMeta:
+      type: object
+      required: [page, per_page, total, last_page]
+      properties:
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        last_page: { type: integer }
+    Ref:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    Service:
+      type: object
+      required: [id, name, duration_minutes, price, kind, is_virtual, online_booking, professional_ids]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category: { type: [string, 'null'] }
+        duration_minutes: { type: integer }
+        price: { type: number }
+        currency: { type: [string, 'null'], example: PEN }
+        kind: { type: [string, 'null'], description: '`individual` o `group` (clase grupal).' }
+        is_virtual: { type: boolean, description: 'Se atiende por videollamada.' }
+        online_booking: { type: boolean, description: 'Se puede reservar en línea.' }
+        branch_ids:
+          type: [array, 'null']
+          description: Sedes donde se ofrece (vacío o null = todas).
+          items: { type: string, format: uuid }
+        professional_ids:
+          type: array
+          items: { type: string, format: uuid }
+    Branch:
+      type: object
+      required: [id, name, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: [string, 'null'] }
+        timezone: { type: string, example: America/Lima }
+    Professional:
+      type: object
+      required: [id, name, branch_ids]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        branch_ids:
+          type: array
+          items: { type: string, format: uuid }
+    Availability:
+      type: object
+      required: [date, duration_minutes, professionals]
+      properties:
+        date: { type: string, format: date }
+        duration_minutes: { type: integer }
+        professionals:
+          type: array
+          items:
+            type: object
+            required: [professional, slots]
+            properties:
+              professional:
+                type: object
+                required: [id, display_name]
+                properties:
+                  id: { type: string, format: uuid }
+                  display_name: { type: string }
+              slots:
+                type: array
+                items: { type: string, pattern: '^\d{2}:\d{2}$' }
+    AppointmentStatus:
+      type: string
+      enum: [pending, confirmed, checked_in, in_progress, completed, cancelled, no_show]
+      description: pendiente, confirmada, llegó, en atención, atendida, cancelada, no asistió.
+    CustomerSummary:
+      type: object
+      description: Si la clave no puede leer clientes, solo trae id y nombre.
+      required: [id, first_name, last_name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: [string, 'null'] }
+        first_name: { type: string }
+        last_name: { type: string }
+        email: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        document_number: { type: [string, 'null'] }
+        created_at: { type: [string, 'null'], format: date-time }
+    Appointment:
+      type: object
+      required: [id, code, status, starts_at, ends_at, source, price]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: C-000045 }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        source: { type: [string, 'null'], description: 'Por dónde se agendó: `api`, `staff`, `portal`, `public`, `kiosk`…' }
+        price: { type: number }
+        currency: { type: [string, 'null'] }
+        notes: { type: [string, 'null'] }
+        video_url: { type: [string, 'null'], format: uri }
+        cancel_reason: { type: [string, 'null'] }
+        branch:
+          oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }]
+        service:
+          oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }]
+        professional:
+          oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }]
+        customer:
+          oneOf: [{ $ref: '#/components/schemas/CustomerSummary' }, { type: 'null' }]
+    AppointmentInput:
+      type: object
+      required: [customer_id, service_id, professional_id, branch_id, starts_at]
+      properties:
+        customer_id: { type: string, format: uuid }
+        service_id: { type: string, format: uuid }
+        professional_id: { type: string, format: uuid }
+        branch_id: { type: string, format: uuid }
+        starts_at: { type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$', description: 'Hora local de la sede (AAAA-MM-DDTHH:MM).', example: '2026-11-20T09:45' }
+        notes: { type: string, maxLength: 2000 }
+        video_url: { type: string, format: uri, description: 'Enlace de videollamada solo para esta cita.' }
+        request_key: { type: string, description: 'Clave propia para no duplicar la cita si reintentas.' }
+    Customer:
+      type: object
+      required: [id, first_name, last_name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: [string, 'null'], example: CLI-000210 }
+        first_name: { type: string }
+        last_name: { type: string }
+        email: { type: [string, 'null'], format: email }
+        phone: { type: [string, 'null'] }
+        document_number: { type: [string, 'null'] }
+        created_at: { type: [string, 'null'], format: date-time }
+    CustomerInput:
+      type: object
+      required: [first_name, last_name]
+      properties:
+        first_name: { type: string, maxLength: 255 }
+        last_name: { type: string, maxLength: 255 }
+        email: { type: string, format: email, maxLength: 255 }
+        phone: { type: string, maxLength: 50 }
+        document_number: { type: string, maxLength: 50, description: 'No puede repetirse en la empresa.' }
+        type_document_id: { type: string, format: uuid }
+        birth_date: { type: string, format: date }
+        address: { type: string, maxLength: 255 }
+    SalePaid:
+      type: object
+      required: [id, status, total, paid, paid_at]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: [string, 'null'] }
+        status: { type: string }
+        total: { type: number }
+        paid: { type: number }
+        currency: { type: [string, 'null'] }
+        customer_id: { type: [string, 'null'], format: uuid }
+        appointment_id: { type: [string, 'null'], format: uuid }
+        branch_id: { type: [string, 'null'], format: uuid }
+        paid_at: { type: string, format: date-time }
+    WebhookEnvelope:
+      type: object
+      required: [id, event, created_at]
+      properties:
+        id: { type: string, format: uuid, description: 'Id del aviso. Úsalo para no procesarlo dos veces.' }
+        event:
+          type: string
+          enum: [appointment.created, appointment.confirmed, appointment.rescheduled, appointment.cancelled, appointment.completed, appointment.no_show, sale.paid, customer.created, webhook.test]
+        created_at: { type: string, format: date-time }
+    AppointmentEventData:
+      allOf:
+        - $ref: '#/components/schemas/Appointment'
+        - type: object
+          properties:
+            previous_status:
+              oneOf: [{ $ref: '#/components/schemas/AppointmentStatus' }, { type: 'null' }]
+              description: Estado anterior (null si la cita es nueva; igual al actual si se reprogramó).
+  examples:
+    AppointmentResponseExample:
+      value:
+        data:
+          id: 2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f01
+          code: C-000045
+          status: pending
+          starts_at: '2026-11-20T09:45:00-05:00'
+          ends_at: '2026-11-20T10:30:00-05:00'
+          source: api
+          price: 35
+          currency: PEN
+          notes: Primera visita
+          video_url: null
+          cancel_reason: null
+          branch: { id: 3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01, name: Sede Miraflores }
+          service: { id: 9b1f7c1e-2f7a-4d55-9a62-1c3a8d0f1a01, name: Corte de cabello }
+          professional: { id: 7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801, name: Ana Torres }
+          customer: { id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01, first_name: Lucía, last_name: Ramos }
+    CustomerResponseExample:
+      value:
+        data:
+          id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01
+          code: CLI-000210
+          first_name: Lucía
+          last_name: Ramos
+          email: lucia.ramos@example.com
+          phone: '987654321'
+          document_number: '45678912'
+          created_at: '2026-11-01T15:20:00-05:00'
+  requestBodies:
+    AppointmentEvent:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/WebhookEnvelope'
+              - type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/AppointmentEventData' }
+          example:
+            id: 6c5b4a39-2817-4f6e-9d8c-7b6a5f4e3d01
+            event: appointment.confirmed
+            created_at: '2026-11-19T18:02:33-05:00'
+            data:
+              id: 2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f01
+              code: C-000045
+              status: confirmed
+              previous_status: pending
+              starts_at: '2026-11-20T09:45:00-05:00'
+              ends_at: '2026-11-20T10:30:00-05:00'
+              source: api
+              price: 35
+              currency: PEN
+              notes: null
+              video_url: null
+              cancel_reason: null
+              branch: { id: 3c2a9d4e-8b1f-4e7a-9d3c-5f6a7b8c9d01, name: Sede Miraflores }
+              service: { id: 9b1f7c1e-2f7a-4d55-9a62-1c3a8d0f1a01, name: Corte de cabello }
+              professional: { id: 7e6d5c4b-3a29-4f18-8e7d-6c5b4a392801, name: Ana Torres }
+              customer: { id: 5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c01, code: CLI-000210, first_name: Lucía, last_name: Ramos, email: lucia.ramos@example.com, phone: '987654321', document_number: '45678912', created_at: '2026-11-01T15:20:00-05:00' }
+  responses:
+    WebhookReceived:
+      description: |
+        Responde con cualquier código 2xx en menos de 10 segundos para darlo por recibido. Si no, se reintenta
+        a los 1, 5, 30, 120 y 720 minutos (6 intentos en total); después queda como «Falló» y se puede reenviar
+        desde Configuración → Integraciones.
+    Unauthorized:
+      description: Falta la clave, no es válida o fue revocada.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            sin_clave: { value: { message: 'Falta la clave de API o no es válida. Envíala en el encabezado Authorization: Bearer <clave>.', code: INVALID_API_KEY } }
+            revocada: { value: { message: 'Esta clave de API fue revocada y ya no funciona.', code: API_KEY_REVOKED } }
+    Forbidden:
+      description: La clave no tiene permiso para esto, el plan no incluye la API o la empresa no está activa.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            sin_permiso: { value: { message: 'Esta clave de API no tiene permiso para ver citas.' } }
+            sin_modulo: { value: { message: 'El plan de la empresa no incluye la API y los webhooks.', code: MODULE_DISABLED } }
+            empresa_inactiva: { value: { message: 'La empresa de esta clave no está activa.', code: TENANT_INACTIVE } }
+    NotFound:
+      description: No existe o es de otra empresa.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'No encontramos lo que buscabas.' }
+    Conflict:
+      description: El horario se acaba de ocupar, la cita se está guardando o el cambio de estado no se permite.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'Ese horario se acaba de ocupar: otra persona agendó a ese profesional a la misma hora. Elige otro horario.', code: SLOT_TAKEN }
+    ValidationError:
+      description: Algún dato no es válido.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+          example: { message: 'Falta la hora de inicio.', errors: { starts_at: [Falta la hora de inicio.] } }
+    PlanLocked:
+      description: El plan de la empresa está vencido; la API queda en solo lectura.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'El plan está vencido. Puedes consultar, pero no hacer cambios hasta pagar.', code: PLAN_LOCKED }
+    BadIdempotencyKey:
+      description: El encabezado Idempotency-Key no tiene un formato válido.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'La clave para no repetir la operación no es válida. Recarga la página e inténtalo de nuevo.', code: IDEMPOTENCY_KEY_INVALID }
+    TooManyRequests:
+      description: Se pasó el límite de 120 solicitudes por minuto.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'Se hicieron demasiadas solicitudes con esta clave. Espera un minuto y vuelve a intentar.', code: TOO_MANY_REQUESTS }
+    NotReady:
+      description: La API todavía no está disponible en este servidor.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'La API todavía no está disponible.', code: NOT_READY }

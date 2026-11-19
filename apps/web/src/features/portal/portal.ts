@@ -20,12 +20,14 @@ export interface PortalAppointment {
   deposit?: { amount: number; currency: string; balance: number; outcome: 'refund_due' | 'retained' | 'refunded' | null; refund_hours: number } | null;
   package?: { id: string; code: string; name: string; status: string; late_policy: string } | null;
   is_virtual?: boolean;
+  video_url?: string | null;
   can_confirm: boolean;
   can_cancel: boolean;
   can_reschedule: boolean;
 }
 
 export interface PortalPolicies {
+  waitlist_enabled?: boolean;
   booking_enabled: boolean;
   choose_professional: boolean;
   min_lead_minutes: number;
@@ -101,6 +103,7 @@ export interface PortalWaitlistEntry {
   time_from: string | null;
   time_to: string | null;
   created_at: string | null;
+  offer_until?: string | null;
   days: { date: string; groups: { professional: { id: string; display_name: string }; slots: string[] }[] }[];
 }
 

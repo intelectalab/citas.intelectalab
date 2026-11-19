@@ -9,6 +9,7 @@ import IdleLogout from '../components/layout/IdleLogout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import BrandStyle from '../components/layout/BrandStyle';
 import BillingBanner from '@/features/billing/components/BillingBanner';
+import SupportAccessBanner from '@/features/support/components/SupportAccessBanner';
 import { useTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -77,6 +78,7 @@ export default function DashboardLayout({
 
         <div className="theme-scope flex-1 flex flex-col min-w-0 bg-[#F2F2F2] lg:rounded-tl-3xl overflow-hidden shadow-inner">
           <ImpersonationBanner />
+          <SupportAccessBanner />
           <BillingBanner />
           <Navbar onOpenMenu={() => setMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto p-3 sm:p-6">

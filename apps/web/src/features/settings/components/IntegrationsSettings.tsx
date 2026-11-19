@@ -3,10 +3,12 @@
 import OptionCard from '@/app/components/common/OptionCard';
 import Badge from '@/app/components/common/Badge';
 import SectionTitle from '@/app/components/common/SectionTitle';
+import TransferSettings from './TransferSettings';
+import InvoicingSettings from './InvoicingSettings';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Copy, FileText, ImagePlus, MessageCircle, Plug, QrCode, ShieldCheck, Trash2 } from 'lucide-react';
+import { CheckCircle2, Copy, ImagePlus, MessageCircle, Plug, QrCode, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { PagedList } from '@/app/components/common/Pager';
 import { apiError } from '@/features/appointments/appointments';
@@ -403,19 +405,14 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
         <ErrorAlert message={error} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-slate-100">
-        <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
-          <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0"><FileText size={16} /></span>
-          <span>
-            <span className="block text-sm font-bold text-brand-ink">Facturación electrónica</span>
-            <span className="block text-xs text-slate-500 mt-0.5">Simulación de SUNAT: las boletas y facturas aún no se envían. Lista para conectar un proveedor.</span>
-          </span>
-        </div>
+      <InvoicingSettings canSave={canSave} />
+
+      <div className="grid grid-cols-1 gap-3 pt-4 border-t border-slate-100">
         <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
           <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0"><MessageCircle size={16} /></span>
           <span>
             <span className="block text-sm font-bold text-brand-ink">Correo y WhatsApp</span>
-            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura en Mensajes → <a href="#correo" data-link="correo" className="font-semibold text-brand-accent hover:underline">Correo de tu empresa</a>. WhatsApp queda listo para conectar cuando elijan un proveedor.</span>
+            <span className="block text-xs text-slate-500 mt-0.5">El correo de tu empresa se configura en Mensajes → <a href="#correo" data-link="correo" className="font-semibold text-brand-accent hover:underline">Correo de tu empresa</a>. WhatsApp se conecta en Mensajes → <a href="#whatsapp" data-link="whatsapp" className="font-semibold text-brand-accent hover:underline">WhatsApp y asistente</a>: solo hay que pegar las claves que da Meta.</span>
           </span>
         </div>
       </div>
@@ -430,6 +427,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
           <QrCard method="plin" label="Plin" qr={data.qr.plin} canSave={canSave} onSaved={(qr) => setData({ ...data, qr })} />
         </div>
       </div>
+
+      <TransferSettings canSave={canSave} hasQr={{ yape: Boolean(data.qr.yape), plin: Boolean(data.qr.plin) }} />
 
       <div className="pt-4 border-t border-slate-100 space-y-2" data-payment-events>
         <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Avisos recibidos de la pasarela</span>

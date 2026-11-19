@@ -33,6 +33,7 @@ interface Service {
   deposit_value?: number | string;
   online_booking?: boolean;
   is_virtual?: boolean;
+  video_url?: string | null;
   kind?: 'individual' | 'group';
   capacity?: number;
   recall_label?: string | null;
@@ -55,6 +56,7 @@ const EMPTY_FORM = {
   deposit_value: '30',
   online_booking: true,
   is_virtual: false,
+  video_url: '',
   kind: 'individual' as 'individual' | 'group',
   capacity: 1,
   recall_label: '',
@@ -139,6 +141,7 @@ export default function FormService({
         deposit_value: initialData.deposit_value !== undefined && initialData.deposit_value !== null ? String(Number(initialData.deposit_value)) : '30',
         online_booking: initialData.online_booking ?? true,
         is_virtual: Boolean(initialData.is_virtual),
+        video_url: initialData.video_url || '',
         kind: initialData.kind || 'individual',
         capacity: initialData.capacity || 1,
         recall_label: initialData.recall_label || '',
@@ -467,6 +470,14 @@ export default function FormService({
                               </label>
                             ))}
                           </div>
+
+                          {form.is_virtual && (
+                            <div data-service-video>
+                              <label htmlFor="service-video-url" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Enlace de la videollamada (opcional)</label>
+                              <input id="service-video-url" maxLength={500} placeholder="https://meet.google.com/..." value={form.video_url} onChange={(e) => setForm({ ...form, video_url: e.target.value })} className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white" />
+                              <span className="block text-xs text-slate-400 mt-1">Una sala fija para este servicio. Sale en el correo de la cita, en el portal y en el enlace de la cita. En cada cita se puede poner otro.</span>
+                            </div>
+                          )}
 
                           {form.requires_deposit && (() => {
                             const value = Number(form.deposit_value || 0);

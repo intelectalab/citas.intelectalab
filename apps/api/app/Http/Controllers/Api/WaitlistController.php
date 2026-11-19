@@ -59,6 +59,7 @@ class WaitlistController extends Controller
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+        \App\Support\Waitlist::advance($tenant);
 
         $validated = $request->validate([
             'view'            => 'nullable|in:open,booked,closed',
@@ -111,6 +112,8 @@ class WaitlistController extends Controller
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+
+        abort_unless(\App\Support\Waitlist::enabled($tenant), 422, 'La lista de espera está apagada. Puedes encenderla en Configuración → Lista de espera.');
 
         $validated = $request->validate(['customer_id' => 'required|uuid'] + $this->rules(), $this->messages());
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
@@ -335,6 +338,7 @@ class WaitlistController extends Controller
             'time_to'      => $entry->time_to ? substr($entry->time_to, 0, 5) : null,
             'notes'        => $entry->notes,
             'notified_at'  => $entry->notified_at?->copy()->setTimezone($timezone)->format('Y-m-d\TH:i'),
+            'offer_until'  => ($offer = \App\Support\Waitlist::openOffer($entry->id)) ? Carbon::parse($offer->expires_at)->setTimezone($timezone)->format('Y-m-d\TH:i') : null,
             'created_at'   => Carbon::parse($entry->created_at)->setTimezone($timezone)->format('Y-m-d\TH:i'),
             'days_waiting' => (int) Carbon::parse($entry->created_at)->setTimezone($timezone)->startOfDay()->diffInDays($today),
             'days_left'    => $dateTo ? (int) round($today->diffInDays($dateTo, false)) : null,

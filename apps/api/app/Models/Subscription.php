@@ -34,6 +34,9 @@ class Subscription extends Model
         'pending_plan_id',
         'pending_billing_cycle',
         'grace_extra_days',
+        'cancel_at',
+        'discount_percent',
+        'discount_cycles',
     ];
 
     protected $casts = [
@@ -44,6 +47,7 @@ class Subscription extends Model
         'requires_card' => 'boolean',
         'card_authorized_at' => 'datetime',
         'last_charge_failed_at' => 'datetime',
+        'cancel_at' => 'datetime',
     ];
 
     public function isCurrent(): bool

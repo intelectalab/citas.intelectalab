@@ -14,15 +14,15 @@ export default function ModulePage() {
   const moduleKey = params.key;
 
   useEffect(() => {
-    if (!loading && moduleKey === 'walkin') {
-      router.replace('/walkin');
+    if (!loading && (moduleKey === 'walkin' || moduleKey === 'memberships' || moduleKey === 'classes')) {
+      router.replace(moduleKey === 'walkin' ? '/walkin' : moduleKey === 'classes' ? '/classes' : '/memberships');
     }
   }, [loading, moduleKey, router]);
 
   const section = PENDING_SECTIONS[moduleKey];
   const label = section?.label ?? MODULE_LABELS[moduleKey];
 
-  if (loading || moduleKey === 'walkin') {
+  if (loading || moduleKey === 'walkin' || moduleKey === 'memberships' || moduleKey === 'classes') {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-brand-accent animate-spin" />

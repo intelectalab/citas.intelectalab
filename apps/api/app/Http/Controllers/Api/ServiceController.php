@@ -63,6 +63,7 @@ class ServiceController extends Controller
             'deposit_value' => 'sometimes|numeric|min:0|max:99999',
             'online_booking' => 'sometimes|boolean',
             'is_virtual' => 'sometimes|boolean',
+            'video_url' => 'sometimes|' . \App\Support\VideoLinks::rule(),
             'kind' => ['sometimes', Rule::in([Service::KIND_INDIVIDUAL, Service::KIND_GROUP])],
             'capacity' => 'sometimes|integer|min:1|max:500',
             'recall_label' => 'nullable|string|max:150|required_with:recall_days',
@@ -90,6 +91,12 @@ class ServiceController extends Controller
 
         if ($kind !== Service::KIND_GROUP) {
             $data['capacity'] = 1;
+        }
+
+        if (!\App\Support\VideoLinks::ready()) {
+            unset($data['video_url']);
+        } elseif (array_key_exists('video_url', $data)) {
+            $data['video_url'] = trim((string) $data['video_url']) ?: null;
         }
 
         if (!\Illuminate\Support\Facades\Schema::hasColumn('services', 'deposit_type')) {

@@ -35,7 +35,7 @@ class CashController extends Controller
 
     private function assertOwn(User $user, object $session): void
     {
-        abort_unless($user->allows('cash.others') || $session->opened_by === $user->id, 403, 'Este turno lo abrió otra persona: solo ella o quien tenga el permiso "Turnos de otros" puede verlo o manejarlo.');
+        abort_unless($user->allows('cash.others') || $session->opened_by === $user->id || (($session->review_status ?? null) && $user->allows('cash.approve')), 403, 'Este turno lo abrió otra persona: solo ella o quien tenga el permiso "Turnos de otros" puede verlo o manejarlo.');
     }
 
     private function session(Tenant $tenant, string $id, bool $lock = false): object
@@ -64,7 +64,7 @@ class CashController extends Controller
         $closed = DB::table('cash_sessions')
             ->where('tenant_id', $tenant->id)
             ->when($limit, fn ($q, $id) => $q->where('branch_id', $id))
-            ->when(!$others, fn ($q) => $q->where('opened_by', $user->id))
+            ->when(!$others, fn ($q) => $q->where(fn ($q) => $q->where('opened_by', $user->id)->when(Cash::reviewReady() && $user->allows('cash.approve'), fn ($q) => $q->orWhereNotNull('review_status'))))
             ->where('status', 'closed')
             ->orderByDesc('closed_at')
             ->limit(300)
@@ -80,6 +80,9 @@ class CashController extends Controller
             'can_operate' => $request->user()->allows('cash.edit'),
             'sees_others' => $others,
             'tolerance'  => Sales::rules($tenant)['cash_tolerance'],
+            'review_over' => Sales::rules($tenant)['cash_review_over'],
+            'review_ready' => Cash::reviewReady(),
+            'can_approve' => $user->allows('cash.approve'),
             'branches'   => $branches->where('status', 'active')->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values(),
             'registers'  => $registers->map(fn ($r) => [
                 'id'          => $r->id,
@@ -107,6 +110,8 @@ class CashController extends Controller
             'register_name' => $register->name ?? null,
             'branch_name'   => DB::table('branches')->where('id', $session->branch_id)->value('name'),
             'tolerance'     => Sales::rules($tenant)['cash_tolerance'],
+            'can_review'    => ($session->review_status ?? null) === 'pending' && $request->user()->allows('cash.approve')
+                && ($session->closed_by !== $request->user()->id || $request->user()->isTenantAdmin()),
         ]);
     }
 
@@ -280,23 +285,105 @@ class CashController extends Controller
                 ]);
             }
 
+            $reviewOver = Sales::rules($tenant)['cash_review_over'];
+            $toReview = Cash::reviewReady() && $reviewOver > 0 && abs($difference) > $reviewOver + 0.001;
+
             DB::table('cash_sessions')->where('id', $row->id)->update([
                 'status' => 'closed', 'closed_by' => $request->user()->id, 'closed_at' => now(),
                 'expected_amount' => $expected, 'closing_amount' => $counted, 'difference' => $difference, 'closing_notes' => $notes,
-            ]);
+            ] + ($toReview ? ['review_status' => 'pending'] : []));
 
             Audit::log($request, 'cash.closed', [
                 'tenant' => $tenant->id, 'entity_type' => 'cash_session', 'entity_id' => $row->id,
                 'entity_label' => DB::table('cash_registers')->where('id', $row->cash_register_id)->value('name'), 'branch_id' => $row->branch_id,
-                'after' => ['counted' => $counted, 'expected' => $expected, 'difference' => $difference, 'notes' => $notes],
+                'after' => array_filter(['counted' => $counted, 'expected' => $expected, 'difference' => $difference, 'notes' => $notes, 'status' => $toReview ? Cash::REVIEW_LABELS['pending'] : null], fn ($v) => $v !== null),
             ]);
 
-            if ($overTolerance) {
+            if ($toReview) {
+                $this->notifyReview($tenant, $row, $difference, $request->user());
+            } elseif ($overTolerance) {
                 $this->notifyDifference($tenant, $row, $difference, $request->user());
             }
 
             return response()->json(Cash::present($this->session($tenant, $row->id), true));
         });
+    }
+
+    public function review(Request $request, string $session)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless(Cash::reviewReady(), 503, 'Falta actualizar la base de datos para revisar cierres de caja: ejecuta php artisan migrate.');
+
+        $validated = $request->validate([
+            'decision' => ['required', Rule::in(['approved', 'observed'])],
+            'notes'    => 'nullable|string|max:500',
+        ], [
+            'decision.required' => 'Elige si apruebas u observas el cierre.',
+        ]);
+
+        $notes = trim((string) ($validated['notes'] ?? '')) ?: null;
+
+        if ($validated['decision'] === 'observed' && !$notes) {
+            throw ValidationException::withMessages(['notes' => 'Escribe qué observas del cierre, para que quien lo cerró sepa qué revisar.']);
+        }
+
+        return DB::transaction(function () use ($tenant, $session, $validated, $notes, $request) {
+            $row = $this->session($tenant, $session, true);
+            Access::assertBranch($request->user(), $row->branch_id, true);
+            abort_if(($row->review_status ?? null) !== 'pending', 409, 'Este cierre no está en revisión.');
+            abort_if($row->closed_by === $request->user()->id && !$request->user()->isTenantAdmin(), 403, 'Un cierre en revisión lo aprueba otra persona, no quien lo cerró.');
+
+            DB::table('cash_sessions')->where('id', $row->id)->update([
+                'review_status' => $validated['decision'], 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'review_notes' => $notes,
+            ]);
+
+            $register = DB::table('cash_registers')->where('id', $row->cash_register_id)->value('name');
+
+            Audit::log($request, 'cash.reviewed', [
+                'tenant' => $tenant->id, 'entity_type' => 'cash_session', 'entity_id' => $row->id, 'entity_label' => $register, 'branch_id' => $row->branch_id,
+                'before' => ['status' => Cash::REVIEW_LABELS['pending']],
+                'after'  => array_filter(['status' => Cash::REVIEW_LABELS[$validated['decision']], 'notes' => $notes, 'difference' => round((float) $row->difference, 2)], fn ($v) => $v !== null),
+            ]);
+
+            try {
+                if (Notifier::available() && $row->closed_by && $row->closed_by !== $request->user()->id) {
+                    $who = \App\Support\Person::name($request->user());
+                    $title = $validated['decision'] === 'approved' ? 'Tu cierre de caja fue aprobado' : 'Tu cierre de caja fue observado';
+                    Notifier::send($tenant->id, $row->closed_by, 'cash.reviewed', $title, implode(' · ', array_filter(["{$register}. Lo revisó {$who}.", $notes])), '/cash', 'cash_session', $row->id);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            $fresh = $this->session($tenant, $row->id);
+
+            return response()->json(Cash::present($fresh, true) + [
+                'register_name' => $register,
+                'branch_name'   => DB::table('branches')->where('id', $row->branch_id)->value('name'),
+            ]);
+        });
+    }
+
+    private function notifyReview(Tenant $tenant, object $session, float $difference, User $actor): void
+    {
+        try {
+            if (!Notifier::available()) {
+                return;
+            }
+
+            $register = DB::table('cash_registers')->where('id', $session->cash_register_id)->value('name');
+            $branch = DB::table('branches')->where('id', $session->branch_id)->value('name');
+            $who = \App\Support\Person::name($actor);
+            $body = ($difference < 0 ? 'Faltan ' : 'Sobran ') . Currency::format(abs($difference), $session->currency ?? Currency::of($tenant)) . " en {$register}. La cerró {$who}: revísalo y apruébalo u obsérvalo.";
+
+            foreach (Notifier::staffWith($tenant->id, 'cash.approve', $session->branch_id) as $userId) {
+                if ($userId !== $actor->id) {
+                    Notifier::send($tenant->id, $userId, 'cash.review', 'Cierre de caja en revisión', implode(' · ', array_filter([$body, $branch])), '/cash', 'cash_session', $session->id);
+                }
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     private function notifyDifference(Tenant $tenant, object $session, float $difference, User $actor): void

@@ -3,8 +3,8 @@
 import Button from '@/app/components/common/Button';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, CalendarClock, Plus, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, CalendarPlus, CalendarClock, CircleCheck, Info, Plus, Search, Wallet, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -26,6 +26,34 @@ export interface CustomerOption {
   document_number?: string | null;
   dependents?: { id: string; name: string; species?: string | null }[];
 }
+
+interface CustomerNote {
+  kind: 'alert' | 'debt' | 'no_show' | 'package' | 'membership';
+  tone: 'bad' | 'warn' | 'ok' | 'info';
+  title: string;
+  text: string;
+}
+
+const NOTE_STYLES: Record<CustomerNote['tone'], string> = {
+  bad: 'bg-rose-50 border-rose-200 text-rose-800',
+  warn: 'bg-amber-50 border-amber-200 text-amber-800',
+  ok: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+  info: 'bg-slate-50 border-slate-200 text-slate-700',
+};
+
+const NOTE_ICONS: Record<CustomerNote['kind'], typeof Info> = {
+  alert: AlertTriangle,
+  debt: Wallet,
+  no_show: AlertTriangle,
+  package: CircleCheck,
+  membership: CircleCheck,
+};
+
+const newRequestKey = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const hex = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+};
 
 interface SlotGroup {
   professional: { id: string; display_name: string };
@@ -77,10 +105,17 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
   const [waitlisting, setWaitlisting] = useState(false);
+  const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
+  const [slotsVersion, setSlotsVersion] = useState(0);
+  const [slotTaken, setSlotTaken] = useState('');
+  const requestKey = useRef('');
+  const waitlistOn = user?.tenant?.rules?.['waitlist.enabled'] !== false;
 
   useEffect(() => {
     if (!isOpen) return;
 
+    requestKey.current = newRequestKey();
+    setSlotTaken('');
     setError('');
     setCanForce(false);
     setWaitlisted(false);
@@ -140,6 +175,20 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     return () => clearTimeout(timer);
   }, [customerQuery, customer, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || isReschedule || !customer) {
+      setCustomerNotes([]);
+      return;
+    }
+
+    let active = true;
+    api.get('/appointments/customer-notes', { params: { customer_id: customer.id, ...(serviceId ? { service_id: serviceId } : {}) } })
+      .then((res) => { if (active) setCustomerNotes(res.data?.notes ?? []); })
+      .catch(() => { if (active) setCustomerNotes([]); });
+
+    return () => { active = false; };
+  }, [isOpen, isReschedule, customer, serviceId]);
+
   const service = context?.services.find((s) => s.id === serviceId) ?? null;
 
   const professionals = useMemo(() => {
@@ -169,12 +218,13 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       .then((res) => setSlotGroups(res.data?.professionals ?? []))
       .catch(() => setSlotGroups([]))
       .finally(() => setLoadingSlots(false));
-  }, [isOpen, serviceId, branchId, date, professionalId, reschedule]);
+  }, [isOpen, serviceId, branchId, date, professionalId, reschedule, slotsVersion]);
 
   const pickSlot = (slotProfessionalId: string, slot: string) => {
     setProfessionalId(slotProfessionalId);
     setTime(slot);
     setError('');
+    setSlotTaken('');
     setCanForce(false);
   };
 
@@ -208,6 +258,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             branch_id: branchId,
             starts_at: startsAt,
             notes: notes.trim() || null,
+            request_key: requestKey.current,
             ...(initial?.recall_id ? { recall_id: initial.recall_id } : {}),
             ...(initial?.waitlist_id ? { waitlist_id: initial.waitlist_id } : {}),
             ...force,
@@ -217,6 +268,15 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
       onClose();
     } catch (err: any) {
       const data = err?.response?.data;
+      const taken = data?.code === 'SLOT_TAKEN'
+        || (data?.code === 'SLOT_UNAVAILABLE' && (data?.reasons ?? []).some((r: { code: string }) => r.code === 'DOUBLE_BOOKING'));
+      if (taken) {
+        setSlotTaken(`Las ${time} de ese día se acaban de ocupar. Te mostramos otra vez los horarios libres: elige otro. Lo demás que llenaste se mantiene.`);
+        setTime('');
+        setCanForce(false);
+        setSlotsVersion((v) => v + 1);
+        return;
+      }
       setError(apiError(err, 'No se pudo guardar la cita.'));
       setCanForce(Boolean(data?.code === 'SLOT_UNAVAILABLE' && data?.overridable && context?.can_override));
     } finally {
@@ -287,7 +347,21 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
                     <X size={16} />
                   </button>
                 </div>
-              ) : (
+              ) : null}
+              {customer && customerNotes.length > 0 && (
+                <ul className="mt-2 space-y-1.5" data-customer-notes>
+                  {customerNotes.map((note) => {
+                    const Icon = NOTE_ICONS[note.kind] ?? Info;
+                    return (
+                      <li key={note.kind} data-note={note.kind} className={`flex items-start gap-2 border rounded-lg px-3 py-2 text-xs ${NOTE_STYLES[note.tone] ?? NOTE_STYLES.info}`}>
+                        <Icon size={14} className="mt-0.5 shrink-0" />
+                        <span><span className="font-bold">{note.title}.</span> {note.text}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {customer ? null : (
                 <>
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
@@ -419,6 +493,9 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
 
           <div>
             <span className={labelClass}>Horarios libres</span>
+            {slotTaken && (
+              <p data-slot-taken className="mb-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{slotTaken}</p>
+            )}
             {!serviceId ? (
               <p className="text-sm text-slate-400">Elige un servicio para ver los horarios libres.</p>
             ) : loadingSlots ? (
@@ -426,7 +503,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             ) : !hasSlots ? (
               <div className="space-y-2" data-no-slots>
                 <p className="text-sm text-slate-400">No hay horarios libres ese día. Prueba con otra fecha.</p>
-                {!isReschedule && !initial?.waitlist_id && customer && (
+                {!isReschedule && !initial?.waitlist_id && customer && waitlistOn && (
                   waitlisted ? (
                     <p data-waitlisted className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                       {customer.first_name} quedó en la lista de espera desde esa fecha. Lo verás en Lista de espera.

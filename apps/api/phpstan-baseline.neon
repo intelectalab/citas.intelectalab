@@ -1,0 +1,4435 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Anonymous function has an unused use \$tenant\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\AccessController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_if expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Role\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Parameter \#1 \$role of method App\\Http\\Controllers\\Api\\AccessController\:\:presentRole\(\) expects App\\Models\\Role\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Access\:\:ensureRoles\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/AccessController.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type Laravel\\Sanctum\\PersonalAccessToken\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/AccountPasswordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ApiIntegrationController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\ApiIntegrationController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/ApiIntegrationController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ApiIntegrationController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 6
+			path: app/Http/Controllers/Api/ApiIntegrationController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Appointment\:\:\$video_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$customer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$color_code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_virtual\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 8
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$species\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:currentStatus\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\AppointmentController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{from\: string\|null, to\: string, to_name\: string, reason\: string\|null, by\: string\|null, at\: non\-falsy\-string\|null\}, Closure\(App\\Models\\AppointmentStatusHistory\)\: array\{from\: string\|null, to\: string, to_name\: string, reason\: string\|null, by\: string\|null, at\: non\-falsy\-string\|null\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#1 \$date of closure expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#1 \$date of closure expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon\|null given\.$#'
+			identifier: argument.type
+			count: 5
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#2 \$customer of method App\\Http\\Controllers\\Api\\AppointmentController\:\:assertCustomerFree\(\) expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Parameter \#3 \$customer of static method App\\Support\\Messaging\:\:queue\(\) expects App\\Models\\Customer\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 4
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentLinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentLinkController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\AppointmentLinkController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/AppointmentLinkController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:zone\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AuditController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AuditController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\AutomationController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/AutomationController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AutomationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 6
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 7
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\AvailabilityBlockController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{id\: string, code\: string, status\: string, status_name\: string, starts_at\: non\-falsy\-string, ends_at\: non\-falsy\-string, customer\: string\|null, service\: mixed, professional\: mixed, package\: mixed\}, Closure\(App\\Models\\Appointment\)\: array\{id\: string, code\: string, status\: string, status_name\: string, starts_at\: non\-falsy\-string, ends_at\: non\-falsy\-string, customer\: string\|null, service\: mixed, professional\: mixed, package\: mixed\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/AvailabilityBlockController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\SaaSPlan\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\SaaSPlan\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$is_public_catalog\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:zone\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Subscription\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, array\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\DataBackup\:\:sheets\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Subscriptions\:\:present\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Parameter \#3 \$tenant of static method App\\Models\\AuditEvent\:\:record\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 8
+			path: app/Http/Controllers/Api/BillingController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\BookingPageController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/BookingPageController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BookingPageController.php
+
+		-
+			message: '#^Parameter \#2 \$tenant of static method App\\Support\\Access\:\:denial\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BookingPageController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BranchController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BranchController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BranchController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\BranchController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/BranchController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BranchController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\ProfessionalSchedule\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/BranchController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$allow_customer_signup\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/BrandingController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\BrandingController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/BrandingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/BrandingController.php
+
+		-
+			message: '#^Parameter \#2 \$tenant of static method App\\Support\\Access\:\:denial\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/BrandingController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CampaignController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CampaignController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CampaignController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, object\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/CampaignController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CampaignController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$license_number\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$recall_service_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$starts_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CareRecordController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\CareRecord\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{note\: string, by\: string\|null, at\: non\-falsy\-string\|null\}, Closure\(App\\Models\\CareRecordAddendum\)\: array\{note\: string, by\: string\|null, at\: non\-falsy\-string\|null\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Parameter \#1 \$date of closure expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Parameter \#1 \$date of closure expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Parameter \#1 \$professional of static method App\\Support\\Documents\:\:professionalSignaturePath\(\) expects App\\Models\\Professional, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Relation ''company'' is not found in App\\Models\\Tenant model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>recall_service_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/CareRecordController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CashController\:\:isOnlyProfessional\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Http/Controllers/Api/CashController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CashController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CashController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CashController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/CashController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ClassSessionController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ClassSessionController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\ClassSessionController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/ClassSessionController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ClassSessionController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/ClassSessionController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Http/Controllers/Api/ClassSessionController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CommissionController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CommissionController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CommissionController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CommissionRuleController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CommissionRuleController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CommissionRuleController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/CommissionRuleController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Tenant\:\:\$company\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billing_cycle\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$ends_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$trial_ends_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CompanyController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>limits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/CompanyController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ComplaintController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Complaints\:\:issuer\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ComplaintController.php
+
+		-
+			message: '#^Parameter \#3 \$tenant of static method App\\Models\\AuditEvent\:\:record\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ComplaintController.php
+
+		-
+			message: '#^Relation ''company'' is not found in App\\Models\\Tenant model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/ComplaintController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/CouponController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CouponController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CurrencyController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CurrencyController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CurrencyController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, object\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CurrencyController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$stage_manual_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:changes\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:move\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:refreshStale\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:release\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:save\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:stages\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/CustomerBoardController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$managerUser\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$typeDocument\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:dependents\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:rules\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:zone\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:move\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerStages\:\:release\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Messaging\:\:portalAccess\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\OnlineBooking\:\:state\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\OnlineBooking\:\:states\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Phones\:\:prefixFor\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Relation ''managerUser'' is not found in App\\Models\\Customer model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Customer model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Relation ''typeDocument'' is not found in App\\Models\\Customer model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/CustomerController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerDependentController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:dependents\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/Api/CustomerDependentController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/CustomerImportController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerImportController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerImport\:\:analyze\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerImportController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerImport\:\:apply\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerImportController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\CustomerProfileController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerProfileController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/CustomerProfileController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/CustomerProfileController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$branch\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 8
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$total\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasModule\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:zone\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$a of closure expects App\\Models\\Appointment\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\AppointmentStatusHistory\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 2
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{id\: string, starts_at\: non\-falsy\-string\|null, who\: mixed, service\: mixed, professional\: mixed, branch\: mixed, status\: string, status_name\: string\}, Closure\(App\\Models\\Appointment\)\: array\{id\: string, starts_at\: non\-falsy\-string\|null, who\: mixed, service\: mixed, professional\: mixed, branch\: mixed, status\: string, status_name\: string\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Appointment\)\: bool given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:sum\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model\)\: float\)\|string\|null, Closure\(App\\Models\\Appointment\)\: float given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$date of closure expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\AppointmentFlow\:\:name\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Currency\:\:of\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\WorkMinutes\:\:compute\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/DataExportController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\HolidayController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{id\: string, code\: string, status\: string, status_name\: string, starts_at\: non\-falsy\-string, ends_at\: non\-falsy\-string, customer\: string\|null, service\: mixed, professional\: mixed, package\: mixed\}, Closure\(App\\Models\\Appointment\)\: array\{id\: string, code\: string, status\: string, status_name\: string, starts_at\: non\-falsy\-string, ends_at\: non\-falsy\-string, customer\: string\|null, service\: mixed, professional\: mixed, package\: mixed\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/Api/HolidayController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/ImpersonationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_owner\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ImpersonationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ImpersonationController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:createToken\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ImpersonationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Offset ''adjustment''\|''initial''\|''purchase''\|''return'' on array\{initial\: ''Carga inicial'', purchase\: ''Compra / ingreso'', sale\: ''Venta'', service_consumption\: ''Consumo en atención'', adjustment\: ''Ajuste / merma'', transfer_out\: ''Salida por traslado'', transfer_in\: ''Entrada por traslado'', return\: ''Devolución''\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 8
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of method App\\Http\\Controllers\\Api\\InventoryController\:\:suppliesPayload\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Parameter \#2 \$tenant of static method App\\Support\\Access\:\:denial\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 2
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>in_transit" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>orders_count" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>quantity" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>total_bought" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/InventoryController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\InvoiceController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/InvoiceController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/InvoiceController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/InvoiceController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\InvoicingSettingsController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/InvoicingSettingsController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/InvoicingSettingsController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/InvoicingSettingsController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>mode" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/InvoicingSettingsController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>provider" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/InvoicingSettingsController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\LoyaltyController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/LoyaltyController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/LoyaltyController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/MembershipController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\MembershipController\:\:ready\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/MembershipController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/MembershipController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/MembershipController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Memberships\:\:expireDue\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/MembershipController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/MembershipController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\MessageController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Offset ''cancelled'' on array\{scheduled\: ''Programado'', queued\: ''Por enviar'', sent\: ''Enviado'', simulated\: ''Simulado'', delivered\: ''Entregado'', read\: ''Leído'', failed\: ''Falló'', not_sent\: ''No enviado'', \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Offset ''queued''\|''scheduled'' on array\{scheduled\: ''Programado'', queued\: ''Por enviar'', sent\: ''Enviado'', simulated\: ''Simulado'', delivered\: ''Entregado'', read\: ''Leído'', failed\: ''Falló'', not_sent\: ''No enviado'', \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, object\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\CustomerProfile\:\:consentHistory\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/MessageController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$timezone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/NotificationController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Confirmations\:\:process\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/NotificationController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\DueNotices\:\:run\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/NotificationController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Messaging\:\:generate\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/NotificationController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Notifier\:\:upcomingAbsences\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/NotificationController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Waitlist\:\:advance\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/NotificationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 6
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Appointment\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Http/Controllers/Api/PackageController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\PaymentController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Support\\Payments\\PaymentProvider\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, array\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>mode" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>provider" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/PaymentController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PaymentVoucherController.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Http/Controllers/Api/PlatformBillingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PlatformBillingController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>mode" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/Api/PlatformBillingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PlatformLookController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 9
+			path: app/Http/Controllers/Api/PlatformWebController.php
+
+		-
+			message: '#^Call to function abort_unless\(\) with false and 403 will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: app/Http/Controllers/Api/PortalClassController.php
+
+		-
+			message: '#^Instanceof between App\\Models\\User\|null and App\\Models\\Customer will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/Api/PortalClassController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/PortalClassController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$category\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Service\>\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$duration_minutes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_virtual\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Instanceof between App\\Models\\User\|null and App\\Models\\Customer will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Left side of && is always false\.$#'
+			identifier: booleanAnd.leftAlwaysFalse
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\PortalController\:\:customer\(\) should return App\\Models\\Customer but returns App\\Models\\User\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Parameter \#2 \$customer of method App\\Http\\Controllers\\Api\\AppointmentController\:\:assertCustomerFree\(\) expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Relation ''category'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 5
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>duration_minutes" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/PortalController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\PortalQuoteController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalQuoteController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalQuoteController.php
+
+		-
+			message: '#^Parameter \#3 \$customer of static method App\\Support\\Notifier\:\:quoteAnswered\(\) expects App\\Models\\Customer, App\\Models\\User\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/PortalQuoteController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\PortalShopController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalShopController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalShopController.php
+
+		-
+			message: '#^Parameter \#2 \$customer of static method App\\Support\\Packages\:\:sellOnline\(\) expects App\\Models\\Customer, App\\Models\\User\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PortalShopController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PosController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/PosController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PosController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Http/Controllers/Api/PosController.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type mixed\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/PosController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/ProductController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ProductController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Currency\:\:of\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/ProductController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Inventory\:\:enabled\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ProductController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>in_transit" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ProductController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>quantity" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ProductController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^If condition is always true\.$#'
+			identifier: if.alwaysTrue
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of method App\\Http\\Controllers\\Api\\ProfessionalController\:\:planLimitReached\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Access\:\:ensureRoles\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>limits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/ProfessionalScheduleController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Branch\>\:\:map\(\) expects callable\(App\\Models\\Branch, int\)\: array\{id\: string, name\: string, hours\: stdClass, professionals\: Illuminate\\Support\\Collection\<int, array\{id\: string, display_name\: string, weekly_minutes\: int, ranges\: Illuminate\\Support\\Collection\<int, array\{weekday\: int, starts\: string, ends\: string\}\>\}\>\}, Closure\(App\\Models\\Branch\)\: array\{id\: string, name\: string, hours\: stdClass, professionals\: Illuminate\\Support\\Collection\<int, array\{id\: string, display_name\: string, weekly_minutes\: int, ranges\: Illuminate\\Support\\Collection\<int, mixed\>\}\>\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalScheduleController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ProfessionalSignatureController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$allow_customer_signup\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PublicBookingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Tenant\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/PublicBookingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Tenant\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/PublicClassController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Match arm comparison between mixed and ''accepted'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\QuoteController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 6
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Cart\:\:productsEnabled\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/QuoteController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$species\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$starts_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\RecallController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Parameter \#2 \$customer of method App\\Http\\Controllers\\Api\\RecallController\:\:links\(\) expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/RecallController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$category\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecordTemplateController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/RecordTemplateController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\RecordTemplateController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/RecordTemplateController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RecordTemplateController.php
+
+		-
+			message: '#^Relation ''category'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/RecordTemplateController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/ReportController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasModule\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/Api/ReportController.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Http/Controllers/Api/ReportController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ReportController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of class App\\Support\\Reports constructor expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/ReportController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Currency\:\:of\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ReportController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RoomController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/RoomController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Rooms\:\:equipmentChanged\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RoomController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Rooms\:\:listing\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RoomController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Rooms\:\:mode\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/RoomController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/SaleController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_if expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/SaleController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, object\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/SaleController.php
+
+		-
+			message: '#^Parameter \#4 \$at of static method App\\Support\\Packages\:\:usable\(\) expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/SaleController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\SalesController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/SalesController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/SalesController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Http/Controllers/Api/SalesController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasModule\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Status\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Relation ''category'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>deposit_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>deposit_value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>kind" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>price" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/ServiceController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Referrals\:\:forTenant\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/SupportController.php
+
+		-
+			message: '#^Relation ''tenant'' is not found in App\\Models\\TenantContact model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Http/Controllers/Api/TenantContactController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Tenant\:\:\$company\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$allow_customer_signup\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$brand_color\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_owner\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$limits\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$modules_off\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$roles\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rules\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$vocabulary\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:moduleKeys\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Parameter \#1 \$account of static method App\\Support\\AccountSecurity\:\:present\(\) expects App\\Models\\Customer\|App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Parameter \#1 \$type of static method App\\Models\\Tenant\:\:startingModulesOff\(\) expects App\\Models\\BusinessType\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Relation ''company'' is not found in App\\Models\\Tenant model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Relation ''subscription'' is not found in App\\Models\\Tenant model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>allow_customer_signup" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>billing_cycle" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>limits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>modules_off" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>rules" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>vocabulary" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/TenantController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$appointment_statuses\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$modules_off\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rules\.$#'
+			identifier: property.notFound
+			count: 20
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$vocabulary\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\TenantSettingController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>vocabulary" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/TenantSettingController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Subscription\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/TenantSubscriptionController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$category\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/PublicApiController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/PublicApiController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/PublicApiController.php
+
+		-
+			message: '#^Relation ''category'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/V1/PublicApiController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/V1/PublicApiController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$duration_minutes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 6
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$species\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$starts_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\WaitlistController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Parameter \#2 \$customer of method App\\Http\\Controllers\\Api\\WaitlistController\:\:values\(\) expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/WaitlistController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$appointment_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$arrived_at\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$branch_id\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$customer_dependent_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$customer_id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$done_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$left_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$notes\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$professional_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$served_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$service_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 8
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$tenant_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$ticket\.$#'
+			identifier: property.notFound
+			count: 8
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$waited_minutes\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$duration_minutes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 8
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$price\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$timezone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\WalkinController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Tenant\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#2 \$branch of method App\\Http\\Controllers\\Api\\WalkinController\:\:preferred\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#2 \$branch of static method App\\Support\\Walkin\:\:candidates\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#2 \$branch of static method App\\Support\\Walkin\:\:estimates\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#2 \$branch of static method App\\Support\\Walkin\:\:estimates\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#2 \$branch of static method App\\Support\\Walkin\:\:now\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#3 \$service of static method App\\Support\\Walkin\:\:candidates\(\) expects App\\Models\\Service, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Property App\\Models\\WalkinEntry\:\:\$id \(int\) does not accept string\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>first_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Api/WalkinController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WebController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rules\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/WhatsAppController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\WhatsAppController\:\:tenant\(\) should return App\\Models\\Tenant but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/WhatsAppController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/Api/WhatsAppController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WhatsAppController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Tenant\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WhatsAppWebhookController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, array\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/WhatsAppWebhookController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$businessType\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:isActive\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Instanceof between App\\Models\\User\|null and App\\Models\\Customer will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Customer\|App\\Models\\User\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,App\\Models\\Customer\|App\\Models\\User\>\:\:reject\(\) expects App\\Models\\Customer\|App\\Models\\User\|bool\|\(callable\(App\\Models\\Customer\|App\\Models\\User, int\)\: bool\), Closure\(App\\Models\\Customer\|App\\Models\\User\)\: \(int\|null\) given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/Auth/LoginController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, array\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Auth/PasswordController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$allow_customer_signup\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Auth/RegisterCustomerController.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Auth/SubscriptionController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$businessType\.$#'
+			identifier: property.notFound
+			count: 6
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$features\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:dependents\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:modules\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:rules\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:vocabulary\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Instanceof between App\\Models\\User\|null and App\\Models\\Customer will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Access\:\:idleMinutes\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\AppointmentFlow\:\:forTenant\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\AppointmentFlow\:\:rule\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Branding\:\:present\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Currency\:\:of\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Subscriptions\:\:present\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>brand_color" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type Laravel\\Sanctum\\PersonalAccessToken\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Component\\HttpFoundation\\Response\:\:header\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Middleware/AuthenticateApiKey.php
+
+		-
+			message: '#^Instanceof between App\\Models\\User\|null and App\\Models\\Customer will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Http/Middleware/EnsureCustomerAccount.php
+
+		-
+			message: '#^Result of \|\| is always true\.$#'
+			identifier: booleanOr.alwaysTrue
+			count: 1
+			path: app/Http/Middleware/EnsureCustomerAccount.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Http/Middleware/EnsureCustomerAccount.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasModule\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Middleware/EnsureModuleEnabled.php
+
+		-
+			message: '#^Parameter \#2 \$tenant of static method App\\Support\\Access\:\:denial\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Middleware/EnsurePermission.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type Laravel\\Sanctum\\PersonalAccessToken\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Middleware/EnsureStaffAccount.php
+
+		-
+			message: '#^Call to function is_string\(\) with non\-empty\-string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Http/Middleware/Idempotency.php
+
+		-
+			message: '#^Unsafe access to private property App\\Models\\PlatformSetting\:\:\$resolved through static\:\:\.$#'
+			identifier: staticClassAccess.privateProperty
+			count: 4
+			path: app/Models/PlatformSetting.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$modules_off\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rules\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$template\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$vocabulary\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Parameter \#1 \$type of static method App\\Models\\Tenant\:\:profileFromType\(\) expects App\\Models\\BusinessType\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>default_rules" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>dependents" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>modules_off" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>plan" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>rules" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>template" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>vocabulary" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Models/Tenant.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/WalkinEntry.php
+
+		-
+			message: '#^Method App\\Support\\Access\:\:roleOf\(\) should return App\\Models\\Role\|null but returns \(Illuminate\\Database\\Eloquent\\Model&object\{pivot\: Illuminate\\Database\\Eloquent\\Relations\\Pivot\}\)\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Support/Access.php
+
+		-
+			message: '#^Offset ''agenda''\|''attention''\|''audit''\|''automations''\|''blocks''\|''branches''\|''campaigns''\|''cash''\|''classes''\|''commissions''\|''company''\|''complaints''\|''coupons''\|''customers''\|''data''\|''holidays''\|''integrations''\|''inventory''\|''loyalty''\|''memberships''\|''messages''\|''packages''\|''payments''\|''pos''\|''products''\|''professionals''\|''quotes''\|''recalls''\|''record_templates''\|''records''\|''reports''\|''rooms''\|''sales''\|''schedules''\|''services''\|''settings''\|''users''\|''waitlist''\|''walkin'' on array\{reports\: 0, agenda\: 1, walkin\: 2, waitlist\: 3, recalls\: 4, classes\: 5, blocks\: 6, holidays\: 7, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Support/Access.php
+
+		-
+			message: '#^Offset ''agenda''\|''attention''\|''audit''\|''automations''\|''blocks''\|''branches''\|''campaigns''\|''cash''\|''classes''\|''commissions''\|''company''\|''complaints''\|''coupons''\|''customers''\|''data''\|''holidays''\|''integrations''\|''inventory''\|''loyalty''\|''memberships''\|''messages''\|''packages''\|''payments''\|''pos''\|''products''\|''professionals''\|''quotes''\|''recalls''\|''record_templates''\|''records''\|''reports''\|''rooms''\|''sales''\|''schedules''\|''services''\|''settings''\|''users''\|''waitlist''\|''walkin'' on array\{reports\: array\{section\: ''start'', screens\: array\{''Reportes''\}, short\: array\{view\: ''Ver'', money\: ''Ver montos'', own\: ''Sus números''\}\}, agenda\: array\{section\: ''agenda'', screens\: array\{''Agenda'', ''Citas''\}, short\: array\{view\: ''Ver'', create\: ''Agendar'', edit\: ''Reprogramar y notas'', confirm\: ''Confirmar'', checkin\: ''Marcar llegada'', start\: ''Empezar atención'', complete\: ''Completar'', noshow\: ''No asistió'', \.\.\.\}\}, walkin\: array\{section\: ''agenda'', screens\: array\{''Cola sin cita''\}, short\: array\{view\: ''Ver'', create\: ''Anotar'', edit\: ''Atender o retirar''\}\}, waitlist\: array\{section\: ''agenda'', screens\: array\{''Lista de espera''\}, short\: array\{view\: ''Ver'', create\: ''Anotar'', edit\: ''Cambiar o cerrar''\}\}, recalls\: array\{section\: ''agenda'', screens\: array\{''Controles y…''\}, short\: array\{view\: ''Ver'', create\: ''Registrar'', edit\: ''Cambiar o dar por…''\}\}, classes\: array\{section\: ''agenda'', screens\: array\{''Clases''\}, short\: array\{view\: ''Ver'', create\: ''Programar'', edit\: ''Inscribir y…'', cancel\: ''Cancelar clase''\}\}, blocks\: array\{section\: ''agenda'', screens\: array\{''Bloqueos y ausencias''\}, short\: array\{view\: ''Ver'', create\: ''Registrar'', edit\: ''Cambiar'', delete\: ''Eliminar''\}\}, holidays\: array\{section\: ''agenda'', screens\: array\{\}, note\: ''Es la pestaña…'', short\: array\{view\: ''Ver'', create\: ''Agregar'', edit\: ''Cambiar'', delete\: ''Eliminar''\}\}, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Support/Access.php
+
+		-
+			message: '#^Offset ''building'' on array\{section\: ''agenda''\|''care''\|''company''\|''footer''\|''inventory''\|''loyalty''\|''marketing''\|''sales''\|''start''\|''team'', screens\: array\{''Agenda'', ''Citas''\}\|array\{''Auditoría''\}\|array\{''Automatizaciones''\}\|array\{''Bloqueos y ausencias''\}\|array\{''Caja''\}\|array\{''Campañas''\}\|array\{''Clases''\}\|array\{''Cola sin cita''\}\|array\{''Comisiones''\}\|array\{''Configuración''\}\|array\{''Controles y…''\}\|array\{''Cupones''\}\|array\{''Empresa''\}\|array\{''Fichas de atención''\}\|array\{''Horarios del equipo''\}\|array\{''Kárdex'', ''Traslados'', ''Compras''\}\|array\{''Libro de…''\}\|array\{''Lista de espera''\}\|array\{''Membresías''\}\|array\{''Mensajes''\}\|array\{''Pagos'', ''Comprobantes''\}\|array\{''Paquetes''\}\|array\{''Presupuestos''\}\|array\{''Productos y stock''\}\|array\{''Punto de venta''\}\|array\{''Puntos'', ''Gift cards''\}\|array\{''Reportes''\}\|array\{''Salas y equipos''\}\|array\{''Servicios''\}\|array\{''Sucursales''\}\|array\{''Tiempos de atención''\}\|array\{''Usuarios y roles''\}\|array\{''Ventas''\}\|array\{''\{Clients\}''\}\|array\{''\{Pros\}''\}, short\: array\{view\: ''Abrir'', create\: ''Armar ventas'', edit\: ''Cambiar una venta…''\}\|array\{view\: ''Ver'', answer\: ''Responder''\}\|array\{view\: ''Ver'', create\: ''Agendar'', edit\: ''Reprogramar y notas'', confirm\: ''Confirmar'', checkin\: ''Marcar llegada'', start\: ''Empezar atención'', complete\: ''Completar'', noshow\: ''No asistió'', \.\.\.\}\|array\{view\: ''Ver'', create\: ''Agregar cajas'', edit\: ''Abrir, mover y…'', others\: ''Turnos de otros'', approve\: ''Aprobar cierres''\}\|array\{view\: ''Ver'', create\: ''Anotar'', edit\: ''Atender o retirar''\|''Cambiar o cerrar''\}\|array\{view\: ''Ver'', create\: ''Cobrar'', delete\: ''Anular y devolver'', approve\: ''Aprobar devoluciones''\}\|array\{view\: ''Ver'', create\: ''Crear planes'', edit\: ''Aprobar y avanzar…'', delete\: ''Anular''\}\|array\{view\: ''Ver'', create\: ''Crear'', edit\: ''Cambiar y dar más…'', delete\: ''Anular y devolver''\}\|array\{view\: ''Ver'', create\: ''Crear'', edit\: ''Cambiar y dar…'', delete\: ''Eliminar roles''\}\|array\{view\: ''Ver'', create\: ''Emitir y acreditar'', edit\: ''Ajustar y canjear'', delete\: ''Anular''\}\|array\{view\: ''Ver'', create\: ''Escribir'', edit\: ''Cambiar, cancelar y…'', reply\: ''Responder WhatsApp''\}\|array\{view\: ''Ver'', create\: ''Mover, comprar y…'', edit\: ''Contar, recibir y…'', delete\: ''Cancelar y eliminar''\}\|array\{view\: ''Ver'', create\: ''Programar'', edit\: ''Inscribir y…'', cancel\: ''Cancelar clase''\}\|array\{view\: ''Ver'', create\: ''Registrar'', edit\: ''Cambiar o dar por…''\}\|array\{view\: ''Ver'', create\?\: ''Crear''\|''Registrar'', edit\?\: ''Cambiar''\|''Cambiar datos''\|''Cambiar horarios''\|''Cambiar o cancelar''\|''Cambiar y poner…''\|''Encender y cambiar''\|''Llenar, firmar y…'', delete\?\: ''Eliminar''\|''Quitar del catálogo''\}\|array\{view\: ''Ver'', money\: ''Ver montos'', own\: ''Sus números''\}\|array\{view\: ''Ver'', review\: ''Revisar comprobantes''\}\|array\{view\: ''Ver'', rules\: ''Reglas'', approve\: ''Aprobar'', pay\: ''Marcar pagadas''\}\}\|array\{section\: ''agenda''\|''care''\|''footer''\|''other'', screens\: array\{\}, note\: ''Es la pestaña…''\|''Está en…''\|''No es una pantalla\:…''\|''Se arman dentro de…'', short\: array\{\}\|array\{create\: ''Crear'', edit\: ''Cambiar'', delete\: ''Eliminar''\}\|array\{view\: ''Ver'', create\: ''Agregar'', edit\: ''Cambiar'', delete\: ''Eliminar''\}\|array\{view\: ''Ver'', edit\: ''Crear y revocar''\}\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Support/Access.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of static method App\\Support\\Access\:\:ensureRoles\(\) expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Access.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/AccountSecurity.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:isActive\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Support/AccountSecurity.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, App\\Models\\Customer\|App\\Models\\User\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/AccountSecurity.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Support/AccountSecurity.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$business_type_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Announcements.php
+
+		-
+			message: '#^Called ''pluck'' on Laravel collection, but could have been retrieved as a query\.$#'
+			identifier: larastan.noUnnecessaryCollectionCall
+			count: 1
+			path: app/Support/Announcements.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/AppointmentEvents.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$appointment_statuses\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/AppointmentFlow.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>appointment_statuses" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/AppointmentFlow.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/AppointmentScheduler.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$buffer_after_minutes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/AppointmentScheduler.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$buffer_before_minutes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/AppointmentScheduler.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/AppointmentScheduler.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>buffer_after_minutes" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/AppointmentScheduler.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>buffer_before_minutes" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/AppointmentScheduler.php
+
+		-
+			message: '#^Method App\\Support\\AppointmentTiming\:\:occupiedUntil\(\) should return Illuminate\\Support\\Carbon but returns Carbon\\Carbon\.$#'
+			identifier: return.type
+			count: 2
+			path: app/Support/AppointmentTiming.php
+
+		-
+			message: '#^Parameter \#1 \$from of static method App\\Support\\AppointmentTiming\:\:seconds\(\) expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Support/AppointmentTiming.php
+
+		-
+			message: '#^Parameter \#1 \$from of static method App\\Support\\AppointmentTiming\:\:seconds\(\) expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon\|null given\.$#'
+			identifier: argument.type
+			count: 6
+			path: app/Support/AppointmentTiming.php
+
+		-
+			message: '#^Parameter \#2 \$to of static method App\\Support\\AppointmentTiming\:\:seconds\(\) expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Support/AppointmentTiming.php
+
+		-
+			message: '#^Parameter \#2 \$to of static method App\\Support\\AppointmentTiming\:\:seconds\(\) expects Illuminate\\Support\\Carbon\|null, Carbon\\Carbon\|null given\.$#'
+			identifier: argument.type
+			count: 6
+			path: app/Support/AppointmentTiming.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Audit.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$brand_color\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Support/Branding.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$logo_url\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Support/Branding.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>first_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Support/CalendarFeeds.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\Subscriptions\:\:price\(\) expects App\\Models\\SaaSPlan\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/Cancellations.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Service\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Service\>\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Customer\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Appointment\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,array\<string, mixed\>\>\:\:sort\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Parameter \#2 \$customer of static method App\\Support\\Memberships\:\:apply\(\) expects App\\Models\\Customer\|null, Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Customer\>\|Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Parameter \#2 \$customer of static method App\\Support\\Memberships\:\:line\(\) expects App\\Models\\Customer\|null, Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Customer\>\|Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Cart.php
+
+		-
+			message: '#^Anonymous function has an unused use \$user\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Support/ClassSessions.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 5
+			path: app/Support/ClassSessions.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Support/ClassSessions.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Commissions.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Tenant\:\:\$company\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Complaints.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Complaints.php
+
+		-
+			message: '#^Left side of && is always true\.$#'
+			identifier: booleanAnd.leftAlwaysTrue
+			count: 1
+			path: app/Support/Confirmations.php
+
+		-
+			message: '#^Method App\\Support\\Confirmations\:\:deadline\(\) should return Illuminate\\Support\\Carbon\|null but returns Carbon\\Carbon\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Support/Confirmations.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<''Alerta''\|''Apellidos''\|''Celular''\|''Correo''\|''Departamento''\|''Dirección''\|''Distrito''\|''Fecha de nacimiento''\|''Nombres''\|''Número de documento''\|''Observaciones''\|''Sexo''\|''Tipo de documento''\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Support/CustomerImport.php
+
+		-
+			message: '#^Instanceof between App\\Models\\User\|null and App\\Models\\Customer will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Support/CustomerProfile.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Http\\Request\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Support/CustomerProfile.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/CustomerTransfers.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$color\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Documents.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: app/Support/Documents.php
+
+		-
+			message: '#^Parameter \#3 \$tenant of static method App\\Models\\AuditEvent\:\:record\(\) expects App\\Models\\Tenant\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/Documents.php
+
+		-
+			message: '#^Parameter \#4 \$font of method Dompdf\\Canvas\:\:page_text\(\) expects string, null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Documents.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>color" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Documents.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billing_cycle\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$card_last4\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$card_status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$ends_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$pending_plan_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$trial_ends_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Dead catch \- Throwable is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>limits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/DueNotices.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$currency\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Dunning.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Support/Dunning.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\Subscriptions\:\:price\(\) expects App\\Models\\SaaSPlan\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Support/Dunning.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>currency" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Dunning.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$color\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/EmailDesign.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$logo_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/EmailDesign.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rules\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/EmailDesign.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>color" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/EmailDesign.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>phone" in empty\(\) is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/EmailDesign.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>rules" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/EmailDesign.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Memberships.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Memberships.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/MessageQuota.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Parameter \#1 \$date of static method App\\Support\\Messaging\:\:longDate\(\) expects Illuminate\\Support\\Carbon, Carbon\\Carbon given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Parameter \#3 \$customer of static method App\\Support\\Messaging\:\:queue\(\) expects App\\Models\\Customer\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 5
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>first_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 3
+			path: app/Support/Messaging.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$branch_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$professional_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$ticket\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$timezone\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user_id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Parameter \#8 \$entityId of static method App\\Support\\Notifier\:\:send\(\) expects string\|null, int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>first_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Notifier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Packages.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Packages.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Packages.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Support/Packages.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Packages.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$brand_color\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$logo_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Class App\\Support\\Payments\\SimulatedPaymentProvider does not have a constructor and must be instantiated without any parameters\.$#'
+			identifier: new.noConstructor
+			count: 2
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>brand_color" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>logo_url" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/PaymentLinks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\PlanBilling\:\:assertCurrency\(\) expects App\\Models\\SaaSPlan, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\Subscriptions\:\:price\(\) expects App\\Models\\SaaSPlan\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#3 \$plan of static method App\\Support\\PlanBilling\:\:pay\(\) expects App\\Models\\SaaSPlan, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#4 \$plan of static method App\\Support\\PlanBilling\:\:culqiCheckout\(\) expects App\\Models\\SaaSPlan, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Parameter \#4 \$plan of static method App\\Support\\PlanBilling\:\:pendingRow\(\) expects App\\Models\\SaaSPlan, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Support/PlanBilling.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billing_cycle\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlanReceipts.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlanReceipts.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\SaaSPlan\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlanTransfers.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/PlanTransfers.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\Subscriptions\:\:price\(\) expects App\\Models\\SaaSPlan\|null, Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\SaaSPlan\>\|Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlanTransfers.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Support/PlatformLook.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$currency\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$limits\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Tenant\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\Subscriptions\:\:price\(\) expects App\\Models\\SaaSPlan\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>billing_cycle" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>currency" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/PlatformReports.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$booking_page\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/PublicBooking.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>booking_page" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/PublicBooking.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Quotes.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Quotes.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Recalls.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$recall_days\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Recalls.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$recall_label\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Recalls.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Recalls.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/Refunds.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>tenant_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Rls.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Sales.php
+
+		-
+			message: '#^Parameter \#1 \$boolean of function abort_unless expects bool, stdClass\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Sales.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Support/Sales.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Sales.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Subscriptions.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Subscriptions.php
+
+		-
+			message: '#^Parameter \#1 \$plan of static method App\\Support\\Subscriptions\:\:price\(\) expects App\\Models\\SaaSPlan\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Support/Subscriptions.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/SupportDesk.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$support\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/SupportDesk.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/SupportDesk.php
+
+		-
+			message: '#^Parameter \#1 \$type of static method App\\Models\\Tenant\:\:startingModulesOff\(\) expects App\\Models\\BusinessType\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/TenantProvisioner.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Appointment\:\:\$video_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/VideoLinks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_virtual\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/VideoLinks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$video_url\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/VideoLinks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$duration_minutes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Method App\\Support\\Waitlist\:\:offerNext\(\) should return App\\Models\\WaitlistEntry\|null but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Parameter \#1 \$branch of static method App\\Support\\AppointmentScheduler\:\:timezone\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Parameter \#1 \$service of method App\\Support\\AppointmentScheduler\:\:slots\(\) expects App\\Models\\Service, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Parameter \#2 \$branch of method App\\Support\\AppointmentScheduler\:\:slots\(\) expects App\\Models\\Branch, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Parameter \#3 \$only of static method App\\Support\\Messaging\:\:waitlistSlot\(\) expects App\\Models\\WaitlistEntry\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Parameter \#4 \$professional of method App\\Support\\AppointmentScheduler\:\:slots\(\) expects App\\Models\\Professional\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Waitlist.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\WalkinEntry\:\:\$arrived_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Walkin.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Walkin.php
+
+		-
+			message: '#^Property App\\Models\\WalkinEntry\:\:\$id \(int\) does not accept string\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Support/Walkin.php
+
+		-
+			message: '#^Relation ''status'' is not found in App\\Models\\Service model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: app/Support/Walkin.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Webhooks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Support/Webhooks.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Support/Webhooks.php
+
+		-
+			message: '#^Parameter \#1 \$customer of static method App\\Support\\Webhooks\:\:customerData\(\) expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Webhooks.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 3
+			path: app/Support/Webhooks.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>phone" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/WhatsApp.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,array\<int, int\>\>\:\:sortBy\(\) expects array\<array\{string, string\}\|\(callable\(array\{int, int\}, array\{int, int\}\)\: mixed\)\|\(callable\(array\{int, int\}, int\)\: mixed\)\|string\>\|\(callable\(array\{int, int\}, int\)\: mixed\)\|string, 0 given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/WorkMinutes.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: database/seeders/DemoDataSeeder.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 4
+			path: database/seeders/DemoExtrasSeeder.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 6
+			path: database/seeders/DemoMembershipsSeeder.php

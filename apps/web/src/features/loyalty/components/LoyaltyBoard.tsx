@@ -341,9 +341,19 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
     {
       header: 'Puntos',
       cell: (row) => (
-        <span className={`font-black tabular-nums ${row.points > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-          {row.points > 0 ? `+${row.points}` : row.points} pts
-        </span>
+        <div>
+          <span className={`font-black tabular-nums ${row.points > 0 ? (row.expired_points && row.expired_points >= row.points ? 'text-slate-400 line-through' : 'text-emerald-700') : 'text-rose-700'}`}>
+            {row.points > 0 ? `+${row.points}` : row.points} pts
+          </span>
+          {row.points > 0 && (row.expired_points ?? 0) > 0 && (
+            <span data-expired-points={row.expired_points} className="block text-xs font-semibold text-rose-600">
+              {row.expired_points! >= row.points ? 'Vencidos' : `Vencieron ${row.expired_points}`}
+            </span>
+          )}
+          {row.points > 0 && !(row.expired_points ?? 0) && row.expires_at && (
+            <span className="block text-xs text-slate-400">Vencen {momentOf(row.expires_at)}</span>
+          )}
+        </div>
       ),
     },
     {

@@ -2,8 +2,15 @@ import { MONTHS_SHORT as MONTHS } from '@/lib/dates';
 import type { AppliedCoupon } from '@/features/sales/sales';
 import type { PickedCustomer } from '@/features/customers/components/CustomerPicker';
 import type { PackagePlan, ScheduleDetails } from '@/features/packages/packages';
+import type { MembershipPlan, MembershipSummary } from '@/features/memberships/memberships';
 
-export type CartItemType = 'appointment' | 'service' | 'product' | 'package';
+export type CartItemType = 'appointment' | 'service' | 'product' | 'package' | 'membership' | 'gift_card';
+
+export interface GiftCardDetails {
+  amount: number;
+  recipient_name?: string | null;
+  recipient_email?: string | null;
+}
 
 export interface CartItem {
   type: CartItemType;
@@ -13,6 +20,8 @@ export interface CartItem {
   label: string;
   unit_price: number;
   details?: ScheduleDetails | null;
+  gift?: GiftCardDetails | null;
+  no_membership?: boolean;
 }
 
 export interface Cart {
@@ -80,12 +89,15 @@ export interface PosBoard {
   products_ready: boolean;
   can: { create: boolean; edit: boolean; charge: boolean; walk_in: boolean; products: boolean; packages?: boolean };
   packages_enabled?: boolean;
+  memberships_enabled?: boolean;
+  gift_cards_enabled?: boolean;
   inventory_enabled?: boolean;
   allow_negative_stock?: boolean;
   pending: { appointments: PendingAppointment[]; sales: PendingSale[] };
   services: PosService[];
   products: PosProduct[];
   packages?: PackagePlan[];
+  memberships?: MembershipPlan[];
   professionals: { id: string; display_name: string }[];
 }
 
@@ -95,7 +107,11 @@ export interface PreviewLine {
   description: string;
   quantity: number;
   unit_price: number;
+  discount?: number;
   total: number;
+  membership?: { code: string; included: number; label: string } | null;
+  membership_plan?: { period_label: string; benefits_text: string; renews: boolean; replaces?: { code: string; name: string; ends_at: string } | null } | null;
+  no_membership?: boolean;
   professional: { id: string; name: string } | null;
   appointment: { code: string; starts_at: string; status: string } | null;
   details?: ScheduleDetails | null;
@@ -108,6 +124,7 @@ export interface CartPreview {
   lines: PreviewLine[];
   totals: { subtotal: number; discount: number; tax: number; total: number; tax_rate: number; prices_include_tax: boolean; currency: string };
   coupon: AppliedCoupon | null;
+  membership?: MembershipSummary | null;
 }
 
 export interface LoadedCart {
@@ -118,7 +135,7 @@ export interface LoadedCart {
   customer: PickedCustomer | null;
   coupon_code: string | null;
   edit_blocked: string | null;
-  items: { type: CartItemType; id: string; quantity: number; professional_id: string | null; details?: ScheduleDetails | null }[];
+  items: { type: CartItemType; id: string; quantity: number; professional_id: string | null; no_membership?: boolean; details?: (ScheduleDetails & Partial<GiftCardDetails>) | null }[];
 }
 
 export interface WalkInOptions {

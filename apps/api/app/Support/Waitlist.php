@@ -7,12 +7,152 @@ use App\Models\Tenant;
 use App\Models\WaitlistEntry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class Waitlist
 {
+    public const ALL = 'all';
+    public const FIRST = 'first';
+    public const MODES = [self::ALL, self::FIRST];
+
+    public static function enabled(Tenant $tenant): bool
+    {
+        return (bool) AppointmentFlow::rule($tenant, 'waitlist.enabled');
+    }
+
+    public static function mode(Tenant $tenant): string
+    {
+        return AppointmentFlow::rule($tenant, 'waitlist.notify_mode') === self::FIRST ? self::FIRST : self::ALL;
+    }
+
+    public static function replyHours(Tenant $tenant): int
+    {
+        return max(1, min(72, (int) AppointmentFlow::rule($tenant, 'waitlist.reply_hours')));
+    }
+
+    public static function rules(Tenant $tenant): array
+    {
+        return [
+            'enabled'      => self::enabled($tenant),
+            'notify_mode'  => self::mode($tenant),
+            'reply_hours'  => self::replyHours($tenant),
+            'offers_ready' => self::offersReady(),
+        ];
+    }
+
+    public static function offersReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= \Illuminate\Support\Facades\Schema::hasTable('waitlist_offers');
+    }
+
     public static function book(WaitlistEntry $entry, Appointment $appointment): void
     {
         $entry->update(['status' => WaitlistEntry::BOOKED, 'appointment_id' => $appointment->id]);
+
+        if (self::offersReady()) {
+            DB::table('waitlist_offers')->where('waitlist_entry_id', $entry->id)->where('status', 'open')
+                ->update(['status' => 'booked', 'closed_at' => now()]);
+        }
+    }
+
+    public static function openOffer(string $entryId): ?object
+    {
+        if (!self::offersReady()) {
+            return null;
+        }
+
+        return DB::table('waitlist_offers')->where('waitlist_entry_id', $entryId)->where('status', 'open')
+            ->where('expires_at', '>', now()->toIso8601String())->orderByDesc('expires_at')->first();
+    }
+
+    public static function offerNext(Tenant $tenant, Appointment $appointment): ?WaitlistEntry
+    {
+        if (DB::table('waitlist_offers')->where('appointment_id', $appointment->id)->where('status', 'open')->exists()) {
+            return null;
+        }
+
+        $offered = DB::table('waitlist_offers')->where('appointment_id', $appointment->id)->pluck('waitlist_entry_id')->all();
+
+        $entry = self::matching($tenant, $appointment)
+            ->when($offered, fn ($q) => $q->whereNotIn('id', $offered))
+            ->orderByDesc('priority')
+            ->orderBy('created_at')
+            ->first();
+
+        if (!$entry) {
+            return null;
+        }
+
+        $expires = now()->addHours(self::replyHours($tenant));
+
+        if ($expires->gt($appointment->starts_at)) {
+            $expires = $appointment->starts_at->copy();
+        }
+
+        DB::table('waitlist_offers')->insertOrIgnore([
+            'id'                => (string) Str::uuid(),
+            'tenant_id'         => $tenant->id,
+            'waitlist_entry_id' => $entry->id,
+            'appointment_id'    => $appointment->id,
+            'status'            => 'open',
+            'notified_at'       => now(),
+            'expires_at'        => $expires->copy()->utc(),
+            'created_at'        => now(),
+        ]);
+
+        $entry->update(['status' => WaitlistEntry::NOTIFIED, 'notified_at' => now()]);
+        Messaging::waitlistSlot($tenant, $appointment, $entry);
+
+        return $entry;
+    }
+
+    public static function advance(Tenant $tenant): void
+    {
+        try {
+            if (!self::offersReady()) {
+                return;
+            }
+
+            $due = DB::table('waitlist_offers')->where('tenant_id', $tenant->id)->where('status', 'open')
+                ->where('expires_at', '<=', now()->toIso8601String())->orderBy('expires_at')->limit(50)->get();
+
+            foreach ($due as $offer) {
+                $closed = DB::table('waitlist_offers')->where('id', $offer->id)->where('status', 'open')
+                    ->update(['status' => 'expired', 'closed_at' => now()]);
+
+                if (!$closed) {
+                    continue;
+                }
+
+                WaitlistEntry::where('id', $offer->waitlist_entry_id)->where('status', WaitlistEntry::NOTIFIED)->whereNull('appointment_id')
+                    ->update(['status' => WaitlistEntry::WAITING, 'updated_at' => now()]);
+
+                $appointment = Appointment::where('tenant_id', $tenant->id)->with('branch')->find($offer->appointment_id);
+
+                if ($appointment && self::enabled($tenant) && self::mode($tenant) === self::FIRST && self::stillFree($appointment)) {
+                    self::offerNext($tenant, $appointment);
+                }
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    public static function stillFree(Appointment $appointment): bool
+    {
+        if (!in_array($appointment->status, AppointmentFlow::RELEASED, true) || !$appointment->starts_at->isFuture()) {
+            return false;
+        }
+
+        return !Appointment::where('tenant_id', $appointment->tenant_id)
+            ->where('professional_id', $appointment->professional_id)
+            ->whereNotIn('status', AppointmentFlow::RELEASED)
+            ->where('starts_at', '<', $appointment->ends_at->toIso8601String())
+            ->where('ends_at', '>', $appointment->starts_at->toIso8601String())
+            ->exists();
     }
 
     public static function appointmentChanged(Tenant $tenant, Appointment $appointment): void
@@ -32,7 +172,7 @@ class Waitlist
     public static function slotFreed(Tenant $tenant, Appointment $appointment): void
     {
         try {
-            if (!$appointment->starts_at->isFuture()) {
+            if (!self::enabled($tenant) || !$appointment->starts_at->isFuture()) {
                 return;
             }
 
@@ -40,7 +180,12 @@ class Waitlist
 
             if ($count > 0) {
                 Notifier::waitlistSlotFreed($tenant, $appointment, $count);
-                Messaging::waitlistSlot($tenant, $appointment);
+
+                if (self::mode($tenant) === self::FIRST && self::offersReady()) {
+                    self::offerNext($tenant, $appointment);
+                } else {
+                    Messaging::waitlistSlot($tenant, $appointment);
+                }
             }
         } catch (\Throwable $e) {
             report($e);

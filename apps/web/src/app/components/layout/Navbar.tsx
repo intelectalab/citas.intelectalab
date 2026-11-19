@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Search, ChevronDown, LogOut, Menu, Moon, Sun, Users, LifeBuoy } from 'lucide-react';
+import Link from 'next/link';
+import { Search, ChevronDown, LogOut, Menu, Moon, Sun, Users, LifeBuoy, UserRound } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import NotificationsBell from '@/features/notifications/components/NotificationsBell';
@@ -106,6 +107,11 @@ export default function Navbar({ onOpenMenu }: { onOpenMenu?: () => void }) {
               </div>
 
               <div className="py-1.5 border-b border-slate-100">
+                {!user?.impersonator && (
+                  <Link href="/account" role="menuitem" data-action="my-account" onClick={() => setIsOpen(false)} className={itemClass}>
+                    <UserRound size={16} className="text-slate-400" /> Mi cuenta
+                  </Link>
+                )}
                 <button type="button" role="menuitem" onClick={toggleTheme} className={itemClass}>
                   {theme === 'dark' ? <Moon size={16} className="text-slate-400" /> : <Sun size={16} className="text-slate-400" />}
                   <span className="flex-1">Tema: {theme === 'dark' ? 'oscuro' : 'claro'}</span>

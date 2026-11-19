@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import PlanSelection from '@/features/subscriptions/PlanSelection';
 import PlatformHomeCards from '@/features/platform/components/PlatformHomeCards';
+import AnnouncementsBar from '@/features/announcements/components/AnnouncementsBar';
 import { formatDateTime, statusStyle, timeOf } from '@/features/appointments/appointments';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { formatMoney } from '@/lib/currency';
@@ -147,7 +148,7 @@ export default function HomePage() {
         { label: 'Nueva cita', icon: CalendarDays, href: '/agenda' },
         { label: `${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client}`, icon: UserPlus, href: '/customers' },
         hasModule('walkin') ? { label: 'Cola sin cita', icon: ListOrdered, href: '/walkin' }
-          : hasModule('classes') ? { label: 'Clases', icon: CalendarClock, href: '/modules/classes' }
+          : hasModule('classes') ? { label: 'Clases', icon: CalendarClock, href: '/classes' }
           : hasModule('records') ? { label: 'Fichas de atención', icon: ClipboardList, href: '/records' }
           : { label: 'Lista de espera', icon: Hourglass, href: '/waitlist' },
         own ? { label: 'Controles y seguimiento', icon: Repeat, href: '/recalls' } : { label: 'Bloqueos y ausencias', icon: CalendarOff, href: '/blocks' },
@@ -183,6 +184,7 @@ export default function HomePage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-10 font-sans text-[#1F2937]" data-dashboard={data ? 'ready' : 'loading'}>
+      <AnnouncementsBar />
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pt-2 pb-2 border-b border-slate-200/60">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs font-semibold text-brand-accent uppercase tracking-wider">

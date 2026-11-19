@@ -9,6 +9,7 @@ use App\Models\Status;
 use App\Support\Access;
 use App\Support\Audit;
 use App\Support\Search;
+use App\Support\PublicBooking;
 
 class ProfessionalController extends Controller
 {
@@ -80,15 +81,30 @@ class ProfessionalController extends Controller
         return null;
     }
 
-    private function commissionPercent(Request $request, array $validated): float|null|false
+    private function commissionFields(Request $request, array $validated): array
     {
-        if (!array_key_exists('commission_percent', $validated) || !\App\Support\Commissions::ready() || !$request->user()->allows('commissions.rules')) {
-            return false;
+        if (!\App\Support\Commissions::ready() || !$request->user()->allows('commissions.rules')) {
+            return [];
         }
 
-        $value = $validated['commission_percent'];
+        $fields = [];
+        $keys = ['commission_percent'] + (\Illuminate\Support\Facades\Schema::hasColumn('professionals', 'goal_month') ? [1 => 'goal_month'] : []);
 
-        return $value === null || $value === '' ? null : round((float) $value, 2);
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $validated)) {
+                $value = $validated[$key];
+                $fields[$key] = $value === null || $value === '' ? null : round((float) $value, 2);
+            }
+        }
+
+        return $fields;
+    }
+
+    private function onlineField(array $validated): array
+    {
+        return PublicBooking::professionalsFlag() && array_key_exists('online_booking', $validated)
+            ? ['online_booking' => (bool) $validated['online_booking']]
+            : [];
     }
 
     private function auditProfessional(Professional $professional): array
@@ -102,6 +118,8 @@ class ProfessionalController extends Controller
             'license_number' => $professional->license_number,
             'phone'          => $professional->phone,
             'commission'     => $professional->commission_percent !== null ? (float) $professional->commission_percent . ' %' : null,
+            'goal_month'     => $professional->goal_month !== null ? (float) $professional->goal_month : null,
+            'online_booking' => PublicBooking::professionalsFlag() ? ($professional->online_booking === false ? 'No' : 'Sí') : null,
             'status'         => $professional->status?->name,
             'specialties'    => $professional->specialties->pluck('name')->sort()->values()->all(),
         ];
@@ -164,8 +182,10 @@ class ProfessionalController extends Controller
             'specialties' => 'nullable|array',
             'specialties.*' => 'exists:specialties,id',
             'commission_percent' => 'nullable|numeric|min:0|max:100',
-        ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.']);
-        $commission = $this->commissionPercent($request, $validated);
+            'goal_month' => 'nullable|numeric|min:0|max:99999999',
+            'online_booking' => 'sometimes|boolean',
+        ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.', 'goal_month.min' => 'La meta no puede ser negativa.']);
+        $commission = $this->commissionFields($request, $validated);
 
         $rawPassword = $validated['document_number'] ?? \Illuminate\Support\Str::random(8);
 
@@ -212,7 +232,7 @@ class ProfessionalController extends Controller
             'license_number' => $validated['license_number'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'status_id' => $statusId,
-        ] + ($commission !== false ? ['commission_percent' => $commission] : []));
+        ] + $commission + $this->onlineField($validated));
 
         if (isset($validated['specialties'])) {
             $syncData = [];
@@ -273,8 +293,10 @@ class ProfessionalController extends Controller
             'specialties' => 'nullable|array',
             'specialties.*' => 'exists:specialties,id',
             'commission_percent' => 'nullable|numeric|min:0|max:100',
-        ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.']);
-        $commission = $this->commissionPercent($request, $validated);
+            'goal_month' => 'nullable|numeric|min:0|max:99999999',
+            'online_booking' => 'sometimes|boolean',
+        ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.', 'goal_month.min' => 'La meta no puede ser negativa.']);
+        $commission = $this->commissionFields($request, $validated);
 
         $auditBefore = $this->auditProfessional($professional);
 
@@ -296,7 +318,7 @@ class ProfessionalController extends Controller
             'license_number' => array_key_exists('license_number', $validated) ? $validated['license_number'] : $professional->license_number,
             'phone' => array_key_exists('phone', $validated) ? $validated['phone'] : $professional->phone,
             'status_id' => $validated['status_id'] ?? $professional->status_id,
-        ] + ($commission !== false ? ['commission_percent' => $commission] : []));
+        ] + $commission + $this->onlineField($validated));
 
         if (isset($validated['specialties'])) {
             $syncData = [];

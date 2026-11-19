@@ -31,6 +31,7 @@ class DemoExtrasSeeder extends Seeder
         }
 
         $this->commissions();
+        $this->call(DemoMembershipsSeeder::class);
     }
 
     private const COMMISSION_DEMOS = [

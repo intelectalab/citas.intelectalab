@@ -14,6 +14,7 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.0",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
         "laravel/sail": "^1.41",
@@ -51,6 +52,16 @@
         "test": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
+        ],
+        "analyse": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php phpstan/schema.php",
+            "@php -d memory_limit=2G vendor/phpstan/phpstan/phpstan analyse -a phpstan/version.php --no-progress"
+        ],
+        "analyse:baseline": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php phpstan/schema.php",
+            "@php -d memory_limit=2G vendor/phpstan/phpstan/phpstan analyse -a phpstan/version.php --no-progress --generate-baseline phpstan-baseline.neon --allow-empty-baseline"
         ],
         "test:coverage": [
             "Composer\\Config::disableProcessTimeout",

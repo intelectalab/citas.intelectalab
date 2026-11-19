@@ -32,6 +32,7 @@ class Service extends Model
         'deposit_value',
         'online_booking',
         'is_virtual',
+        'video_url',
         'kind',
         'capacity',
         'recall_label',

@@ -52,6 +52,7 @@ class AuthController extends Controller
             'is_saas_support' => $isSaasSupport,
             'is_tenant_admin' => $user->isTenantAdmin(),
             'platform_pending' => $user->tenant_id ? null : ['transfers' => \App\Support\PlanTransfers::pendingCount()],
+            'pending_vouchers' => $user instanceof \App\Models\User && $user->tenant_id ? \App\Support\CustomerTransfers::pendingCount($user) : 0,
             'must_change_password' => (bool) ($user->must_change_password ?? false),
             'impersonator' => $impersonator ? [
                 'name' => trim($impersonator->first_name . ' ' . $impersonator->last_name),
@@ -111,6 +112,7 @@ class AuthController extends Controller
                 'id' => $tenant->id,
                 'name' => $tenant->name,
                 'code' => null,
+                'complaints_code' => $tenant->code,
                 'business_type' => $tenant->businessType?->slug,
                 'business_type_name' => $tenant->businessType?->short_name,
                 'color' => $tenant->settings?->brand_color ?? $tenant->businessType?->color,

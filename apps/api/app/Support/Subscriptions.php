@@ -145,7 +145,7 @@ class Subscriptions
                 'subscription_id'     => $subscription->id,
                 'tenant_id'           => $subscription->tenant_id,
                 'status_id'           => $paidStatusId,
-                'amount'              => $values['amount'] ?? self::price($plan, $cycle),
+                'amount'              => $values['amount'] ?? Cancellations::chargeFor($subscription, $plan, $cycle),
                 'currency'            => substr($plan->currency ?? 'PEN', 0, 3),
                 'billing_reason'      => $values['reason'] ?? ($wasTrial ? 'subscription_create' : 'manual'),
                 'invoice_date'        => $paidAt,
@@ -178,12 +178,21 @@ class Subscriptions
                 }
             }
 
+            if (Cancellations::ready()) {
+                $update += ['cancel_at' => null] + Cancellations::usedDiscount($subscription, $cycle);
+                DB::table('saas_cancellations')->where('subscription_id', $subscription->id)->where('status', 'scheduled')
+                    ->update(['status' => 'resumed', 'resumed_at' => now(), 'updated_at' => now()]);
+            }
+
+            PlanCoupons::consume($subscription, $plan, $cycle);
             $subscription->update($update);
 
             return $invoice;
         });
 
         self::forget($subscription->tenant_id);
+        Referrals::onPaid($subscription, $invoice);
+        WebLeads::onPaid($subscription);
 
         return $invoice;
     }
@@ -225,6 +234,10 @@ class Subscriptions
             'review'        => $subscription && ($pendingTransfer = PlanTransfers::pendingFor($subscription->id)) ? PlanTransfers::present($pendingTransfer) : null,
             'rejected'      => $subscription && ($rejectedTransfer = PlanTransfers::lastRejected($subscription->id)) ? PlanTransfers::present($rejectedTransfer) : null,
             'simulated'     => PlanBilling::simulated(),
+            'cancellation'  => $subscription && $user?->isTenantAdmin() ? Cancellations::present($subscription) : null,
+            'charge'        => $subscription ? Cancellations::chargeFor($subscription, $plan, $subscription->billing_cycle) : 0,
+            'coupon'        => PlanCoupons::present($subscription),
+            'coupons'       => PlanCoupons::ready(),
             'plan'          => $plan ? ['id' => $plan->id, 'name' => $plan->name, 'currency' => $plan->currency ?? 'PEN'] : null,
             'billing_cycle' => $subscription?->billing_cycle,
             'price'         => $subscription ? self::price($plan, $subscription->billing_cycle) : 0,

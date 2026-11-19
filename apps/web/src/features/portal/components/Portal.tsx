@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BellRing, Boxes, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, FileText, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound } from 'lucide-react';
+import { BadgeCheck, BellRing, Boxes, Building2, CalendarDays, CalendarPlus, CalendarX2, CreditCard, FileText, Gift, Home, KeyRound, Loader2, LogOut, Mail, PawPrint, Phone, UserRound, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -12,15 +12,18 @@ import Switch from '@/app/components/common/Switch';
 import PortalAppointmentCard from './PortalAppointmentCard';
 import PortalAppointments from './PortalAppointments';
 import PortalWaitlist from './PortalWaitlist';
+import PortalClasses, { type PortalClassesData } from './PortalClasses';
 import PortalPassword from './PortalPassword';
 import PortalPackages, { type PortalPackage } from './PortalPackages';
+import PortalMemberships, { type PortalMembership } from './PortalMemberships';
+import PortalBenefits, { hasBenefits, type PortalBenefitsData } from './PortalBenefits';
 import PortalQuotes, { type PortalQuotesData } from './PortalQuotes';
 import PortalShop, { type ShopData } from './PortalShop';
 import PortalPrivacy, { PortalContact } from './PortalPrivacy';
 import { portalError, type PortalAppointment, type PortalCatalog, type PortalOverview, type PortalWaitlistEntry } from '../portal';
 import { money, momentOf, type PaymentLink } from '@/features/sales/sales';
 
-type Tab = 'home' | 'book' | 'appointments' | 'packages' | 'quotes' | 'profile' | 'privacy';
+type Tab = 'home' | 'book' | 'appointments' | 'classes' | 'packages' | 'memberships' | 'benefits' | 'quotes' | 'profile' | 'privacy';
 
 export default function Portal() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -76,8 +79,22 @@ export default function Portal() {
   }, [overview, mustChangePassword, loadPayLinks]);
 
   const [packages, setPackages] = useState<PortalPackage[] | null>(null);
+  const [memberships, setMemberships] = useState<PortalMembership[] | null>(null);
+  const [benefits, setBenefits] = useState<PortalBenefitsData | null>(null);
   const [quotes, setQuotes] = useState<PortalQuotesData | null>(null);
   const [shop, setShop] = useState<ShopData | null>(null);
+  const [classes, setClasses] = useState<PortalClassesData | null>(null);
+
+  const loadClasses = useCallback(() => {
+    api.get<PortalClassesData>('/portal/classes')
+      .then((res) => setClasses(res.data))
+      .catch(() => setClasses(null));
+  }, []);
+
+  useEffect(() => {
+    if (!overview || mustChangePassword) return;
+    loadClasses();
+  }, [overview, mustChangePassword, loadClasses]);
 
   const loadPackages = useCallback(() => {
     api.get('/portal/packages')
@@ -95,6 +112,12 @@ export default function Portal() {
     api.get<PortalQuotesData>('/portal/quotes')
       .then((res) => setQuotes(res.data))
       .catch(() => setQuotes(null));
+    api.get('/portal/memberships')
+      .then((res) => setMemberships(res.data.memberships ?? []))
+      .catch(() => setMemberships(null));
+    api.get<PortalBenefitsData>('/portal/benefits')
+      .then((res) => setBenefits(res.data))
+      .catch(() => setBenefits(null));
     api.get<ShopData>('/portal/shop')
       .then((res) => setShop(res.data))
       .catch(() => setShop(null));
@@ -208,7 +231,10 @@ export default function Portal() {
     { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
     ...(canBook ? [{ id: 'book' as Tab, label: 'Reservar', icon: <CalendarPlus size={16} /> }] : []),
     { id: 'appointments', label: 'Mis citas', icon: <CalendarDays size={16} /> },
+    ...(classes && (classes.classes.length > 0 || classes.mine.length > 0) ? [{ id: 'classes' as Tab, label: 'Clases', icon: <Users size={16} /> }] : []),
     ...((packages && packages.length > 0) || (shop && shop.packages.length > 0) ? [{ id: 'packages' as Tab, label: 'Paquetes', icon: <Boxes size={16} /> }] : []),
+    ...(memberships && memberships.length > 0 ? [{ id: 'memberships' as Tab, label: 'Membresías', icon: <BadgeCheck size={16} /> }] : []),
+    ...(hasBenefits(benefits) ? [{ id: 'benefits' as Tab, label: 'Mis beneficios', icon: <Gift size={16} /> }] : []),
     ...(quotes && quotes.quotes.length > 0 ? [{ id: 'quotes' as Tab, label: 'Presupuestos', icon: <FileText size={16} /> }] : []),
     { id: 'profile', label: 'Mis datos', icon: <UserRound size={16} /> },
   ];
@@ -403,12 +429,25 @@ export default function Portal() {
           </>
         )}
 
+        {overview && !mustChangePassword && tab === 'classes' && classes && (
+          <PortalClasses
+            data={classes}
+            proWord={vocab.pro}
+            onChanged={(message) => { setError(''); setNotice(message); loadClasses(); }}
+            onError={(message) => { setNotice(''); setError(message); loadClasses(); }}
+          />
+        )}
+
         {overview && !mustChangePassword && tab === 'packages' && (
           <>
             {packages && packages.length > 0 && <PortalPackages packages={packages} onBook={canBook ? () => setTab('book') : undefined} />}
             {shop && shop.packages.length > 0 && <PortalShop data={shop} />}
           </>
         )}
+
+        {overview && !mustChangePassword && tab === 'memberships' && memberships && <PortalMemberships memberships={memberships} />}
+
+        {overview && !mustChangePassword && tab === 'benefits' && benefits && <PortalBenefits data={benefits} currency={benefits.currency} />}
 
         {overview && !mustChangePassword && tab === 'quotes' && quotes && (
           <PortalQuotes
@@ -542,6 +581,12 @@ export default function Portal() {
           <footer className="pt-4 text-center text-xs text-slate-400" data-portal-footer>
             {tenant?.name} ·{' '}
             <button type="button" data-action="footer-privacy" onClick={() => openTab('privacy')} className="underline hover:text-brand-ink">Política de privacidad</button>
+            {(tenant as any)?.complaints_code && (
+              <>
+                {' · '}
+                <a href={`/reclamaciones/${(tenant as any).complaints_code}`} target="_blank" rel="noreferrer" data-portal-complaints className="underline hover:text-brand-ink">Libro de Reclamaciones</a>
+              </>
+            )}
           </footer>
         )}
       </main>

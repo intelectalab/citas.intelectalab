@@ -19,6 +19,8 @@ import Switch from '@/app/components/common/Switch';
 import { CORE_MODULE_LABELS, MODULE_GROUPS, MODULE_LABELS } from '@/lib/modules';
 import { SUBSCRIPTION_STATUS, TENANT_STATUS } from '../tenantStatus';
 import MemberAccessDrawer, { type TenantMember } from './MemberAccessDrawer';
+import ImpersonateDrawer from '@/features/support/components/ImpersonateDrawer';
+import ReceiptButton from '@/features/billing/components/ReceiptButton';
 import { BILLING_STATES, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, type Billing, type PlanPayment } from '@/features/billing/billing';
 
 interface TenantModule {
@@ -87,6 +89,7 @@ const USAGE: Record<string, { label: string; icon: React.ReactNode; tint: string
   professionals: { label: 'Profesionales', icon: <Stethoscope size={18} />, tint: 'bg-teal-50 border-teal-100', iconColor: 'text-teal-600 bg-teal-100' },
   appointments_month: { label: 'Citas este mes', icon: <CalendarCheck size={18} />, tint: 'bg-amber-50 border-amber-100', iconColor: 'text-amber-600 bg-amber-100' },
   whatsapp_month: { label: 'WhatsApp este mes', icon: <MessageCircle size={18} />, tint: 'bg-emerald-50 border-emerald-100', iconColor: 'text-emerald-600 bg-emerald-100' },
+  campaign_emails_month: { label: 'Correos de campañas este mes', icon: <MessageCircle size={18} />, tint: 'bg-sky-50 border-sky-100', iconColor: 'text-sky-600 bg-sky-100' },
 };
 
 const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString() : 'Sin fecha');
@@ -161,7 +164,8 @@ function UsageTile({ item }: { item: { key: string; used: number; limit: number 
 
 export default function TenantDetail() {
   const params = useParams<{ id: string }>();
-  const { user, startImpersonation } = useAuth();
+  const { user } = useAuth();
+  const [entering, setEntering] = useState(false);
   const canManage = Boolean(user?.is_saas_admin);
 
   const [detail, setDetail] = useState<TenantDetailData | null>(null);
@@ -218,17 +222,7 @@ export default function TenantDetail() {
     }
   };
 
-  const handleImpersonate = async () => {
-    if (!detail) return;
-    try {
-      setBusy(true);
-      setNotice(null);
-      await startImpersonation(detail.id);
-    } catch (err: any) {
-      setNotice({ type: 'error', text: err.response?.data?.message || 'No se pudo entrar al panel de la empresa.' });
-      setBusy(false);
-    }
-  };
+  const handleImpersonate = () => setEntering(true);
 
   if (loading) {
     return (
@@ -600,8 +594,11 @@ export default function TenantDetail() {
                         </p>
                       </div>
                     </div>
-                    <span className={`px-2 py-0.5 text-[11px] rounded-md font-semibold shrink-0 ${invoice.status_slug === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-white border border-slate-200 text-slate-700'}`}>
-                      {invoice.status ?? 'Sin estado'}
+                    <span className="flex items-center gap-2 shrink-0">
+                      <span className={`px-2 py-0.5 text-[11px] rounded-md font-semibold ${invoice.status_slug === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-white border border-slate-200 text-slate-700'}`}>
+                        {invoice.status ?? 'Sin estado'}
+                      </span>
+                      {invoice.status_slug === 'paid' && <ReceiptButton path={`/admin/billing/invoices/${invoice.id}/receipt`} />}
                     </span>
                   </li>
                 ))}
@@ -722,11 +719,11 @@ export default function TenantDetail() {
               </p>
               {canManage && (
                 <div className="space-y-2">
-                  <input type="text" maxLength={255} value={suspendReason} onChange={(e) => setSuspendReason(e.target.value)} className={inputClass} placeholder="Motivo (opcional). Ej. Falta de pago" />
+                  <input type="text" maxLength={255} value={suspendReason} onChange={(e) => setSuspendReason(e.target.value)} className={inputClass} placeholder="Motivo. Ej. Uso indebido de la cuenta" aria-label="Motivo de la suspensión" />
                   <button
                     type="button"
-                    disabled={busy}
-                    onClick={() => run(() => api.post(`/tenants/${detail.id}/suspend`, { reason: suspendReason || null }), 'Empresa suspendida.')}
+                    disabled={busy || suspendReason.trim().length < 5}
+                    onClick={() => run(() => api.post(`/tenants/${detail.id}/suspend`, { reason: suspendReason.trim() }), 'Empresa suspendida.')}
                     className="w-full px-4 py-2.5 bg-rose-600 text-white text-xs font-bold rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Ban size={14} /> Suspender empresa
@@ -803,6 +800,8 @@ export default function TenantDetail() {
             onChanged={(fresh) => apply(fresh)}
           />
         )}
+
+        <ImpersonateDrawer isOpen={entering} onClose={() => setEntering(false)} tenant={{ id: detail.id, name: detail.name }} />
       </div>
     </div>
   );

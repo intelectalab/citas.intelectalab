@@ -4,7 +4,7 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeftRight, CheckCircle2, Edit2, Eye, Lock, Plus, Unlock, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CheckCircle2, ClipboardCheck, Edit2, Eye, Lock, Plus, Unlock, Wallet } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
@@ -51,6 +51,7 @@ export default function CashBoard() {
     (!filters.register_id || session.register_id === filters.register_id) &&
     (activeCard !== 'difference' || !squared(session)) &&
     (activeCard !== 'squared' || squared(session)) &&
+    (activeCard !== 'review' || session.review_status === 'pending') &&
     (!term || `${session.register_name ?? ''} ${session.branch_name ?? ''} ${session.opened_by ?? ''} ${session.closed_by ?? ''}`.toLowerCase().includes(term)),
   );
 
@@ -88,6 +89,14 @@ export default function CashBoard() {
       borderColorClass: activeCard === 'difference' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'hover:border-slate-300',
       onClick: () => toggleCard('difference'),
     },
+    ...((data?.review_over ?? 0) > 0 || sessions.some((s) => s.review_status) ? [{
+      title: 'En revisión',
+      value: sessions.filter((s) => s.review_status === 'pending').length,
+      icon: <ClipboardCheck size={18} />,
+      iconColorClass: 'text-amber-600',
+      borderColorClass: activeCard === 'review' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'hover:border-slate-300',
+      onClick: () => toggleCard('review'),
+    }] : []),
   ];
 
   const exportColumns: ExportColumn<CashSession>[] = [
@@ -103,6 +112,8 @@ export default function CashBoard() {
     { header: 'Diferencia', type: 'money', total: true, value: (c) => c.difference ?? 0 },
     { header: 'Resultado', value: (c) => (squared(c) ? 'Cuadró' : (c.difference ?? 0) < 0 ? 'Faltó' : 'Sobró') },
     { header: 'Nota del cierre', value: (c) => c.closing_notes },
+    { header: 'Revisión', value: (c) => c.review_label ?? '' },
+    { header: 'Nota de la revisión', value: (c) => c.review_notes },
   ];
 
   const columns: Column<CashSession>[] = [
@@ -156,6 +167,20 @@ export default function CashBoard() {
           {squared(session) ? 'Cuadró' : `${(session.difference ?? 0) < 0 ? 'Faltaron' : 'Sobraron'} ${money(Math.abs(session.difference ?? 0), session?.currency)}`}
         </Badge>
       ),
+    },
+    {
+      header: 'Revisión',
+      cell: (session) => (session.review_status ? (
+        <Badge
+          key={`review-${session.id}`}
+          data-review-status={session.review_status}
+          title={session.review_notes ?? undefined}
+          tone={session.review_status === 'pending' ? 'bg-amber-50 text-amber-700' : session.review_status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}
+          nowrap
+        >
+          {session.review_label}
+        </Badge>
+      ) : <span key={`review-${session.id}`} className="text-xs text-slate-400">—</span>),
     },
     {
       header: 'Acciones',
@@ -278,6 +303,12 @@ export default function CashBoard() {
         <p className="text-sm text-slate-500 px-1">Tu empresa aún no tiene una sucursal activa donde abrir una caja.</p>
       )}
 
+      {(data?.review_over ?? 0) > 0 && data?.review_ready === false && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-review-not-ready>
+          Tu empresa pide revisar los cierres con diferencia, pero falta actualizar la base de datos (php artisan migrate): mientras tanto los cierres no quedan en revisión.
+        </p>
+      )}
+
       <DataTable<CashSession>
         title={seesOthers ? 'Turnos cerrados' : 'Mis turnos cerrados'}
         searchTerm={searchTerm}
@@ -297,7 +328,7 @@ export default function CashBoard() {
         data={rows}
         exportTitle="Turnos de caja"
         exportScreen="cash"
-        exportFilters={activeCard ? [activeCard === 'squared' ? 'Tarjeta: Cuadraron' : 'Tarjeta: Con diferencia'] : []}
+        exportFilters={activeCard ? [activeCard === 'squared' ? 'Tarjeta: Cuadraron' : activeCard === 'review' ? 'Tarjeta: En revisión' : 'Tarjeta: Con diferencia'] : []}
         exportColumns={exportColumns}
         getItemKey={(s) => s.id}
         entityLabel={rows.length === 1 ? 'turno' : 'turnos'}
@@ -308,7 +339,7 @@ export default function CashBoard() {
       <CashMovementPanel session={moving?.session ?? null} registerName={moving?.name} onClose={() => setMoving(null)} onSaved={load} />
       <CloseCashPanel session={closing?.session ?? null} registerName={closing?.name} tolerance={data?.tolerance ?? 0} onClose={() => setClosing(null)} onSaved={load} />
       <RegisterPanel isOpen={registerOpen} register={editing} branches={data?.branches ?? []} onClose={() => setRegisterOpen(false)} onSaved={load} />
-      <CashSessionPanel sessionId={viewing} onClose={() => setViewing(null)} />
+      <CashSessionPanel sessionId={viewing} onClose={() => setViewing(null)} onChanged={load} />
     </div>
   );
 }

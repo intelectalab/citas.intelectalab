@@ -29,11 +29,8 @@ export default function PermissionGrid({ grid, mode, canEdit, busy, onToggle, em
     return list;
   }, []);
 
-  const sorted = (actions: GridAction[]) => [...actions].sort((a, b) => {
-    const ia = a.special ? 9 : ORDER.indexOf(a.action);
-    const ib = b.special ? 9 : ORDER.indexOf(b.action);
-    return ia - ib;
-  });
+  const rank = (action: GridAction) => (action.special ? 9 : ORDER.includes(action.action) ? ORDER.indexOf(action.action) : 5);
+  const sorted = (actions: GridAction[]) => [...actions].sort((a, b) => rank(a) - rank(b));
 
   return (
     <div data-permission-grid>

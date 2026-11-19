@@ -102,6 +102,11 @@ export default function PortalWaitlist({ entries, proWord, onChanged }: PortalWa
                       {entry.date_to ? `, hasta el ${formatDate(entry.date_to, { day: 'numeric', month: 'long' })}` : ', sin fecha límite'}
                       {entry.dependent ? ` · para ${entry.dependent.name}` : ''}.
                     </p>
+                    {entry.offer_until && (
+                      <p data-offer-until className="mt-1.5 text-xs font-bold text-emerald-700">
+                        Se liberó un horario para ti: tómalo antes del {formatDate(entry.offer_until.slice(0, 10), { day: 'numeric', month: 'long' })} a las {entry.offer_until.slice(11, 16)}. Después se le ofrece a la siguiente persona.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button

@@ -35,8 +35,12 @@ class PlatformSettingController extends Controller
             'impersonation_hours'   => 'sometimes|required|integer|min:1|max:24',
             'mfa_tenant_admins'     => 'sometimes|boolean',
             'mfa_platform'          => 'sometimes|boolean',
+            'legal_name'            => 'sometimes|nullable|string|max:200',
+            'legal_tax_id'          => ['sometimes', 'nullable', 'regex:/^\d{11}$/'],
+            'legal_address'         => 'sometimes|nullable|string|max:255',
         ], [
             'accent_color.regex' => 'El color debe tener el formato #RRGGBB.',
+            'legal_tax_id.regex' => 'El RUC tiene 11 números, sin espacios.',
         ]);
 
         $before = PlatformSetting::values();

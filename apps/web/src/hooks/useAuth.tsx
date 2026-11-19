@@ -64,6 +64,7 @@ export interface User {
   help_enabled?: boolean;
   must_change_password?: boolean;
   platform_pending?: { transfers: number } | null;
+  pending_vouchers?: number;
   tenant?: UserTenant | null;
   customer?: { id: string; code: string } | null;
   roles?: string[];
@@ -84,7 +85,7 @@ interface AuthContextType {
   hasModule: (moduleKey: string) => boolean;
   hasRole: (roleSlug: string) => boolean;
   can: (permission: string) => boolean;
-  startImpersonation: (tenantId: string) => Promise<void>;
+  startImpersonation: (tenantId: string, payload: { reason: string; ticket_id?: string | null }) => Promise<void>;
   stopImpersonation: () => Promise<void>;
 }
 
@@ -204,9 +205,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const startImpersonation = async (tenantId: string) => {
+  const startImpersonation = async (tenantId: string, payload: { reason: string; ticket_id?: string | null }) => {
     const platformToken = localStorage.getItem('auth_token');
-    const res = await api.post(`/tenants/${tenantId}/impersonate`);
+    const res = await api.post(`/tenants/${tenantId}/impersonate`, payload);
 
     if (platformToken) localStorage.setItem(PLATFORM_TOKEN_KEY, platformToken);
     localStorage.setItem('last_activity', String(Date.now()));

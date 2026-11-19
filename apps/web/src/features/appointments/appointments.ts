@@ -6,6 +6,7 @@ export interface Appointment {
   status_name: string;
   next_statuses: string[];
   can_reschedule: boolean;
+  can_remind?: boolean;
   confirm_by?: string | null;
   confirmation_overdue?: boolean;
   starts_at: string;
@@ -14,7 +15,12 @@ export interface Appointment {
   price: string;
   source: string;
   late_cancel_strike?: { window_hours: number; misses: number; limit: number | null; block_days: number; would_block: boolean } | null;
+  penalty_preview?: { late_cancel: number | null; late_cancel_percent: number; no_show: number | null; no_show_percent: number; window_hours: number; currency: string } | null;
+  penalty?: { sale_id: string; code: string; kind: string | null; label: string; total: number; balance: number; status: string; currency: string | null } | null;
   notes: string | null;
+  video_url?: string | null;
+  own_video_url?: string | null;
+  is_virtual?: boolean;
   reschedule_count: number;
   override_reason: string | null;
   cancel_reason: string | null;

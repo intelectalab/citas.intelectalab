@@ -24,6 +24,8 @@ class Professional extends Model
         'document_number',
         'display_name',
         'commission_percent',
+        'goal_month',
+        'online_booking',
         'license_number',
         'phone',          
         'signature_url',  

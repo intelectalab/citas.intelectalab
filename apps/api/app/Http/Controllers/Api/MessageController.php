@@ -118,12 +118,14 @@ class MessageController extends Controller
         return response()->json([
             'messages' => $rows->map(fn ($m) => Messaging::present($m, $customers[$m->customer_id] ?? null, trim("{$m->by_first} {$m->by_last}") ?: null))->values(),
             'email'    => $this->emailStatus($tenant),
+            'whatsapp' => WhatsAppController::status($tenant),
             'kinds'    => collect(Messaging::KINDS)->map(fn ($k, $key) => ['value' => $key, 'label' => $k['label']])->values()->push(['value' => 'manual', 'label' => Messaging::MANUAL_LABEL])->push(['value' => 'campaign', 'label' => Messaging::kindLabel('campaign')]),
             'statuses' => collect(Messaging::STATUS_LABELS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'due'      => Messaging::due($tenant->id)->count(),
             'can'      => [
                 'create'   => $user->allows('messages.create'),
                 'edit'     => $user->allows('messages.edit'),
+                'reply'    => $user->allows('messages.reply'),
                 'settings' => $user->allows('settings.edit'),
             ],
         ]);
@@ -271,6 +273,18 @@ class MessageController extends Controller
         }
 
         $customer = $row->customer_id ? Customer::find($row->customer_id) : null;
+
+        if ($row->channel === 'whatsapp') {
+            if (!\App\Support\WhatsApp::connected($tenant->id)) {
+                throw ValidationException::withMessages(['message' => 'Tu empresa aún no conecta WhatsApp: hazlo en Configuración → Mensajes → WhatsApp.']);
+            }
+
+            DB::table('messages')->where('id', $row->id)->update(['status' => 'queued', 'attempts' => 0, 'error' => null, 'scheduled_at' => null, 'updated_at' => now()]);
+            Messaging::process($tenant->id, 5);
+
+            return response()->json($this->one($row->id));
+        }
+
         $email = trim((string) ($customer?->email ?? $row->to_address));
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -300,7 +314,7 @@ class MessageController extends Controller
             'own_email' => (bool) config('app.own_email_enabled'),
             'notices'  => array_values(Messaging::settings($tenant->id)),
             'design'   => EmailDesign::of($tenant) + ['colors' => EmailDesign::COLORS],
-            'whatsapp' => ['state' => 'pending', 'label' => 'Listo para conectar cuando tu empresa elija un proveedor de WhatsApp'],
+            'whatsapp' => WhatsAppController::status($tenant),
         ]);
     }
 
@@ -701,6 +715,8 @@ class MessageController extends Controller
                 'created_at'  => now(),
                 'updated_at'  => now(),
             ]], ['customer_id', 'channel'], ['granted', 'source', 'granted_at', 'revoked_at', 'updated_at']);
+
+            \App\Support\CustomerProfile::recordConsent($tenantId, $customerId, $channel, $granted, $source);
         }
 
         return self::consentsOf($customerId);
@@ -712,7 +728,22 @@ class MessageController extends Controller
         abort_unless($tenant, 403);
         $row = Customer::where('tenant_id', $tenant->id)->findOrFail($customer);
         $validated = $request->validate(['email' => 'nullable|boolean', 'whatsapp' => 'nullable|boolean']);
+        $before = self::consentsOf($row->id);
+        $after = self::saveConsents($tenant->id, $row->id, $validated, 'staff');
+        $labels = ['email' => 'Correo', 'whatsapp' => 'WhatsApp'];
+        $changed = collect($labels)->filter(fn ($label, $channel) => $before[$channel]['granted'] !== $after[$channel]['granted']);
 
-        return response()->json(['consents' => self::saveConsents($tenant->id, $row->id, $validated, 'staff')]);
+        if ($changed->isNotEmpty()) {
+            \App\Support\Audit::log($request, 'customer.consent_changed', [
+                'tenant'       => $tenant->id,
+                'entity_type'  => 'customer',
+                'entity_id'    => $row->id,
+                'entity_label' => \App\Support\Person::name($row),
+                'before'       => $changed->mapWithKeys(fn ($label, $channel) => [$label => $before[$channel]['granted'] ? 'Aceptado' : 'Sin aceptar'])->all(),
+                'after'        => $changed->mapWithKeys(fn ($label, $channel) => [$label => $after[$channel]['granted'] ? 'Aceptado' : 'Sin aceptar'])->all(),
+            ]);
+        }
+
+        return response()->json(['consents' => $after, 'history' => \App\Support\CustomerProfile::consentHistory($tenant, $row->id)]);
     }
 }

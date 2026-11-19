@@ -60,7 +60,58 @@ class CustomerController extends Controller
             'department'              => $customer->department,
             'postal_code'             => $customer->postal_code,
             'medical_notes'           => $customer->medical_notes,
+        ] + (\App\Support\CustomerProfile::fieldsReady() ? [
+            'home_branch'             => $customer->home_branch_id ? DB::table('branches')->where('id', $customer->home_branch_id)->value('name') : null,
+            'preferred_professional'  => $customer->preferred_professional_id ? DB::table('professionals')->where('id', $customer->preferred_professional_id)->value('display_name') : null,
+            'alert'                   => $customer->alert,
+        ] : []);
+    }
+
+    private function extraRules(Request $request): array
+    {
+        if (!\App\Support\CustomerProfile::fieldsReady()) {
+            return [];
+        }
+
+        $tenantId = $request->user()->tenant_id;
+
+        return [
+            'home_branch_id'            => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists('branches', 'id')->where('tenant_id', $tenantId)],
+            'preferred_professional_id' => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists('professionals', 'id')->where('tenant_id', $tenantId)],
+            'alert'                     => 'nullable|string|max:160',
         ];
+    }
+
+    private const EXTRA_MESSAGES = [
+        'home_branch_id.exists'            => 'Esa sede no es de tu empresa.',
+        'preferred_professional_id.exists' => 'Ese profesional no es de tu empresa.',
+        'alert.max'                        => 'La alerta debe ser corta: hasta 160 letras.',
+    ];
+
+    private function normalizePhones(Request $request, array $validated): array
+    {
+        $prefix = \App\Support\Phones::prefixFor($request->user()->tenant);
+        $labels = ['phone' => 'El celular', 'emergency_contact_phone' => 'El teléfono de emergencia'];
+
+        foreach ($labels as $field => $label) {
+            if (!array_key_exists($field, $validated) || $validated[$field] === null || trim((string) $validated[$field]) === '') {
+                continue;
+            }
+
+            $normalized = \App\Support\Phones::normalize($validated[$field], $prefix);
+
+            if ($normalized === null) {
+                throw \Illuminate\Validation\ValidationException::withMessages([$field => "{$label} no parece un número: escribe entre 6 y 15 números, con o sin +{$prefix}."]);
+            }
+
+            $validated[$field] = $normalized;
+        }
+
+        if (array_key_exists('alert', $validated) && $validated['alert'] !== null) {
+            $validated['alert'] = trim($validated['alert']) ?: null;
+        }
+
+        return $validated;
     }
 
     public static function auditChanges(array $before, array $after): array
@@ -80,6 +131,11 @@ class CustomerController extends Controller
     private function relations(Request $request): array
     {
         $relations = ['typeDocument', 'status'];
+
+        if (\App\Support\CustomerProfile::fieldsReady()) {
+            $relations[] = 'homeBranch:id,name';
+            $relations[] = 'preferredProfessional:id,display_name';
+        }
 
         if ($this->usesDependents($request)) {
             $relations[] = 'dependents';
@@ -107,13 +163,22 @@ class CustomerController extends Controller
         $query = $this->tenantQuery($request)->with($this->relations($request));
 
         if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
+            $query->where(function ($q) use ($search, $request) {
                 Search::contains($q, "coalesce(first_name, '') || ' ' || coalesce(last_name, '')", $search);
 
                 foreach (['document_number', 'phone', 'email', 'code'] as $column) {
                     Search::orContains($q, $column, $search);
                 }
+
+                foreach (\App\Support\Phones::searchVariants($search, \App\Support\Phones::prefixFor($request->user()->tenant)) as $digits) {
+                    $q->orWhereRaw("regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') like ?", ['%' . $digits . '%']);
+                }
             });
+        }
+
+        if (($tagId = $request->input('tag_id')) && \Illuminate\Support\Str::isUuid($tagId) && \App\Support\CustomerProfile::tagsReady()) {
+            $query->whereExists(fn ($q) => $q->select(DB::raw(1))->from('customer_tag_assignments as cta')
+                ->whereColumn('cta.customer_id', 'customers.id')->where('cta.customer_tag_id', $tagId));
         }
 
         if ($biologicalSex = $request->input('biological_sex')) {
@@ -133,7 +198,9 @@ class CustomerController extends Controller
             $states = \App\Support\OnlineBooking::states($tenant, $ids);
             $visits = $this->visits($tenant->id, $ids);
             $local = fn (?string $value) => $value ? \Illuminate\Support\Carbon::parse($value)->setTimezone($tenant->zone())->format('Y-m-d\TH:i:s') : null;
-            $customers->getCollection()->each(function (Customer $c) use ($states, $visits, $local) {
+            $tags = \App\Support\CustomerProfile::tagsFor($ids);
+            $customers->getCollection()->each(function (Customer $c) use ($states, $visits, $local, $tags) {
+                $c->setAttribute('tags', $tags[$c->id] ?? []);
                 $c->setAttribute('online_booking', $states[$c->id] ?? null);
                 $c->setAttribute('last_visit', $local($visits[$c->id]->last_visit ?? null));
                 $c->setAttribute('next_visit', $local($visits[$c->id]->next_visit ?? null));
@@ -197,8 +264,10 @@ class CustomerController extends Controller
             'postal_code' => 'nullable|string|max:20',
             'medical_notes' => 'nullable|string',
             'dependents' => 'sometimes|array|max:20',
-        ] + CustomerDependent::rules('dependents.*.'));
+        ] + CustomerDependent::rules('dependents.*.') + $this->extraRules($request), self::EXTRA_MESSAGES);
 
+        $this->assertUniqueDocument($request, $validated['document_number'] ?? null);
+        $validated = $this->normalizePhones($request, $validated);
         $dependents = $validated['dependents'] ?? [];
         $stage = array_intersect_key($validated, ['pipeline_stage_id' => true]);
         unset($validated['dependents'], $validated['pipeline_stage_id']);
@@ -295,7 +364,13 @@ class CustomerController extends Controller
             'department' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
             'medical_notes' => 'nullable|string',
-        ]);
+        ] + $this->extraRules($request), self::EXTRA_MESSAGES);
+
+        if (array_key_exists('document_number', $validated)) {
+            $this->assertUniqueDocument($request, $validated['document_number'], $customer->id);
+        }
+
+        $validated = $this->normalizePhones($request, $validated);
 
         $stage = array_intersect_key($validated, ['pipeline_stage_id' => true]);
         unset($validated['pipeline_stage_id']);
@@ -385,6 +460,79 @@ class CustomerController extends Controller
 
         return response()->json([
             'message' => 'Cliente eliminado correctamente'
+        ]);
+    }
+
+    private function assertUniqueDocument(Request $request, ?string $document, ?string $exceptId = null): void
+    {
+        $other = \App\Support\CustomerRecords::duplicateByDocument($request->user()->tenant_id, $document, $exceptId);
+
+        if ($other) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'document_number' => 'Ya hay una ficha con ese documento: ' . \App\Support\Person::name($other) . ($other->code ? " ({$other->code})" : '') . '. Búscala en vez de crear otra; si son la misma persona, únelas desde su ficha.',
+            ]);
+        }
+    }
+
+    public function mergePreview(Request $request, string $customer)
+    {
+        $keep = $this->findForTenant($request, $customer);
+        $validated = $request->validate(['duplicate_id' => 'required|uuid']);
+        $duplicate = $this->findForTenant($request, $validated['duplicate_id']);
+        abort_if($keep->id === $duplicate->id, 422, 'Elige otra ficha.');
+
+        $count = fn (string $table) => \Illuminate\Support\Facades\Schema::hasTable($table) ? DB::table($table)->where('customer_id', $duplicate->id)->count() : 0;
+
+        return response()->json([
+            'duplicate' => ['id' => $duplicate->id, 'code' => $duplicate->code, 'name' => \App\Support\Person::name($duplicate), 'document_number' => $duplicate->document_number, 'phone' => $duplicate->phone, 'email' => $duplicate->email],
+            'counts'    => [
+                'appointments' => $count('appointments'),
+                'sales'        => $count('sales'),
+                'packages'     => $count('customer_packages'),
+                'records'      => $count('care_records'),
+                'quotes'       => $count('quotes'),
+            ],
+            'fills' => collect(\App\Support\CustomerRecords::FILLABLE_FROM_DUPLICATE)
+                ->filter(fn ($field) => ($keep->{$field} === null || $keep->{$field} === '') && $duplicate->{$field} !== null && $duplicate->{$field} !== '')
+                ->values(),
+        ]);
+    }
+
+    public function merge(Request $request, string $customer)
+    {
+        $keep = $this->findForTenant($request, $customer);
+        $validated = $request->validate(['duplicate_id' => 'required|uuid']);
+        $duplicate = $this->findForTenant($request, $validated['duplicate_id']);
+        abort_if($keep->id === $duplicate->id, 422, 'No puedes unir una ficha consigo misma.');
+
+        $result = DB::transaction(fn () => \App\Support\CustomerRecords::merge($keep, $duplicate));
+
+        $this->audit($request, 'customer.merged', $keep, ['Ficha unida' => trim(\App\Support\Person::name($duplicate) . ' ' . ($duplicate->code ?? ''))], ['Registros movidos' => array_sum($result['moved']), 'Datos completados' => implode(', ', $result['filled']) ?: null]);
+
+        return response()->json([
+            'message'  => 'Fichas unidas: todo lo de ' . \App\Support\Person::name($duplicate) . ' ahora está en esta ficha.',
+            'customer' => $keep->fresh()->load($this->relations($request)),
+            'moved'    => $result['moved'],
+        ]);
+    }
+
+    public function anonymize(Request $request, string $customer)
+    {
+        abort_unless(\App\Support\CustomerRecords::ready(), 503, 'Falta actualizar la base de datos para borrar datos personales (php artisan migrate).');
+        $customer = $this->findForTenant($request, $customer);
+        $request->validate(['confirm' => 'required|in:BORRAR'], ['confirm.in' => 'Escribe BORRAR para confirmar.', 'confirm.required' => 'Escribe BORRAR para confirmar.']);
+
+        if ($customer->anonymized_at) {
+            return response()->json(['message' => 'Los datos personales de esta ficha ya se borraron.'], 422);
+        }
+
+        $name = \App\Support\Person::name($customer);
+        DB::transaction(fn () => \App\Support\CustomerRecords::anonymize($customer));
+        $this->audit($request, 'customer.anonymized', $customer, ['Nombre' => $name], ['Datos personales' => 'Borrados']);
+
+        return response()->json([
+            'message'  => 'Se borraron los datos personales. Sus citas, ventas y fichas de atención se conservan sin su nombre.',
+            'customer' => $customer->fresh()->load($this->relations($request)),
         ]);
     }
 }

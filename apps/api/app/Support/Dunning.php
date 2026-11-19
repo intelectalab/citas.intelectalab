@@ -105,6 +105,7 @@ class Dunning
     {
         return Subscription::with('plan')
             ->whereIn('status', ['active', 'trialing', 'expired', 'past_due'])
+            ->when(Cancellations::ready(), fn ($q) => $q->whereNull('cancel_at'))
             ->where(fn ($q) => $q->where(fn ($c) => $c->where('status', 'trialing')->whereRaw('coalesce(trial_ends_at, ends_at) <= now()'))
                 ->orWhere(fn ($c) => $c->where('status', '!=', 'trialing')->where('ends_at', '<=', now())))
             ->get()

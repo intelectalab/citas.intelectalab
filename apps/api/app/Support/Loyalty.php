@@ -118,6 +118,8 @@ class Loyalty
             return 0;
         }
 
+        self::expirePoints($tenantId, $customerId);
+
         return max(0, (int) DB::table('loyalty_transactions')
             ->where('tenant_id', $tenantId)
             ->where('customer_id', $customerId)
@@ -487,6 +489,309 @@ class Loyalty
                 'sale_id'      => $sale->id,
                 'created_at'   => now(),
             ]);
+        }
+    }
+
+    public static function pointLots(string $tenantId, string $customerId): array
+    {
+        $rows = DB::table('loyalty_transactions')
+            ->where('tenant_id', $tenantId)
+            ->where('customer_id', $customerId)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'type', 'points', 'expires_at', 'created_at']);
+
+        $now = now();
+        $events = [];
+        $lots = [];
+
+        foreach ($rows as $row) {
+            $at = Carbon::parse($row->created_at);
+            $points = (int) $row->points;
+
+            if ($points > 0) {
+                $lots[$row->id] = [
+                    'points'     => $points,
+                    'left'       => 0,
+                    'expired'    => 0,
+                    'expires_at' => $row->expires_at ? Carbon::parse($row->expires_at) : null,
+                    'created_at' => $at,
+                ];
+                $events[] = [$at, 0, 'add', $row->id, $points];
+
+                if ($lots[$row->id]['expires_at'] && $lots[$row->id]['expires_at']->lte($now)) {
+                    $events[] = [$lots[$row->id]['expires_at'], 2, 'expire', $row->id, 0];
+                }
+            } elseif ($row->type !== 'expire') {
+                $events[] = [$at, 1, 'use', $row->id, -$points];
+            }
+        }
+
+        usort($events, fn ($a, $b) => [$a[0]->getTimestamp(), $a[1]] <=> [$b[0]->getTimestamp(), $b[1]]);
+        $expiredTotal = 0;
+
+        foreach ($events as [$at, , $kind, $id, $amount]) {
+            if ($kind === 'add') {
+                $lots[$id]['left'] = $amount;
+                continue;
+            }
+
+            if ($kind === 'expire') {
+                $lots[$id]['expired'] = $lots[$id]['left'];
+                $expiredTotal += $lots[$id]['left'];
+                $lots[$id]['left'] = 0;
+                continue;
+            }
+
+            $alive = array_filter($lots, fn ($lot) => $lot['left'] > 0 && $lot['created_at']->lte($at));
+            uasort($alive, fn ($a, $b) => [$a['expires_at'] ? 0 : 1, $a['expires_at']?->getTimestamp() ?? 0, $a['created_at']->getTimestamp()]
+                <=> [$b['expires_at'] ? 0 : 1, $b['expires_at']?->getTimestamp() ?? 0, $b['created_at']->getTimestamp()]);
+
+            foreach (array_keys($alive) as $lotId) {
+                if ($amount <= 0) {
+                    break;
+                }
+                $take = min($amount, $lots[$lotId]['left']);
+                $lots[$lotId]['left'] -= $take;
+                $amount -= $take;
+            }
+        }
+
+        return ['expired_total' => $expiredTotal, 'lots' => $lots];
+    }
+
+    public static function expirePoints(string $tenantId, string $customerId): int
+    {
+        if (!self::ready()) {
+            return 0;
+        }
+
+        $state = self::pointLots($tenantId, $customerId);
+
+        if ($state['expired_total'] <= 0) {
+            return 0;
+        }
+
+        $recorded = (int) abs((int) DB::table('loyalty_transactions')->where('tenant_id', $tenantId)->where('customer_id', $customerId)->where('type', 'expire')->sum('points'));
+        $current = (int) DB::table('loyalty_transactions')->where('tenant_id', $tenantId)->where('customer_id', $customerId)->sum('points');
+        $due = min($state['expired_total'] - $recorded, $current);
+
+        if ($due <= 0) {
+            return 0;
+        }
+
+        DB::table('loyalty_transactions')->insert([
+            'id'            => (string) Str::uuid(),
+            'tenant_id'     => $tenantId,
+            'customer_id'   => $customerId,
+            'type'          => 'expire',
+            'points'        => -$due,
+            'balance_after' => max(0, $current - $due),
+            'sale_id'       => null,
+            'reason'        => $due === 1 ? 'Venció 1 punto' : "Vencieron {$due} puntos",
+            'expires_at'    => null,
+            'actor_user_id' => null,
+            'created_at'    => now(),
+        ]);
+
+        return $due;
+    }
+
+    public static function expirePointsDue(string $tenantId): void
+    {
+        if (!self::ready()) {
+            return;
+        }
+
+        $customers = DB::table('loyalty_transactions')
+            ->where('tenant_id', $tenantId)
+            ->where('points', '>', 0)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now()->toIso8601String())
+            ->distinct()
+            ->pluck('customer_id');
+
+        foreach ($customers as $customerId) {
+            self::expirePoints($tenantId, $customerId);
+        }
+    }
+
+    public static function lotStates(string $tenantId, array $customerIds): array
+    {
+        $states = [];
+
+        foreach (array_unique($customerIds) as $customerId) {
+            foreach (self::pointLots($tenantId, $customerId)['lots'] as $id => $lot) {
+                $states[$id] = ['left' => $lot['left'], 'expired' => $lot['expired']];
+            }
+        }
+
+        return $states;
+    }
+
+    public static function expiringSoon(string $tenantId, string $customerId, int $limit = 5): array
+    {
+        return collect(self::pointLots($tenantId, $customerId)['lots'])
+            ->filter(fn ($lot) => $lot['left'] > 0 && $lot['expires_at'] && $lot['expires_at']->isFuture())
+            ->groupBy(fn ($lot) => $lot['expires_at']->copy()->utc()->toIso8601String())
+            ->map(fn ($group, $at) => ['expires_at' => $at, 'points' => (int) $group->sum('left')])
+            ->sortBy('expires_at')
+            ->take($limit)
+            ->values()
+            ->all();
+    }
+
+    public static function giftCardLine(Tenant $tenant, array $item, string $field, string $currency): array
+    {
+        if (!self::enabled($tenant) || !self::rules($tenant)['gift_cards_enabled']) {
+            throw ValidationException::withMessages([$field => self::ready() ? 'Las gift cards no están activas en tu empresa.' : self::NOT_READY]);
+        }
+
+        $details = (array) ($item['details'] ?? []);
+        $amount = round((float) ($details['amount'] ?? 0), 2);
+
+        if ($amount < 1 || $amount > 999999) {
+            throw ValidationException::withMessages([$field => 'Escribe el monto de la gift card (desde 1).']);
+        }
+
+        if ((int) ($item['quantity'] ?? 1) > 1) {
+            throw ValidationException::withMessages([$field => 'Una gift card se vende de a una. Si quieren dos, agrégala otra vez.']);
+        }
+
+        $name = mb_substr(trim((string) ($details['recipient_name'] ?? '')), 0, 150) ?: null;
+        $email = mb_substr(trim((string) ($details['recipient_email'] ?? '')), 0, 250) ?: null;
+
+        if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw ValidationException::withMessages([$field => 'Escribe un correo válido para quien recibe la gift card.']);
+        }
+
+        return [
+            'type'            => 'gift_card',
+            'id'              => $item['id'],
+            'item_type'       => 'gift_card',
+            'reference_id'    => null,
+            'description'     => 'Gift card' . ($name ? " para {$name}" : ''),
+            'quantity'        => 1,
+            'unit_price'      => $amount,
+            'professional_id' => null,
+            'professional'    => null,
+            'appointment_id'  => null,
+            'appointment'     => null,
+            'no_membership'   => true,
+            'details'         => ['amount' => $amount, 'recipient_name' => $name, 'recipient_email' => $email],
+        ];
+    }
+
+    public static function issueForSale(Tenant $tenant, object $sale, ?User $actor = null): array
+    {
+        if (!self::ready() || ($sale->status ?? null) !== 'paid') {
+            return [];
+        }
+
+        $lines = DB::table('sale_items')->where('sale_id', $sale->id)->where('item_type', 'gift_card')->whereNull('reference_id')->get();
+        $issued = [];
+        $days = self::rules($tenant)['gift_card_validity_days'];
+
+        foreach ($lines as $line) {
+            $details = json_decode((string) ($line->details ?? ''), true) ?: [];
+            $amount = round((float) ($details['amount'] ?? $line->unit_price), 2);
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $id = (string) Str::uuid();
+            $code = self::nextGiftCardCode($tenant->id);
+            $expires = $days > 0 ? now()->addDays($days) : null;
+
+            DB::table('gift_cards')->insert([
+                'id'                    => $id,
+                'tenant_id'             => $tenant->id,
+                'code'                  => $code,
+                'initial_amount'        => $amount,
+                'balance'               => $amount,
+                'purchaser_customer_id' => $sale->customer_id,
+                'recipient_customer_id' => null,
+                'recipient_name'        => $details['recipient_name'] ?? null,
+                'recipient_email'       => $details['recipient_email'] ?? null,
+                'sale_id'               => $sale->id,
+                'status'                => 'active',
+                'expires_at'            => $expires,
+                'created_at'            => now(),
+                'updated_at'            => now(),
+            ]);
+
+            DB::table('gift_card_transactions')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'gift_card_id' => $id,
+                'type' => 'issue', 'amount' => $amount, 'sale_id' => $sale->id, 'created_at' => now(),
+            ]);
+
+            DB::table('sale_items')->where('id', $line->id)->update(['reference_id' => $id]);
+
+            Audit::log(request(), 'gift_card.issued', [
+                'tenant' => $tenant->id, 'entity_type' => 'gift_card', 'entity_id' => $id, 'entity_label' => $code, 'branch_id' => $sale->branch_id,
+                'after'  => array_filter(['code' => $code, 'amount' => $amount, 'sale' => $sale->code, 'recipient' => $details['recipient_name'] ?? null, 'ends_at' => $expires?->toIso8601String()], fn ($v) => $v !== null),
+            ]);
+
+            $issued[] = ['code' => $code, 'amount' => $amount, 'recipient_name' => $details['recipient_name'] ?? null, 'expires_at' => $expires?->toIso8601String()];
+        }
+
+        return $issued;
+    }
+
+    public static function usedFromSale(string $saleId): float
+    {
+        if (!self::ready()) {
+            return 0.0;
+        }
+
+        return round((float) DB::table('gift_cards')
+            ->where('sale_id', $saleId)
+            ->where('status', '!=', 'cancelled')
+            ->whereRaw('balance < initial_amount - 0.001')
+            ->sum('initial_amount'), 2);
+    }
+
+    public static function cancelUncoveredGiftCards(Tenant $tenant, object $sale, ?User $actor = null): void
+    {
+        if (!self::ready()) {
+            return;
+        }
+
+        $unused = DB::table('gift_cards')
+            ->where('tenant_id', $tenant->id)
+            ->where('sale_id', $sale->id)
+            ->where('status', 'active')
+            ->whereRaw('balance >= initial_amount - 0.001')
+            ->orderByDesc('initial_amount')
+            ->lockForUpdate()
+            ->get();
+
+        if ($unused->isEmpty()) {
+            return;
+        }
+
+        $room = round((float) $sale->paid - self::usedFromSale($sale->id), 2);
+        $total = round((float) $unused->sum('initial_amount'), 2);
+
+        foreach ($unused as $card) {
+            if ($total <= $room + 0.001) {
+                break;
+            }
+
+            DB::table('gift_cards')->where('id', $card->id)->update(['balance' => 0, 'status' => 'cancelled', 'updated_at' => now()]);
+            DB::table('gift_card_transactions')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'gift_card_id' => $card->id,
+                'type' => 'cancel', 'amount' => round((float) $card->balance, 2), 'sale_id' => $sale->id, 'created_at' => now(),
+            ]);
+
+            Audit::log(request(), 'gift_card.cancelled', [
+                'tenant' => $tenant->id, 'entity_type' => 'gift_card', 'entity_id' => $card->id, 'entity_label' => $card->code, 'branch_id' => $sale->branch_id,
+                'before' => ['status' => self::GIFT_CARD_STATUSES['active'], 'balance' => round((float) $card->balance, 2)],
+                'after'  => ['status' => self::GIFT_CARD_STATUSES['cancelled'], 'balance' => 0, 'reason' => "Se devolvió la venta {$sale->code}"],
+            ]);
+
+            $total = round($total - (float) $card->initial_amount, 2);
         }
     }
 

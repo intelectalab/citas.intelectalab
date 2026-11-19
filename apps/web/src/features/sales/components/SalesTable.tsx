@@ -27,7 +27,7 @@ const VIEWS: { id: string; label: string; test: (sale: SaleRow) => boolean }[] =
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export const ITEM_TYPES: Record<string, string> = { service: 'Servicios', product: 'Productos', package: 'Paquetes', deposit: 'Adelantos' };
+export const ITEM_TYPES: Record<string, string> = { service: 'Servicios', product: 'Productos', package: 'Paquetes', deposit: 'Adelantos', penalty: 'Penalidades', gift_card: 'Gift cards' };
 
 export interface SalesFilter {
   item_type?: string;
@@ -66,6 +66,13 @@ export default function SalesTable({ initial }: { initial?: SalesFilter } = {}) 
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get('venta');
+    if (!wanted) return;
+    setViewing(wanted);
+    window.history.replaceState(null, '', '/sales');
+  }, []);
 
   const all = sales ?? [];
   const term = normalize(searchTerm.trim());

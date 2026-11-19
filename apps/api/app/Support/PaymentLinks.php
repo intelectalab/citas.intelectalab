@@ -26,12 +26,14 @@ class PaymentLinks
         'niubiz'      => ['label' => 'Niubiz', 'class' => null],
         'izipay'      => ['label' => 'Izipay', 'class' => null],
         'mercadopago' => ['label' => 'Mercado Pago', 'class' => MercadoPagoPaymentProvider::class],
+        'transfer'    => ['label' => 'Transferencia', 'class' => null],
     ];
 
     public const NOT_CONNECTED = 'Tu empresa todavía no recibe pagos en línea: conecta Culqi o Mercado Pago en Configuración → Integraciones.';
 
     public const STATUS_LABELS = [
         'pending'   => 'Esperando pago',
+        'review'    => 'Comprobante en revisión',
         'paid'      => 'Pagado',
         'expired'   => 'Vencido',
         'cancelled' => 'Anulado',
@@ -116,7 +118,7 @@ class PaymentLinks
 
     public static function available(Tenant|string $tenant): bool
     {
-        return self::ready() && self::provider($tenant) !== null;
+        return self::ready() && (self::provider($tenant) !== null || CustomerTransfers::enabled($tenant instanceof Tenant ? $tenant->id : $tenant));
     }
 
     public static function providerFor(string $tenantId, string $key): ?PaymentProvider
@@ -192,7 +194,7 @@ class PaymentLinks
             ->where('notes', Packages::ONLINE_NOTE)
             ->where('status', 'pending')
             ->where('paid', 0)
-            ->whereNotExists(fn ($q) => $q->from('payment_links')->whereColumn('payment_links.sale_id', 'sales.id')->where('payment_links.status', 'pending'))
+            ->whereNotExists(fn ($q) => $q->from('payment_links')->whereColumn('payment_links.sale_id', 'sales.id')->whereIn('payment_links.status', ['pending', 'review']))
             ->get();
 
         foreach ($sales as $sale) {
@@ -291,13 +293,13 @@ class PaymentLinks
         $id = (string) Str::uuid();
         $provider = self::provider($tenant);
 
-        if (!$provider) {
+        if (!$provider && !CustomerTransfers::enabled($tenant->id)) {
             throw ValidationException::withMessages(['link' => self::NOT_CONNECTED]);
         }
 
-        $values += ['id' => $id, 'tenant_id' => $tenant->id, 'token' => self::token(), 'provider' => $provider->key(), 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()];
+        $values += ['id' => $id, 'tenant_id' => $tenant->id, 'token' => self::token(), 'provider' => $provider?->key() ?? 'transfer', 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()];
 
-        if ($provider->simulated()) {
+        if ($provider?->simulated()) {
             $values['external_id'] = $provider->checkout((object) $values)['external_id'] ?? null;
         }
 
@@ -435,6 +437,8 @@ class PaymentLinks
             'booking'      => $booking,
             'appointment'  => $link->appointment_id ? DB::table('appointments')->where('id', $link->appointment_id)->value('code') : null,
             'culqi'        => $link->status === 'pending' && $link->provider === 'culqi' ? self::culqiCheckout($link, $company->trade_name ?? $tenant->name) : null,
+            'transfer'     => CustomerTransfers::ready() ? CustomerTransfers::publicOptions($link) : null,
+            'voucher'      => CustomerTransfers::ready() ? CustomerTransfers::voucherView($link) : null,
         ];
     }
 
@@ -679,6 +683,45 @@ class PaymentLinks
         });
     }
 
+    public static function confirmVoucher(Tenant $tenant, object $link, object $voucher): array
+    {
+        $event = [
+            'event_id'    => 'voucher:' . $voucher->id,
+            'type'        => 'payment.approved',
+            'reference'   => $voucher->operation_number,
+            'external_id' => $voucher->operation_number,
+            'amount'      => (float) $link->amount,
+            'payload'     => ['voucher_id' => $voucher->id, 'method' => $voucher->method, 'account' => $voucher->account_label],
+        ];
+
+        DB::table('payment_links')->where('id', $link->id)->update(['provider' => 'transfer', 'status' => 'pending', 'updated_at' => now()]);
+        $link->provider = 'transfer';
+        $link->status = 'pending';
+
+        if ($link->purpose === 'deposit') {
+            DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
+            AppointmentScheduler::$ignoreLink = $link->id;
+
+            try {
+                if ($taken = self::slotTaken($tenant, $link)) {
+                    return ['status' => 'taken', 'message' => 'Ese horario ya se ocupó (el apartado venció antes de revisar el comprobante). Habla con el cliente para darle otro horario y, si no lo quiere, rechaza el comprobante y devuélvele el dinero.'];
+                }
+
+                return self::confirmDeposit($tenant, $link, 'transfer', $event);
+            } finally {
+                AppointmentScheduler::$ignoreLink = null;
+            }
+        }
+
+        $sale = DB::table('sales')->where('id', $link->sale_id)->first();
+
+        if (!$sale || !in_array($sale->status, ['pending', 'partial'], true) || (float) $sale->balance + 0.001 < (float) $link->amount) {
+            return ['status' => 'changed', 'message' => 'La venta cambió y ya no tiene ese saldo por cobrar. Rechaza el comprobante y, si el cliente transfirió, devuélvele el dinero.'];
+        }
+
+        return self::confirmSale($tenant, $link, 'transfer', $event);
+    }
+
     private static function refundUnexpected(Tenant $tenant, object $link, string $provider, array $event, string $why): array
     {
         $gateway = self::providerFor($tenant->id, $provider);
@@ -737,9 +780,12 @@ class PaymentLinks
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, Invoicing::validated($tenant, ['doc_type' => Invoicing::FACTURA === Invoicing::defaultType($tenant) ? Invoicing::types($tenant)[0] : Invoicing::defaultType($tenant)]), null);
             Packages::issueForSale($tenant, $sale, null);
+            Memberships::issueForSale($tenant, $sale, null);
+            Loyalty::issueForSale($tenant, $sale, null);
             Inventory::deductForSale($tenant, $sale, null);
             Loyalty::earnForSale($tenant, $sale, null);
             Commissions::forSale($tenant, $sale);
+            Webhooks::salePaid($tenant->id, $sale);
         }
 
         return $sale;
@@ -955,6 +1001,7 @@ class PaymentLinks
 
         $sale = DB::table('sales')->where('id', $sale->id)->first();
         Invoicing::issue($tenant, $sale, Invoicing::validated($tenant, ['doc_type' => Invoicing::FACTURA === Invoicing::defaultType($tenant) ? Invoicing::types($tenant)[0] : Invoicing::defaultType($tenant)]), null);
+        Webhooks::salePaid($tenant->id, $sale);
     }
 
     public static function refundThroughGateway(Tenant $tenant, object $sale, float $amount): array
@@ -966,6 +1013,10 @@ class PaymentLinks
         }
 
         $payment = DB::table('payments')->where('sale_id', $sale->id)->whereIn('method', self::GATEWAY_METHODS)->where('status', 'confirmed')->orderByDesc('created_at')->first();
+        if (($payment->provider ?? null) === 'transfer') {
+            throw ValidationException::withMessages(['amount' => 'Ese pago entró por transferencia, Yape o Plin con comprobante: devuélvelo tú al cliente y regístralo como devolución en efectivo o transferencia.']);
+        }
+
         $gateway = self::providerFor($tenant->id, $payment->provider ?? 'simulated');
 
         if (!$gateway) {
@@ -1008,11 +1059,11 @@ class PaymentLinks
         return DB::table('payment_links')
             ->where('tenant_id', $tenantId)
             ->where('customer_id', $customerId)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'review'])
             ->orderByDesc('created_at')
             ->limit(20)
             ->get()
-            ->map(fn ($link) => self::present($link) + ['token' => $link->token, 'can_drop' => $link->purpose === 'deposit' || ($link->sale_id && DB::table('sales')->where('id', $link->sale_id)->value('notes') === Packages::ONLINE_NOTE)])
+            ->map(fn ($link) => self::present($link) + ['token' => $link->token, 'can_drop' => $link->status === 'pending' && ($link->purpose === 'deposit' || ($link->sale_id && DB::table('sales')->where('id', $link->sale_id)->value('notes') === Packages::ONLINE_NOTE))])
             ->values()
             ->all();
     }

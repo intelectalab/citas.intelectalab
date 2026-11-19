@@ -81,6 +81,48 @@ class CommissionRuleController extends Controller
         ]);
     }
 
+    public function professional(Request $request, string $professional)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $pro = DB::table('professionals')->where('tenant_id', $tenant->id)->where('id', $professional)->first();
+        abort_unless($pro, 404);
+
+        $scope = \App\Support\Access::scopeOf($user);
+        $self = $pro->user_id === $user->id;
+        abort_unless($self || $user->allows('commissions.view'), 403, 'No tienes permiso para ver comisiones.');
+        abort_if($scope === 'own' && !$self, 403, 'Con tu rol solo puedes ver tus propias comisiones.');
+
+        $range = \App\Support\Reports::range($tenant, 'month');
+        $production = (new \App\Support\Reports($tenant, null, $range['from'], $range['to']))->production($pro->id);
+        $earned = Commissions::byProfessional($tenant->id, $range['from']->copy()->utc()->toIso8601String(), $range['to']->copy()->utc()->toIso8601String(), null, $pro->id)[$pro->id] ?? 0.0;
+        $goal = property_exists($pro, 'goal_month') && $pro->goal_month !== null ? round((float) $pro->goal_month, 2) : null;
+        $rules = $this->rows($tenant->id)
+            ->where('r.active', true)
+            ->where(fn ($q) => $q->whereNull('r.professional_id')->orWhere('r.professional_id', $pro->id))
+            ->orderBy('r.kind')->orderBy('s.name')->orderBy('pr.name')
+            ->get(self::COLUMNS)
+            ->map(fn ($row) => $this->present($row))
+            ->filter(fn ($rule) => $rule['type'] !== 'product' || Cart::productsEnabled($tenant))
+            ->values();
+
+        return response()->json([
+            'month'       => \Illuminate\Support\Str::ucfirst($range['from']->locale('es')->translatedFormat('F Y')),
+            'currency'    => \App\Support\Currency::of($tenant),
+            'goal_ready'  => property_exists($pro, 'goal_month'),
+            'goal'        => $goal,
+            'production'  => $production,
+            'with_products' => Cart::productsEnabled($tenant),
+            'progress'    => $goal ? min(100, (int) round($production * 100 / $goal)) : null,
+            'earned'      => round((float) $earned, 2),
+            'own_percent' => $pro->commission_percent !== null ? round((float) $pro->commission_percent, 2) : null,
+            'base'        => Commissions::rules($tenant)['base'],
+            'on_products' => Commissions::rules($tenant)['on_products'] && Cart::productsEnabled($tenant),
+            'rules'       => $rules,
+            'can_edit'    => $user->allows('commissions.rules'),
+        ]);
+    }
+
     private function validated(Request $request, Tenant $tenant, ?string $ignoreId = null): array
     {
         $exists = fn (string $table) => Rule::exists($table, 'id')->where('tenant_id', $tenant->id);

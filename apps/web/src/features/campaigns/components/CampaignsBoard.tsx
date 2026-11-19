@@ -70,7 +70,7 @@ export default function CampaignsBoard() {
       cell: (c) => (
         <div key={`name-${c.id}`} className="min-w-0 max-w-sm">
           <Link href={`/campaigns/${c.id}`} data-open-campaign={c.name} className={`${styles.customerName} hover:text-brand-accent transition-colors truncate block`}>{c.name}</Link>
-          <span className="block text-xs text-slate-400 truncate">{c.audience}</span>
+          <span className="block text-xs text-slate-400 truncate">{c.channel && c.channel !== 'email' ? `${c.channel_label} · ` : ''}{c.audience}</span>
         </div>
       ),
     },

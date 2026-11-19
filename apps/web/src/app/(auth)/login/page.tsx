@@ -523,6 +523,12 @@ export default function AuthPage() {
                       Registrar mi empresa
                     </button>
                   </div>
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                    <span>¿Algo no salió bien?</span>
+                    <Link href="/reclamaciones" data-login-complaints className="text-brand-accent hover:text-brand-ink font-bold transition-colors">
+                      Libro de Reclamaciones
+                    </Link>
+                  </div>
                 </div>
               </motion.div>
             ) : (

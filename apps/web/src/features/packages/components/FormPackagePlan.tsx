@@ -74,7 +74,7 @@ const empty = {
 };
 
 export default function FormPackagePlan({ isOpen, onClose, initialData, options, onSaved }: FormPackagePlanProps) {
-  const { user, can } = useAuth();
+  const { user, can, hasModule } = useAuth();
   const [form, setForm] = useState(empty);
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [services, setServices] = useState<ServiceOption[]>([]);
@@ -90,7 +90,7 @@ export default function FormPackagePlan({ isOpen, onClose, initialData, options,
       .then((res) => {
         const list: ServiceRow[] = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
         setServices(list
-          .filter((s) => s.status?.slug !== 'inactive' && (s.kind ?? 'individual') === 'individual')
+          .filter((s) => s.status?.slug !== 'inactive' && ((s.kind ?? 'individual') === 'individual' || hasModule('classes')))
           .map((s) => ({ id: s.id, name: s.name, price: Number(s.price) }))
           .sort((a, b) => a.name.localeCompare(b.name)));
       })

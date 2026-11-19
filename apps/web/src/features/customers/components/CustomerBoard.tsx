@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarCheck, CalendarClock, Columns3, Phone } from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarPlus, Columns3, Mail, Phone } from 'lucide-react';
+import { formatPhone } from '@/lib/phone';
 import Select from '@/app/components/common/Select';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { PAGE_SIZE } from '@/app/components/common/Pager';
@@ -17,6 +18,9 @@ export interface BoardCustomer {
   last_visit?: string | null;
   next_visit?: string | null;
   stage_manual_at?: string | null;
+  code?: string;
+  email?: string | null;
+  document_number?: string | null;
 }
 
 interface CustomerBoardProps {
@@ -25,11 +29,13 @@ interface CustomerBoardProps {
   clientWord: string;
   onMove: (customerId: string, stageId: string) => void;
   onEditColumns?: () => void;
+  onSchedule?: (row: BoardCustomer) => void;
+  onWrite?: (row: BoardCustomer) => void;
 }
 
 const shortDate = (local: string) => formatDate(dateOf(local), { day: 'numeric', month: 'short', year: 'numeric' });
 
-export default function CustomerBoard({ rows, info, clientWord, onMove, onEditColumns }: CustomerBoardProps) {
+export default function CustomerBoard({ rows, info, clientWord, onMove, onEditColumns, onSchedule, onWrite }: CustomerBoardProps) {
   const [shown, setShown] = useState<Record<string, number>>({});
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -113,12 +119,26 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                       <CustomerLink id={row.id} className="block text-sm font-bold text-brand-ink truncate">{`${row.first_name} ${row.last_name}`}</CustomerLink>
                       {row.stage_manual_at && <span data-manual-stage title="Se movió a mano: aquí se queda hasta su próxima cita" className="inline-block text-[10px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 rounded-md px-1.5 py-0.5">Movido a mano</span>}
                       <div className="space-y-1 text-xs text-slate-500">
-                        <span className="flex items-center gap-1.5"><Phone size={12} className="text-slate-400 shrink-0" />{row.phone || 'Sin teléfono'}</span>
+                        <span className="flex items-center gap-1.5"><Phone size={12} className="text-slate-400 shrink-0" />{formatPhone(row.phone) || 'Sin teléfono'}</span>
                         <span className="flex items-center gap-1.5"><CalendarCheck size={12} className="text-emerald-600 shrink-0" />{row.last_visit ? `Última visita: ${shortDate(row.last_visit)}` : 'Aún sin atenciones'}</span>
                         <span className="flex items-center gap-1.5"><CalendarClock size={12} className="text-sky-600 shrink-0" />
                           {row.next_visit ? <span className="first-letter:uppercase">Próxima cita: {formatDate(dateOf(row.next_visit), { weekday: 'short', day: 'numeric', month: 'short' })}, {timeOf(row.next_visit)}</span> : 'Sin cita agendada'}
                         </span>
                       </div>
+                      {(onSchedule || onWrite) && (
+                        <div className="flex gap-1.5 pt-2 border-t border-slate-100" data-card-actions>
+                          {onSchedule && (
+                            <button type="button" data-action="schedule" onClick={() => onSchedule(row)} className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-brand-accent transition-colors">
+                              <CalendarPlus size={13} className="text-brand-accent" /> Agendar
+                            </button>
+                          )}
+                          {onWrite && (
+                            <button type="button" data-action="write" onClick={() => onWrite(row)} className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-brand-accent transition-colors">
+                              <Mail size={13} className="text-brand-accent" /> Escribir
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {info.can_move && info.stages.length > 1 && (
                         <div className="pt-2 border-t border-slate-100" data-move-select>
                           <Select

@@ -21,6 +21,7 @@ class AppointmentScheduler
         'PRO_NO_SERVICE'   => ':name no realiza este servicio',
         'PAST'             => 'El horario ya pasó',
         'NOT_ONLINE'       => 'Este servicio no se reserva en línea',
+        'PRO_NOT_ONLINE'   => 'No atiende reservas en línea',
         'LEAD_TIME'        => 'Ese horario está demasiado cerca para reservarlo en línea',
         'TOO_FAR'          => 'Aún no se puede reservar con tanta anticipación',
         'BRANCH_CLOSED'    => 'La sede está cerrada a esa hora',
@@ -29,10 +30,13 @@ class AppointmentScheduler
         'BLOCKED'          => 'Horario bloqueado',
         'BLOCKED_SOFT'     => 'Horario bloqueado',
         'DOUBLE_BOOKING'   => ':name ya tiene una cita en ese intervalo',
+        'CLASS_BUSY'       => ':name tiene una clase grupal en ese intervalo',
         'BUFFER'           => 'Choca con el tiempo de preparación o limpieza de otra cita',
     ];
 
     public const OVERRIDABLE = ['BRANCH_CLOSED', 'OUT_OF_SCHEDULE', 'BUFFER', 'BLOCKED_SOFT'];
+
+    public static ?string $ignoreLink = null;
 
     public function __construct(private Tenant $tenant, private bool $online = false)
     {
@@ -148,6 +152,40 @@ class AppointmentScheduler
             ])
             ->all();
 
+        if (CustomerTransfers::ready()) {
+            $held = \Illuminate\Support\Facades\DB::table('payment_links')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('professional_id', $professional->id)
+                ->where('purpose', 'deposit')
+                ->where('status', 'review')
+                ->where('held_until', '>', now())
+                ->when(self::$ignoreLink, fn ($q, $id) => $q->where('id', '!=', $id))
+                ->where('starts_at', '<', $dayEnd->toIso8601String())
+                ->where('ends_at', '>', $dayStart->toIso8601String())
+                ->get(['starts_at', 'ends_at']);
+
+            foreach ($held as $link) {
+                $appointments[] = [
+                    'code'   => 'Reserva por confirmar',
+                    'starts' => Carbon::parse($link->starts_at)->setTimezone($timezone),
+                    'ends'   => Carbon::parse($link->ends_at)->setTimezone($timezone),
+                    'before' => 0,
+                    'after'  => 0,
+                ];
+            }
+        }
+
+        foreach (ClassSessions::busy($this->tenant->id, [$professional->id], $dayStart, $dayEnd) as $class) {
+            $appointments[] = [
+                'code'   => "Clase {$class->title}",
+                'starts' => Carbon::parse($class->starts_at)->setTimezone($timezone),
+                'ends'   => Carbon::parse($class->ends_at)->setTimezone($timezone),
+                'before' => 0,
+                'after'  => 0,
+                'class'  => true,
+            ];
+        }
+
         $holiday = Holidays::on($this->tenant, $branch->id, $dayStart->format('Y-m-d'), true)->first()?->name;
 
         $branchHours = BranchHours::of($branch->id);
@@ -187,6 +225,9 @@ class AppointmentScheduler
             $lead = (int) AppointmentFlow::rule($this->tenant, 'booking.min_lead_minutes');
             $maxDays = (int) AppointmentFlow::rule($this->tenant, 'booking.max_days_ahead');
 
+            if (PublicBooking::professionalsFlag() && $professional->online_booking === false) {
+                $add('PRO_NOT_ONLINE');
+            }
             if (!$service->online_booking) {
                 $add('NOT_ONLINE');
             }
@@ -232,7 +273,7 @@ class AppointmentScheduler
 
         foreach ($day['appointments'] as $other) {
             if ($other['starts']->lt($end) && $start->lt($other['ends'])) {
-                $add('DOUBLE_BOOKING', "{$other['code']} {$other['starts']->format('H:i')}–{$other['ends']->format('H:i')}");
+                $add(empty($other['class']) ? 'DOUBLE_BOOKING' : 'CLASS_BUSY', "{$other['code']}{$other['starts']->format('H:i')}–{$other['ends']->format('H:i')}");
                 continue;
             }
 

@@ -125,6 +125,10 @@ export interface ChargeContext {
   links?: { ready: boolean; hours: number; simulated: boolean; current: PaymentLink | null };
   qr?: Partial<Record<'yape' | 'plin', PaymentQr>>;
   packages?: { id: string; code: string; name: string; created: { code: string; starts_at: string }[]; failed: { date: string; time: string | null; message: string }[] }[];
+  memberships?: { id: string; code: string; name: string; renewed: boolean; replaced?: string | null; ends_at: string }[];
+  gift_cards?: { code: string; amount: number; recipient_name: string | null; expires_at: string | null }[];
+  next_visit?: { customer_id: string; service_id: string; service_name: string; professional_id: string | null; branch_id: string; dependent_id: string | null } | null;
+  membership?: { code: string; name: string; included: boolean; percent: number; pos_url: string } | null;
   package?: {
     current: { id: string; code: string; name: string; status: string; consumed: boolean; usage_label: string | null; late_policy: string } | null;
     usable: { id: string; code: string; name: string; sessions_available: number; sessions_total: number; sessions_used: number; expires_at: string; days_left: number }[];
@@ -193,6 +197,12 @@ export interface CashSession {
   by_method: { method: string; label: string; total: number; count: number }[];
   movements?: CashMovement[];
   tolerance?: number;
+  review_status?: 'pending' | 'approved' | 'observed' | null;
+  review_label?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  can_review?: boolean;
 }
 
 export interface CashRegister {
@@ -207,6 +217,9 @@ export interface CashRegister {
 export interface CashBoardData {
   can_manage: boolean;
   tolerance: number;
+  review_over?: number;
+  review_ready?: boolean;
+  can_approve?: boolean;
   branches: { id: string; name: string }[];
   registers: CashRegister[];
   sessions: CashSession[];
@@ -291,6 +304,26 @@ export interface SaleDetail extends Sale {
   refund_blocked: string | null;
   refund_methods: { value: string; label: string }[];
   cash_sessions: { id: string; register_name: string }[];
+  can_approve?: boolean;
+  refund_approval_over?: number;
+  refund_requests?: RefundRequest[];
+}
+
+export interface RefundRequest {
+  id: string;
+  amount: number;
+  currency: string;
+  method_label: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  status_label: string;
+  requested_by: string | null;
+  requested_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  mine: boolean;
+  can_review: boolean;
 }
 
 export interface PaymentRow {

@@ -14,6 +14,7 @@ interface Tenant {
   slug?: string;
   timezone: string;
   status: string;
+  reason?: string;
 }
 
 export interface TenantFormData extends Tenant {
@@ -114,8 +115,15 @@ export default function FormTenant({
   const selectedPlan = plans.find((plan) => plan.id === formData.plan_id);
   const trialDays = selectedPlan?.trial_config?.trial_days ?? 14;
 
+  const needsReason = isEditing && formData.status !== 'active' && formData.status !== (initialData?.status || 'active');
+  const reasonMissing = needsReason && (formData.reason ?? '').trim().length < 5;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (reasonMissing) {
+      setError(formData.status === 'suspended' ? 'Escribe por qué suspendes la empresa (al menos 5 letras).' : 'Escribe por qué la dejas inactiva (al menos 5 letras).');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -317,9 +325,31 @@ export default function FormTenant({
             clearable={false}
             value={formData.status}
             onChange={(e) => set('status', String(e.target.value))}
-            options={[{ value: 'active', label: 'Activo' }, { value: 'suspended', label: 'Suspendido' }, { value: 'inactive', label: 'Inactivo' }]}
+            options={[
+              { value: 'active', label: 'Activo' },
+              ...(initialData?.status === 'suspended' ? [{ value: 'suspended', label: 'Suspendido' }] : []),
+              { value: 'inactive', label: 'Inactivo' },
+            ]}
           />
         </div>
+
+        {needsReason && (
+          <div>
+            <label className={labelClass} htmlFor="tenant-status-reason">
+              {formData.status === 'suspended' ? 'Motivo de la suspensión' : 'Motivo'} <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="tenant-status-reason"
+              rows={3}
+              maxLength={255}
+              value={formData.reason ?? ''}
+              onChange={(e) => set('reason', e.target.value)}
+              className={inputClass}
+              placeholder="Ej. Lleva dos meses sin pagar su plan"
+            />
+            <p className="text-xs text-slate-500 mt-1">La empresa verá este motivo. Sin él no se puede guardar.</p>
+          </div>
+        )}
 
         {error && (
           <p className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>

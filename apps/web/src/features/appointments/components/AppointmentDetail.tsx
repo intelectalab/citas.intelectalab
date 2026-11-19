@@ -3,8 +3,10 @@
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { inputClass } from '@/app/components/ui/forms/styles';
-import { useEffect, useState } from 'react';
-import { Boxes, CalendarCheck, CalendarClock, Check, ChevronRight, ClipboardList, Timer, Wallet } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { BellRing, Boxes, CalendarCheck, CalendarClock, CalendarX, Check, ChevronRight, ClipboardList, MoreHorizontal, Timer, Undo2, UserRound, UserX, Wallet } from 'lucide-react';
+import Floating from '@/app/components/common/Floating';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -41,15 +43,20 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [notes, setNotes] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [byCustomer, setByCustomer] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
 
   const statusNames = Object.fromEntries((user?.tenant?.appointment_statuses ?? []).map((s) => [s.key, s.name]));
 
   const apply = (data: Appointment) => {
     setAppointment((current) => ({ ...data, customer_timing: data.customer_timing ?? current?.customer_timing }));
     setNotes(data.notes ?? '');
+    setVideoUrl(data.own_video_url ?? '');
   };
 
   useEffect(() => {
@@ -60,6 +67,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     setNotice('');
     setCancelling(false);
     setCancelReason('');
+    setMoreOpen(false);
     setLoading(true);
 
     api.get(`/appointments/${appointmentId}`)
@@ -92,7 +100,10 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       setByCustomer(false);
       const waiting = Number(res.data.waitlist_matches ?? 0);
       const notices = [
-        res.data.late_cancel ? 'Se canceló fuera del plazo sin costo de tu empresa.' : '',
+        res.data.late_cancel && !res.data.penalty ? 'Se canceló fuera del plazo sin costo de tu empresa.' : '',
+        res.data.penalty && (status === 'no_show' || status === 'cancelled')
+          ? `Se generó una ${res.data.penalty.label.toLowerCase()} de ${money(res.data.penalty.total, res.data.penalty.currency)} por cobrar (venta ${res.data.penalty.code}).`
+          : '',
         waiting > 0
           ? `Este horario le sirve a ${waiting === 1 ? '1 persona' : `${waiting} personas`} de la lista de espera. Revísala en Lista de espera.`
           : '',
@@ -114,12 +125,28 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     try {
       setBusy('notes');
       setError('');
-      const res = await api.put(`/appointments/${appointment.id}`, { notes: notes.trim() || null });
+      const res = await api.put(`/appointments/${appointment.id}`, { notes: notes.trim() || null, ...(videoUrl.trim() !== (appointment.own_video_url ?? '') ? { video_url: videoUrl.trim() || null } : {}) });
       apply(res.data);
-      setNotice('Notas guardadas.');
+      setNotice('Cambios guardados.');
       onChanged(res.data);
     } catch (err) {
       setError(apiError(err, 'No se pudieron guardar las notas.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const sendReminder = async () => {
+    if (!appointment) return;
+
+    try {
+      setBusy('remind');
+      setError('');
+      setNotice('');
+      const res = await api.post(`/appointments/${appointment.id}/remind`);
+      setNotice(res.data?.message ?? 'Recordatorio enviado.');
+    } catch (err) {
+      setError(apiError(err, 'No se pudo enviar el recordatorio.'));
     } finally {
       setBusy('');
     }
@@ -129,6 +156,19 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const forward = appointment?.next_statuses.filter((s) => FLOW.indexOf(s) > flowIndex && FLOW.includes(s)) ?? [];
   const backward = appointment?.next_statuses.filter((s) => FLOW.includes(s) && FLOW.indexOf(s) < flowIndex) ?? [];
   const exits = appointment?.next_statuses.filter((s) => !FLOW.includes(s)) ?? [];
+
+  const moreItems: { key: string; label: string; icon: React.ReactNode; danger?: boolean; onClick: () => void }[] = appointment ? [
+    ...(appointment.can_reschedule ? [{ key: 'reschedule', label: 'Reprogramar', icon: <CalendarClock size={15} />, onClick: () => onReschedule(appointment) }] : []),
+    ...backward.map((status) => ({ key: status, label: actionLabel(status, appointment.status), icon: <Undo2 size={15} />, onClick: () => changeStatus(status) })),
+    ...(appointment.customer && can('customers.view') ? [{ key: 'customer', label: `Ver ${vocab.pick('client', 'el', 'la')} ${vocab.client.toLowerCase()}`, icon: <UserRound size={15} />, onClick: () => router.push(`/customers/${appointment.customer!.id}`) }] : []),
+    ...exits.map((status) => ({
+      key: status,
+      label: actionLabel(status, appointment.status),
+      icon: status === 'cancelled' ? <CalendarX size={15} /> : <UserX size={15} />,
+      danger: true,
+      onClick: () => (status === 'cancelled' ? setCancelling(true) : changeStatus(status)),
+    })),
+  ] : [];
 
   const timing = appointment?.timing;
   const plannedMinutes = timing?.planned_seconds ? timing.planned_seconds / 60 : null;
@@ -151,6 +191,11 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     ['Fecha', formatDate(dateOf(appointment.starts_at))],
     ['Hora', `${timeOf(appointment.starts_at)} a ${timeOf(appointment.ends_at)} · ${appointment.duration_minutes} min`],
     ['Precio', money(appointment.price, appointment.currency)],
+    ['Penalidad', appointment.penalty
+      ? <span data-penalty className={appointment.penalty.status === 'pending' || appointment.penalty.status === 'partial' ? 'text-rose-600' : undefined}>
+          {money(appointment.penalty.total, appointment.penalty.currency)} · {appointment.penalty.status === 'paid' ? 'cobrada' : appointment.penalty.status === 'void' ? 'perdonada' : `por cobrar ${money(appointment.penalty.balance, appointment.penalty.currency)}`} · venta {appointment.penalty.code}
+        </span>
+      : null],
     ['Confirmación', appointment.status === 'pending' && appointment.confirm_by
       ? <span data-confirm-by className={appointment.confirmation_overdue ? 'text-rose-600' : undefined}>
           {appointment.confirmation_overdue ? 'Venció el plazo: debía confirmarse antes del ' : 'Debe confirmarse antes del '}
@@ -208,7 +253,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
               </ol>
             )}
 
-            {(forward.length > 0 || backward.length > 0 || exits.length > 0 || appointment.can_reschedule) && (
+            {(forward.length > 0 || moreItems.length > 0 || appointment.can_remind) && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {forward.map((status, index) => (
                   <button
@@ -225,43 +270,49 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                   </button>
                 ))}
 
-                {appointment.can_reschedule && (
+                {appointment.can_remind && (
                   <button
                     type="button"
-                    data-action="reschedule"
+                    data-action="remind"
                     disabled={busy !== ''}
-                    onClick={() => onReschedule(appointment)}
+                    onClick={sendReminder}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                   >
-                    <CalendarClock size={15} /> Reprogramar
+                    <BellRing size={15} /> {busy === 'remind' ? 'Enviando...' : 'Enviar recordatorio'}
                   </button>
                 )}
 
-                {backward.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    data-action={status}
-                    disabled={busy !== ''}
-                    onClick={() => changeStatus(status)}
-                    className="px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                  >
-                    {busy === status ? 'Guardando...' : actionLabel(status, appointment.status)}
-                  </button>
-                ))}
-
-                {exits.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    data-action={status}
-                    disabled={busy !== ''}
-                    onClick={() => (status === 'cancelled' ? setCancelling(true) : changeStatus(status))}
-                    className="px-4 py-2 text-sm font-medium border border-rose-200 rounded-lg text-rose-700 hover:bg-rose-50 transition-colors disabled:opacity-50"
-                  >
-                    {busy === status ? 'Guardando...' : actionLabel(status, appointment.status)}
-                  </button>
-                ))}
+                {moreItems.length > 0 && (
+                  <>
+                    <button
+                      ref={moreRef}
+                      type="button"
+                      data-action="more"
+                      aria-haspopup="menu"
+                      aria-expanded={moreOpen}
+                      disabled={busy !== ''}
+                      onClick={() => setMoreOpen((open) => !open)}
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    >
+                      <MoreHorizontal size={15} /> Más acciones
+                    </button>
+                    <Floating anchorRef={moreRef} open={moreOpen} onClose={() => setMoreOpen(false)} align="right" role="menu" className="min-w-[220px] bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+                      {moreItems.map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          role="menuitem"
+                          data-action={item.key}
+                          onClick={() => { setMoreOpen(false); item.onClick(); }}
+                          className={`w-full flex items-center gap-2 px-3.5 py-2 text-sm text-left transition-colors ${item.danger ? 'text-rose-700 hover:bg-rose-50' : 'text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          {item.icon}
+                          {item.label}
+                        </button>
+                      ))}
+                    </Floating>
+                  </>
+                )}
               </div>
             )}
 
@@ -298,6 +349,20 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     </div>
                   );
                 })()}
+                {!appointment.late_cancel_strike && appointment.penalty_preview?.late_cancel && (
+                  <div className="rounded-lg border border-rose-200 bg-white px-3 py-2 space-y-1.5" data-late-cancel-penalty>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={byCustomer} onChange={(e) => setByCustomer(e.target.checked)} className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
+                      <span className="text-sm text-slate-800">Lo pidió {vocab.pick('client', 'el', 'la')} {vocab.client.toLowerCase()}</span>
+                    </label>
+                    <p className="text-xs text-slate-500">Faltan menos de {appointment.penalty_preview.window_hours} horas: si la cancelación es a pedido suyo, se genera una penalidad.</p>
+                  </div>
+                )}
+                {byCustomer && appointment.penalty_preview?.late_cancel && (
+                  <p className="text-xs font-semibold text-rose-700" data-penalty-warning>
+                    Se generará una penalidad de {money(appointment.penalty_preview.late_cancel, appointment.penalty_preview.currency)} ({appointment.penalty_preview.late_cancel_percent} %) por cobrar.
+                  </p>
+                )}
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
@@ -486,7 +551,14 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
               value={notes}
               onChange={(e) => { setNotes(e.target.value); setNotice(''); }}
             />
-            {can('agenda.edit') && notes.trim() !== (appointment.notes ?? '').trim() && (
+            {(appointment.is_virtual || appointment.video_url || videoUrl) && (
+              <div className="space-y-1.5" data-appointment-video>
+                <label htmlFor="appointment-video-url" className={sectionTitle}>Enlace de la videollamada</label>
+                <input id="appointment-video-url" maxLength={500} disabled={!can('agenda.edit')} className={inputClass} placeholder={appointment.video_url && !appointment.own_video_url ? `Del servicio: ${appointment.video_url}` : 'https://meet.google.com/...'} value={videoUrl} onChange={(e) => { setVideoUrl(e.target.value); setNotice(''); }} />
+                {appointment.video_url && <a href={appointment.video_url} target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-brand-accent hover:text-brand-ink break-all">Abrir {appointment.video_url}</a>}
+              </div>
+            )}
+            {can('agenda.edit') && (notes.trim() !== (appointment.notes ?? '').trim() || videoUrl.trim() !== (appointment.own_video_url ?? '')) && (
               <div className="flex justify-end">
                 <button
                   type="button"
@@ -494,7 +566,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                   onClick={saveNotes}
                   className="px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
-                  {busy === 'notes' ? 'Guardando...' : 'Guardar notas'}
+                  {busy === 'notes' ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
             )}

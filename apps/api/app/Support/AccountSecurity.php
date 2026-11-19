@@ -306,6 +306,60 @@ class AccountSecurity
         return $device;
     }
 
+    public static function devices(User|Customer $account, ?string $current): array
+    {
+        $currentHash = $current ? self::hash($current) : null;
+
+        return DB::table('account_tokens')
+            ->where('kind', 'trusted_device')
+            ->where('account_type', self::type($account))
+            ->where('account_id', $account->id)
+            ->where('expires_at', '>', now())
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($row) => [
+                'id'         => $row->id,
+                'label'      => self::deviceLabel((string) $row->user_agent),
+                'ip'         => $row->ip,
+                'created_at' => $row->created_at,
+                'expires_at' => $row->expires_at,
+                'current'    => $currentHash !== null && hash_equals($row->token_hash, $currentHash),
+            ])
+            ->all();
+    }
+
+    public static function forgetDevice(User|Customer $account, string $id): bool
+    {
+        return \Illuminate\Support\Str::isUuid($id) && DB::table('account_tokens')
+            ->where('id', $id)
+            ->where('kind', 'trusted_device')
+            ->where('account_type', self::type($account))
+            ->where('account_id', $account->id)
+            ->delete() > 0;
+    }
+
+    public static function deviceLabel(string $agent): string
+    {
+        $browser = match (true) {
+            str_contains($agent, 'Edg/')                                   => 'Edge',
+            str_contains($agent, 'OPR/')                                   => 'Opera',
+            str_contains($agent, 'Firefox/')                               => 'Firefox',
+            str_contains($agent, 'Chrome/')                                => 'Chrome',
+            str_contains($agent, 'Safari/')                                => 'Safari',
+            default                                                        => 'Navegador',
+        };
+        $system = match (true) {
+            str_contains($agent, 'Android')                                => 'Android',
+            str_contains($agent, 'iPhone') || str_contains($agent, 'iPad') => 'iPhone o iPad',
+            str_contains($agent, 'Windows')                                => 'Windows',
+            str_contains($agent, 'Mac OS')                                 => 'Mac',
+            str_contains($agent, 'Linux')                                  => 'Linux',
+            default                                                        => null,
+        };
+
+        return $system ? "{$browser} en {$system}" : $browser;
+    }
+
     public static function forgetDevices(User|Customer $account): void
     {
         DB::table('account_tokens')->where('kind', 'trusted_device')->where('account_type', self::type($account))->where('account_id', $account->id)->delete();

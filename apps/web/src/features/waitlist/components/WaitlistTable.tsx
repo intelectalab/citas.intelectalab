@@ -262,9 +262,14 @@ export default function WaitlistTable() {
     {
       header: 'Estado',
       cell: (e) => (
-        <Badge key={`status-${e.id}`} tone={WAITLIST_STATUS_STYLES[e.status]} nowrap data-status={e.status}>
-          {e.status_name}
-        </Badge>
+        <span key={`status-${e.id}`} className="inline-flex flex-col gap-0.5">
+          <Badge tone={WAITLIST_STATUS_STYLES[e.status]} nowrap data-status={e.status}>
+            {e.status_name}
+          </Badge>
+          {e.offer_until && (
+            <span data-offer-until className="text-[11px] text-slate-500 whitespace-nowrap">Tiene hasta el {e.offer_until.slice(8, 10)}/{e.offer_until.slice(5, 7)} {e.offer_until.slice(11, 16)}</span>
+          )}
+        </span>
       ),
     },
     {
@@ -324,6 +329,11 @@ export default function WaitlistTable() {
   return (
     <div className="space-y-6 mb-8">
       <ErrorAlert message={error} />
+      {user?.tenant?.rules?.['waitlist.enabled'] === false && (
+        <p data-waitlist-off className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          La lista de espera está apagada: no se avisa a nadie cuando se libera un horario y en el portal no aparece. Lo anotado se conserva. Puedes encenderla en Configuración → Lista de espera.
+        </p>
+      )}
 
       <div className="mb-6">
         <DataTable<WaitlistEntry>

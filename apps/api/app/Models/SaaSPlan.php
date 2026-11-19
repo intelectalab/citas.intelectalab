@@ -32,6 +32,8 @@ class SaaSPlan extends Model
         'status',
         'presentation_order',
         'is_public_catalog',
+        'is_popular',
+        'tagline',
     ];
 
     protected $appends = ['currency_symbol'];
@@ -46,6 +48,7 @@ class SaaSPlan extends Model
         'price_yearly' => 'float',
         'presentation_order' => 'integer',
         'is_public_catalog' => 'boolean',
+        'is_popular' => 'boolean',
         'trial_config' => 'array',
         'subscription_config' => 'array',
         'modules' => 'array',

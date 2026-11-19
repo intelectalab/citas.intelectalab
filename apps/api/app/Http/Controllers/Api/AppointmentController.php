@@ -25,7 +25,9 @@ use App\Support\Search;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
@@ -199,6 +201,9 @@ class AppointmentController extends Controller
             ->where('ends_at', '>', $dayStart->toIso8601String())
             ->get();
 
+        $held = \App\Support\CustomerTransfers::held($tenant->id, $branch->id, $dayStart, $dayEnd, $own);
+        $classes = $tenant->hasModule('classes') ? \App\Support\ClassSessions::agendaRows($tenant->id, $branch->id, $dayStart, $dayEnd, $own) : collect();
+
         $clip = function (string $value) use ($dayStart, $dayEnd, $timezone) {
             $date = Carbon::parse($value)->setTimezone($timezone);
 
@@ -225,6 +230,8 @@ class AppointmentController extends Controller
                     ->filter(fn (AvailabilityBlock $b) => $b->professional_id === $p->id || (!$b->professional_id && $b->branch_id === $branch->id))
                     ->map(fn (AvailabilityBlock $b) => ['starts' => $clip($b->starts_at), 'ends' => $clip($b->ends_at), 'reason' => $b->reason, 'kind' => $b->kindKey()])
                     ->values()
+                    ->concat($held->where('professional_id', $p->id)->map(fn ($h) => ['starts' => $clip($h->starts_at), 'ends' => $clip($h->ends_at), 'reason' => $h->reason, 'kind' => 'held'])->values())
+                    ->concat($classes->where('professional_id', $p->id)->map(fn ($c) => ['starts' => $clip($c->starts_at), 'ends' => $clip($c->ends_at), 'reason' => $c->reason, 'kind' => 'class', 'class_id' => $c->id])->values())
                     ->when($closedBy, fn ($blocks) => $blocks->prepend(['starts' => '00:00', 'ends' => '24:00', 'reason' => $closedBy->name, 'kind' => 'holiday'])),
             ])->values();
 
@@ -316,7 +323,21 @@ class AppointmentController extends Controller
                 'starts'          => $local($b->starts_at),
                 'ends'            => $local($b->ends_at),
                 'reason'          => $b->reason,
-            ])->values(),
+                'kind'            => 'block',
+            ])->concat(\App\Support\CustomerTransfers::held($tenant->id, $branch->id, $from, $to, $own)->map(fn ($h) => [
+                'professional_id' => $h->professional_id,
+                'starts'          => $local($h->starts_at),
+                'ends'            => $local($h->ends_at),
+                'reason'          => $h->reason,
+                'kind'            => 'held',
+            ]))->concat(($tenant->hasModule('classes') ? \App\Support\ClassSessions::agendaRows($tenant->id, $branch->id, $from, $to, $own) : collect())->map(fn ($c) => [
+                'professional_id' => $c->professional_id,
+                'starts'          => $local($c->starts_at),
+                'ends'            => $local($c->ends_at),
+                'reason'          => $c->reason,
+                'kind'            => 'class',
+                'class_id'        => $c->id,
+            ]))->values(),
             'my_professional_id' => Professional::where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->value('id'),
             'appointments'  => $appointments->map(fn (Appointment $a) => $this->present($a, $tenant)),
         ]);
@@ -328,6 +349,8 @@ class AppointmentController extends Controller
 
         return response()->json($this->present($appointment, $this->tenant($request), true) + [
             'late_cancel_strike' => \App\Support\OnlineBooking::lateCancelPreview($this->tenant($request), $appointment),
+            'penalty_preview'    => \App\Support\Penalties::preview($this->tenant($request), $appointment),
+            'penalty'            => \App\Support\Penalties::present(\App\Support\Penalties::find($appointment->tenant_id, $appointment->id)),
             'customer_timing' => AppointmentTiming::summarize(
                 Appointment::where('tenant_id', $appointment->tenant_id)
                     ->where('customer_id', $appointment->customer_id)
@@ -408,6 +431,46 @@ class AppointmentController extends Controller
 
     public function store(Request $request)
     {
+        $key = $request->input('request_key');
+
+        if (!is_string($key) || !\Illuminate\Support\Str::isUuid($key)) {
+            return $this->create($request);
+        }
+
+        $cacheKey = 'appointment-store:' . $this->tenant($request)->id . ':' . $request->user()->id . ':' . $key;
+        $repeat = fn (array $previous) => response()->json($previous['body'] + ['repeated' => true], $previous['status']);
+
+        if ($previous = Cache::get($cacheKey)) {
+            return $repeat($previous);
+        }
+
+        $lock = Cache::lock($cacheKey . ':lock', 30);
+
+        try {
+            $lock->block(20);
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException) {
+            return response()->json(['message' => 'Todavía estamos guardando esta cita. Espera unos segundos y revisa la agenda.', 'code' => 'IN_PROGRESS'], 409);
+        }
+
+        try {
+            if ($previous = Cache::get($cacheKey)) {
+                return $repeat($previous);
+            }
+
+            $response = $this->create($request);
+
+            if ($response->getStatusCode() < 400) {
+                Cache::put($cacheKey, ['status' => $response->getStatusCode(), 'body' => $response->getData(true)], now()->addMinutes(30));
+            }
+
+            return $response;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    protected function create(Request $request): JsonResponse
+    {
         $tenant = $this->tenant($request);
         $user = $request->user();
 
@@ -424,6 +487,7 @@ class AppointmentController extends Controller
             'recall_id'             => 'nullable|uuid',
             'waitlist_id'           => 'nullable|uuid',
             'walkin_id'             => 'nullable|uuid',
+            'video_url'             => \App\Support\VideoLinks::rule(),
         ]);
 
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
@@ -477,14 +541,14 @@ class AppointmentController extends Controller
                 'starts_at'             => $start,
                 'ends_at'               => $end,
                 'status'                => $status,
-                'source'                => $walkin ? 'walkin' : 'staff',
+                'source'                => $walkin ? 'walkin' : ($request->attributes->get('appointment_source') ?: 'staff'),
                 'price'                 => $service->price,
             ] + Currency::column($tenant) + [
                 'notes'                 => $validated['notes'] ?? null,
                 'override_reason'       => $override,
                 'confirmed_at'          => $status === AppointmentFlow::CONFIRMED ? now() : null,
                 'created_by'            => $user->id,
-            ]);
+            ] + (\App\Support\VideoLinks::ready() && !empty($validated['video_url']) ? ['video_url' => $validated['video_url']] : []));
 
             $this->log($appointment, null, $status, $user, $override ? "Sobre-agenda: {$override}" : null);
             $this->auditAppointment($request, 'appointment.created', $appointment, $this->auditFacts($appointment));
@@ -513,8 +577,8 @@ class AppointmentController extends Controller
     {
         $appointment = $this->find($request, $appointment);
 
-        $validated = $request->validate(['notes' => 'present|nullable|string|max:2000']);
-        $appointment->update(['notes' => $validated['notes']]);
+        $validated = $request->validate(['notes' => 'present|nullable|string|max:2000', 'video_url' => 'sometimes|' . \App\Support\VideoLinks::rule()]);
+        $appointment->update(['notes' => $validated['notes']] + (\App\Support\VideoLinks::ready() && array_key_exists('video_url', $validated) ? ['video_url' => $validated['video_url'] ?: null] : []));
 
         return response()->json($this->present($appointment, $this->tenant($request), true));
     }
@@ -538,6 +602,15 @@ class AppointmentController extends Controller
             $appointment = $this->find($request, $appointment);
             $appointment = Appointment::whereKey($appointment->id)->lockForUpdate()->first()->load(self::RELATIONS);
             $from = $appointment->status;
+            $needed = AppointmentFlow::permission($from, $to);
+
+            if ($user instanceof User && !$user->allows($needed)) {
+                return response()->json([
+                    'message'    => Access::denial($needed, $tenant),
+                    'code'       => 'PERMISSION_DENIED',
+                    'permission' => $needed,
+                ], 403);
+            }
 
             if (!in_array($to, AppointmentFlow::next($tenant, $from), true)) {
                 return response()->json([
@@ -630,13 +703,20 @@ class AppointmentController extends Controller
                 \App\Support\Inventory::consumeForAppointment($tenant, $appointment, $user);
             }
 
+            $penalty = match (true) {
+                $to === AppointmentFlow::NO_SHOW                           => \App\Support\Penalties::apply($tenant, $appointment, \App\Support\Penalties::NO_SHOW, $user),
+                $to === AppointmentFlow::CANCELLED && $lateCancel && $byCustomer => \App\Support\Penalties::apply($tenant, $appointment, \App\Support\Penalties::LATE_CANCEL, $user),
+                default                                                    => null,
+            };
+
             \App\Support\Recalls::appointmentChanged($tenant, $appointment);
             \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
             \App\Support\Walkin::appointmentChanged($tenant, $appointment);
 
             return response()->json($this->present($appointment, $tenant, true) + [
                 'late_cancel' => $lateCancel,
-                'waitlist_matches' => $to === AppointmentFlow::CANCELLED && $appointment->starts_at->gt($now)
+                'penalty'     => \App\Support\Penalties::present($penalty ?? \App\Support\Penalties::find($tenant->id, $appointment->id)),
+                'waitlist_matches' => $to === AppointmentFlow::CANCELLED && $appointment->starts_at->gt($now) && \App\Support\Waitlist::enabled($tenant)
                     ? \App\Support\Waitlist::matching($tenant, $appointment)->count()
                     : 0,
             ]);
@@ -717,6 +797,133 @@ class AppointmentController extends Controller
 
             return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true));
         });
+    }
+
+    public function customerNotes(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        $validated = $request->validate([
+            'customer_id' => 'required|uuid',
+            'service_id'  => 'nullable|uuid',
+        ]);
+
+        $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
+        $serviceId = $validated['service_id'] ?? null;
+        $timezone = $tenant->zone();
+        $notes = [];
+
+        if (Schema::hasColumn('customers', 'alert') && trim((string) $customer->alert) !== '') {
+            $notes[] = ['kind' => 'alert', 'tone' => 'warn', 'title' => 'Alerta', 'text' => trim((string) $customer->alert)];
+        }
+
+        if (\App\Support\Sales::ready()) {
+            $debt = DB::table('sales')
+                ->where('tenant_id', $tenant->id)
+                ->where('customer_id', $customer->id)
+                ->whereIn('status', ['pending', 'partial'])
+                ->where('balance', '>', 0)
+                ->selectRaw('count(*) AS count, coalesce(sum(balance), 0) AS total')
+                ->first();
+
+            if ((int) ($debt->count ?? 0) > 0) {
+                $count = (int) $debt->count;
+                $notes[] = [
+                    'kind'  => 'debt',
+                    'tone'  => 'bad',
+                    'title' => 'Tiene saldo pendiente',
+                    'text'  => 'Debe ' . Currency::format((float) $debt->total, Currency::of($tenant)) . ' en ' . ($count === 1 ? '1 venta' : "{$count} ventas") . ' por cobrar.',
+                ];
+            }
+        }
+
+        $since = now()->subDays(90);
+        $missed = Appointment::where('tenant_id', $tenant->id)
+            ->where('customer_id', $customer->id)
+            ->where('status', AppointmentFlow::NO_SHOW)
+            ->where('starts_at', '>=', $since->toIso8601String())
+            ->orderByDesc('starts_at')
+            ->get(['starts_at']);
+
+        if ($missed->isNotEmpty()) {
+            $count = $missed->count();
+            $notes[] = [
+                'kind'  => 'no_show',
+                'tone'  => 'warn',
+                'title' => 'Faltas recientes',
+                'text'  => ($count === 1 ? 'No asistió a 1 cita' : "No asistió a {$count} citas") . ' en los últimos 90 días (la última, el ' . $missed->first()->starts_at->copy()->setTimezone($timezone)->format('d/m/Y') . ').',
+            ];
+        }
+
+        if ($serviceId && \App\Support\Packages::enabled($tenant)) {
+            $package = \App\Support\Packages::usable($tenant->id, $customer->id, $serviceId, now())[0] ?? null;
+
+            if ($package) {
+                $left = collect($package['items'])->where('service_id', $serviceId)->sum('available');
+                $notes[] = [
+                    'kind'  => 'package',
+                    'tone'  => 'ok',
+                    'title' => 'Tiene un paquete que cubre este servicio',
+                    'text'  => "{$package['name']} ({$package['code']}): " . ($left === 1 ? 'le queda 1 sesión' : "le quedan {$left} sesiones") . ' de este servicio.',
+                ];
+            }
+        }
+
+        if (\App\Support\Memberships::enabled($tenant) && ($membership = \App\Support\Memberships::current($tenant, $customer->id))) {
+            $summary = \App\Support\Memberships::summary($tenant, $membership);
+            $included = $serviceId ? collect($summary['included'])->firstWhere('service_id', $serviceId) : null;
+            $grace = $summary['status'] === 'grace' ? ' Está en sus días de gracia: aún no renueva.' : '';
+
+            if ($included && $included['left'] > 0) {
+                $notes[] = ['kind' => 'membership', 'tone' => 'ok', 'title' => 'Su membresía cubre este servicio', 'text' => "{$summary['name']}: " . ($included['left'] === 1 ? 'le queda 1 incluido' : "le quedan {$included['left']} incluidos") . ' en este periodo.' . $grace];
+            } elseif ($summary['discount_percent'] > 0) {
+                $notes[] = ['kind' => 'membership', 'tone' => 'ok', 'title' => 'Tiene membresía vigente', 'text' => "{$summary['name']}: {$summary['benefits_text']}." . $grace];
+            } elseif ($included) {
+                $notes[] = ['kind' => 'membership', 'tone' => 'info', 'title' => 'Tiene membresía vigente', 'text' => "{$summary['name']}: ya usó los incluidos de este servicio en este periodo." . $grace];
+            }
+        }
+
+        return response()->json(['notes' => $notes]);
+    }
+
+    public function remind(Request $request, string $appointment)
+    {
+        $tenant = $this->tenant($request);
+        $appointment = $this->find($request, $appointment);
+
+        if (!in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true) || !$appointment->starts_at->isFuture()) {
+            return response()->json(['message' => 'Solo se envía recordatorio a citas pendientes o confirmadas que aún no empiezan.', 'code' => 'INVALID_STATE'], 422);
+        }
+
+        if (!\App\Support\Messaging::ready()) {
+            return response()->json(['message' => 'Los mensajes aún no están disponibles: falta actualizar la base de datos.', 'code' => 'NOT_READY'], 422);
+        }
+
+        $customer = $appointment->customer;
+        $vars = \App\Support\Messaging::appointmentVars($tenant, $appointment);
+        $extra = ['force' => true, 'user' => $request->user(), 'branch_id' => $appointment->branch_id, 'entity_type' => 'appointment', 'entity_id' => $appointment->id];
+        $message = \App\Support\Messaging::queue($tenant, 'reminder', $customer, $vars, $extra);
+
+        if (!$message) {
+            return response()->json(['message' => 'No se pudo preparar el recordatorio. Inténtalo otra vez.'], 422);
+        }
+
+        $this->auditAppointment($request, 'appointment.reminded', $appointment, array_filter([
+            'reminder_channel' => ($message->channel ?? 'email') === 'whatsapp' ? 'WhatsApp' : 'Correo',
+            'reminder_to'      => $message->to_address ?? null,
+            'reminder_result'  => ($message->status ?? '') === 'not_sent' ? 'No se envió: ' . ($message->error ?? '') : 'Enviado',
+        ]));
+
+        if (($message->status ?? '') === 'not_sent') {
+            return response()->json(['message' => $message->error ?: 'No se pudo enviar el recordatorio.', 'code' => 'NOT_SENT', 'status' => 'not_sent'], 422);
+        }
+
+        $channel = ($message->channel ?? 'email') === 'whatsapp' ? 'por WhatsApp' : 'por correo';
+
+        return response()->json([
+            'message' => "Recordatorio enviado {$channel} a " . ($message->to_address ?? \App\Support\Person::name($customer)) . '.',
+            'status'  => $message->status,
+        ]);
     }
 
     protected function resolveDependent(Tenant $tenant, Customer $customer, ?string $dependentId): ?string
@@ -968,7 +1175,8 @@ class AppointmentController extends Controller
             'code'             => $appointment->code,
             'status'           => $appointment->status,
             'status_name'      => AppointmentFlow::name($tenant, $appointment->status),
-            'next_statuses'    => $canEdit ? AppointmentFlow::next($tenant, $appointment->status) : [],
+            'next_statuses'    => AppointmentFlow::allowedNext($tenant, $appointment->status, $viewer),
+            'can_remind'       => $viewer instanceof User && $viewer->allows('agenda.confirm') && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true) && $appointment->starts_at->isFuture(),
             'can_reschedule'   => $canEdit && in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true),
             'starts_at'        => $local($appointment->starts_at),
             'ends_at'          => $local($appointment->ends_at),
@@ -977,6 +1185,9 @@ class AppointmentController extends Controller
             'currency'         => $appointment->currency ?? Currency::DEFAULT,
             'source'           => $appointment->source,
             'notes'            => $appointment->notes,
+            'video_url'        => \App\Support\VideoLinks::for($appointment),
+            'own_video_url'    => \App\Support\VideoLinks::ready() ? $appointment->video_url : null,
+            'is_virtual'       => (bool) $appointment->service?->is_virtual,
             'reschedule_count' => $appointment->reschedule_count,
             'override_reason'  => $appointment->override_reason,
             'cancel_reason'    => $appointment->cancel_reason,

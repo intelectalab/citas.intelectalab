@@ -1,7 +1,7 @@
 'use client';
 
 import Badge from '@/app/components/common/Badge';
-import { CalendarClock, Check, Clock, MapPin, PawPrint, UserRound, Wallet, X } from 'lucide-react';
+import { CalendarClock, Check, Clock, MapPin, PawPrint, UserRound, Video, Wallet, X } from 'lucide-react';
 import { dateOf, formatDate, statusStyle, timeOf } from '@/features/appointments/appointments';
 import type { PortalAppointment } from '../portal';
 import { money } from '@/features/sales/sales';
@@ -54,6 +54,12 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
                 ? `Aún no confirmas tu asistencia${onMiss === 'notify' ? '. Hazlo cuanto antes.' : ': tu cita puede cancelarse. Confírmala ahora.'}`
                 : `Confirma tu asistencia antes del ${formatDate(dateOf(appointment.confirm_by), { weekday: 'long', day: 'numeric', month: 'long' })}, ${timeOf(appointment.confirm_by)}${onMiss === 'notify' ? '.' : ', o tu cita se cancelará.'}`}
             </p>
+          )}
+
+          {appointment.video_url && (
+            <a data-video-link href={appointment.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink">
+              <Video size={14} className="shrink-0" /> Entrar a la videollamada
+            </a>
           )}
 
           {appointment.pay_on_arrival && (

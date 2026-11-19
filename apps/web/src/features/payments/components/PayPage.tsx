@@ -9,9 +9,10 @@ import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
 import { CulqiClosed, openCulqi, type CulqiCheckoutConfig } from '@/features/billing/culqi';
+import TransferPanel, { type TransferOptions } from './TransferPanel';
 
 interface PublicLink {
-  status: 'pending' | 'paid' | 'expired' | 'cancelled' | 'failed';
+  status: 'pending' | 'review' | 'paid' | 'expired' | 'cancelled' | 'failed';
   status_label: string;
   purpose: 'sale' | 'deposit';
   online_package?: boolean;
@@ -31,6 +32,8 @@ interface PublicLink {
   booking: { service: string | null; professional: string | null; branch: string | null; starts_at: string | null; price: number | null } | null;
   appointment: string | null;
   culqi?: CulqiCheckoutConfig | null;
+  transfer?: TransferOptions | null;
+  voucher?: { status: 'review' | 'approved' | 'rejected'; reason: string | null; method: string | null; sent_at: string; held_until: string | null } | null;
 }
 
 const minutesLeft = (iso: string) => Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
@@ -44,6 +47,8 @@ export default function PayPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState<'' | 'approved' | 'rejected'>('');
+  const [way, setWay] = useState<'gateway' | 'transfer'>('gateway');
+  const [sent, setSent] = useState('');
   const [, setTick] = useState(0);
 
   const apply = (data: PublicLink) => {
@@ -155,6 +160,8 @@ export default function PayPage() {
   const left = minutesLeft(link.expires_at);
   const accent = link.company.color || '#022340';
   const isDeposit = link.purpose === 'deposit';
+  const onlyTransfer = link.gateway === 'transfer';
+  const showTransfer = Boolean(link.transfer) && (onlyTransfer || way === 'transfer');
 
   return (
     <div className="min-h-screen bg-[#F2F2F2] py-10 px-4 font-sans" data-pay-page={link.status}>
@@ -204,6 +211,11 @@ export default function PayPage() {
           <div className="px-6 py-5 space-y-4">
             {link.status === 'pending' && (
               <>
+                {link.voucher?.status === 'rejected' && (
+                  <p data-voucher-rejected className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <b>No se aprobó tu comprobante.</b> {link.voucher.reason} Puedes enviar otro o pagar de otra forma.
+                  </p>
+                )}
                 {isDeposit && (
                   <p className="flex items-start gap-2 text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3" data-hold-warning>
                     <Clock size={15} className="shrink-0 mt-0.5" />
@@ -216,7 +228,29 @@ export default function PayPage() {
                 {link.rejected && !notice && <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">Tu último intento fue rechazado. Puedes intentarlo de nuevo.</p>}
                 {notice && <p role="status" data-pay-notice className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">{notice}</p>}
 
-                {link.simulated ? (
+                {link.transfer && !onlyTransfer && !link.locked && (
+                  <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100" role="tablist" data-pay-ways>
+                    {([['gateway', link.simulated ? 'Pago de prueba' : `Con ${link.provider}`], ['transfer', 'Transferencia, Yape o Plin']] as const).map(([key, label]) => (
+                      <button key={key} type="button" role="tab" aria-selected={way === key} data-pay-way={key} onClick={() => { setWay(key); setError(''); }} className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors ${way === key ? 'bg-white text-brand-ink shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {link.locked ? (
+                  <p data-pay-locked className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">Por ahora {link.company.name} no recibe reservas en línea. Comunícate con la sede para agendar.</p>
+                ) : showTransfer && link.transfer ? (
+                  <TransferPanel
+                    token={params.token}
+                    options={link.transfer}
+                    accent={accent}
+                    amountLabel={money(link.amount, link.currency)}
+                    onSent={(fresh, message) => { apply(fresh as PublicLink); setNotice(''); setError(''); setSent(message); }}
+                  />
+                ) : onlyTransfer ? (
+                  <p className="text-sm text-slate-600">Pídele a la empresa otra forma de pago.</p>
+                ) : link.simulated ? (
                   <div className="space-y-2" data-simulate>
                     <button type="button" data-simulate-result="approved" disabled={busy !== ''} onClick={() => simulate('approved')} className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-white rounded-xl shadow-sm transition-colors disabled:opacity-50" style={{ background: accent }}>
                       {busy === 'approved' ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />} Simular pago aprobado
@@ -225,8 +259,6 @@ export default function PayPage() {
                       {busy === 'rejected' ? 'Enviando...' : 'Simular pago rechazado'}
                     </button>
                   </div>
-                ) : link.locked ? (
-                  <p data-pay-locked className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">Por ahora {link.company.name} no recibe reservas en línea. Comunícate con la sede para agendar.</p>
                 ) : checking ? (
                   <p data-pay-checking className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
                     <Loader2 size={15} className="animate-spin shrink-0" /> Estamos confirmando tu pago con {link.provider}. No cierres esta página.
@@ -241,6 +273,19 @@ export default function PayPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {link.status === 'review' && (
+              <div className="text-center space-y-2" data-pay-review>
+                <span className="w-14 h-14 mx-auto rounded-full bg-amber-50 text-amber-600 flex items-center justify-center"><Clock size={28} /></span>
+                <h1 className="text-lg font-black text-brand-ink">Estamos revisando tu comprobante</h1>
+                {sent && <p className="text-sm text-emerald-700">{sent}</p>}
+                <p className="text-sm text-slate-600">
+                  {link.company.name} revisará tu pago{link.voucher?.method ? ` a ${link.voucher.method}` : ''}{link.transfer?.review_text ? ` ${link.transfer.review_text}` : ''}.
+                  {isDeposit && link.voucher?.held_until ? ` Tu horario está apartado hasta el ${momentOf(link.voucher.held_until)}; al aprobarlo, tu cita queda confirmada.` : ' Cuando lo apruebe, verás aquí el pago confirmado.'}
+                </p>
+                <button type="button" data-pay-review-refresh onClick={() => load()} className="text-xs font-bold text-brand-accent hover:text-brand-ink">Revisar otra vez</button>
+              </div>
             )}
 
             {link.status === 'paid' && (
@@ -272,13 +317,13 @@ export default function PayPage() {
 
             {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
 
-            {link.online_package && link.status !== 'pending' && (
+            {link.online_package && !['pending', 'review'].includes(link.status) && (
               <Link href="/portal" data-back-portal className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
                 <CalendarCheck size={16} /> Volver a mi portal
               </Link>
             )}
 
-            {isDeposit && link.status !== 'pending' && (
+            {isDeposit && !['pending', 'review'].includes(link.status) && (
               <Link href="/portal" data-back-portal className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
                 <CalendarCheck size={16} /> {link.status === 'paid' ? 'Ver mis citas' : 'Elegir otro horario'}
               </Link>
@@ -287,7 +332,7 @@ export default function PayPage() {
         </section>
 
         <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
-          <ShieldCheck size={13} /> {link.simulated ? 'Simulación de pasarela' : `Pago procesado por ${link.provider}`}
+          <ShieldCheck size={13} /> {link.simulated ? 'Simulación de pasarela' : onlyTransfer ? 'Pago con comprobante revisado por la empresa' : `Pago procesado por ${link.provider}`}
         </p>
       </div>
     </div>

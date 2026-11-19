@@ -18,6 +18,12 @@ export default function RegisterPage() {
     api.get('/plans')
       .then((res) => {
         setPlans(res.data);
+        const wanted = new URLSearchParams(window.location.search).get('plan');
+        const match = wanted ? (res.data as (Plan & { slug?: string })[]).find((plan) => plan.slug === wanted || plan.id === wanted) : null;
+        if (match) {
+          setSelectedPlan(match);
+          setIsModalOpen(true);
+        }
       })
       .catch((err) => {
         console.error('Error al cargar planes:', err);

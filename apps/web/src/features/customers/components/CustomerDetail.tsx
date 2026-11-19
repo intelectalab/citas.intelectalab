@@ -5,9 +5,12 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import BackLink from '@/app/components/common/BackLink';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CalendarCheck, CalendarClock, CalendarDays, CalendarX2, ClipboardList, EyeOff, Hash, IdCard, Loader2, Mail, MapPin, PawPrint, Pencil, Phone, Timer, User, Users } from 'lucide-react';
+import { AlertTriangle, Building2, CalendarCheck, CalendarClock, CalendarDays, CalendarX2, ClipboardList, EyeOff, Hash, IdCard, Loader2, Mail, MapPin, PawPrint, Pencil, Phone, Stethoscope, Timer, User, Users } from 'lucide-react';
+import { formatPhone } from '@/lib/phone';
+import CustomerProfilePanel from './CustomerProfilePanel';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
+import CustomerRecordActions from './CustomerRecordActions';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormCustomer from './FormCustomer';
 import CustomerPortalAccess, { type PortalAccess } from './CustomerPortalAccess';
@@ -45,6 +48,11 @@ interface CustomerData {
   portal_access?: PortalAccess;
   online_booking?: OnlineBookingState | null;
   dependents?: { id: string; name: string; species?: string | null; breed?: string | null }[];
+  alert?: string | null;
+  home_branch_id?: string | null;
+  preferred_professional_id?: string | null;
+  home_branch?: { id: string; name: string } | null;
+  preferred_professional?: { id: string; display_name: string } | null;
 }
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -78,6 +86,7 @@ export default function CustomerDetail() {
   const [recordFor, setRecordFor] = useState<string | null>(null);
   const [focus, setFocus] = useState('');
   const [stageKey, setStageKey] = useState(0);
+  const [consentKey, setConsentKey] = useState(0);
 
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const usesAgenda = hasModule('agenda');
@@ -163,11 +172,13 @@ export default function CustomerDetail() {
   const facts: [React.ReactNode, string, string | null | undefined][] = [
     [<Hash key="i" size={14} />, 'Código', customer.code],
     [<IdCard key="i" size={14} />, customer.type_document?.code ?? customer.type_document?.name ?? 'Documento', customer.document_number],
-    [<Phone key="i" size={14} />, 'Celular', customer.phone],
+    [<Phone key="i" size={14} />, 'Celular', formatPhone(customer.phone)],
     [<Mail key="i" size={14} />, 'Correo', customer.email],
     [<User key="i" size={14} />, 'Edad y sexo', [age, sex].filter(Boolean).join(' · ') || null],
     [<MapPin key="i" size={14} />, 'Dirección', [customer.address, customer.district, customer.department].filter(Boolean).join(', ') || null],
-    [<Users key="i" size={14} />, 'Contacto de emergencia', [customer.emergency_contact_name, customer.emergency_contact_phone].filter(Boolean).join(' · ') || null],
+    [<Users key="i" size={14} />, 'Contacto de emergencia', [customer.emergency_contact_name, formatPhone(customer.emergency_contact_phone)].filter(Boolean).join(' · ') || null],
+    [<Building2 key="i" size={14} />, 'Sede habitual', customer.home_branch?.name],
+    [<Stethoscope key="i" size={14} />, vocab.pro + ' preferido', customer.preferred_professional?.display_name],
   ];
 
   const stats: { id: string; title: string; value: string; note: string; icon: React.ReactNode; color: string }[] = [
@@ -223,6 +234,16 @@ export default function CustomerDetail() {
               <Pencil size={16} />
             </button>)}
           </div>
+
+          {customer.alert && (
+            <div data-customer-alert className="flex items-start gap-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl">
+              <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="block text-[11px] font-bold text-rose-700 uppercase tracking-wider">Alerta</span>
+                <p className="text-sm font-semibold text-rose-800 break-words">{customer.alert}</p>
+              </div>
+            </div>
+          )}
 
           <dl className="space-y-3">
             {facts.filter(([, , value]) => value).map(([icon, label, value]) => (
@@ -323,10 +344,12 @@ export default function CustomerDetail() {
           ))}
         </div>
 
+        <CustomerProfilePanel customerId={customer.id} refreshKey={consentKey} />
+
         {hasModule('packages') && can('packages.view') && <CustomerPackages customerId={customer.id} />}
 
         {(can('messages.view') || can('customers.edit')) && (
-          <CustomerMessages customer={customer} consents={consents} canView={can('messages.view')} canEditConsents={can('customers.edit')} />
+          <CustomerMessages customer={customer} consents={consents} canView={can('messages.view')} canEditConsents={can('customers.edit')} onConsentsChanged={() => setConsentKey((key) => key + 1)} />
         )}
 
         {usesRecords && (
@@ -409,6 +432,8 @@ export default function CustomerDetail() {
           </section>
         )}
       </div>
+
+      {can('customers.delete') && <CustomerRecordActions customer={customer} onChanged={loadCustomer} />}
 
       <FormCustomer
         isOpen={editing}

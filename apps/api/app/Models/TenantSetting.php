@@ -23,6 +23,7 @@ class TenantSetting extends Model
         'allow_customer_signup',
         'appointment_statuses',
         'branding',
+        'booking_page',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class TenantSetting extends Model
         'allow_customer_signup' => 'boolean',
         'appointment_statuses'  => 'array',
         'branding'              => 'array',
+        'booking_page'          => 'array',
     ];
 
     public function tenant(): BelongsTo

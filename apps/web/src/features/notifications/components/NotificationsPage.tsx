@@ -20,7 +20,7 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [view, setView] = useState<'all' | 'unread'>('all');
 
-  const enabled = Boolean(user?.tenant);
+  const enabled = Boolean(user?.tenant) || Boolean(user?.is_saas_admin);
   const { unread, total, items, loaded, load, markRead, markAllRead } = useNotifications(300, enabled);
   const { openDetail, panels, isOpen: panelOpen } = useAppointmentPanels(load);
 

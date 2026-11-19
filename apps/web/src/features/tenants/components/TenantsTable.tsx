@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, Pencil, Trash2, Eye, CheckCircle, XCircle, LogIn } from 'lucide-react';
+import { Building2, Pencil, Trash2, Eye, CheckCircle, XCircle, LogIn, Ban } from 'lucide-react';
+import SuspendTenantDrawer from './SuspendTenantDrawer';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormTenant from './FormTenant';
@@ -9,6 +10,7 @@ import Link from 'next/link';
 import { TENANT_STATUS } from '../tenantStatus';
 import { useAuth } from '@/hooks/useAuth';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
+import ImpersonateDrawer from '@/features/support/components/ImpersonateDrawer';
 import { api } from '@/lib/axios';
 import { BILLING_STATES, type BillingState } from '@/features/billing/billing';
 
@@ -28,8 +30,10 @@ interface Tenant {
 const SUBSCRIPTION_STATUS: Record<string, string> = { active: 'Activa', trialing: 'En prueba', past_due: 'Pago vencido', expired: 'Prueba vencida', canceled: 'Cancelada' };
 
 export default function TenantsTable() {
-  const { user, startImpersonation } = useAuth();
+  const { user } = useAuth();
+  const [entering, setEntering] = useState<{ id: string; name: string } | null>(null);
   const canManage = Boolean(user?.is_saas_admin);
+  const [suspending, setSuspending] = useState<Tenant | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -147,7 +151,7 @@ export default function TenantsTable() {
   const handleFormSubmit = async (formData: any) => {
     if (editingTenant) {
       const { name, slug, timezone, status } = formData;
-      await api.put(`/tenants/${editingTenant.id}`, { name, slug, timezone, status });
+      await api.put(`/tenants/${editingTenant.id}`, { name, slug, timezone, status, reason: formData.reason });
     } else {
       const res = await api.post('/tenants', formData);
       const owner = res.data?.owner;
@@ -227,30 +231,7 @@ export default function TenantsTable() {
     });
   };
 
-  const handleImpersonate = (tenant: Tenant) => {
-    setModalConfig({
-      isOpen: true,
-      type: 'confirm',
-      title: `¿Entrar al panel de ${tenant.name}?`,
-      message: 'Vas a ver y usar su panel como su administrador para darle soporte. El ingreso queda registrado y la sesión se cierra sola a las 2 horas.',
-      confirmText: 'Entrar',
-      cancelText: 'Cancelar',
-      onConfirm: async () => {
-        try {
-          setIsActionLoading(true);
-          await startImpersonation(tenant.id);
-        } catch (error: any) {
-          setIsActionLoading(false);
-          setModalConfig({
-            isOpen: true,
-            type: 'alert',
-            title: 'No se pudo entrar',
-            message: error.response?.data?.message || 'No se pudo abrir el panel de la empresa.',
-          });
-        }
-      }
-    });
-  };
+  const handleImpersonate = (tenant: Tenant) => setEntering({ id: tenant.id, name: tenant.name });
 
   const columns: Column<Tenant>[] = [
     {
@@ -335,6 +316,16 @@ export default function TenantsTable() {
               >
                 <Pencil size={16} />
               </button>
+              {tenant.status === 'active' && (
+                <button
+                  onClick={() => setSuspending(tenant)}
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Suspender"
+                  aria-label={`Suspender ${tenant.name}`}
+                >
+                  <Ban size={16} />
+                </button>
+              )}
               <button
                 onClick={() => handleDelete(tenant.id)}
                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -416,6 +407,9 @@ export default function TenantsTable() {
         onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
         isLoading={isActionLoading}
       />
+
+      {entering && <ImpersonateDrawer isOpen onClose={() => setEntering(null)} tenant={entering} />}
+      {suspending && <SuspendTenantDrawer isOpen onClose={() => setSuspending(null)} onDone={() => fetchTenants(searchTerm, filters)} tenant={suspending} />}
     </div>
   );
 }

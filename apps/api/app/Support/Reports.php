@@ -159,7 +159,7 @@ class Reports
             'by_type'   => DB::table('sale_items as i')->joinSub($this->sales()->select('s.id'), 'ss', 'ss.id', '=', 'i.sale_id')
                 ->groupBy('i.item_type')->selectRaw('i.item_type, sum(i.total) AS amount')->orderByDesc('amount')->get()
                 ->map(fn ($row) => ['key' => $row->item_type, 'label' => match ($row->item_type) {
-                    'service' => 'Servicios', 'product' => 'Productos', 'package' => 'Paquetes', 'deposit' => 'Adelantos', default => ucfirst($row->item_type),
+                    'service' => 'Servicios', 'product' => 'Productos', 'package' => 'Paquetes', 'membership' => 'Membresías', 'deposit' => 'Adelantos', default => ucfirst($row->item_type),
                 }, 'value' => round((float) $row->amount, 2)])->values()->all(),
         ];
     }
@@ -333,6 +333,24 @@ class Reports
             'no_show'   => (int) $row->no_show,
             'minutes'   => $row->minutes !== null ? (int) round((float) $row->minutes) : null,
         ])->sortByDesc('completed')->values()->all();
+    }
+
+    public function production(string $professionalId): float
+    {
+        $currency = $this->currency();
+        $attended = (float) $this->appointments()
+            ->where('a.professional_id', $professionalId)
+            ->where('a.status', AppointmentFlow::COMPLETED)
+            ->whereRaw('coalesce(a.currency, ?) = ?', [$currency, $currency])
+            ->sum('a.price');
+
+        $products = Cart::productsEnabled($this->tenant) ? (float) DB::table('sale_items as i')
+            ->joinSub($this->sales()->select('s.id'), 'ss', 'ss.id', '=', 'i.sale_id')
+            ->where('i.item_type', 'product')
+            ->where('i.professional_id', $professionalId)
+            ->sum('i.total') : 0.0;
+
+        return round($attended + $products, 2);
     }
 
     public function mine(): array

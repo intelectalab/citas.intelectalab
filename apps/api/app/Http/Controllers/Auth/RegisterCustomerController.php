@@ -55,7 +55,7 @@ class RegisterCustomerController extends Controller
                 'first_name' => $validated['first_name'],
                 'last_name'  => $validated['last_name'],
                 'email'      => $email,
-                'phone'      => $validated['phone'] ?? null,
+                'phone'      => \App\Support\Phones::normalize($validated['phone'] ?? null, \App\Support\Phones::prefixFor($tenant)) ?? ($validated['phone'] ?? null),
             ]);
 
             \App\Http\Controllers\Api\PortalController::acceptPrivacy($tenant->id, $customer->id, 'portal_signup');

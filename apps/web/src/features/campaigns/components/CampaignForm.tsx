@@ -11,11 +11,11 @@ import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { useEffect, useState } from 'react';
-import { CalendarClock, Loader2, Megaphone, Send, Users } from 'lucide-react';
+import { CalendarClock, Loader2, Mail, Megaphone, MessageCircle, Plus, Send, Users, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { apiError, todayISO } from '@/features/appointments/appointments';
 import MessageFields from '@/features/messages/components/MessageFields';
-import { COUPON_TOKEN, EMAIL_NOTICE, copyName, type Audience, type Campaign, type CampaignOptions } from '../campaigns';
+import { CHANNEL_LABELS, COUPON_TOKEN, EMAIL_NOTICE, EMAIL_REASON_LABELS, WA_REASON_LABELS, channelsOf, copyName, type Audience, type Campaign, type CampaignChannel, type CampaignOptions, type QuotaState } from '../campaigns';
 
 interface CampaignFormProps {
   isOpen: boolean;
@@ -35,12 +35,25 @@ const localParts = (iso: string) => {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+const reasonsText = (counts: Record<string, number> | undefined, labels: Record<string, string>) =>
+  Object.entries(labels).filter(([key]) => (counts?.[key] ?? 0) > 0).map(([key, label]) => `${counts![key]} ${label}`).join(', ');
+
+const quotaText = (quota: QuotaState | undefined) => {
+  if (!quota) return '';
+  if (quota.limit === null) return `Tu plan no tiene tope de ${quota.label}.`;
+  const used = quota.used + quota.pending;
+  return quota.enough
+    ? `Usas ${used} de ${quota.limit} ${quota.label} este mes; con esta campaña quedarían ${Math.max(0, (quota.remaining ?? 0) - quota.needed)}.`
+    : `No alcanza: necesita ${quota.needed} ${quota.label} y a tu plan le quedan ${quota.remaining} este mes (usas ${used} de ${quota.limit}).`;
+};
+
 export default function CampaignForm({ isOpen, onClose, options, editing = null, duplicateFrom = null, onSaved }: CampaignFormProps) {
   const vocab = useVocabulary();
   const [name, setName] = useState('');
   const [group, setGroup] = useState('all');
   const [serviceId, setServiceId] = useState('');
   const [branchId, setBranchId] = useState('');
+  const [tagId, setTagId] = useState('');
   const [onlyBranch, setOnlyBranch] = useState(true);
   const [couponNotice, setCouponNotice] = useState('');
   const [subject, setSubject] = useState('');
@@ -54,16 +67,26 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
   const [confirmBig, setConfirmBig] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [channel, setChannel] = useState<CampaignChannel>('email');
+  const [waTemplate, setWaTemplate] = useState('');
+  const [waLanguage, setWaLanguage] = useState('es');
+  const [waParams, setWaParams] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
     setError('');
     setCouponNotice('');
+    const from = duplicateFrom ?? editing;
+    setChannel(from?.channel ?? 'email');
+    setWaTemplate(from?.whatsapp?.template ?? '');
+    setWaLanguage(from?.whatsapp?.language ?? 'es');
+    setWaParams(from?.whatsapp?.params ?? ['Nombre']);
     if (duplicateFrom) {
       setName(copyName(duplicateFrom.name));
       setGroup(duplicateFrom.segment.group);
       setServiceId(duplicateFrom.segment.service_id ?? '');
       setBranchId(duplicateFrom.segment.branch_id ?? '');
+      setTagId(duplicateFrom.segment.tag_id ?? '');
       setOnlyBranch(Boolean(duplicateFrom.segment.only_branch));
       setSubject(duplicateFrom.subject);
       setBody(duplicateFrom.body);
@@ -76,6 +99,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
       setGroup(editing.segment.group);
       setServiceId(editing.segment.service_id ?? '');
       setBranchId(editing.segment.branch_id ?? '');
+      setTagId(editing.segment.tag_id ?? '');
       setOnlyBranch(Boolean(editing.segment.only_branch));
       setSubject(editing.subject);
       setBody(editing.body);
@@ -89,6 +113,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
       setGroup('all');
       setServiceId('');
       setBranchId('');
+      setTagId('');
       setSubject('');
       setBody('Hola [Nombre]:\n\n\n\n[Empresa]');
       setCouponId('');
@@ -109,7 +134,12 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
   }, [isOpen, options, source, couponId]);
 
   const chosen = options?.groups.find((g) => g.key === group) ?? null;
-  const segmentReady = chosen && (chosen.needs !== 'service' || serviceId) && (chosen.needs !== 'branch' || branchId);
+  const segmentReady = chosen && (chosen.needs !== 'service' || serviceId) && (chosen.needs !== 'branch' || branchId) && (chosen.needs !== 'tag' || tagId);
+  const waAvailable = (options?.channels?.length ?? 0) > 1 && options?.whatsapp?.state !== 'not_ready';
+  const withEmail = channelsOf(channel).includes('email');
+  const withWhatsApp = channelsOf(channel).includes('whatsapp');
+  const waTemplateValid = /^[a-z0-9_]+$/.test(waTemplate.trim());
+  const shortage = audience?.quota ? Object.values(audience.quota).find((q) => q && !q.enough) : undefined;
 
   useEffect(() => {
     if (!isOpen || !segmentReady) {
@@ -118,13 +148,13 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
     }
     setCounting(true);
     const timer = window.setTimeout(() => {
-      api.post('/campaigns/audience', { group, service_id: serviceId || null, branch_id: branchId || null, only_branch: onlyBranch })
+      api.post('/campaigns/audience', { group, service_id: serviceId || null, branch_id: branchId || null, tag_id: tagId || null, only_branch: onlyBranch, channel })
         .then((res) => setAudience(res.data))
         .catch(() => setAudience(null))
         .finally(() => setCounting(false));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [isOpen, group, serviceId, branchId, segmentReady, onlyBranch]);
+  }, [isOpen, group, serviceId, branchId, tagId, segmentReady, onlyBranch, channel]);
 
   const send = async () => {
     setConfirmBig(false);
@@ -136,21 +166,32 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
         group,
         service_id: chosen?.needs === 'service' ? serviceId : null,
         branch_id: chosen?.needs === 'branch' ? branchId : null,
+        tag_id: chosen?.needs === 'tag' ? tagId : null,
         only_branch: onlyBranch,
-        subject: subject.trim(),
-        body: body.trim(),
+        channel,
+        subject: withEmail ? subject.trim() : null,
+        body: withEmail ? body.trim() : null,
+        wa_template: withWhatsApp ? waTemplate.trim() : null,
+        wa_language: withWhatsApp ? waLanguage.trim() || 'es' : null,
+        wa_params: withWhatsApp ? waParams : null,
         coupon_id: couponId || null,
         send: when === 'now' ? 'now' : 'scheduled',
         scheduled_at: when === 'later' ? `${date}T${time}` : null,
       };
       const res = editing ? await api.put(`/campaigns/${editing.id}`, payload) : await api.post('/campaigns', payload);
       const campaign: Campaign = res.data;
-      const simulated = options?.email.state === 'simulated';
+      const counts = campaign.stats as { channels?: Record<string, { eligible?: number }> };
+      const emails = counts.channels?.email?.eligible ?? (withEmail ? campaign.stats.eligible ?? 0 : 0);
+      const whatsapps = counts.channels?.whatsapp?.eligible ?? 0;
+      const parts = [withEmail ? plural(emails, 'correo', 'correos') : '', withWhatsApp ? plural(whatsapps, 'WhatsApp', 'WhatsApp') : ''].filter(Boolean).join(' y ');
+      const simulated = (withEmail && options?.email.state === 'simulated') || (withWhatsApp && options?.whatsapp?.state === 'simulated');
       const notice = campaign.status === 'scheduled'
         ? `Campaña programada para el ${new Date(campaign.scheduled_at!).toLocaleString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false })}. Puedes cambiarla o cancelarla mientras no salga.`
-        : simulated
-          ? `Campaña lista: se armaron ${plural(campaign.stats.eligible ?? 0, 'correo', 'correos')}, pero no salen porque tu empresa está en "Probar sin enviar".`
-          : `Campaña enviada: ${plural(campaign.stats.eligible ?? 0, 'correo está', 'correos están')} saliendo. Los resultados se actualizan en su página.`;
+        : campaign.status === 'blocked'
+          ? `La campaña no salió: ${campaign.blocked ?? 'se pasa del tope de tu plan.'}`
+          : simulated
+            ? `Campaña lista: se armaron ${parts}, pero lo que está en "Probar sin enviar" no sale.`
+            : `Campaña enviada: ${parts} saliendo. Los resultados se actualizan en su página.`;
       onSaved(campaign, notice);
       onClose();
     } catch (err) {
@@ -162,7 +203,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (audience && options && audience.eligible > options.volume_warning) {
+    if (withEmail && audience && options && (audience.channels?.email?.eligible ?? audience.eligible) > options.volume_warning) {
       setConfirmBig(true);
       return;
     }
@@ -171,22 +212,30 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
 
   const formId = 'campaign-form';
   const coupon = options?.coupons.find((c) => c.id === couponId) ?? null;
-  const orphanCoupon = !couponId && (body.includes(COUPON_TOKEN) || subject.includes(COUPON_TOKEN));
+  const orphanCoupon = !couponId && ((withEmail && (body.includes(COUPON_TOKEN) || subject.includes(COUPON_TOKEN))) || (withWhatsApp && waParams.includes('Cupón')));
   const variables = (options?.variables ?? []).filter((v) => v.token !== COUPON_TOKEN || couponId);
-  const ready = name.trim() && segmentReady && subject.trim() && body.trim() && !orphanCoupon && (when === 'now' || (date && time)) && options?.email.state !== 'none';
+  const emailOk = !withEmail || (subject.trim() && body.trim() && options?.email.state !== 'none');
+  const waOk = !withWhatsApp || (waTemplateValid && options?.whatsapp?.state !== 'none' && options?.whatsapp?.state !== 'not_ready');
+  const laterMonth = when === 'later' && date.slice(0, 7) !== todayISO().slice(0, 7);
+  const ready = name.trim() && segmentReady && emailOk && waOk && !orphanCoupon && (!shortage || laterMonth) && (when === 'now' || (date && time));
+  const waVariables = (options?.wa_variables ?? []).filter((v) => v.key !== 'Cupón' || couponId || waParams.includes('Cupón'));
+  const maxParams = options?.wa_max_params ?? 10;
 
   return (
     <FormDrawer
       isOpen={isOpen}
       onClose={onClose}
       title={editing ? `Cambiar campaña: ${editing.name}` : 'Nueva campaña'}
-      subtitle={editing ? 'Programada: puedes cambiarla mientras no salga' : duplicateFrom ? `Copia de "${duplicateFrom.name}": revisa y cambia lo que quieras` : 'Un correo para un grupo de clientes, ahora o programado'}
+      subtitle={editing ? 'Programada: puedes cambiarla mientras no salga' : duplicateFrom ? `Copia de "${duplicateFrom.name}": revisa y cambia lo que quieras` : 'Un correo o un WhatsApp para un grupo de clientes, ahora o programado'}
       icon={<Megaphone size={20} />}
     >
       <div className="flex flex-col h-full justify-between">
         <form id={formId} onSubmit={submit} className="space-y-5 overflow-y-auto flex-1 pr-1 pb-4" data-campaign-form>
-          {options && options.email.state !== 'ok' && (
+          {options && withEmail && options.email.state !== 'ok' && (
             <p className={`text-sm border rounded-lg px-3 py-2 ${EMAIL_NOTICE[options.email.state]}`} data-email-state={options.email.state}>{options.email.label}</p>
+          )}
+          {options?.whatsapp && withWhatsApp && options.whatsapp.state !== 'ok' && (
+            <p className={`text-sm border rounded-lg px-3 py-2 ${EMAIL_NOTICE[options.whatsapp.state === 'simulated' ? 'simulated' : 'none']}`} data-whatsapp-state={options.whatsapp.state}>{options.whatsapp.label}</p>
           )}
 
           <div>
@@ -194,6 +243,21 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
             <input id="campaign-name" required maxLength={150} placeholder="Ej. Chequeo preventivo de octubre" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
             <p className="mt-1 text-xs text-slate-500">Solo lo ve tu equipo; el cliente ve el asunto.</p>
           </div>
+
+          {waAvailable && (
+            <div data-channel-field>
+              <span className={labelClass}>¿Por dónde sale? *</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Por dónde sale">
+                {(['email', 'whatsapp', 'both'] as CampaignChannel[]).map((key) => (
+                  <button key={key} type="button" role="radio" aria-checked={channel === key} data-channel={key} onClick={() => setChannel(key)}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${channel === key ? 'border-brand bg-brand-soft/15 text-brand-ink ring-2 ring-brand/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    {key === 'email' ? <Mail size={15} /> : <MessageCircle size={15} />} {CHANNEL_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+              {withWhatsApp && <p className="mt-1 text-xs text-slate-500">Por WhatsApp solo llega a quien tiene celular y aceptó recibir mensajes por WhatsApp, y nunca a quien pidió no recibir promociones.</p>}
+            </div>
+          )}
 
           <div className="space-y-3 rounded-2xl border border-slate-200 p-4" data-audience-box>
             <div>
@@ -212,6 +276,13 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
               <div>
                 <span className={labelClass}>Sede *</span>
                 <Select ariaLabel="Sede" placeholder="Elige la sede" options={(options?.branches ?? []).map((b) => ({ value: b.id, label: b.name }))} value={branchId} onChange={(e) => setBranchId(String(e.target.value))} />
+              </div>
+            )}
+            {chosen?.needs === 'tag' && (
+              <div data-field="segment-tag">
+                <span className={labelClass}>Etiqueta *</span>
+                <Select ariaLabel="Etiqueta" placeholder="Elige la etiqueta" options={(options?.tags ?? []).map((t) => ({ value: t.id, label: `${t.name} (${t.customers})` }))} value={tagId} onChange={(e) => setTagId(String(e.target.value))} />
+                {(options?.tags ?? []).length === 0 && <p className="mt-1 text-xs text-slate-500">Aún no tienes etiquetas. Créalas desde {vocab.clients} → Etiquetas.</p>}
               </div>
             )}
 
@@ -236,13 +307,31 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
             <div className="flex items-start gap-3 rounded-xl bg-brand-soft/15 px-3 py-2.5" data-audience-count>
               <span className="p-1.5 rounded-lg bg-white text-brand-accent shrink-0">{counting ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} />}</span>
               <span className="text-sm text-brand-ink">
-                {!segmentReady && (chosen?.needs === 'service' ? 'Elige el servicio para ver a cuántos les llega.' : chosen?.needs === 'branch' ? 'Elige la sede para ver a cuántos les llega.' : 'Elige el grupo para ver a cuántos les llega.')}
-                {segmentReady && audience && (
+                {!segmentReady && (chosen?.needs === 'service' ? 'Elige el servicio para ver a cuántos les llega.' : chosen?.needs === 'branch' ? 'Elige la sede para ver a cuántos les llega.' : chosen?.needs === 'tag' ? 'Elige la etiqueta para ver a cuántos les llega.' : 'Elige el grupo para ver a cuántos les llega.')}
+                {segmentReady && audience && !audience.channels && (
                   <>
                     <span className="block font-bold" data-eligible={audience.eligible}>Le llegará a {plural(audience.eligible, 'cliente', 'clientes')}</span>
                     <span className="block text-xs text-slate-600">
                       {audience.total === 0 ? 'Este grupo no tiene clientes por ahora.' : `De ${plural(audience.total, 'cliente', 'clientes')} del grupo${audience.no_consent ? `, ${audience.no_consent} no aceptaron recibir promociones` : ''}${audience.no_email ? `, ${audience.no_email} no tienen correo` : ''}. Solo se envía a quien aceptó promociones por correo.`}
                     </span>
+                  </>
+                )}
+                {segmentReady && audience?.channels && (
+                  <>
+                    <span className="block font-bold" data-eligible={audience.eligible}>Le llegará a {plural(audience.eligible, 'cliente', 'clientes')} de {audience.total}</span>
+                    {audience.total === 0 && <span className="block text-xs text-slate-600">Este grupo no tiene clientes por ahora.</span>}
+                    {audience.total > 0 && (['email', 'whatsapp'] as const).filter((key) => audience.channels?.[key]).map((key) => {
+                      const counts = audience.channels![key]!;
+                      const reasons = reasonsText(counts, key === 'email' ? EMAIL_REASON_LABELS : WA_REASON_LABELS);
+                      const quota = audience.quota?.[key];
+                      return (
+                        <span key={key} className="block text-xs text-slate-600 mt-1" data-audience-channel={key} data-channel-eligible={counts.eligible}>
+                          <span className="font-semibold text-brand-ink">{key === 'email' ? 'Por correo' : 'Por WhatsApp'}: {plural(counts.eligible ?? 0, 'cliente', 'clientes')}.</span>
+                          {reasons && <> No se les envía: {reasons}.</>}
+                          {quota && <span className={`block ${quota.enough ? 'text-slate-500' : 'text-rose-700 font-semibold'}`} data-quota={key}>{quotaText(quota)}</span>}
+                        </span>
+                      );
+                    })}
                   </>
                 )}
               </span>
@@ -259,8 +348,60 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
             {(options?.coupons.length ?? 0) === 0 && <p className="mt-1 text-xs text-slate-500">No tienes cupones vigentes. Puedes crearlos en Ventas → Cupones.</p>}
           </div>
 
-          <MessageFields idPrefix="campaign" subject={subject} onSubject={setSubject} body={body} onBody={setBody} variables={variables} subjectPlaceholder="Ej. [Nombre], es momento de tu chequeo" minHeight={180}
-            hint="Cada dato se cambia por el de cada cliente. Al final de cada correo se agrega solo un enlace para dejar de recibir promociones." />
+          {withWhatsApp && (
+            <div className="space-y-3 rounded-2xl border border-slate-200 p-4" data-whatsapp-template>
+              <div>
+                <span className="block text-sm font-bold text-slate-800">Plantilla de WhatsApp</span>
+                <p className="text-xs text-slate-500">WhatsApp solo deja enviar promociones con una plantilla de tipo marketing aprobada por Meta. Escríbela igual que en Meta.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className={labelClass} htmlFor="campaign-wa-template">Nombre de la plantilla *</label>
+                  <input id="campaign-wa-template" maxLength={512} placeholder="Ej. promo_noviembre" className={inputClass} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="campaign-wa-language">Idioma</label>
+                  <input id="campaign-wa-language" maxLength={15} placeholder="es" className={inputClass} value={waLanguage} onChange={(e) => setWaLanguage(e.target.value)} />
+                </div>
+              </div>
+              {waTemplate.trim() !== '' && !waTemplateValid && (
+                <p className="text-xs text-amber-800" data-template-invalid>El nombre va como en Meta: minúsculas, números y guion bajo (ej. promo_noviembre).</p>
+              )}
+              <div className="space-y-2">
+                <span className={labelClass}>Datos de la plantilla, en orden</span>
+                {waParams.length === 0 && <p className="text-xs text-slate-500">La plantilla no lleva datos. Si tu plantilla tiene {'{{1}}'}, {'{{2}}'}…, agrégalos aquí en el mismo orden.</p>}
+                {waParams.map((param, index) => (
+                  <div key={index} className="flex items-center gap-2" data-wa-param={index + 1}>
+                    <span className="w-12 shrink-0 text-xs font-mono font-bold text-slate-500">{`{{${index + 1}}}`}</span>
+                    <div className="flex-1 min-w-0">
+                      <Select ariaLabel={`Dato ${index + 1} de la plantilla`} options={waVariables.map((v) => ({ value: v.key, label: v.label }))} value={param}
+                        onChange={(e) => { const value = String(e.target.value); if (!value) return; setWaParams(waParams.map((p, i) => (i === index ? value : p))); }} />
+                    </div>
+                    <button type="button" title="Quitar este dato" aria-label={`Quitar el dato ${index + 1}`} onClick={() => setWaParams(waParams.filter((_, i) => i !== index))} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors">
+                      <X size={15} />
+                    </button>
+                  </div>
+                ))}
+                {waParams.length < maxParams && (
+                  <button type="button" data-action="add-wa-param" onClick={() => setWaParams([...waParams, 'Nombre'])} className="flex items-center gap-1.5 text-xs font-semibold text-brand-ink hover:underline">
+                    <Plus size={14} /> Agregar dato {`{{${waParams.length + 1}}}`}
+                  </button>
+                )}
+                {!waParams.includes('Baja') && <p className="text-xs text-slate-500">Si tu plantilla tiene un espacio para el enlace de baja, elige el dato «Enlace para dejar de recibir promociones».</p>}
+              </div>
+            </div>
+          )}
+
+          {withEmail && (
+            <MessageFields idPrefix="campaign" subject={subject} onSubject={setSubject} body={body} onBody={setBody} variables={variables} subjectPlaceholder="Ej. [Nombre], es momento de tu chequeo" minHeight={180}
+              hint="Cada dato se cambia por el de cada cliente. Al final de cada correo se agrega solo un enlace para dejar de recibir promociones." />
+          )}
+
+          {shortage && !laterMonth && (
+            <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2" data-quota-shortage>
+              {quotaText(shortage)} La campaña no sale: elige un grupo más chico, espera al próximo mes o cambia de plan.
+            </p>
+          )}
 
           {orphanCoupon && (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-orphan-coupon>
@@ -309,7 +450,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
 
       <AppModal
         isOpen={confirmBig}
-        title={`Vas a enviar ${audience?.eligible ?? 0} correos`}
+        title={`Vas a enviar ${audience?.channels?.email?.eligible ?? audience?.eligible ?? 0} correos`}
         message={`Es un envío grande. Algunos servicios de correo limitan cuántos mensajes salen por día (Gmail, unos 500): si tu correo llega a ese límite, el resto quedará con error y podrás reintentarlo después. ¿Quieres continuar?`}
         confirmText="Sí, enviar"
         cancelText="Revisar"

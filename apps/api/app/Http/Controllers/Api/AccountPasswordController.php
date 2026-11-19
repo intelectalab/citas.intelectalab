@@ -30,7 +30,7 @@ class AccountPasswordController extends Controller
         }
 
         if (Hash::check($validated['password'], $user->getAuthPassword())) {
-            throw ValidationException::withMessages(['password' => 'Elige una contraseña distinta de la que te dieron.']);
+            throw ValidationException::withMessages(['password' => $user->must_change_password ? 'Elige una contraseña distinta de la que te dieron.' : 'La contraseña nueva es igual a la que tienes: elige otra.']);
         }
 
         $current = $user->currentAccessToken()?->id;

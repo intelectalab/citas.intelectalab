@@ -155,6 +155,9 @@ class SalesController extends Controller
                 'credit_note'  => $r->invoice_id && isset($notes[$r->invoice_id]) ? Invoicing::present($notes[$r->invoice_id]) : null,
             ])->values(),
             'can_manage'       => $user->allows('sales.delete'),
+            'can_approve'      => $user->allows('sales.approve'),
+            'refund_approval_over' => Refunds::requestsReady() ? Sales::rules($tenant)['refund_approval_over'] : 0,
+            'refund_requests'  => Refunds::requestsOf($sale->id, $user),
             'void_blocked'     => Refunds::voidBlocked($sale),
             'refund_available' => $refund['available'],
             'refund_blocked'   => $refund['blocked'],
@@ -221,7 +224,30 @@ class SalesController extends Controller
         ]);
 
         $validated['reason'] = trim($validated['reason']);
-        $this->find($tenant, $sale);
+        $row = $this->find($tenant, $sale);
+
+        if (Refunds::hasPendingRequest($row->id)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['amount' => 'Esta venta ya tiene una devolución esperando aprobación: espera a que la aprueben o la rechacen.']);
+        }
+
+        if (Refunds::needsApproval($tenant, (float) $validated['amount'])) {
+            $requestId = DB::transaction(fn () => Refunds::request($tenant, $sale, $validated, $request->user()));
+            $fresh = DB::table('sales')->where('id', $row->id)->first();
+
+            Audit::log($request, 'refund.requested', [
+                'tenant' => $tenant->id, 'entity_type' => 'sale', 'entity_id' => $fresh->id, 'entity_label' => $fresh->code, 'branch_id' => $fresh->branch_id,
+                'after'  => [
+                    'amount'   => round((float) $validated['amount'], 2),
+                    'method'   => (Sales::METHODS + Sales::OTHER_METHODS)[$validated['method']] ?? $validated['method'],
+                    'reason'   => $validated['reason'],
+                    'customer' => $this->customerName($fresh),
+                ],
+            ]);
+
+            Refunds::notifyRequested($tenant, $requestId, $request->user());
+
+            return response()->json($this->detail($tenant, $this->find($tenant, $sale), $request->user()) + ['requested' => true], 202);
+        }
 
         $fresh = DB::transaction(fn () => Refunds::refund($tenant, $sale, $validated, $request->user()));
 
@@ -237,6 +263,82 @@ class SalesController extends Controller
         ]);
 
         return response()->json($this->detail($tenant, $this->find($tenant, $sale), $request->user()));
+    }
+
+    private function pendingRequest(Tenant $tenant, string $id): object
+    {
+        abort_unless(Refunds::requestsReady(), 503, Refunds::REQUESTS_NOT_READY);
+        $row = DB::table('refund_requests')->where('tenant_id', $tenant->id)->where('id', $id)->lockForUpdate()->first();
+        abort_unless($row, 404);
+        Access::assertBranch(request()->user(), $row->branch_id, true);
+        abort_if($row->status !== 'pending', 409, 'Esta devolución ya se revisó.');
+        abort_if($row->requested_by === request()->user()->id, 403, 'Una devolución que pediste tú la aprueba otra persona.');
+
+        return $row;
+    }
+
+    public function approveRefund(Request $request, string $refundRequest)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+
+        [$row, $fresh] = DB::transaction(function () use ($tenant, $refundRequest, $user) {
+            $row = $this->pendingRequest($tenant, $refundRequest);
+            $fresh = Refunds::refund($tenant, $row->sale_id, [
+                'amount' => (float) $row->amount, 'method' => $row->method, 'reason' => $row->reason, 'cash_session_id' => $row->cash_session_id,
+            ], $user);
+            $refundId = DB::table('sale_refunds')->where('sale_id', $row->sale_id)->orderByDesc('created_at')->value('id');
+
+            DB::table('refund_requests')->where('id', $row->id)->update([
+                'status' => 'approved', 'reviewed_by' => $user->id, 'reviewed_at' => now(), 'sale_refund_id' => $refundId, 'updated_at' => now(),
+            ]);
+
+            return [$row, $fresh];
+        });
+
+        Audit::log($request, 'sale.refunded', [
+            'tenant' => $tenant->id, 'entity_type' => 'sale', 'entity_id' => $fresh->id, 'entity_label' => $fresh->code, 'branch_id' => $fresh->branch_id,
+            'after'  => [
+                'amount'       => round((float) $row->amount, 2),
+                'method'       => (Sales::METHODS + Sales::OTHER_METHODS)[$row->method] ?? $row->method,
+                'reason'       => $row->reason,
+                'status'       => Sales::STATUS_LABELS[$fresh->status] ?? $fresh->status,
+                'customer'     => $this->customerName($fresh),
+                'requested_by' => \App\Support\Person::name(DB::table('users')->where('id', $row->requested_by)->first(['first_name', 'last_name'])) ?: null,
+            ],
+        ]);
+
+        Refunds::notifyReviewed($tenant, $row, true, $user, null);
+
+        return response()->json($this->detail($tenant, $this->find($tenant, $row->sale_id), $user));
+    }
+
+    public function rejectRefund(Request $request, string $refundRequest)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $validated = $request->validate(['notes' => 'required|string|max:255'], ['notes.required' => 'Escribe por qué no se aprueba la devolución.']);
+        $notes = trim($validated['notes']);
+
+        $row = DB::transaction(function () use ($tenant, $refundRequest, $user, $notes) {
+            $row = $this->pendingRequest($tenant, $refundRequest);
+            DB::table('refund_requests')->where('id', $row->id)->update([
+                'status' => 'rejected', 'reviewed_by' => $user->id, 'reviewed_at' => now(), 'review_notes' => $notes, 'updated_at' => now(),
+            ]);
+
+            return $row;
+        });
+
+        $sale = $this->find($tenant, $row->sale_id);
+
+        Audit::log($request, 'refund.rejected', [
+            'tenant' => $tenant->id, 'entity_type' => 'sale', 'entity_id' => $sale->id, 'entity_label' => $sale->code, 'branch_id' => $sale->branch_id,
+            'after'  => ['amount' => round((float) $row->amount, 2), 'reason' => $row->reason, 'notes' => $notes, 'customer' => $this->customerName($sale)],
+        ]);
+
+        Refunds::notifyReviewed($tenant, $row, false, $user, $notes);
+
+        return response()->json($this->detail($tenant, $sale, $user));
     }
 
     public function payments(Request $request)

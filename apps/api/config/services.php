@@ -23,4 +23,14 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com'),
+        'graph_version' => env('WHATSAPP_GRAPH_VERSION', 'v21.0'),
+        'simulate' => (bool) env('WHATSAPP_SIMULATE', env('APP_ENV') === 'local'),
+    ],
+
+    'assistant' => [
+        'provider' => env('ASSISTANT_PROVIDER', 'none'),
+    ],
+
 ];

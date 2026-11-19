@@ -1,7 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { Bell, CircleHelp } from 'lucide-react';
+import { Bell, CircleHelp, UserRound } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { matchesPath, useMenu } from '@/app/components/layout/menu';
@@ -78,6 +78,7 @@ export function useHelp() {
 
   const extras: HelpScreen[] = [
     toScreen({ name: 'Notificaciones', href: '/notifications', icon: Bell }),
+    toScreen({ name: 'Mi cuenta', href: '/account', icon: UserRound }),
     toScreen({ name: 'Autoayuda', href: '/help', icon: CircleHelp }),
   ];
 

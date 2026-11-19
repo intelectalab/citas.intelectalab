@@ -371,6 +371,8 @@ class Quotes
 
     public static function createPlan(Tenant $tenant, object $quote, ?User $user): ?object
     {
+        $existing = null;
+
         if (!self::plansReady() || ($existing = self::planOf($quote->id))) {
             if ($existing && !$existing->sale_id && $quote->sale_id) {
                 DB::table('customer_packages')->where('id', $existing->id)->update(['sale_id' => $quote->sale_id, 'updated_at' => now()]);
@@ -722,6 +724,7 @@ class Quotes
             Inventory::deductForSale($tenant, $sale, $user);
             Loyalty::earnForSale($tenant, $sale, $user);
             Commissions::forSale($tenant, $sale);
+            Webhooks::salePaid($tenant->id, $sale);
         }
 
         return $sale;

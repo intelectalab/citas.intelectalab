@@ -359,7 +359,7 @@ class WalkinController extends Controller
         }
 
         $appointment = Appointment::findOrFail($booking->getData(true)['id']);
-        $pending = $user->allows('agenda.edit') ? $this->startAttention($request, $tenant, $appointment) : 'No tienes permiso para iniciar la atención: pídeselo a quien la atiende.';
+        $pending = $user->allows('agenda.start') ? $this->startAttention($request, $tenant, $appointment) : 'No tienes permiso para iniciar la atención: pídeselo a quien la atiende.';
 
         $walkin->refresh()->load(self::RELATIONS);
         $this->audit($request, 'walkin.served', $walkin, [

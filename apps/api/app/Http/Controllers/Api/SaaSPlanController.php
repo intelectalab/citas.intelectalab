@@ -68,13 +68,20 @@ class SaaSPlanController extends Controller
             'status' => 'required|string|max:30',
             'presentation_order' => 'integer|min:0',
             'is_public_catalog' => 'boolean',
+            'is_popular' => 'sometimes|boolean',
+            'tagline' => 'sometimes|nullable|string|max:160',
         ], ['currency.in' => 'Esa moneda no está disponible.']);
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('saas_plans', 'is_popular')) {
+            unset($validated['is_popular'], $validated['tagline']);
+        }
 
         if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
         }
 
         $plan = SaaSPlan::create($validated);
+        $this->onlyOnePopular($plan);
         \App\Support\Audit::log($request, 'plan.created', ['entity_type' => 'plan', 'entity_id' => $plan->id, 'entity_label' => $plan->name]);
 
         return response()->json([
@@ -128,7 +135,13 @@ class SaaSPlanController extends Controller
             'status' => 'sometimes|required|string|max:30',
             'presentation_order' => 'integer|min:0',
             'is_public_catalog' => 'boolean',
+            'is_popular' => 'sometimes|boolean',
+            'tagline' => 'sometimes|nullable|string|max:160',
         ], ['currency.in' => 'Esa moneda no está disponible.']);
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('saas_plans', 'is_popular')) {
+            unset($validated['is_popular'], $validated['tagline']);
+        }
 
         if (isset($validated['name']) && empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
@@ -136,6 +149,7 @@ class SaaSPlanController extends Controller
 
         [$was, $now] = \App\Support\Audit::changed($plan->only(array_keys($validated)), $validated);
         $plan->update($validated);
+        $this->onlyOnePopular($plan);
 
         if ($now) {
             \App\Support\Audit::log($request, 'plan.updated', ['entity_type' => 'plan', 'entity_id' => $plan->id, 'entity_label' => $plan->name, 'before' => $was, 'after' => $now]);
@@ -145,6 +159,13 @@ class SaaSPlanController extends Controller
             'message' => 'Plan SaaS actualizado correctamente',
             'data' => $plan
         ]);
+    }
+
+    private function onlyOnePopular(SaaSPlan $plan): void
+    {
+        if ($plan->is_popular) {
+            SaaSPlan::where('id', '!=', $plan->id)->where('is_popular', true)->update(['is_popular' => false]);
+        }
     }
 
     public function destroy(Request $request, $id)

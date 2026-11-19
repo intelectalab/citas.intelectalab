@@ -3,7 +3,7 @@
 import Badge from '@/app/components/common/Badge';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { User, Pencil, Trash2, Users, Mars, Venus, Phone, MapPin, Eye } from 'lucide-react';
+import { User, Pencil, Trash2, Users, Mars, Venus, Phone, MapPin, Eye, FileSpreadsheet, Tag } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -16,6 +16,13 @@ import CustomerBoard from './CustomerBoard';
 import BoardColumnsEditor from './BoardColumnsEditor';
 import { stageOf, type BoardInfo } from '../board';
 import { apiError } from '@/features/appointments/appointments';
+import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
+import ComposePanel from '@/features/messages/components/ComposePanel';
+import type { PickedCustomer } from './CustomerPicker';
+import CustomerImport from './CustomerImport';
+import TagsManager from './TagsManager';
+import TagChip, { type CustomerTag } from './TagChip';
+import { formatPhone } from '@/lib/phone';
 
 const VIEW_KEY = 'customers.view';
 
@@ -43,6 +50,7 @@ interface Customer {
   pipeline_stage_id?: string | null;
   last_visit?: string | null;
   next_visit?: string | null;
+  tags?: CustomerTag[];
   status?: {
     id: string;
     name: string;
@@ -53,14 +61,18 @@ interface Customer {
 export default function CustomersTable() {
   const vocab = useVocabulary();
   const clientLower = vocab.client.toLowerCase();
-  const { user, can } = useAuth();
+  const { user, can, hasModule } = useAuth();
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, any>>({ biological_sex: '' });
+  const [filters, setFilters] = useState<Record<string, any>>({ biological_sex: '', tag_id: '' });
+  const [tags, setTags] = useState<CustomerTag[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [managingTags, setManagingTags] = useState(false);
+  const [writingTo, setWritingTo] = useState<PickedCustomer | null>(null);
 
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -85,6 +97,8 @@ export default function CustomersTable() {
   const [boardError, setBoardError] = useState('');
   const [editingColumns, setEditingColumns] = useState(false);
 
+  const { openNew, panels } = useAppointmentPanels(() => { fetchCustomers(searchTerm, filters); loadBoard(); });
+
   const loadBoard = () => {
     api.get('/customer-board')
       .then((res) => { setBoard(res.data); setBoardError(''); })
@@ -94,6 +108,7 @@ export default function CustomersTable() {
   useEffect(() => {
     setView(savedView());
     loadBoard();
+    api.get('/customer-tags').then((res) => setTags(res.data.tags ?? [])).catch(() => setTags([]));
   }, []);
 
   const changeView = (next: 'table' | 'board') => {
@@ -124,7 +139,13 @@ export default function CustomersTable() {
         { label: 'Femenino', value: 'F' },
         { label: 'Otro', value: 'O' },
       ]
-    }
+    },
+    ...(tags.length > 0 ? [{
+      id: 'tag_id',
+      label: 'Etiqueta',
+      type: 'select' as const,
+      options: tags.map((t) => ({ label: t.name, value: t.id })),
+    }] : []),
   ];
 
   const fetchCustomers = async (search = '', currentFilters = filters) => {
@@ -225,7 +246,8 @@ export default function CustomersTable() {
     { header: 'Correo', value: (c) => c.email },
     ...(usesDependents ? [{ header: vocab.dependents, value: (c: Customer) => (c.dependents ?? []).map((d) => d.name).join(', ') }] : []),
     { header: 'Documento', value: (c) => c.document_number },
-    { header: 'Teléfono', value: (c) => c.phone },
+    { header: 'Teléfono', value: (c) => formatPhone(c.phone) },
+    { header: 'Etiquetas', value: (c) => (c.tags ?? []).map((t) => t.name).join(', ') },
     { header: 'Distrito', value: (c) => c.district },
     { header: 'Sexo biológico', value: (c) => (c.biological_sex === 'M' ? 'Masculino' : c.biological_sex === 'F' ? 'Femenino' : c.biological_sex ? 'Otro' : '') },
     ...(board?.ready ? [{ header: 'Etapa', value: (c: Customer) => stageOf(board, c.pipeline_stage_id)?.name }] : []),
@@ -257,6 +279,11 @@ export default function CustomersTable() {
             <span className="block text-xs text-slate-400 font-mono">
               {pat.email ? pat.email : 'Sin correo electrónico'}
             </span>
+            {(pat.tags?.length ?? 0) > 0 && (
+              <span className="flex flex-wrap gap-1 mt-1">
+                {pat.tags!.map((t) => <TagChip key={t.id} tag={t} size="sm" />)}
+              </span>
+            )}
             {pat.online_booking && (
               <span
                 data-online-booking={pat.online_booking.blocked ? 'blocked' : 'note'}
@@ -300,7 +327,7 @@ export default function CustomersTable() {
         <div key={`contact-${pat.id}`} className="space-y-0.5 text-xs text-slate-600">
           <div className="flex items-center gap-1.5">
             <Phone size={12} className="text-slate-400" />
-            <span>{pat.phone || 'Sin teléfono'}</span>
+            <span>{formatPhone(pat.phone) || 'Sin teléfono'}</span>
           </div>
           <div className="flex items-center gap-1.5 text-slate-400">
             <MapPin size={12} />
@@ -401,6 +428,20 @@ export default function CustomersTable() {
           getItemKey={(p) => p.id}
           entityLabel={`${vocab.clients.toLowerCase()} ${vocab.pick('client', 'registrados', 'registradas')}`}
           metricCards={metricCards}
+          headerActions={(can('customers.import') || can('customers.edit')) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {can('customers.edit') && (
+                <button type="button" data-action="manage-tags" onClick={() => setManagingTags(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-brand-ink hover:bg-slate-50">
+                  <Tag size={16} /> Etiquetas
+                </button>
+              )}
+              {can('customers.import') && (
+                <button type="button" data-action="import-customers" onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-brand-ink hover:bg-slate-50">
+                  <FileSpreadsheet size={16} /> Importar
+                </button>
+              )}
+            </div>
+          ) : undefined}
           view={view}
           onViewChange={changeView}
           boardView={(rows) => (
@@ -411,6 +452,8 @@ export default function CustomersTable() {
                 clientWord={vocab.client}
                 onMove={moveCustomer}
                 onEditColumns={board.can_edit_columns ? () => setEditingColumns(true) : undefined}
+                onSchedule={hasModule('agenda') && can('agenda.create') ? (row) => openNew({ customer: { id: row.id, code: row.code ?? '', first_name: row.first_name, last_name: row.last_name, phone: row.phone, document_number: row.document_number } }) : undefined}
+                onWrite={can('messages.create') ? (row) => setWritingTo({ id: row.id, code: row.code ?? '', first_name: row.first_name, last_name: row.last_name, phone: row.phone, document_number: row.document_number }) : undefined}
               />
             ) : (
               <p role="alert" data-board-not-ready className="m-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -441,6 +484,29 @@ export default function CustomersTable() {
         initialData={editingCustomer}
         onSubmitSuccess={() => { fetchCustomers(searchTerm, filters); loadBoard(); }}
       />
+
+      <CustomerImport
+        isOpen={importing}
+        clientsWord={vocab.clients}
+        onClose={() => setImporting(false)}
+        onImported={() => { fetchCustomers(searchTerm, filters); loadBoard(); }}
+      />
+
+      <TagsManager
+        isOpen={managingTags}
+        clientsWord={vocab.clients}
+        onClose={() => setManagingTags(false)}
+        onChanged={(list) => { setTags(list); fetchCustomers(searchTerm, filters); }}
+      />
+
+      <ComposePanel
+        isOpen={writingTo !== null}
+        customer={writingTo}
+        onClose={() => setWritingTo(null)}
+        onSaved={(_message, notice) => { setWritingTo(null); setModalConfig({ isOpen: true, type: 'alert', title: 'Mensaje', message: notice }); }}
+      />
+
+      {panels}
 
       <AppModal
         isOpen={modalConfig.isOpen}

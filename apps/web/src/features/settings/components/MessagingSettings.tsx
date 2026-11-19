@@ -449,7 +449,7 @@ export default function MessagingSettings({ canSave, company, part, onDirtyChang
           <span className="p-2 rounded-lg bg-brand-soft/20 text-brand-ink shrink-0"><MessageCircle size={16} /></span>
           <span>
             <span className="block text-sm font-bold text-brand-ink">WhatsApp</span>
-            <span className="block text-xs text-slate-500 mt-0.5">{data.whatsapp.label}. Siempre necesita un proveedor (Meta u otro), con costo por mensaje y plantillas aprobadas.</span>
+            <span className="block text-xs text-slate-500 mt-0.5">{data.whatsapp.label}. Se conecta en <a href="#whatsapp" data-link="whatsapp" className="font-semibold text-brand-accent hover:underline">WhatsApp y asistente</a>.</span>
           </span>
         </div>
         {emailDirty && <p className="text-xs text-amber-700 text-right" data-unsaved>Tienes cambios sin guardar.</p>}

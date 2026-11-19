@@ -41,6 +41,7 @@ class Appointment extends Model
         'cancelled_at',
         'created_by',
         'customer_package_id',
+        'video_url',
     ];
 
     protected $casts = [
@@ -60,6 +61,11 @@ class Appointment extends Model
     public static function nextCode(string $tenantId): string
     {
         return \App\Support\Codes::next($tenantId, 'appointment');
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'tenant_id');
     }
 
     public function customer(): BelongsTo

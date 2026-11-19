@@ -4,9 +4,10 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Boxes, CalendarClock, CalendarPlus, Minus, Package, Plus, Receipt, Search, ShoppingCart, Sparkles, TicketPercent, Trash2, X } from 'lucide-react';
+import { BadgeCheck, Boxes, CalendarClock, CalendarPlus, Gift, Minus, Package, Plus, Receipt, Search, ShoppingCart, Sparkles, TicketPercent, Trash2, X } from 'lucide-react';
 import SchedulePanel, { type ScheduleSource } from '@/features/packages/components/SchedulePanel';
 import { sessionsLabel, type ScheduleDetails } from '@/features/packages/packages';
+import { includedLeftText, shortDate } from '@/features/memberships/memberships';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import Select from '@/app/components/common/Select';
@@ -20,7 +21,22 @@ import { money, momentOf, type ChargeContext } from '@/features/sales/sales';
 import { emptyCart, whenOf, type Cart, type CartItem, type CartPreview, type LoadedCart, type PendingAppointment, type PendingSale, type PosBoard } from '../pos';
 import WalkInPanel, { type BookedWalkIn } from './WalkInPanel';
 
-type Tab = 'pending' | 'services' | 'products' | 'packages';
+type Tab = 'pending' | 'services' | 'products' | 'packages' | 'memberships' | 'gift_cards';
+
+type NextVisit = NonNullable<ChargeContext['next_visit']>;
+
+const newLineId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+  ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16)));
+
+const nextVisitUrl = (visit: NextVisit) => `/agenda?${new URLSearchParams({
+  nueva: '1',
+  cliente: visit.customer_id,
+  servicio: visit.service_id,
+  sede: visit.branch_id,
+  ...(visit.professional_id ? { profesional: visit.professional_id } : {}),
+  ...(visit.dependent_id ? { dependiente: visit.dependent_id } : {}),
+}).toString()}`;
 
 type PendingEntry = { kind: 'sale'; sale: PendingSale } | { kind: 'appointment'; appointment: PendingAppointment };
 
@@ -49,12 +65,14 @@ const store = (cart: Cart) => {
 
 const fullName = (customer: PickedCustomer | null) => (customer ? `${customer.first_name} ${customer.last_name}` : '');
 
-const toLine = ({ type, id, quantity, professional_id, details }: CartItem) => ({
+const toLine = ({ type, id, quantity, professional_id, details, gift, no_membership }: CartItem) => ({
   type,
   id,
   quantity,
   professional_id: professional_id || null,
   ...(type === 'package' && details ? { details } : {}),
+  ...(type === 'gift_card' && gift ? { details: gift } : {}),
+  ...(no_membership ? { no_membership: true } : {}),
 });
 
 export default function PointOfSale() {
@@ -79,7 +97,12 @@ export default function PointOfSale() {
   const [pendingSwitch, setPendingSwitch] = useState<{ message: string; run: () => void } | null>(null);
   const [scheduleIndex, setScheduleIndex] = useState<number | null>(null);
   const [scheduleInitial, setScheduleInitial] = useState<ScheduleDetails | null>(null);
+  const [giftForm, setGiftForm] = useState({ amount: '', name: '', email: '' });
+  const [giftError, setGiftError] = useState('');
+  const [nextVisit, setNextVisit] = useState<NextVisit | null>(null);
   const restored = useRef(false);
+  const wantedAppointment = useRef<string | null>(null);
+  const wantedRenewal = useRef<string | null>(null);
 
   const load = useCallback((branch?: string) => {
     api.get('/pos', { params: branch ? { branch_id: branch } : {} })
@@ -102,7 +125,9 @@ export default function PointOfSale() {
         editBlocked: data.edit_blocked,
         customer: data.customer,
         coupon: data.coupon_code ?? '',
-        items: data.items.map((item) => ({ ...item, label: '', unit_price: 0, details: item.details ?? null })),
+        items: data.items.map((item) => (item.type === 'gift_card'
+          ? { ...item, label: 'Gift card', unit_price: Number(item.details?.amount ?? 0), details: null, gift: { amount: Number(item.details?.amount ?? 0), recipient_name: item.details?.recipient_name ?? null, recipient_email: item.details?.recipient_email ?? null } }
+          : { ...item, label: '', unit_price: 0, details: item.details ?? null })),
       });
       setCouponInput('');
       setCouponError('');
@@ -126,6 +151,17 @@ export default function PointOfSale() {
       if (!wanted) window.history.replaceState(null, '', '/pos');
     }
 
+    if (query?.get('tab') === 'membresias') {
+      setTab('memberships');
+      wantedRenewal.current = query.get('renovar');
+      if (!wanted) window.history.replaceState(null, '', '/pos');
+    }
+
+    if (query?.get('cita')) {
+      wantedAppointment.current = query.get('cita');
+      window.history.replaceState(null, '', '/pos');
+    }
+
     if (wanted) {
       window.history.replaceState(null, '', '/pos');
       load();
@@ -138,6 +174,38 @@ export default function PointOfSale() {
   }, [load, loadSale]);
 
   useEffect(() => { store(cart); }, [cart]);
+
+  useEffect(() => {
+    const id = wantedAppointment.current;
+    if (!id || !board) return;
+    wantedAppointment.current = null;
+    const appointment = board.pending.appointments.find((a) => a.id === id);
+    if (!appointment) {
+      setNotice('Esa cita ya no está por cobrar en esta sede.');
+      return;
+    }
+    const item: CartItem = { type: 'appointment', id: appointment.id, quantity: 1, label: appointment.service ?? 'Servicio', unit_price: appointment.price };
+    setCart((current) => (current.items.some((i) => i.type === 'appointment' && i.id === id) ? current : { ...emptyCart(), items: [item] }));
+  }, [board]);
+
+  useEffect(() => {
+    const id = wantedRenewal.current;
+    if (!id || !board) return;
+    wantedRenewal.current = null;
+    api.get(`/memberships/${id}`)
+      .then((res) => {
+        const m = res.data;
+        const plan = (board.memberships ?? []).find((p) => p.id === m.plan_id);
+        if (!plan || !m.customer) {
+          setNotice(`El plan ${m.name} ya no se vende: elige otro plan para ${m.customer?.name ?? 'el socio'}.`);
+          return;
+        }
+        const customer = { id: m.customer.id, code: m.customer.code, first_name: m.customer.first_name, last_name: m.customer.last_name, phone: m.customer.phone ?? null };
+        setCart({ ...emptyCart(), customer, items: [{ type: 'membership', id: plan.id, quantity: 1, label: plan.name, unit_price: plan.price }] });
+        setNotice('');
+      })
+      .catch(() => setNotice('No se pudo cargar la membresía para renovarla.'));
+  }, [board]);
 
   useEffect(() => {
     if (!branchId || cart.items.length === 0) {
@@ -194,11 +262,13 @@ export default function PointOfSale() {
   const services = (board?.services ?? []).filter((s) => !term || `${s.name} ${s.category ?? ''}`.toLowerCase().includes(term));
   const products = (board?.products ?? []).filter((p) => !term || `${p.name} ${p.sku} ${p.category ?? ''}`.toLowerCase().includes(term));
   const plans = (board?.packages ?? []).filter((p) => !term || `${p.name} ${p.items.map((i) => i.name).join(' ')}`.toLowerCase().includes(term));
+  const membershipPlans = (board?.memberships ?? []).filter((p) => !term || `${p.name} ${p.benefits_text}`.toLowerCase().includes(term));
 
   const pendingPage = usePaged(pendingEntries);
   const servicePage = usePaged(services);
   const productPage = usePaged(products);
   const planPage = usePaged(plans);
+  const membershipPage = usePaged(membershipPlans);
 
   const scheduleItem = scheduleIndex !== null ? cart.items[scheduleIndex] ?? null : null;
   const schedulePlan = scheduleItem ? (board?.packages ?? []).find((p) => p.id === scheduleItem.id) ?? null : null;
@@ -219,6 +289,28 @@ export default function PointOfSale() {
     setCouponInput('');
     setCouponError('');
     setNotice(message);
+    setNextVisit(null);
+  };
+
+  const addGiftCard = () => {
+    const amount = Number(giftForm.amount || 0);
+    const email = giftForm.email.trim();
+    if (amount < 1) {
+      setGiftError('Escribe el monto de la gift card (desde 1).');
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setGiftError('Escribe un correo válido para quien la recibe, o déjalo vacío.');
+      return;
+    }
+    const name = giftForm.name.trim();
+    setGiftError('');
+    setNotice('');
+    setCart((current) => ({
+      ...current,
+      items: [...current.items, { type: 'gift_card', id: newLineId(), quantity: 1, label: name ? `Gift card para ${name}` : 'Gift card', unit_price: amount, gift: { amount, recipient_name: name || null, recipient_email: email || null } }],
+    }));
+    setGiftForm({ amount: '', name: '', email: '' });
   };
 
   const addItem = (item: CartItem, customer?: PickedCustomer | null) => {
@@ -263,6 +355,17 @@ export default function PointOfSale() {
       if (cart.customer) { setScheduleInitial(null); setScheduleIndex(index); }
       else setNotice(`Elige al cliente y luego pulsa "Agendar sesiones" en el carrito: ${plan.name} se agenda al venderlo.`);
     }
+  };
+
+  const addMembership = (planId: string) => {
+    const plan = (board?.memberships ?? []).find((p) => p.id === planId);
+    if (!plan) return;
+    if (cart.items.some((i) => i.type === 'membership')) {
+      setNotice('Una venta lleva una sola membresía.');
+      return;
+    }
+    setNotice(cart.customer ? '' : `Elige al cliente: ${plan.name} queda a su nombre.`);
+    setCart((current) => ({ ...current, items: [...current.items, { type: 'membership', id: plan.id, quantity: 1, label: plan.name, unit_price: plan.price }] }));
   };
 
   const saveSchedule = (details: ScheduleDetails) => {
@@ -313,6 +416,11 @@ export default function PointOfSale() {
       setError('');
       const res = cart.saleId ? await api.put(`/pos/sales/${cart.saleId}`, payload()) : await api.post('/pos/sales', payload());
       const loaded: LoadedCart = res.data.cart;
+      if (res.data.sale?.status === 'paid') {
+        resetCart(`Venta ${loaded.code} registrada sin cobro: lo cubrió la membresía.`);
+        load(branchId);
+        return null;
+      }
       setCart((current) => ({ ...current, saleId: loaded.sale_id, code: loaded.code, editBlocked: loaded.edit_blocked }));
       return loaded.sale_id;
     } catch (err) {
@@ -343,10 +451,14 @@ export default function PointOfSale() {
     const paid = charged?.sale?.status === 'paid';
     const code = charged?.sale?.code ?? cart.code;
     const sold = (charged?.packages ?? []).map((p) => `${p.code} (${p.name})${p.created.length ? `: ${sessionsLabel(p.created.length)} agendadas` : ''}${p.failed.length ? `; ${p.failed.length} no se pudieron agendar porque el horario se ocupó, agéndalas desde el paquete` : ''}`);
+    const members = (charged?.memberships ?? []).map((m) => `${m.renewed ? 'Se renovó' : 'Quedó activa'} la membresía ${m.code} (${m.name}) hasta el ${shortDate(m.ends_at)}.${m.replaced ? ` La membresía ${m.replaced} quedó cancelada por el cambio de plan.` : ''}`);
+    const gifts = (charged?.gift_cards ?? []).map((g) => `${g.code} por ${money(g.amount, charged?.sale?.currency)}${g.recipient_name ? ` para ${g.recipient_name}` : ''}`);
+    const visit = paid ? charged?.next_visit ?? null : null;
     setCharging(null);
     setCharged(null);
     if (paid) {
-      resetCart(`Venta ${code} cobrada.${sold.length ? ` Paquete ${sold.join(' · ')}. Lo ves en Paquetes y en la página del cliente.` : ''}`);
+      resetCart(`Venta ${code} cobrada.${sold.length ? ` Paquete ${sold.join(' · ')}. Lo ves en Paquetes y en la página del cliente.` : ''}${members.length ? ` ${members.join(' ')}` : ''}${gifts.length ? ` Gift card activa: ${gifts.join(' · ')}. Entrega el código a quien la recibe.` : ''}`);
+      setNextVisit(visit);
     } else {
       setNotice(`La venta ${code ?? ''} quedó por cobrar. Puedes cobrarla ahora o después, desde "Por cobrar".`);
     }
@@ -376,6 +488,8 @@ export default function PointOfSale() {
     return { item, index, line };
   });
   const totals = preview?.totals;
+  const membershipSaving = (preview?.lines ?? []).reduce((sum, l) => sum + (l.discount ?? 0), 0);
+  const coveredFree = Boolean(totals && totals.total <= 0 && membershipSaving > 0);
   const lineCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
   const canSave = cart.saleId ? Boolean(can?.edit) : Boolean(can?.create);
   const ready = cart.items.length > 0 && Boolean(totals) && !previewError && !previewing;
@@ -386,6 +500,8 @@ export default function PointOfSale() {
     { id: 'services', label: 'Servicios' },
     ...(board?.products_ready ? [{ id: 'products' as Tab, label: 'Productos' }] : []),
     ...(board?.packages_enabled ? [{ id: 'packages' as Tab, label: 'Paquetes' }] : []),
+    ...(board?.memberships_enabled ? [{ id: 'memberships' as Tab, label: 'Membresías' }] : []),
+    ...(board?.gift_cards_enabled ? [{ id: 'gift_cards' as Tab, label: 'Gift cards' }] : []),
   ];
 
   return (
@@ -419,6 +535,21 @@ export default function PointOfSale() {
       <ErrorAlert message={error} />
       <SuccessAlert message={notice} />
 
+      {nextVisit && cart.items.length === 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-soft bg-brand-soft/10 px-4 py-3" data-next-visit>
+          <span className="flex items-center gap-2 text-sm text-brand-ink">
+            <CalendarPlus size={16} className="text-brand-accent shrink-0" />
+            <span>¿Quiere volver? Agenda su próxima cita de <strong>{nextVisit.service_name}</strong> sin volver a buscar sus datos.</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setNextVisit(null)} className="px-3 py-2 text-sm font-medium text-slate-600 rounded-lg hover:bg-white transition-colors">Ahora no</button>
+            <Link href={nextVisitUrl(nextVisit)} data-next-visit-link className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors">
+              <CalendarPlus size={15} /> Agendar la próxima cita
+            </Link>
+          </div>
+        </div>
+      )}
+
       {board && !branchId && (
         <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Tu empresa aún no tiene una sucursal activa donde vender.</p>
       )}
@@ -442,11 +573,11 @@ export default function PointOfSale() {
                 </button>
               ))}
             </div>
-            <div className="relative w-full sm:w-64">
+            <div className={`relative w-full sm:w-64 ${tab === 'gift_cards' ? 'hidden' : ''}`}>
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 aria-label="Buscar en el catálogo"
-                placeholder={tab === 'pending' ? 'Cliente, cita o venta' : tab === 'services' ? 'Buscar servicio' : tab === 'packages' ? 'Buscar paquete' : 'Nombre o código'}
+                placeholder={tab === 'pending' ? 'Cliente, cita o venta' : tab === 'services' ? 'Buscar servicio' : tab === 'packages' ? 'Buscar paquete' : tab === 'memberships' ? 'Buscar membresía' : 'Nombre o código'}
                 className={`${inputClass} pl-9`}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -632,6 +763,64 @@ export default function PointOfSale() {
               {planPage.pages > 1 && <Pager page={planPage.page} pages={planPage.pages} onChange={planPage.setPage} />}
             </>
           )}
+
+          {tab === 'memberships' && (
+            <>
+              {membershipPlans.length === 0 ? (
+                <p className="text-sm text-slate-500 py-6 text-center">
+                  {term ? 'Ninguna membresía coincide.' : 'Aún no tienes planes de membresía a la venta.'}
+                  {!term && <> <Link href="/memberships" className="font-semibold text-brand-accent underline underline-offset-2">Créalos en Membresías → Planes</Link>.</>}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-memberships-catalog>
+                  {membershipPage.rows.map((plan) => (
+                    <article key={plan.id} className={tileClass} data-membership-plan={plan.name}>
+                      <span className="flex items-center gap-1.5 text-sm font-bold text-brand-ink"><BadgeCheck size={14} className="text-brand-accent shrink-0" /> {plan.name}</span>
+                      <span className="text-xs text-slate-500">{plan.benefits_text}</span>
+                      <div className="flex items-center justify-between gap-2 mt-auto">
+                        <span className="block text-sm font-black text-brand-ink tabular-nums">{money(plan.price, plan.currency)} <span className="text-xs font-semibold text-slate-500">{plan.per_label}</span></span>
+                        <button type="button" data-add-membership={plan.name} disabled={!!cart.editBlocked} onClick={() => addMembership(plan.id)} className={addButton.replace('mt-auto self-start ', '')}>
+                          <Plus size={13} /> Agregar
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {membershipPage.pages > 1 && <Pager page={membershipPage.page} pages={membershipPage.pages} onChange={membershipPage.setPage} />}
+            </>
+          )}
+
+          {tab === 'gift_cards' && (
+            <form
+              className="rounded-2xl border border-slate-200/80 bg-white p-4 space-y-4 max-w-xl"
+              data-gift-card-form
+              onSubmit={(e) => { e.preventDefault(); addGiftCard(); }}
+            >
+              <div>
+                <span className="flex items-center gap-1.5 text-sm font-bold text-brand-ink"><Gift size={15} className="text-brand-accent" /> Vender una gift card</span>
+                <p className="text-xs text-slate-500 mt-1">Se cobra como cualquier venta, con su comprobante. El código se crea y se activa cuando la venta queda pagada.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass} htmlFor="gift-amount">Monto *</label>
+                  <input id="gift-amount" inputMode="decimal" className={inputClass} placeholder="Ej. 100" value={giftForm.amount} onChange={(e) => { setGiftForm({ ...giftForm, amount: e.target.value.replace(/[^\d.]/g, '').slice(0, 9) }); setGiftError(''); }} />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="gift-name">Para quién (opcional)</label>
+                  <input id="gift-name" maxLength={150} className={inputClass} placeholder="Nombre de quien la recibe" value={giftForm.name} onChange={(e) => setGiftForm({ ...giftForm, name: e.target.value })} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass} htmlFor="gift-email">Correo de quien la recibe (opcional)</label>
+                  <input id="gift-email" maxLength={250} inputMode="email" className={inputClass} value={giftForm.email} onChange={(e) => { setGiftForm({ ...giftForm, email: e.target.value }); setGiftError(''); }} />
+                </div>
+              </div>
+              {giftError && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{giftError}</p>}
+              <button type="submit" data-add-gift-card disabled={!!cart.editBlocked} className={addButton}>
+                <Plus size={13} /> Agregar al carrito
+              </button>
+            </form>
+          )}
         </section>
 
         {cart.items.length > 0 && (
@@ -673,6 +862,14 @@ export default function PointOfSale() {
           />
           {!cart.customer && <p className="-mt-3 text-xs text-slate-400">Opcional: sin cliente, la boleta sale a nombre de &quot;Cliente varios&quot;.</p>}
 
+          {preview?.membership && cart.customer && (
+            <div className="-mt-2 rounded-xl border border-brand-soft bg-brand-soft/10 px-3.5 py-2.5 text-xs text-brand-ink space-y-0.5" data-cart-membership>
+              <span className="flex items-center gap-1.5 text-sm font-bold"><BadgeCheck size={14} className="text-brand-accent" /> {preview.membership.name} <span className="font-mono text-xs font-semibold text-slate-500">{preview.membership.code}</span></span>
+              <span className="block text-slate-600">{preview.membership.benefits_text} · {preview.membership.status === 'grace' ? `venció el ${shortDate(preview.membership.ends_at)}, en gracia hasta el ${shortDate(preview.membership.grace_until ?? null)}` : `vigente hasta el ${shortDate(preview.membership.ends_at)}`}</span>
+              {preview.membership.included.length > 0 && <span className="block text-slate-600">Este periodo: {includedLeftText(preview.membership.included)}</span>}
+            </div>
+          )}
+
           <div className="space-y-2" data-cart-lines>
             {cart.items.length === 0 ? (
               <p className="text-sm text-slate-400 border border-dashed border-slate-200 rounded-xl px-4 py-6 text-center">
@@ -686,6 +883,10 @@ export default function PointOfSale() {
                     <span className="block text-xs text-slate-500">
                       {item.type === 'appointment'
                         ? <>Cita {line?.appointment?.code ?? ''}{line?.appointment ? ` · ${line.appointment.starts_at.slice(11)}` : ''}{line?.professional ? <> · <ProfessionalLink id={line.professional.id}>{line.professional.name}</ProfessionalLink></> : ''}</>
+                        : item.type === 'membership'
+                          ? `Membresía${line?.membership_plan ? ` · ${line.membership_plan.period_label} · ${line.membership_plan.benefits_text}` : ''}${line?.membership_plan?.replaces ? `. Reemplaza a ${line.membership_plan.replaces.code} (${line.membership_plan.replaces.name}), que deja de valer desde hoy` : ''}`
+                        : item.type === 'gift_card'
+                          ? `Gift card · se activa al pagar${item.gift?.recipient_email ? ` · ${item.gift.recipient_email}` : ''}`
                         : item.type === 'package'
                           ? (() => {
                             const plan = (board?.packages ?? []).find((p) => p.id === item.id);
@@ -697,9 +898,19 @@ export default function PointOfSale() {
                     </span>
                   </div>
                   <div className="text-right shrink-0">
+                    {(line?.discount ?? 0) > 0 && <span className="block text-xs text-slate-400 line-through tabular-nums">{money((line?.total ?? 0) + (line?.discount ?? 0), currency)}</span>}
                     <span className="block text-sm font-bold text-slate-800 tabular-nums">{money(line?.total ?? item.unit_price * item.quantity, currency)}</span>
                   </div>
                 </div>
+
+                {preview?.membership && (item.type === 'service' || item.type === 'appointment' || (item.type === 'product' && preview.membership.discount_scope === 'all')) && !cart.editBlocked && (line?.membership || item.no_membership) && (
+                  <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs ${item.no_membership ? 'bg-slate-50 text-slate-600' : 'bg-emerald-50 text-emerald-800'}`} data-line-membership>
+                    <span className="flex items-center gap-1.5 font-semibold"><BadgeCheck size={13} /> {item.no_membership ? 'Se cobra sin la membresía' : line?.membership?.label}</span>
+                    <button type="button" data-toggle-membership onClick={() => changeItem(index, { no_membership: !item.no_membership })} className="font-bold underline underline-offset-2">
+                      {item.no_membership ? 'Aplicar membresía' : 'Cobrar sin membresía'}
+                    </button>
+                  </div>
+                )}
 
                 {item.type === 'package' && (board?.packages ?? []).find((p) => p.id === item.id)?.booking_mode === 'scheduled' && (
                   <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs ${item.details?.slots.length ? 'bg-brand-soft/15 text-brand-ink' : 'bg-amber-50 text-amber-800'}`} data-package-schedule>
@@ -717,7 +928,7 @@ export default function PointOfSale() {
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {item.type !== 'appointment' && item.type !== 'package' && (
+                  {item.type !== 'appointment' && item.type !== 'package' && item.type !== 'membership' && item.type !== 'gift_card' && (
                     <div className="flex items-center gap-1.5" data-quantity>
                       <button type="button" aria-label="Uno menos" data-qty-minus disabled={item.quantity <= 1 || !!cart.editBlocked} onClick={() => changeItem(index, { quantity: item.quantity - 1 })} className={stepButton}><Minus size={13} /></button>
                       <span className="w-7 text-center text-sm font-semibold tabular-nums" data-qty>{item.quantity}</span>
@@ -786,6 +997,9 @@ export default function PointOfSale() {
           {cart.items.length > 0 && (
             <div className="space-y-1.5 text-sm border-t border-dashed border-slate-200 pt-4" data-cart-totals>
               <div className="flex justify-between text-slate-500"><span>{lineCount} {lineCount === 1 ? 'ítem' : 'ítems'}</span><span className="tabular-nums">{totals ? money(totals.subtotal, totals.currency) : '—'}</span></div>
+              {membershipSaving > 0 && (
+                <div className="flex justify-between text-emerald-700" data-membership-saving><span>Ya descontado por membresía</span><span className="tabular-nums">{money(membershipSaving, totals?.currency ?? currency)}</span></div>
+              )}
               {totals && totals.discount > 0 && (
                 <div className="flex justify-between text-emerald-700"><span>Cupón {cart.coupon}</span><span className="tabular-nums">− {money(totals.discount, totals.currency)}</span></div>
               )}
@@ -806,14 +1020,14 @@ export default function PointOfSale() {
 
           {cart.items.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              {!cart.editBlocked && canSave && (
+              {!cart.editBlocked && canSave && !coveredFree && (
                 <button type="button" data-leave-pending disabled={!ready || saving} onClick={leavePending} className="px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">
                   {cart.saleId ? 'Guardar cambios' : 'Dejar por cobrar'}
                 </button>
               )}
               {can?.charge && (canSave || cart.editBlocked) && (
                 <button type="button" data-charge-cart disabled={!ready || saving} onClick={charge} className="flex-1 px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
-                  {saving ? 'Guardando...' : `Cobrar ${totals ? money(totals.total, totals.currency) : ''}`}
+                  {saving ? 'Guardando...' : coveredFree ? 'Registrar (lo cubre la membresía)' : `Cobrar ${totals ? money(totals.total, totals.currency) : ''}`}
                 </button>
               )}
             </div>

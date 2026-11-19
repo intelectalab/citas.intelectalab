@@ -9,6 +9,7 @@ import { Plus, UserPlus } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
+import Switch from '@/app/components/common/Switch';
 import SignatureField, { saveSignature, type SignatureChange } from './SignatureField';
 
 interface Professional {
@@ -20,6 +21,8 @@ interface Professional {
   signature_url?: string | null;
   phone?: string;
   commission_percent?: string | number | null;
+  goal_month?: string | number | null;
+  online_booking?: boolean;
   status_id?: string;
   first_name?: string;
   last_name?: string;
@@ -62,6 +65,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     license_number: '',
     phone: '',
     commission_percent: '',
+    goal_month: '',
+    online_booking: true,
     status_id: '',
     specialties: [] as string[],
   });
@@ -127,6 +132,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         license_number: initialData.license_number || '',
         phone: initialData.phone || '',
         commission_percent: initialData.commission_percent === null || initialData.commission_percent === undefined ? '' : String(Number(initialData.commission_percent)),
+        goal_month: initialData.goal_month === null || initialData.goal_month === undefined ? '' : String(Number(initialData.goal_month)),
+        online_booking: initialData.online_booking !== false,
         status_id: initialData.status_id || '',
         specialties: initialData.specialties ? initialData.specialties.map((s: any) => s.id) : [],
       });
@@ -141,6 +148,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         license_number: '',
         phone: '',
         commission_percent: '',
+        goal_month: '',
+        online_booking: true,
         status_id: '',
         specialties: [],
       });
@@ -162,7 +171,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         document_number: form.document_number || null,
         ...(usesLicense ? { license_number: form.license_number || null } : {}),
         phone: form.phone || null,
-        ...(usesCommission ? { commission_percent: form.commission_percent === '' ? null : Number(form.commission_percent) } : {}),
+        ...(usesCommission ? { commission_percent: form.commission_percent === '' ? null : Number(form.commission_percent), goal_month: form.goal_month === '' ? null : Number(form.goal_month) } : {}),
+        ...(hasModule('booking') ? { online_booking: form.online_booking } : {}),
         status_id: form.status_id || null,
         specialties: form.specialties,
       };
@@ -259,6 +269,31 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
                 onChange={e => { const v = e.target.value.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 6); setForm({...form, commission_percent: Number(v) > 100 ? '100' : v}); }}
               />
               <span className="text-[10px] text-slate-400 mt-1 block">Lo que gana por los servicios que atiende y que no tienen una regla de comisión. Las reglas están en Comisiones → Reglas.</span>
+            </div>
+          )}
+
+          {usesCommission && (
+            <div>
+              <label htmlFor="pro-goal" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Meta del mes</label>
+              <input
+                id="pro-goal"
+                inputMode="decimal"
+                placeholder="Sin meta"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800"
+                value={form.goal_month}
+                onChange={e => setForm({...form, goal_month: e.target.value.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 11)})}
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">Cuánto debería producir en el mes (servicios y productos que vende). Se ve con su avance en su página.</span>
+            </div>
+          )}
+
+          {hasModule('booking') && (
+            <div className="flex items-start gap-3" data-field="online_booking">
+              <Switch checked={form.online_booking} onChange={(checked) => setForm({ ...form, online_booking: checked })} label="Aparece en la reserva en línea" />
+              <span className="text-sm text-slate-700">
+                Aparece en la reserva en línea
+                <span className="block text-[10px] text-slate-400">Si lo apagas, los clientes no lo ven en la página de reservas ni en el portal. El personal sí puede agendarle.</span>
+              </span>
             </div>
           )}
 

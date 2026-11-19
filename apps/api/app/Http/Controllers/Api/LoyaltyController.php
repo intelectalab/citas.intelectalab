@@ -30,6 +30,7 @@ class LoyaltyController extends Controller
         $tenant = $this->tenant($request);
         $user = $request->user();
         Loyalty::expireDue($tenant->id);
+        Loyalty::expirePointsDue($tenant->id);
 
         $rules = Loyalty::rules($tenant);
         $iso = fn ($value) => $value ? Carbon::parse($value)->toIso8601String() : null;
@@ -106,9 +107,14 @@ class LoyaltyController extends Controller
                 's.code as sale_code',
                 'u.first_name as user_first_name',
                 'u.last_name as user_last_name',
-            ])
+            ]);
+
+        $lots = Loyalty::lotStates($tenant->id, $pointMovements->where('points', '>', 0)->pluck('customer_id')->all());
+
+        $pointMovements = $pointMovements
             ->map(fn ($m) => [
                 'id'                => $m->id,
+                'expired_points'    => (int) ($lots[$m->id]['expired'] ?? 0),
                 'customer_id'       => $m->customer_id,
                 'customer_name'     => trim(($m->customer_first_name ?? '') . ' ' . ($m->customer_last_name ?? '')),
                 'customer_document' => $m->customer_document,

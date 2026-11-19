@@ -48,7 +48,14 @@ import {
   CreditCard,
   Palette,
   Percent,
-  LucideIcon
+  FileCheck2,
+  LucideIcon,
+  BookOpenText,
+  LifeBuoy,
+  HeartPulse,
+  Filter,
+  Globe,
+  Newspaper,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -63,7 +70,7 @@ export interface MenuItem {
   perm?: string;
   saasAdminOnly?: boolean;
   tenantOnly?: boolean;
-  badge?: 'platform_transfers';
+  badge?: 'platform_transfers' | 'payment_vouchers';
 }
 
 export interface MenuGroup {
@@ -95,11 +102,20 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     requireAdmin: true,
     items: [
       { name: 'Tenants', href: '/admin/tenants', icon: Building2 },
+      { name: 'Soporte', href: '/admin/support', icon: LifeBuoy },
+      { name: 'Salud de las empresas', href: '/admin/health', icon: HeartPulse },
       { name: 'Cobros', href: '/admin/cobros', icon: Wallet, saasAdminOnly: true, badge: 'platform_transfers' },
       { name: 'Reportes', href: '/admin/reports', icon: ChartColumn, saasAdminOnly: true },
       { name: 'Planes SaaS', href: '/admin/plans', icon: Ticket, saasAdminOnly: true },
       { name: 'Plantillas de rubros', href: '/admin/business-types', icon: Layers, saasAdminOnly: true },
+      { name: 'Anuncios', href: '/admin/announcements', icon: Megaphone, saasAdminOnly: true },
+      { name: 'Recomienda y gana', href: '/admin/referrals', icon: Gift, saasAdminOnly: true },
+      { name: 'Embudo e interesados', href: '/admin/funnel', icon: Filter, saasAdminOnly: true },
+      { name: 'Cupones de planes', href: '/admin/plan-coupons', icon: TicketPercent, saasAdminOnly: true },
+      { name: 'Sitio web', href: '/admin/site', icon: Globe, saasAdminOnly: true },
+      { name: 'Blog', href: '/admin/blog', icon: Newspaper, saasAdminOnly: true },
       { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },
+      { name: 'Libro de Reclamaciones', href: '/admin/complaints', icon: BookOpenText, saasAdminOnly: true },
       { name: 'Auditoría', href: '/admin/audit', icon: History, saasAdminOnly: true },
     ]
   },
@@ -113,7 +129,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
       { name: 'Cola sin cita', href: '/walkin', icon: ListOrdered, module: 'walkin', perm: 'walkin.view' },
       { name: 'Lista de espera', href: '/waitlist', icon: Hourglass, module: 'agenda', perm: 'waitlist.view' },
       { name: 'Controles y seguimiento', href: '/recalls', icon: Repeat, module: 'agenda', perm: 'recalls.view' },
-      { name: 'Clases', href: '/modules/classes', icon: CalendarClock, module: 'classes', perm: 'classes.view' },
+      { name: 'Clases', href: '/classes', icon: CalendarClock, module: 'classes', perm: 'classes.view' },
       { name: 'Bloqueos y ausencias', href: '/blocks', icon: CalendarOff, module: 'agenda', perm: 'blocks.view' },
       { name: 'Tiempos de atención', href: '/attention-times', icon: Timer, module: 'agenda', perm: 'attention.view' },
     ]
@@ -146,7 +162,9 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     items: [
       { name: 'Punto de venta', href: '/pos', icon: ShoppingCart, module: 'pos', perm: 'pos.view' },
       { name: 'Ventas', href: '/sales', icon: Receipt, module: 'pos', perm: 'sales.view' },
+      { name: 'Boletas y facturas', href: '/invoices', icon: FileText, module: 'pos', perm: 'sales.view' },
       { name: 'Pagos', href: '/payments', icon: Coins, module: 'pos', perm: 'payments.view' },
+      { name: 'Comprobantes', href: '/payments/vouchers', icon: FileCheck2, module: 'pos', perm: 'payments.review', badge: 'payment_vouchers' },
       { name: 'Caja', href: '/cash', icon: Wallet, module: 'pos', perm: 'cash.view' },
       { name: 'Comisiones', href: '/commissions', icon: Percent, module: 'commissions', perm: 'commissions.view' },
     ]
@@ -167,7 +185,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     groupName: 'Fidelización',
     groupIcon: Gift,
     items: [
-      { name: 'Membresías', href: '/modules/memberships', icon: BadgeCheck, module: 'memberships', requireAdmin: true },
+      { name: 'Membresías', href: '/memberships', icon: BadgeCheck, module: 'memberships', perm: 'memberships.view' },
       { name: 'Paquetes', href: '/packages', icon: Boxes, module: 'packages', perm: 'packages.view' },
       { name: 'Puntos', href: '/loyalty/points', icon: Sparkles, module: 'loyalty', perm: 'loyalty.view' },
       { name: 'Gift cards', href: '/loyalty/gift-cards', icon: CreditCard, module: 'loyalty', perm: 'loyalty.view' },
@@ -191,8 +209,10 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     items: [
       { name: 'Sucursales', href: '/branches', icon: Store, perm: 'branches.view' },
       { name: 'Empresa', href: '/companies', icon: Building2, perm: 'company.view' },
+      { name: 'Libro de Reclamaciones', href: '/complaints', icon: BookOpenText, perm: 'complaints.view' },
       { name: 'Usuarios y roles', href: '/users', icon: UserCog, perm: 'users.view' },
       { name: 'Auditoría', href: '/audit', icon: History, perm: 'audit.view' },
+      { name: 'Soporte', href: '/support', icon: LifeBuoy, tenantOnly: true },
     ]
   }
 ];

@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class Cart
 {
-    public const TYPES = ['appointment', 'service', 'product', 'package'];
+    public const TYPES = ['appointment', 'service', 'product', 'package', 'membership', 'gift_card'];
 
     public const SELLABLE = ['retail', 'both'];
 
@@ -77,6 +77,7 @@ class Cart
 
         $lines = [];
         $seen = [];
+        $memberships = [];
 
         foreach ($items as $index => $item) {
             $type = $item['type'] ?? null;
@@ -150,6 +151,7 @@ class Cart
                     'professional_id' => $appointment->professional_id,
                     'professional'    => $appointment->professional?->display_name,
                     'appointment_id'  => $appointment->id,
+                    'no_membership'   => !empty($item['no_membership']),
                     'appointment'     => [
                         'code'      => $code,
                         'starts_at' => $appointment->starts_at->copy()->setTimezone($timezone)->format('Y-m-d\TH:i'),
@@ -196,6 +198,7 @@ class Cart
                     'professional_id' => $professional?->id,
                     'professional'    => $professional?->display_name,
                     'appointment_id'  => null,
+                    'no_membership'   => !empty($item['no_membership']),
                     'appointment'     => null,
                 ];
 
@@ -204,6 +207,23 @@ class Cart
 
             if ($type === 'package') {
                 $lines[] = self::packageLine($tenant, $item, $field, $currency);
+
+                continue;
+            }
+
+            if ($type === 'gift_card') {
+                $lines[] = Loyalty::giftCardLine($tenant, $item, $field, $currency);
+
+                continue;
+            }
+
+            if ($type === 'membership') {
+                if ($memberships) {
+                    self::fail($field, 'Una venta lleva una sola membresía.');
+                }
+
+                $memberships[] = [count($lines), $item, $field];
+                $lines[] = null;
 
                 continue;
             }
@@ -247,11 +267,21 @@ class Cart
                 'professional_id' => $seller?->id,
                 'professional'    => $seller?->display_name,
                 'appointment_id'  => null,
+                'no_membership'   => !empty($item['no_membership']),
                 'appointment'     => null,
             ];
         }
 
+        foreach ($memberships as [$position, $item, $field]) {
+            if (!$customer) {
+                self::fail('customer_id', 'Elige al cliente: la membresía queda a su nombre.');
+            }
+
+            $lines[$position] = Memberships::line($tenant, $customer, $item, $field, $currency);
+        }
+
         foreach ($lines as &$line) {
+            $line['discount'] = 0.0;
             $line['total'] = round($line['unit_price'] * $line['quantity'], 2);
         }
         unset($line);
@@ -260,16 +290,18 @@ class Cart
             self::fail('customer_id', 'Elige al cliente: el paquete queda a su nombre.');
         }
 
+        $membership = Memberships::apply($tenant, $customer, $lines, $sale?->id);
+
         Inventory::assertStockForItems($tenant, $branch->id, $lines);
 
         $gross = round(array_sum(array_column($lines, 'total')), 2);
 
-        if ($gross <= 0) {
+        if ($gross <= 0 && !Memberships::covered($lines)) {
             self::fail('items', 'El carrito no tiene nada por cobrar: todo lo que lleva tiene precio cero.');
         }
 
         $code = trim((string) ($input['coupon_code'] ?? ''));
-        $applied = $code !== '' ? Coupons::check($tenant->id, $code, $gross, $currency) : null;
+        $applied = $code !== '' && $gross > 0 ? Coupons::check($tenant->id, $code, $gross, $currency) : null;
         $rules = Sales::rules($tenant);
 
         return [
@@ -279,6 +311,7 @@ class Cart
             'lines'    => $lines,
             'gross'    => $gross,
             'applied'  => $applied,
+            'membership' => $membership,
             'totals'   => Sales::totals($rules, $gross, $applied['discount'] ?? 0) + [
                 'tax_rate'           => $rules['tax_rate'],
                 'prices_include_tax' => $rules['prices_include_tax'],
@@ -362,13 +395,21 @@ class Cart
             $details['plan'] = $line['snapshot'];
         }
 
+        if (!empty($line['membership'])) {
+            $details['membership'] = $line['membership'];
+        }
+
+        if (!empty($line['no_membership'])) {
+            $details['no_membership'] = true;
+        }
+
         return $details ? json_encode($details) : null;
     }
 
     private static function shownDetails(?string $raw): ?array
     {
         $details = $raw ? (json_decode($raw, true) ?: []) : [];
-        unset($details['plan']);
+        unset($details['plan'], $details['membership'], $details['no_membership'], $details['issued'], $details['extended_from'], $details['replaced'], $details['replaced_status'], $details['extended_status']);
 
         return $details ?: null;
     }
@@ -386,13 +427,18 @@ class Cart
                 'description'  => $line['description'],
                 'quantity'     => $line['quantity'],
                 'unit_price'   => $line['unit_price'],
+                'discount'     => $line['discount'] ?? 0,
                 'total'        => $line['total'],
+                'membership'   => isset($line['membership']) ? ['code' => $line['membership']['code'], 'included' => $line['membership']['included'], 'label' => $line['membership']['label']] : null,
+                'membership_plan' => $line['membership_plan'] ?? null,
+                'no_membership' => !empty($line['no_membership']),
                 'professional' => $line['professional_id'] ? ['id' => $line['professional_id'], 'name' => $line['professional']] : null,
                 'appointment'  => $line['appointment'],
                 'details'      => $line['details'] ?? null,
                 'package'      => $line['package'] ?? null,
             ], $resolved['lines']),
             'totals'    => $resolved['totals'],
+            'membership' => $resolved['membership'] ?? null,
             'coupon'    => $resolved['applied'] ? Coupons::summary($resolved['applied']['coupon'], $resolved['applied']['discount'], $resolved['currency']) : null,
         ];
     }
@@ -491,7 +537,7 @@ class Cart
                 'description'     => $line['description'],
                 'quantity'        => $line['quantity'],
                 'unit_price'      => $line['unit_price'],
-                'discount'        => 0,
+                'discount'        => $line['discount'] ?? 0,
                 'total'           => $line['total'],
                 'professional_id' => $line['professional_id'],
                 'appointment_id'  => $line['appointment_id'],
@@ -499,6 +545,16 @@ class Cart
 
             if ($resolved['applied']) {
                 Coupons::redeem($resolved['applied']['coupon'], $id, $resolved['customer']?->id, $resolved['applied']['discount']);
+            }
+
+            Memberships::recordUsages($tenant, $id, $resolved['lines']);
+
+            if ((float) $totals['total'] <= 0 && Memberships::covered($resolved['lines'])) {
+                DB::table('sales')->where('id', $id)->update(['status' => 'paid', 'balance' => 0, 'paid_at' => now(), 'updated_at' => now()]);
+                $paid = DB::table('sales')->where('id', $id)->first();
+                Inventory::deductForSale($tenant, $paid, $user);
+                Commissions::forSale($tenant, $paid);
+                Webhooks::salePaid($tenant->id, $paid);
             }
 
             return DB::table('sales')->where('id', $id)->first();
@@ -537,9 +593,10 @@ class Cart
             'edit_blocked' => self::editBlocked($sale),
             'items'        => DB::table('sale_items')->where('sale_id', $sale->id)->when(Schema::hasColumn('sale_items', 'position'), fn ($q) => $q->orderBy('position'))->get()->map(fn ($i) => [
                 'type'            => $i->appointment_id ? 'appointment' : $i->item_type,
-                'id'              => $i->appointment_id ?? $i->reference_id,
+                'id'              => $i->appointment_id ?? ($i->item_type === 'gift_card' ? $i->id : $i->reference_id),
                 'quantity'        => (int) round((float) $i->quantity),
                 'professional_id' => $i->appointment_id ? null : $i->professional_id,
+                'no_membership'   => (bool) ((json_decode((string) ($i->details ?? ''), true) ?: [])['no_membership'] ?? false),
                 'details'         => self::shownDetails($i->details ?? null),
             ])->values(),
         ];

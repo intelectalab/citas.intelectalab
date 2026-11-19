@@ -21,9 +21,10 @@ interface CustomerMessagesProps {
   consents: Consents | null;
   canView: boolean;
   canEditConsents: boolean;
+  onConsentsChanged?: () => void;
 }
 
-export default function CustomerMessages({ customer, consents: initial, canView, canEditConsents }: CustomerMessagesProps) {
+export default function CustomerMessages({ customer, consents: initial, canView, canEditConsents, onConsentsChanged }: CustomerMessagesProps) {
   const [board, setBoard] = useState<MessagesBoard | null>(null);
   const [consents, setConsents] = useState<Consents | null>(initial);
   const [composing, setComposing] = useState(false);
@@ -43,7 +44,7 @@ export default function CustomerMessages({ customer, consents: initial, canView,
   const toggle = (channel: 'email' | 'whatsapp', granted: boolean) => {
     setError('');
     api.put(`/customers/${customer.id}/consents`, { [channel]: granted })
-      .then((res) => setConsents(res.data.consents))
+      .then((res) => { setConsents(res.data.consents); onConsentsChanged?.(); })
       .catch((err) => setError(apiError(err, 'No se pudo guardar.')));
   };
 

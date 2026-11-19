@@ -13,8 +13,12 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->tenant_id || !Notifier::available()) {
+        if ((!$user->tenant_id && !$user->isPlatformUser()) || !Notifier::available()) {
             return response()->json(['unread' => 0, 'total' => 0, 'items' => []]);
+        }
+
+        if (!$user->tenant_id && \Illuminate\Support\Facades\Cache::add('complaint-notices:platform', 1, 900)) {
+            \App\Support\Complaints::notices(null);
         }
 
         $validated = $request->validate([
@@ -26,14 +30,16 @@ class NotificationController extends Controller
             Notifier::upcomingAbsences($user->tenant);
             \App\Support\DueNotices::run($user->tenant);
             \App\Support\Confirmations::process($user->tenant);
+            \App\Support\Waitlist::advance($user->tenant);
             \App\Support\Messaging::generate($user->tenant);
+            \App\Support\Announcements::deliver($user);
 
             if (\App\Support\Messaging::ready() && \App\Support\Messaging::due($user->tenant_id)->exists()) {
                 \App\Support\Messaging::kick($user->tenant_id);
             }
         }
 
-        $mine = fn () => UserNotification::where('tenant_id', $user->tenant_id)->where('user_id', $user->id);
+        $mine = fn () => $this->mine($user);
         $timezone = $user->tenant?->timezone ?: 'America/Lima';
 
         $items = $mine()
@@ -61,12 +67,17 @@ class NotificationController extends Controller
         ]);
     }
 
+    private function mine($user)
+    {
+        return UserNotification::where('user_id', $user->id)
+            ->when($user->tenant_id, fn ($q) => $q->where('tenant_id', $user->tenant_id), fn ($q) => $q->whereNull('tenant_id'));
+    }
+
     public function read(Request $request, string $notification)
     {
         $user = $request->user();
 
-        UserNotification::where('tenant_id', $user->tenant_id)
-            ->where('user_id', $user->id)
+        $this->mine($user)
             ->whereNull('read_at')
             ->findOrFail($notification)
             ->update(['read_at' => now()]);
@@ -78,9 +89,8 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        if ($user->tenant_id && Notifier::available()) {
-            UserNotification::where('tenant_id', $user->tenant_id)
-                ->where('user_id', $user->id)
+        if (($user->tenant_id || $user->isSaasAdmin()) && Notifier::available()) {
+            $this->mine($user)
                 ->whereNull('read_at')
                 ->update(['read_at' => now()]);
         }

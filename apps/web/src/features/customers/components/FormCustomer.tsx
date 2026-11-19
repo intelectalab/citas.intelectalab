@@ -31,6 +31,8 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
   const [error, setError] = useState('');
   const [board, setBoard] = useState<BoardInfo | null>(null);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [professionals, setProfessionals] = useState<{ id: string; display_name: string }[]>([]);
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
   const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -53,13 +55,16 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
     postal_code: '',
     medical_notes: '',
     pipeline_stage_id: AUTO_STAGE,
+    home_branch_id: '',
+    preferred_professional_id: '',
+    alert: '',
   });
 
   const sections = [
     { id: 1, title: '1. Información Personal' },
     { id: 2, title: '2. Identificación' },
     { id: 3, title: '3. Contacto y Ubicación' },
-    { id: 4, title: '4. Observaciones y Estado' },
+    { id: 4, title: '4. Alerta, preferencias y observaciones' },
     ...(usesDependents ? [{ id: 5, title: `5. ${vocab.dependents}` }] : []),
   ];
 
@@ -86,6 +91,9 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
         postal_code: initialData.postal_code || '',
         medical_notes: initialData.medical_notes || '',
         pipeline_stage_id: initialData.stage_manual_at && initialData.pipeline_stage_id ? initialData.pipeline_stage_id : AUTO_STAGE,
+        home_branch_id: initialData.home_branch_id || '',
+        preferred_professional_id: initialData.preferred_professional_id || '',
+        alert: initialData.alert || '',
       });
     } else {
       setForm({
@@ -107,6 +115,9 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
         postal_code: '',
         medical_notes: '',
         pipeline_stage_id: AUTO_STAGE,
+        home_branch_id: '',
+        preferred_professional_id: '',
+        alert: '',
       });
     }
     setPendingDependents([]);
@@ -117,6 +128,17 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
       api.get('/customer-board')
         .then(res => setBoard(res.data?.ready ? res.data : null))
         .catch(() => setBoard(null));
+
+      api.get('/branches')
+        .then((res) => {
+          const list = (Array.isArray(res.data) ? res.data : res.data?.branches ?? []) as { id: string; name: string; status?: string }[];
+          setBranches(list.filter((b) => b.status !== 'inactive').map((b) => ({ id: b.id, name: b.name })));
+        })
+        .catch(() => setBranches([]));
+
+      api.get('/professionals')
+        .then((res) => setProfessionals((Array.isArray(res.data) ? res.data : res.data?.data ?? []).map((p: { id: string; display_name: string }) => ({ id: p.id, display_name: p.display_name }))))
+        .catch(() => setProfessionals([]));
 
       api.get('/type-documents')
         .then(res => {
@@ -298,14 +320,16 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                           </p>
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Teléfono</label>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Celular</label>
                           <input
-                            type="text"
+                            type="tel"
+                            data-field="phone"
                             value={form.phone}
                             onChange={(e) => setForm({ ...form, phone: e.target.value })}
                             className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
-                            placeholder="+51 ..."
+                            placeholder="987 654 321"
                           />
+                          <p className="text-xs text-slate-500 mt-1.5">Escríbelo con o sin +51: se guarda con el código del país y se muestra ordenado.</p>
                         </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Dirección</label>
@@ -362,6 +386,38 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
 
                     {sec.id === 4 && (
                       <div className="space-y-4">
+                        <div data-field="alert">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Alerta</label>
+                          <input
+                            type="text"
+                            maxLength={160}
+                            value={form.alert}
+                            onChange={(e) => setForm({ ...form, alert: e.target.value })}
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                            placeholder={clinical ? 'Ej. Alérgica a la penicilina' : 'Ej. Prefiere que la llamen antes de su cita'}
+                          />
+                          <p className="text-xs text-slate-500 mt-1.5">Un aviso corto que el equipo ve en su página y al agendarle.</p>
+                        </div>
+                        <div data-field="home-branch">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Sede habitual</label>
+                          <Select
+                            ariaLabel="Sede habitual"
+                            placeholder="Sin sede habitual"
+                            value={form.home_branch_id}
+                            onChange={(e) => setForm({ ...form, home_branch_id: String(e.target.value) })}
+                            options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                          />
+                        </div>
+                        <div data-field="preferred-professional">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{vocab.pro} preferido</label>
+                          <Select
+                            ariaLabel={`${vocab.pro} preferido`}
+                            placeholder="Sin preferencia"
+                            value={form.preferred_professional_id}
+                            onChange={(e) => setForm({ ...form, preferred_professional_id: String(e.target.value) })}
+                            options={professionals.map((p) => ({ value: p.id, label: p.display_name }))}
+                          />
+                        </div>
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{clinical ? 'Antecedentes y observaciones' : 'Observaciones'}</label>
                           <textarea

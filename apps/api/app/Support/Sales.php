@@ -59,6 +59,8 @@ class Sales
             'refund_days'        => max(0, (int) AppointmentFlow::rule($tenant, 'pos.refund_days')),
             'pay_before_service' => (bool) AppointmentFlow::rule($tenant, 'pos.pay_before_service'),
             'arrive_minutes'     => max(0, min(240, (int) AppointmentFlow::rule($tenant, 'pos.arrive_minutes'))),
+            'cash_review_over'   => max(0, round((float) AppointmentFlow::rule($tenant, 'cash.review_over'), 2)),
+            'refund_approval_over' => max(0, round((float) AppointmentFlow::rule($tenant, 'pos.refund_approval_over'), 2)),
         ];
     }
 
@@ -293,12 +295,15 @@ class Sales
         if ($isPaid) {
             Invoicing::issue($tenant, $sale, $doc, $user);
             $packages = Packages::issueForSale($tenant, $sale, $user);
+            $memberships = Memberships::issueForSale($tenant, $sale, $user);
+            $giftCards = Loyalty::issueForSale($tenant, $sale, $user);
             Inventory::deductForSale($tenant, $sale, $user);
             Loyalty::earnForSale($tenant, $sale, $user);
             Commissions::forSale($tenant, $sale);
+            Webhooks::salePaid($tenant->id, $sale);
         }
 
-        return ['sale' => $sale, 'duplicate' => false, 'change' => $change, 'packages' => $packages];
+        return ['sale' => $sale, 'duplicate' => false, 'change' => $change, 'packages' => $packages, 'memberships' => $memberships ?? [], 'gift_cards' => $giftCards ?? []];
     }
 
     public static function auditPayment(string $tenantId, object $sale, string $method, float $amount, ?string $reference = null, array $options = []): void

@@ -117,6 +117,8 @@ INSERT INTO saas_plans (
 )
 ON CONFLICT (slug) DO NOTHING;
 
+UPDATE saas_plans SET is_popular = true WHERE slug = 'profesional' AND NOT EXISTS (SELECT 1 FROM saas_plans WHERE is_popular);
+
 INSERT INTO business_types (id, slug, name, short_name, description, icon, color, vocabulary, sort_order) VALUES
   ('b7000000-0000-0000-0000-000000000001', 'salon', 'Salón de belleza y spa', 'Salón y spa', 'Peluquería, color, uñas, faciales y masajes.', 'scissors', '#1F7A63', '{"client":"Cliente","clients":"Clientes","pro":"Estilista","pros":"Equipo"}', 1),
   ('b7000000-0000-0000-0000-000000000002', 'barber', 'Barbería', 'Barbería', 'Cortes y barba con atención por orden de llegada.', 'scissors', '#7A4B1F', '{"client":"Cliente","clients":"Clientes","pro":"Barbero","pros":"Barberos"}', 2),
