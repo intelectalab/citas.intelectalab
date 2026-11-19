@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
 import Select from '@/app/components/common/Select';
@@ -20,6 +20,33 @@ interface BusinessType {
   slug: string;
   name: string;
   description: string | null;
+}
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (element: HTMLElement, options: Record<string, unknown>) => string;
+      reset: (widgetId?: string) => void;
+      remove: (widgetId?: string) => void;
+    };
+  }
+}
+
+const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+
+function loadTurnstile(): Promise<void> {
+  if (window.turnstile) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SRC}"]`);
+    const script = existing ?? document.createElement('script');
+    script.addEventListener('load', () => resolve());
+    script.addEventListener('error', () => reject(new Error('turnstile')));
+    if (!existing) {
+      script.src = TURNSTILE_SRC;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  });
 }
 
 interface RegisterModalProps {
@@ -55,6 +82,49 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
   });
   const [couponText, setCouponText] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [formToken, setFormToken] = useState('');
+  const [siteKey, setSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [trap, setTrap] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const turnstileBox = useRef<HTMLDivElement | null>(null);
+  const turnstileId = useRef<string | null>(null);
+
+  const loadFormToken = () => {
+    api.get('/register-tenant/start')
+      .then((res) => {
+        setFormToken(res.data.form_token ?? '');
+        setSiteKey(res.data.turnstile_site_key || null);
+      })
+      .catch(() => setFormToken(''));
+  };
+
+  useEffect(() => {
+    if (isOpen) loadFormToken();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || modalStep !== 2 || !siteKey) return;
+    let cancelled = false;
+    loadTurnstile()
+      .then(() => {
+        if (cancelled || !turnstileBox.current || !window.turnstile || turnstileId.current) return;
+        turnstileId.current = window.turnstile.render(turnstileBox.current, {
+          sitekey: siteKey,
+          language: 'es',
+          callback: (token: string) => setTurnstileToken(token),
+          'expired-callback': () => setTurnstileToken(''),
+          'error-callback': () => setTurnstileToken(''),
+        });
+      })
+      .catch(() => setErrorMessage('No pudimos cargar la verificación. Revisa tu conexión y recarga la página.'));
+    return () => {
+      cancelled = true;
+      if (turnstileId.current && window.turnstile) window.turnstile.remove(turnstileId.current);
+      turnstileId.current = null;
+      setTurnstileToken('');
+    };
+  }, [isOpen, modalStep, siteKey]);
 
   useEffect(() => {
     api.get('/business-types')
@@ -100,8 +170,13 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (siteKey && !turnstileToken) {
+      setFieldErrors({ turnstile_token: 'Confirma que no eres un robot antes de continuar.' });
+      return;
+    }
     setIsLoading(true);
     setErrorMessage(null);
+    setFieldErrors({});
 
     try {
       const ref = new URLSearchParams(window.location.search).get('ref');
@@ -114,6 +189,9 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
         ...(ref ? { ref } : {}),
         ...(coupon.trim() ? { coupon: coupon.trim() } : {}),
         utm,
+        form_token: formToken,
+        website: trap,
+        ...(turnstileToken ? { turnstile_token: turnstileToken } : {}),
       });
 
       const token = response.data.access_token || response.data.token;
@@ -130,9 +208,22 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
         router.push('/home');
       }
     } catch (err: any) {
-      setErrorMessage(
-        err.response?.data?.message || 'Ocurrió un error al procesar el registro.'
-      );
+      const data = err.response?.data ?? {};
+      const errors: Record<string, string[]> = data.errors ?? {};
+      const firstErrors: Record<string, string> = Object.fromEntries(Object.entries(errors).map(([field, list]) => [field, list?.[0] ?? '']));
+      const shownHere = ['email', 'turnstile_token'];
+      const other = Object.entries(firstErrors).find(([field]) => !shownHere.includes(field));
+      setFieldErrors(firstErrors);
+      if (Object.keys(firstErrors).length > 0) {
+        setErrorMessage(other ? other[1] : null);
+      } else {
+        setErrorMessage(data.message || 'Ocurrió un error al procesar el registro.');
+      }
+      if (data.code === 'SIGNUP_FORM_EXPIRED') loadFormToken();
+      if (turnstileId.current && window.turnstile) {
+        window.turnstile.reset(turnstileId.current);
+        setTurnstileToken('');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -346,12 +437,21 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
                 <input
                   type="email"
                   placeholder="admin@minegocio.com"
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium"
+                  aria-invalid={fieldErrors.email ? true : undefined}
+                  className={`w-full pl-10 pr-4 py-2 bg-slate-50 border rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium ${fieldErrors.email ? 'border-rose-400' : 'border-slate-200'}`}
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, email: e.target.value });
+                    setFieldErrors((current) => {
+                      const next = { ...current };
+                      delete next.email;
+                      return next;
+                    });
+                  }}
                   required
                 />
               </div>
+              {fieldErrors.email && <p className="text-[11px] font-semibold text-rose-600" data-email-error>{fieldErrors.email}</p>}
             </div>
 
             <div className="space-y-1">
@@ -394,6 +494,26 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
               {couponText && <p className="text-[11px] font-semibold text-emerald-700" data-coupon-ok>{couponText}</p>}
               {couponError && <p className="text-[11px] font-semibold text-rose-600" data-coupon-error>{couponError}</p>}
             </div>
+
+            <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden">
+              <label htmlFor="register-website">Sitio web</label>
+              <input
+                id="register-website"
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={trap}
+                onChange={(e) => setTrap(e.target.value)}
+              />
+            </div>
+
+            {siteKey && (
+              <div className="space-y-1" data-register-turnstile>
+                <div ref={turnstileBox} />
+                {fieldErrors.turnstile_token && <p className="text-[11px] font-semibold text-rose-600">{fieldErrors.turnstile_token}</p>}
+              </div>
+            )}
 
             <p data-trial-note className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
               Empiezas con una prueba gratis, sin tarjeta. Cuando quieras quedarte, activas tu plan desde Mi empresa.

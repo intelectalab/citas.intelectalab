@@ -324,8 +324,8 @@ class LoyaltyController extends Controller
         $validated = $request->validate([
             'code'                  => 'nullable|string|max:40',
             'initial_amount'        => 'required|numeric|min:1|max:999999',
-            'purchaser_customer_id' => 'nullable|uuid',
-            'recipient_customer_id' => 'nullable|uuid',
+            'purchaser_customer_id' => ['nullable', 'uuid', Rule::exists('customers', 'id')->where('tenant_id', $tenant->id)->whereNull('deleted_at')],
+            'recipient_customer_id' => ['nullable', 'uuid', Rule::exists('customers', 'id')->where('tenant_id', $tenant->id)->whereNull('deleted_at')],
             'recipient_name'        => 'nullable|string|max:150',
             'recipient_email'       => 'nullable|email|max:250',
             'validity_days'         => 'nullable|integer|min:0|max:3650',

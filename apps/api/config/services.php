@@ -33,4 +33,18 @@ return [
         'provider' => env('ASSISTANT_PROVIDER', 'none'),
     ],
 
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+        'verify_url' => env('TURNSTILE_VERIFY_URL', 'https://challenges.cloudflare.com/turnstile/v0/siteverify'),
+    ],
+
+    'signup' => [
+        'min_seconds' => (int) env('SIGNUP_MIN_SECONDS', 4),
+        'max_hours' => (int) env('SIGNUP_MAX_HOURS', 12),
+        'per_minute_ip' => (int) env('SIGNUP_PER_MINUTE_IP', 5),
+        'per_hour_ip' => (int) env('SIGNUP_PER_HOUR_IP', 20),
+        'per_hour_email' => (int) env('SIGNUP_PER_HOUR_EMAIL', 5),
+    ],
+
 ];

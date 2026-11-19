@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
+import { api } from '@/lib/axios';
 
 export const ACTIVITY_KEY = 'last_activity';
 export const LOGOUT_REASON_KEY = 'logout_reason';
@@ -26,6 +27,8 @@ export default function IdleLogout() {
 
     const limit = minutes * 60_000;
     let lastMark = 0;
+    let lastPing = Date.now();
+    const pingEvery = Math.min(240_000, limit / 3);
     let closing = false;
 
     const lastActivity = () => Number(localStorage.getItem(ACTIVITY_KEY) || 0);
@@ -35,6 +38,10 @@ export default function IdleLogout() {
       if (now - lastMark < 5_000) return;
       lastMark = now;
       markActivity();
+      if (now - lastPing >= pingEvery) {
+        lastPing = now;
+        api.get('/session').catch(() => {});
+      }
     };
 
     const check = () => {
@@ -66,6 +73,7 @@ export default function IdleLogout() {
 
   const stay = () => {
     markActivity();
+    api.get('/session').catch(() => {});
     setSecondsLeft(null);
   };
 

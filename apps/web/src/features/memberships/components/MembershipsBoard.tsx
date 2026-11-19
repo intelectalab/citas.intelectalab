@@ -98,7 +98,7 @@ export default function MembershipsBoard() {
 
   const metricCards: MetricCardItem[] = tab === 'members' ? [
     card('Socios vigentes', active.length, <Users size={18} />, 'active', 'text-brand-accent', 'border-brand-accent ring-2 ring-brand-accent/20'),
-    card('Ingreso recurrente al mes', money(monthly, currency), <Wallet size={18} />, null, 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
+    card('Ingreso recurrente al mes', money(monthly, currency).replace(' ', ' '), <Wallet size={18} />, null, 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
     card('Vencen en 7 días', expiring.length, <Hourglass size={18} />, 'expiring', 'text-amber-600', 'border-amber-500 ring-2 ring-amber-500/20'),
     card('Vencidas', expired.length, <CalendarX size={18} />, 'expired', 'text-slate-500', 'border-slate-400 ring-2 ring-slate-400/20'),
   ] : [];
@@ -157,7 +157,7 @@ export default function MembershipsBoard() {
         </div>
       ),
     },
-    { header: 'Precio', cell: (m) => <span key={`price-${m.id}`} className="text-sm font-semibold text-slate-800 tabular-nums">{money(m.price, m.currency)} <span className="block text-xs font-normal text-slate-400">{m.period_label}</span></span> },
+    { header: 'Precio', cell: (m) => <span key={`price-${m.id}`} className="text-sm font-semibold text-slate-800 tabular-nums whitespace-nowrap">{money(m.price, m.currency)} <span className="block text-xs font-normal text-slate-400">{m.period_label}</span></span> },
     { header: 'Estado', cell: (m) => <Badge key={`status-${m.id}`} data-status={m.status} tone={STATUS_BADGES[m.status]} nowrap>{m.status_label}</Badge> },
     {
       header: 'Acciones',

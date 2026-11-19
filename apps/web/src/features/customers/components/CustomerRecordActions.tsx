@@ -167,7 +167,7 @@ export default function CustomerRecordActions({ customer, onChanged }: Props) {
 
       <FormDrawer isOpen={mode === 'erase'} onClose={() => setMode(null)} title="Borrar datos personales" subtitle={name} icon={<Eraser size={18} />}>
         <div className="space-y-4" data-erase-panel>
-          <p className="text-sm text-slate-600">Para cuando {vocab.pick('client', 'el', 'la')} {client} pide que borren sus datos (Ley 29733). Se borran su nombre, documento, celular, correo, dirección, fecha de nacimiento y notas, su acceso al portal y sus permisos de mensajes.</p>
+          <p className="text-sm text-slate-600">Para cuando {vocab.pick('client', 'el', 'la')} {client} pide que borren sus datos (Ley 29733). Se borran su nombre, documento, celular, correo, dirección, fecha de nacimiento, las notas internas (también las privadas), el texto de los mensajes que se le enviaron, su acceso al portal y sus permisos de mensajes.</p>
           <p className="text-sm text-slate-600">Se conservan sus citas, ventas, comprobantes y fichas de atención, sin su nombre, porque la empresa debe guardarlos por ley.</p>
           <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex gap-2"><ShieldAlert size={15} className="shrink-0 mt-0.5" /> No se puede deshacer.</p>
           <label className="block">

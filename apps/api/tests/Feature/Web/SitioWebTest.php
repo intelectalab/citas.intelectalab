@@ -28,6 +28,7 @@ function webSignup($test, array $extra = [])
         'ruc' => '20123456789', 'company_name' => 'Spa Nuevo ' . Str::upper(Str::random(4)), 'department' => 'Lima',
         'first_name' => 'Rosa', 'last_name' => 'Quispe', 'email' => 'rosa.' . Str::lower(Str::random(6)) . '@correo.test',
         'password' => 'clave-segura-123', 'plan_id' => TestCase::PLAN_PROFESIONAL,
+        'form_token' => \App\Support\SignupGuard::token(now()->subMinute()),
     ]);
 }
 

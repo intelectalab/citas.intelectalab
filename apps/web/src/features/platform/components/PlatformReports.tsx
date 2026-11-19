@@ -457,7 +457,7 @@ export default function PlatformReports({ initialTab }: { initialTab?: string })
             data-tab={item.key}
             aria-selected={tab === item.key}
             onClick={() => setTab(item.key)}
-            className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${tab === item.key ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+            className={`px-3 py-1.5 text-sm font-semibold rounded-lg ${tab === item.key ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50'}`}
           >
             {item.label}
           </button>

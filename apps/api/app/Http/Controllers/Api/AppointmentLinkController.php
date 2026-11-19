@@ -8,6 +8,7 @@ use App\Support\AppointmentFlow;
 use App\Support\AppointmentLinks;
 use App\Support\Branding;
 use App\Support\PortalLook;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 
 class AppointmentLinkController extends PortalController
@@ -24,6 +25,17 @@ class AppointmentLinkController extends PortalController
         $appointment = $id ? Appointment::with(self::RELATIONS)->find($id) : null;
         abort_unless($appointment && $appointment->customer, 404, 'Este enlace no es válido. Revisa que lo hayas copiado completo o entra al portal.');
         abort_if($appointment->tenant?->status !== 'active', 404, 'Este enlace ya no está disponible.');
+
+        if ($reason = AppointmentLinks::expiredReason($appointment)) {
+            throw new HttpResponseException(response()->json([
+                'message' => $reason === 'cancelled'
+                    ? 'Esta cita fue cancelada, así que este enlace ya no sirve. Si quieres otra cita, puedes reservar de nuevo.'
+                    : 'Este enlace venció porque la cita ya pasó. Para ver tus citas anteriores, entra al portal.',
+                'code'    => 'LINK_EXPIRED',
+                'reason'  => $reason,
+                'company' => ['name' => $appointment->tenant->name, 'slug' => $appointment->tenant->slug],
+            ], 410));
+        }
 
         $customer = $appointment->customer;
         $request->setUserResolver(fn () => $customer);
@@ -54,6 +66,7 @@ class AppointmentLinkController extends PortalController
             'cancel_window_hours' => (int) AppointmentFlow::rule($tenant, 'cancel.window_hours'),
             'cancel_allowed' => (bool) AppointmentFlow::rule($tenant, 'cancel.client_allowed'),
             'appointment' => $this->presentForCustomer($appointment, $tenant),
+            'link_expires_at' => AppointmentLinks::expiresAt($appointment)?->toIso8601String(),
         ]);
     }
 

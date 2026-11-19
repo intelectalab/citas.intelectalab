@@ -261,7 +261,7 @@ export default function Portal() {
           </button>
         </div>
 
-        <nav className="max-w-3xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto" aria-label="Secciones del portal">
+        <nav className="max-w-3xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto select-scroll md:flex-wrap md:overflow-visible" aria-label="Secciones del portal">
           {!mustChangePassword && tabs.map((item) => (
             <button
               key={item.id}

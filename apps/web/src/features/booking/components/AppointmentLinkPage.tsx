@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, CalendarClock, CalendarX2, Check, Clock, Loader2, MapPin, UserRound, Video } from 'lucide-react';
+import { isAxiosError } from 'axios';
 import { api } from '@/lib/axios';
 import { previewStyle, resolveColors } from '@/lib/brand';
 import { dateOf, formatDate, timeOf } from '@/features/appointments/appointments';
@@ -16,6 +17,12 @@ interface LinkData {
   appointment: PortalAppointment;
 }
 
+interface ExpiredLink {
+  message: string;
+  reason: 'cancelled' | 'past';
+  company: { name: string; slug: string };
+}
+
 export default function AppointmentLinkPage({ token }: { token: string }) {
   const [data, setData] = useState<LinkData | null>(null);
   const [error, setError] = useState('');
@@ -23,11 +30,18 @@ export default function AppointmentLinkPage({ token }: { token: string }) {
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
   const [done, setDone] = useState('');
+  const [expired, setExpired] = useState<ExpiredLink | null>(null);
 
   useEffect(() => {
     api.get<LinkData>(`/public/appointment/${token}`)
       .then((res) => { setData(res.data); document.title = `Tu cita · ${res.data.company.name}`; })
-      .catch((err) => setError(portalError(err, 'No se pudo abrir tu cita.')));
+      .catch((err) => {
+        if (isAxiosError(err) && err.response?.status === 410 && err.response.data?.code === 'LINK_EXPIRED') {
+          setExpired(err.response.data as ExpiredLink);
+          return;
+        }
+        setError(portalError(err, 'No se pudo abrir tu cita.'));
+      });
   }, [token]);
 
   const style = useMemo(() => (data ? previewStyle(resolveColors({ primary: data.company.primary, accent: data.company.accent }), false) : undefined), [data]);
@@ -47,6 +61,25 @@ export default function AppointmentLinkPage({ token }: { token: string }) {
       setBusy('');
     }
   };
+
+  if (expired) {
+    return (
+      <main className="min-h-screen bg-[#F2F2F2] flex items-center justify-center px-4" data-link-expired={expired.reason}>
+        <section className="max-w-md w-full bg-white border border-slate-200/80 rounded-3xl shadow-xs p-6 space-y-4 text-center">
+          <span className="mx-auto w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center">{expired.reason === 'cancelled' ? <CalendarX2 size={22} /> : <CalendarClock size={22} />}</span>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-500">{expired.company.name}</p>
+            <h1 className="text-lg font-black text-slate-800">{expired.reason === 'cancelled' ? 'Esta cita fue cancelada' : 'Este enlace ya venció'}</h1>
+          </div>
+          <p className="text-sm text-slate-600">{expired.message}</p>
+          <div className="flex flex-col gap-2">
+            <a href={`/reservar/${expired.company.slug}`} className="px-5 py-3 text-sm font-bold bg-slate-800 text-white rounded-xl hover:bg-slate-700">Reservar otra cita</a>
+            <a href="/login" className="px-5 py-3 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Entrar al portal</a>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   if (!data) {
     return (

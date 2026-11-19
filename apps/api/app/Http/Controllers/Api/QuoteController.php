@@ -354,6 +354,16 @@ class QuoteController extends Controller
             }
         }
 
+        $tables = ['service' => 'services', 'product' => 'products', 'package' => 'package_plans'];
+
+        foreach (array_values($validated['items']) as $idx => $item) {
+            $table = $tables[$item['item_type']] ?? null;
+
+            if ($table && !empty($item['reference_id']) && !DB::table($table)->where('tenant_id', $request->user()->tenant_id)->where('id', $item['reference_id'])->exists()) {
+                throw ValidationException::withMessages(["items.{$idx}.reference_id" => 'Esa línea apunta a algo que no existe en tu empresa.']);
+            }
+        }
+
         return $validated;
     }
 
@@ -627,6 +637,13 @@ class QuoteController extends Controller
             'note'        => 'nullable|string|max:255',
             'create_sale' => 'nullable|boolean',
         ]);
+
+        $needed = match ($validated['status']) {
+            'cancelled' => 'quotes.delete',
+            'rejected'  => $user->allows('quotes.delete') ? 'quotes.delete' : 'quotes.edit',
+            default     => 'quotes.edit',
+        };
+        abort_unless($user->allows($needed), 403, Access::denial($needed, $tenant));
 
         $change = DB::transaction(function () use ($tenant, $user, $rules, $quote, $validated) {
             $row = DB::table('quotes')

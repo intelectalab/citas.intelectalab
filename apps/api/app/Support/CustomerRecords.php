@@ -38,7 +38,7 @@ class CustomerRecords
 
     private static function references(): array
     {
-        $rows = DB::select("select table_name, column_name from information_schema.columns where table_schema = 'public' and column_name in ('customer_id', 'actor_customer_id') and table_name <> 'customers'");
+        $rows = DB::select("select table_name, column_name from information_schema.columns where table_schema = 'public' and column_name in ('customer_id', 'actor_customer_id') and table_name not in ('customers', 'audit_events')");
 
         return array_map(fn ($row) => [$row->table_name, $row->column_name], $rows);
     }
@@ -111,6 +111,61 @@ class CustomerRecords
         foreach (['waitlist_entries' => 'notes', 'walkin_entries' => 'notes', 'messages' => 'to_address'] as $table => $column) {
             if (Schema::hasColumn($table, $column)) {
                 DB::table($table)->where('customer_id', $customer->id)->update([$column => null]);
+            }
+        }
+
+        self::erasePersonalTrail($customer);
+    }
+
+    private const ERASED = '(contenido borrado por supresión de datos personales)';
+
+    private static function erasePersonalTrail(Customer $customer): void
+    {
+        $id = $customer->id;
+
+        if (Schema::hasTable('customer_notes')) {
+            DB::table('customer_notes')->where('customer_id', $id)->delete();
+        }
+
+        $nullable = [
+            'appointments'           => ['notes', 'cancel_reason'],
+            'quotes'                 => ['notes'],
+            'recalls'                => ['notes'],
+            'class_enrollments'      => ['notes'],
+            'payment_links'          => ['notes'],
+            'customer_consent_events' => ['ip_address'],
+            'messages'               => ['to_name', 'subject', 'meta'],
+            'customer_messages'      => ['subject'],
+        ];
+
+        foreach ($nullable as $table => $columns) {
+            $present = array_values(array_filter($columns, fn ($column) => Schema::hasColumn($table, $column)));
+
+            if ($present) {
+                DB::table($table)->where('customer_id', $id)->update(array_fill_keys($present, null));
+            }
+        }
+
+        foreach (['messages', 'customer_messages'] as $table) {
+            if (Schema::hasColumn($table, 'body')) {
+                DB::table($table)->where('customer_id', $id)->update(['body' => self::ERASED]);
+            }
+        }
+
+        if (Schema::hasTable('gift_cards')) {
+            DB::table('gift_cards')->where('recipient_customer_id', $id)->update(['recipient_name' => null, 'recipient_email' => null]);
+        }
+
+        if (Schema::hasTable('whatsapp_conversations')) {
+            $conversations = DB::table('whatsapp_conversations')->where('customer_id', $id)->pluck('id');
+
+            if ($conversations->isNotEmpty()) {
+                DB::table('whatsapp_conversations')->whereIn('id', $conversations)->update(['phone' => '', 'contact_name' => null]);
+                DB::table('whatsapp_messages')->whereIn('conversation_id', $conversations)->update(['body' => self::ERASED]);
+
+                if (Schema::hasTable('assistant_logs')) {
+                    DB::table('assistant_logs')->whereIn('conversation_id', $conversations)->update(['question' => null, 'reply' => null]);
+                }
             }
         }
     }

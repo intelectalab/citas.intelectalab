@@ -102,7 +102,7 @@ export default function ClassDetail() {
   };
 
   const facts: [React.ReactNode, string, React.ReactNode][] = [
-    [<Clock key="c" size={15} />, 'Cuándo', <span key="w" className="capitalize">{classDate(data.date)} · {data.time}–{data.end_time}</span>],
+    [<Clock key="c" size={15} />, 'Cuándo', <span key="w" className="inline-block first-letter:uppercase">{classDate(data.date)} · {data.time}–{data.end_time}</span>],
     [<User key="u" size={15} />, vocab.pro, data.professional ? <ProfessionalLink id={data.professional.id}>{data.professional.display_name}</ProfessionalLink> : '—'],
     [<DoorOpen key="d" size={15} />, 'Sala', data.room?.name ?? 'Sin sala'],
     [<MapPin key="m" size={15} />, 'Sede', data.branch?.name ?? '—'],
@@ -154,7 +154,7 @@ export default function ClassDetail() {
             <span className="w-12 h-12 rounded-2xl bg-brand-soft/20 text-brand-ink flex items-center justify-center shrink-0"><CalendarCheck size={22} /></span>
             <div className="min-w-0">
               <h1 className="text-xl font-black text-brand-ink tracking-tight">{data.title}</h1>
-              <p className="text-xs text-slate-500 capitalize">{shortClassDate(data.date)} · {data.time}</p>
+              <p className="text-xs text-slate-500 first-letter:uppercase">{shortClassDate(data.date)} · {data.time}</p>
               <Badge data-state={data.state} tone={STATE_BADGES[data.state]} bold className="inline-block mt-2">{data.state_label}</Badge>
             </div>
           </div>
@@ -246,7 +246,7 @@ export default function ClassDetail() {
                   empty="No quedan más clases de esta serie."
                   renderRow={(s) => (
                     <li key={s.id} className="flex items-center gap-3 px-5 py-2.5">
-                      <Link href={`/classes/${s.id}`} className="flex-1 min-w-0 text-sm font-semibold text-slate-800 hover:text-brand-accent capitalize">{shortClassDate(s.date)} · {s.time}</Link>
+                      <Link href={`/classes/${s.id}`} className="flex-1 min-w-0 text-sm font-semibold text-slate-800 hover:text-brand-accent first-letter:uppercase">{shortClassDate(s.date)} · {s.time}</Link>
                       <span className="text-xs text-slate-500">{spotsLabel(s)}</span>
                     </li>
                   )}

@@ -218,6 +218,11 @@ class LoginController extends Controller
         ];
     }
 
+    public function ping()
+    {
+        return response()->noContent();
+    }
+
     public function logout(Request $request)
     {
         $account = $request->user();

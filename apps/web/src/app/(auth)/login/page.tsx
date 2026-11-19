@@ -49,6 +49,8 @@ export default function AuthPage() {
       const minutes = Number(reason.split(':')[1]);
       const span = minutes % 60 === 0 ? `${minutes / 60} ${minutes === 60 ? 'hora' : 'horas'}` : `${minutes} minutos`;
       setIdleNotice(`Tu sesión se cerró porque ${minutes === 60 ? 'pasó' : 'pasaron'} ${span} sin actividad. Vuelve a ingresar para continuar.`);
+    } else if (reason === 'expired') {
+      setIdleNotice('Tu sesión venció por seguridad. Vuelve a ingresar para continuar.');
     }
     localStorage.removeItem('logout_reason');
   }, []);

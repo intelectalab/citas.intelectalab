@@ -125,7 +125,7 @@ class MembershipController extends Controller
         $branch = !empty($row->branch_id) ? DB::table('branches')->where('id', $row->branch_id)->first(['id', 'name']) : null;
         $summary = in_array($row->status, Memberships::ALIVE, true) ? Memberships::summary($tenant, $row) : null;
 
-        return $data + [
+        return array_merge($data, [
             'customer'      => $customer ? ['id' => $customer->id, 'code' => $customer->code, 'first_name' => $customer->first_name, 'last_name' => $customer->last_name, 'name' => Person::name($customer), 'phone' => $customer->phone] : null,
             'plan_id'       => $row->membership_plan_id,
             'plan_on_sale'  => DB::table('membership_plans')->where('id', $row->membership_plan_id)->whereNull('deleted_at')->where('status', 'active')->exists(),
@@ -143,7 +143,7 @@ class MembershipController extends Controller
                 'delete' => $user->allows('memberships.delete'),
                 'sell'   => $tenant->hasModule('pos') && $user->allows('pos.create'),
             ],
-        ];
+        ]);
     }
 
     private function audit(Request $request, Tenant $tenant, string $action, string $id, array $after, array $before = []): void

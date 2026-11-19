@@ -4,14 +4,14 @@ import Badge from '@/app/components/common/Badge';
 import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ClipboardList, Download, EyeOff, Lock, PenLine, RefreshCw, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ClipboardList, Download, Eye, EyeOff, Lock, PenLine, RefreshCw, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { formatDateTime } from '@/features/appointments/appointments';
 import RecordFieldInput from './RecordFieldInput';
-import { RECORD_STATUS, isEmptyValue, type AppointmentRecord, type CareRecord, type RecordData, type RecordField, type RecordValue } from '../records';
+import { READ_ACTIONS, RECORD_STATUS, isEmptyValue, type AppointmentRecord, type CareRecord, type RecordData, type RecordField, type RecordValue } from '../records';
 
 interface RecordPanelProps {
   appointmentId: string | null;
@@ -52,6 +52,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   const [openPrevious, setOpenPrevious] = useState<string | null>(null);
   const [accessReason, setAccessReason] = useState('');
   const [confirmUpdate, setConfirmUpdate] = useState(false);
+  const [showReads, setShowReads] = useState(false);
 
   const applyRecord = (record: CareRecord | null) => {
     setData({ ...(record?.data ?? {}) });
@@ -263,6 +264,29 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                 ))}
                 {readingByEmergency && (
                   <p className="text-xs text-amber-700">La estás leyendo con acceso de emergencia: dura 30 minutos y no permite cambiarla.</p>
+                )}
+              </section>
+            )}
+
+            {record && record.can_see_reads && (
+              <section className="border border-slate-200 rounded-xl" data-record-reads>
+                <button type="button" onClick={() => setShowReads((open) => !open)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    <Eye size={14} /> Quién abrió esta ficha ({record.reads?.length ?? 0})
+                  </span>
+                  <ChevronDown size={15} className={`text-slate-400 transition-transform duration-200 ${showReads ? 'rotate-180' : ''}`} />
+                </button>
+                {showReads && (
+                  <div className="px-3 pb-3 space-y-1.5" data-record-reads-list>
+                    {(record.reads ?? []).length === 0 && <p className="text-xs text-slate-500">Nadie la ha abierto todavía.</p>}
+                    {(record.reads ?? []).map((read, index) => (
+                      <p key={index} className="text-xs text-slate-600">
+                        <span className="font-semibold text-slate-700">{read.by}</span> · {formatDateTime(read.at)} · {READ_ACTIONS[read.action] ?? read.action}
+                        {read.by_emergency && <span className="ml-1 font-semibold text-amber-700">(con acceso de emergencia)</span>}
+                      </p>
+                    ))}
+                    <p className="text-[11px] text-slate-400 pt-1">Solo lo ven quienes pueden ver la auditoría. Si la misma persona la abre varias veces en 10 minutos, se anota una sola vez.</p>
+                  </div>
                 )}
               </section>
             )}

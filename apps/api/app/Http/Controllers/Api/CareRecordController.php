@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\AuditEvent;
 use App\Models\CareRecord;
 use App\Models\CareRecordAddendum;
+use App\Models\CareRecordRead;
 use App\Models\Professional;
 use App\Models\RecordTemplate;
 use App\Models\Tenant;
@@ -87,6 +88,76 @@ class CareRecordController extends Controller
         return !$record->is_private || $record->created_by === $user->id;
     }
 
+    private const READ_REPEAT_MINUTES = 10;
+
+    private function logRead(Request $request, CareRecord $record, string $action): void
+    {
+        $user = $request->user();
+
+        if (!$user || !$this->canRead($record, $user)) {
+            return;
+        }
+
+        if (!$request->attributes->has('care_reads_ready')) {
+            $request->attributes->set('care_reads_ready', Schema::hasTable('care_record_reads'));
+        }
+
+        if (!$request->attributes->get('care_reads_ready')) {
+            return;
+        }
+
+        $recent = CareRecordRead::where('care_record_id', $record->id)
+            ->where('user_id', $user->id)
+            ->where('action', $action)
+            ->where('created_at', '>', now()->subMinutes(self::READ_REPEAT_MINUTES))
+            ->exists();
+
+        if ($recent) {
+            return;
+        }
+
+        CareRecordRead::create([
+            'tenant_id'      => $record->tenant_id,
+            'care_record_id' => $record->id,
+            'user_id'        => $user->id,
+            'action'         => $action,
+            'by_emergency'   => !$this->isOwn($record, $user),
+            'ip_address'     => $request->ip(),
+        ]);
+    }
+
+    private function withReads(array $presented, CareRecord $record, Tenant $tenant, User $user): array
+    {
+        $allowed = $user->allows('audit.view');
+
+        return $presented + [
+            'can_see_reads' => $allowed,
+            'reads'         => $allowed ? $this->readsFor($record, $tenant) : [],
+        ];
+    }
+
+    private function readsFor(CareRecord $record, Tenant $tenant): array
+    {
+        if (!Schema::hasTable('care_record_reads')) {
+            return [];
+        }
+
+        $timezone = $this->timezone($tenant);
+
+        return CareRecordRead::where('care_record_id', $record->id)
+            ->with('user:id,first_name,last_name')
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get()
+            ->map(fn (CareRecordRead $read) => [
+                'by'           => $read->user ? \App\Support\Person::name($read->user) : 'Cuenta borrada',
+                'action'       => $read->action,
+                'by_emergency' => $read->by_emergency,
+                'at'           => $read->created_at?->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+            ])
+            ->all();
+    }
+
     public function emergencyAccess(Request $request, string $careRecord)
     {
         $tenant = $this->tenant($request);
@@ -121,6 +192,7 @@ class CareRecordController extends Controller
         ]);
 
         \App\Support\Notifier::emergencyAccess($tenant, $record, $user, trim($validated['reason']));
+        $this->logRead($request, $record, 'emergency');
 
         return response()->json($this->present($record, $tenant, $user));
     }
@@ -132,6 +204,7 @@ class CareRecordController extends Controller
         $record = $this->find($request, $careRecord);
 
         abort_unless($this->canRead($record, $user), 403, 'Esta ficha es privada: solo la ve quien la escribió.');
+        $this->logRead($request, $record, 'pdf');
 
         $data = $this->present($record, $tenant, $user);
         $tenant->loadMissing(['company', 'businessType']);
@@ -168,7 +241,7 @@ class CareRecordController extends Controller
 
     public function forAppointment(Request $request, string $appointment)
     {
-        return response()->json($this->context($request, $this->appointment($request, $appointment)));
+        return response()->json($this->context($request, $this->appointment($request, $appointment), true));
     }
 
     public function refreshTemplate(Request $request, string $appointment)
@@ -251,7 +324,7 @@ class CareRecordController extends Controller
         return array_key_exists('require_consent', $record->getAttributes());
     }
 
-    private function context(Request $request, Appointment $appointment): array
+    private function context(Request $request, Appointment $appointment, bool $logReads = false): array
     {
         $tenant = $this->tenant($request);
         $user = $request->user();
@@ -268,6 +341,16 @@ class CareRecordController extends Controller
             ->limit(5)
             ->get();
 
+        if ($logReads) {
+            if ($record) {
+                $this->logRead($request, $record, 'appointment');
+            }
+
+            foreach ($previous as $old) {
+                $this->logRead($request, $old, 'previous');
+            }
+        }
+
         return [
             'appointment' => [
                 'id'           => $appointment->id,
@@ -280,7 +363,7 @@ class CareRecordController extends Controller
                 'professional' => $appointment->professional?->display_name,
             ],
             'uses_record' => (bool) ($record || $template),
-            'record'      => $record ? $this->present($record, $tenant, $user) : null,
+            'record'      => $record ? $this->withReads($this->present($record, $tenant, $user), $record, $tenant, $user) : null,
             'template'    => $template ? [
                 'name'            => $template->name,
                 'fields'          => $template->fields ?? [],
@@ -490,7 +573,12 @@ class CareRecordController extends Controller
 
     public function show(Request $request, string $careRecord)
     {
-        return response()->json($this->present($this->find($request, $careRecord), $this->tenant($request), $request->user()));
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $record = $this->find($request, $careRecord);
+        $this->logRead($request, $record, 'view');
+
+        return response()->json($this->withReads($this->present($record, $tenant, $user), $record, $tenant, $user));
     }
 
     private function find(Request $request, string $id): CareRecord

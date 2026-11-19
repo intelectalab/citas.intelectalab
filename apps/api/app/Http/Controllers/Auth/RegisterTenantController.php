@@ -4,12 +4,21 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\PlatformSetting;
+use App\Support\SignupGuard;
 use App\Support\TenantProvisioner;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class RegisterTenantController extends Controller
 {
+    public function start()
+    {
+        return response()->json([
+            'form_token'         => SignupGuard::token(),
+            'turnstile_site_key' => SignupGuard::siteKey(),
+        ]);
+    }
+
     public function register(Request $request)
     {
         if (!PlatformSetting::value('allow_tenant_signup')) {
@@ -18,6 +27,8 @@ class RegisterTenantController extends Controller
                 'code'    => 'SIGNUP_CLOSED',
             ], 403);
         }
+
+        SignupGuard::check($request);
 
         $validated = $request->validate([
             'ruc'             => 'required|string|max:30',
@@ -29,7 +40,11 @@ class RegisterTenantController extends Controller
             'district'        => 'nullable|string|max:100',
             'first_name'      => 'required|string|max:150',
             'last_name'       => 'required|string|max:150',
-            'email'           => 'required|email|max:190',
+            'email'           => ['required', 'email', 'max:190', function ($attribute, $value, $fail) {
+                if (is_string($value) && SignupGuard::ownerEmailTaken($value)) {
+                    $fail(SignupGuard::takenMessage());
+                }
+            }],
             'business_type_id' => ['nullable', 'uuid', Rule::exists('business_types', 'id')->where('status', 'active')],
             'password'        => 'required|string|min:8',
             'ref'             => 'nullable|string|max:20',
@@ -45,6 +60,8 @@ class RegisterTenantController extends Controller
         }
 
         $result = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $coupon) {
+            SignupGuard::lockEmail($validated['email']);
+
             $result = TenantProvisioner::provision([
                 'name'             => $validated['company_name'],
                 'legal_name'       => $validated['company_name'],

@@ -89,7 +89,7 @@ export default function ClassesBoard() {
           <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><CalendarCheck size={16} /></span>
           <div className="min-w-0">
             <Link href={`/classes/${c.id}`} className={`${styles.customerName} hover:text-brand-accent`} data-class-link={c.id}>{c.title}</Link>
-            <span className="block text-xs text-slate-500 capitalize">{shortClassDate(c.date)} · {c.time}–{c.end_time}</span>
+            <span className="block text-xs text-slate-500 first-letter:uppercase">{shortClassDate(c.date)} · {c.time}–{c.end_time}</span>
           </div>
         </div>
       ),

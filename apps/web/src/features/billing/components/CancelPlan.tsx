@@ -144,7 +144,7 @@ export default function CancelPlan({ info, currency, onChanged }: { info: Cancel
           )}
 
           <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input type="checkbox" data-cancel-confirm-check checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="mt-0.5" />
+            <input type="checkbox" data-cancel-confirm-check checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="mt-0.5 rounded border-slate-300 accent-brand cursor-pointer" />
             {immediate ? 'Entiendo que mi empresa queda en solo lectura desde ahora.' : `Entiendo que después del ${day(info.effective_at)} mi empresa queda en solo lectura.`}
           </label>
 

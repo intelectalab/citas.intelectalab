@@ -293,6 +293,7 @@ describe('recomienda y gana', function () {
             'ruc' => '20123456789', 'company_name' => 'Spa Referido', 'department' => 'Lima',
             'first_name' => 'Ana', 'last_name' => 'Ruiz', 'email' => 'ana.ruiz.' . Str::lower(Str::random(4)) . '@correo.test',
             'password' => 'clave-segura-123', 'plan_id' => self::PLAN_ESENCIAL, 'ref' => $code,
+            'form_token' => \App\Support\SignupGuard::token(now()->subMinute()),
         ])->assertCreated();
 
         expect(DB::table('saas_referrals')->where('referrer_tenant_id', $quien->tenant->id)->count())->toBe(1);

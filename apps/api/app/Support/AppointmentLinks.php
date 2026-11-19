@@ -6,6 +6,26 @@ use App\Models\Appointment;
 
 class AppointmentLinks
 {
+    public const DAYS_AFTER = 3;
+
+    public static function expiresAt(Appointment $appointment): ?\Carbon\CarbonInterface
+    {
+        $end = $appointment->ends_at ?? $appointment->starts_at;
+
+        return $end?->copy()->addDays(self::DAYS_AFTER);
+    }
+
+    public static function expiredReason(Appointment $appointment): ?string
+    {
+        if ($appointment->status === 'cancelled') {
+            return 'cancelled';
+        }
+
+        $expires = self::expiresAt($appointment);
+
+        return $expires && $expires->isPast() ? 'past' : null;
+    }
+
     public static function signature(string $appointmentId): string
     {
         return substr(hash_hmac('sha256', 'appointment-link|' . $appointmentId, (string) config('app.key')), 0, 32);

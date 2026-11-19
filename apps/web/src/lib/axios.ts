@@ -40,6 +40,16 @@ api.interceptors.response.use((response) => response, (error) => {
   if (axios.isAxiosError(error) && error.response?.status === 402 && error.response.data?.code === 'PLAN_LOCKED' && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('plan-locked', { detail: error.response.data.message }));
   }
+  if (axios.isAxiosError(error) && error.response?.status === 401 && error.response.data?.code === 'SESSION_EXPIRED' && typeof window !== 'undefined' && !localStorage.getItem('platform_auth_token')) {
+    const { reason, minutes } = error.response.data;
+    localStorage.setItem('logout_reason', reason === 'idle' && minutes ? `idle:${minutes}` : 'expired');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('last_activity');
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  }
   if (axios.isAxiosError(error) && !error.response && !axios.isCancel(error)) {
     error.message = error.code === 'ECONNABORTED'
       ? 'El servidor tardó demasiado en responder. Inténtalo de nuevo en unos segundos.'

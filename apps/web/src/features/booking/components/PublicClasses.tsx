@@ -85,7 +85,7 @@ export default function PublicClasses({ slug, documentTypes, privacyHtml, depend
         <form onSubmit={submit} className="px-5 sm:px-6 pb-6 space-y-4" data-public-class-form>
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
             <span className="block font-bold text-brand-ink">{chosen.title}</span>
-            <span className="block text-xs text-slate-600 capitalize">{dayLabel(chosen.date)} · {chosen.time}–{chosen.end_time}{chosen.branch ? ` · ${chosen.branch.name}` : ''}</span>
+            <span className="block text-xs text-slate-600 first-letter:uppercase">{dayLabel(chosen.date)} · {chosen.time}–{chosen.end_time}{chosen.branch ? ` · ${chosen.branch.name}` : ''}</span>
           </div>
           <GuestFields value={guest} onChange={setGuest} documentTypes={documentTypes} dependents={{ enabled: false, required: false }} dependentLabel={dependentLabel} privacyHtml={privacyHtml} />
           {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
@@ -104,7 +104,7 @@ export default function PublicClasses({ slug, documentTypes, privacyHtml, depend
             <li key={c.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 sm:px-6 py-3.5" data-public-class={c.id}>
               <div className="flex-1 min-w-0 space-y-0.5">
                 <span className="block text-sm font-bold text-brand-ink">{c.title}</span>
-                <span className="block text-xs text-slate-600 capitalize">{dayLabel(c.date)} · {c.time}–{c.end_time}</span>
+                <span className="block text-xs text-slate-600 first-letter:uppercase">{dayLabel(c.date)} · {c.time}–{c.end_time}</span>
                 <span className="flex flex-wrap gap-x-3 text-xs text-slate-500">
                   {c.professional && <span className="inline-flex items-center gap-1"><User size={12} /> {c.professional.display_name}</span>}
                   {(c.room || c.branch) && <span className="inline-flex items-center gap-1"><MapPin size={12} /> {[c.room?.name, c.branch?.name].filter(Boolean).join(' · ')}</span>}

@@ -125,6 +125,13 @@ Artisan::command('notifications:due', function () {
 
 Schedule::command('notifications:due')->hourlyAt(7)->withoutOverlapping();
 
+Artisan::command('sessions:prune', function () {
+    $deleted = \App\Support\Sessions::prune();
+    $this->info("Sesiones vencidas borradas: {$deleted}.");
+})->purpose('Borra las sesiones (tokens de ingreso) que ya vencieron');
+
+Schedule::command('sessions:prune')->dailyAt('03:40')->withoutOverlapping();
+
 Artisan::command('db:demo {--agregar : Solo suma los ejemplos nuevos, sin borrar nada} {--force : No pregunta antes de borrar}', function () {
     if (app()->isProduction()) {
         $this->error('Los datos de muestra no se cargan en producción.');

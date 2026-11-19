@@ -173,7 +173,7 @@ class RoomController extends Controller
         $this->assertCanManage($request);
         $room = $this->find($request, $room);
 
-        if (DB::table('appointments')->where('room_id', $room->id)->exists()) {
+        if (DB::table('appointments')->where('room_id', $room->id)->exists() || (\App\Support\ClassSessions::ready() && DB::table('class_sessions')->where('room_id', $room->id)->exists())) {
             DB::table('rooms')->where('id', $room->id)->update(['status' => 'inactive', 'updated_at' => now()]);
             $this->notifyIfEquipmentChanged($request, $room);
             $this->auditRoom($request, 'room.deactivated', $room);

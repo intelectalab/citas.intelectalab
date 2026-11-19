@@ -90,7 +90,7 @@ export default function PortalClasses({ data, proWord, onChanged, onError }: Por
     <li key={c.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-3.5" data-portal-class={c.id}>
       <div className="flex-1 min-w-0 space-y-0.5">
         <span className="block text-sm font-bold text-brand-ink">{c.title}</span>
-        <span className="block text-xs text-slate-600 capitalize">{dayLabel(c.date)} · {c.time}–{c.end_time}</span>
+        <span className="block text-xs text-slate-600 first-letter:uppercase">{dayLabel(c.date)} · {c.time}–{c.end_time}</span>
         <span className="flex flex-wrap gap-x-3 text-xs text-slate-500">
           {c.professional && <span className="inline-flex items-center gap-1"><User size={12} /> {c.professional.display_name}</span>}
           {(c.room || c.branch) && <span className="inline-flex items-center gap-1"><MapPin size={12} /> {[c.room?.name, c.branch?.name].filter(Boolean).join(' · ')}</span>}

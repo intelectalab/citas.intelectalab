@@ -25,7 +25,7 @@ const EMPTY = {
 type Form = typeof EMPTY;
 
 const card = 'bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 sm:p-6 space-y-4';
-const check = 'mt-0.5 w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand/30 shrink-0';
+const check = 'mt-0.5 w-4 h-4 rounded border-slate-300 accent-brand cursor-pointer shrink-0';
 
 function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
   return (

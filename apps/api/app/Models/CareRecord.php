@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Sealed;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,7 +43,7 @@ class CareRecord extends Model
 
     protected $casts = [
         'template_snapshot'   => 'array',
-        'data'                => 'array',
+        'data'                => Sealed::class . ':json',
         'consent_accepted'    => 'boolean',
         'require_consent'     => 'boolean',
         'is_private'          => 'boolean',
@@ -85,6 +86,11 @@ class CareRecord extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function reads(): HasMany
+    {
+        return $this->hasMany(CareRecordRead::class, 'care_record_id')->orderByDesc('created_at');
     }
 
     public function addenda(): HasMany

@@ -526,12 +526,11 @@ class CustomerController extends Controller
             return response()->json(['message' => 'Los datos personales de esta ficha ya se borraron.'], 422);
         }
 
-        $name = \App\Support\Person::name($customer);
         DB::transaction(fn () => \App\Support\CustomerRecords::anonymize($customer));
-        $this->audit($request, 'customer.anonymized', $customer, ['Nombre' => $name], ['Datos personales' => 'Borrados']);
+        $this->audit($request, 'customer.anonymized', $customer, ['Código' => $customer->code], ['Datos personales' => 'Borrados', 'Notas internas' => 'Borradas']);
 
         return response()->json([
-            'message'  => 'Se borraron los datos personales. Sus citas, ventas y fichas de atención se conservan sin su nombre.',
+            'message'  => 'Se borraron los datos personales y las notas internas. Sus citas, ventas y fichas de atención se conservan sin su nombre.',
             'customer' => $customer->fresh()->load($this->relations($request)),
         ]);
     }

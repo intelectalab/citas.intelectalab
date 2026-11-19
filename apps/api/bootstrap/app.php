@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(fn ($request) => $request->is('api/*') || $request->expectsJson());
+        $exceptions->render(fn (\Illuminate\Auth\AuthenticationException $e, $request) => \App\Support\Sessions::response($request));
         $exceptions->render(function (\Illuminate\Database\QueryException $e) {
             if (str_contains($e->getMessage(), 'appointments_no_overlap')) {
                 return response()->json(['message' => 'Ese horario se acaba de ocupar: otra persona agendó a ese profesional a la misma hora. Elige otro horario.', 'code' => 'SLOT_TAKEN'], 409);

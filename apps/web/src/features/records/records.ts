@@ -59,7 +59,24 @@ export interface CareRecord {
   fields?: RecordField[];
   data?: RecordData;
   addenda?: { note: string; by: string | null; at: string }[];
+  can_see_reads?: boolean;
+  reads?: RecordRead[];
 }
+
+export interface RecordRead {
+  by: string;
+  action: 'view' | 'appointment' | 'previous' | 'pdf' | 'emergency';
+  by_emergency: boolean;
+  at: string;
+}
+
+export const READ_ACTIONS: Record<RecordRead['action'], string> = {
+  view: 'Abrió la ficha',
+  appointment: 'Abrió la ficha desde la cita',
+  previous: 'La vio como ficha anterior al atender otra cita',
+  pdf: 'Descargó el PDF',
+  emergency: 'Pidió acceso de emergencia',
+};
 
 export interface AppointmentRecord {
   appointment: {

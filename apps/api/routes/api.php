@@ -74,7 +74,8 @@ Route::get('/password/reset/{token}', [\App\Http\Controllers\Auth\PasswordContro
 Route::post('/password/reset', [\App\Http\Controllers\Auth\PasswordController::class, 'reset'])->middleware('throttle:10,1');
 Route::post('/register-customer', [RegisterCustomerController::class, 'register'])->middleware(['throttle:10,1', 'idempotent']);
 Route::get('/signup-info/{code}', [BrandingController::class, 'signupInfo'])->middleware('throttle:20,1');
-Route::post('/register-tenant', [RegisterTenantController::class, 'register'])->middleware('idempotent');
+Route::get('/register-tenant/start', [RegisterTenantController::class, 'start'])->middleware('throttle:30,1');
+Route::post('/register-tenant', [RegisterTenantController::class, 'register'])->middleware(['throttle:register-tenant', 'idempotent']);
 
 Route::get('/platform', [PlatformSettingController::class, 'publicValues']);
 Route::get('/complaints-book', [\App\Http\Controllers\Api\ComplaintController::class, 'platformBook'])->middleware('throttle:30,1');
@@ -162,6 +163,7 @@ Route::prefix('web')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [LoginController::class, 'logout']);
+    Route::get('/session', [LoginController::class, 'ping'])->middleware('throttle:30,1');
     Route::post('/impersonation/stop', [ImpersonationController::class, 'stop']);
 });
 
@@ -355,7 +357,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
     Route::get('/announcements', [\App\Http\Controllers\Api\AnnouncementController::class, 'feed']);
     Route::post('/announcements/{announcement}/dismiss', [\App\Http\Controllers\Api\AnnouncementController::class, 'dismiss'])->whereUuid('announcement');
 
-    Route::apiResource('statuses', StatusController::class);
+    Route::apiResource('statuses', StatusController::class)->except(['show']);
 
     $guarded = function (string $name, string $controller, string $key, bool $guardView = false, array $except = []) {
         foreach (['view' => ['index', 'show'], 'create' => ['store'], 'edit' => ['update'], 'delete' => ['destroy']] as $action => $methods) {

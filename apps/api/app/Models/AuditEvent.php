@@ -38,6 +38,34 @@ class AuditEvent extends Model
         'after_data'  => 'array',
     ];
 
+    public const LOCKED_MESSAGE = 'Los registros de auditoría no se pueden modificar ni borrar.';
+
+    protected static function booted(): void
+    {
+        static::updating(fn () => throw new \LogicException(self::LOCKED_MESSAGE));
+        static::deleting(fn () => throw new \LogicException(self::LOCKED_MESSAGE));
+    }
+
+    public function newEloquentBuilder($query)
+    {
+        return new class($query) extends \Illuminate\Database\Eloquent\Builder {
+            public function update(array $values)
+            {
+                throw new \LogicException(AuditEvent::LOCKED_MESSAGE);
+            }
+
+            public function delete()
+            {
+                throw new \LogicException(AuditEvent::LOCKED_MESSAGE);
+            }
+
+            public function forceDelete()
+            {
+                throw new \LogicException(AuditEvent::LOCKED_MESSAGE);
+            }
+        };
+    }
+
     public static function record(Request $request, string $action, ?Tenant $tenant = null, ?array $before = null, ?array $after = null): ?self
     {
         return \App\Support\Audit::log($request, $action, [
