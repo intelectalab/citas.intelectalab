@@ -228,7 +228,7 @@ describe('la aplicación funciona con un usuario de base sin permisos especiales
 
         appRole();
         $this->getJson('/api/public/booking/no-existe-esta-empresa')->assertNotFound();
-        expect(Rls::current())->toBe(['tenant' => null, 'bypass' => false])
-            ->and(visible('tenant_settings', $a->tenant->id))->toBe(0);
+        expect(Rls::current())->toBe(['tenant' => null, 'bypass' => \Tests\TestCase::strictRls()])
+            ->and(Rls::within(null, false, fn () => visible('tenant_settings', $a->tenant->id)))->toBe(0);
     });
 });

@@ -177,7 +177,7 @@ class Webhooks
         }
 
         $attributes->set('webhooks_kick', $pending + [$tenantId => true]);
-        app()->terminating(fn () => self::process($tenantId));
+        app()->terminating(fn () => Rls::within($tenantId, true, fn () => self::process($tenantId)));
     }
 
     public static function process(?string $tenantId = null, int $limit = 50): array

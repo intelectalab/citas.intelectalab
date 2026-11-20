@@ -69,6 +69,10 @@ class Sessions
 
     private static function mark(string $reason, ?int $minutes = null): void
     {
+        if (request()->attributes->has('session_end')) {
+            return;
+        }
+
         request()->attributes->set('session_end', ['reason' => $reason, 'minutes' => $minutes]);
     }
 

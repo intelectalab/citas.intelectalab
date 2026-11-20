@@ -409,7 +409,7 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
         }
 
         $attributes->set('messaging_kick', $pending + [$tenantId => true]);
-        app()->terminating(fn () => self::process($tenantId));
+        app()->terminating(fn () => Rls::within($tenantId, true, fn () => self::process($tenantId)));
     }
 
     public static function due(?string $tenantId = null)

@@ -64,6 +64,27 @@ abstract class TestCase extends BaseTestCase
         self::forgetCaches();
         PlatformMail::$outbox = [];
         Http::preventStrayRequests();
+        self::systemContext();
+    }
+
+    public static function strictRls(): bool
+    {
+        return in_array(getenv('RLS_STRICT'), ['true', '1'], true);
+    }
+
+    public static function systemContext(): void
+    {
+        if (self::strictRls()) {
+            \App\Support\Rls::platform();
+        }
+    }
+
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
+    {
+        $response = parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+        self::systemContext();
+
+        return $response;
     }
 
     public function createApplication()
@@ -75,6 +96,15 @@ abstract class TestCase extends BaseTestCase
         if (!str_ends_with((string) $database, '_test')) {
             throw new \RuntimeException("Las pruebas borran la base: solo corren en una terminada en _test, no en \"$database\".");
         }
+
+        if (self::strictRls()) {
+            $app['events']->listen(
+                [\Illuminate\Database\Events\MigrationsStarted::class, \Illuminate\Database\Events\DatabaseRefreshed::class],
+                fn () => \App\Support\Rls::apply(),
+            );
+        }
+
+        self::systemContext();
 
         return $app;
     }
@@ -92,6 +122,7 @@ abstract class TestCase extends BaseTestCase
         }
 
         PlatformMail::$outbox = [];
+        self::systemContext();
     }
 
     protected function company(array $options = []): object
