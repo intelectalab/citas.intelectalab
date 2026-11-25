@@ -49,6 +49,49 @@ class Customer extends Authenticatable
         'remember_token',
     ];
 
+    public const CLINICAL = ['medical_notes', 'blood_type'];
+
+    public function scopeVisibleTo($query, User $user)
+    {
+        $query->where('customers.tenant_id', $user->tenant_id);
+        $professionalId = \App\Support\Access::ownProfessionalId($user);
+
+        if ($professionalId === null) {
+            return $query;
+        }
+
+        if ($professionalId === 'none') {
+            return $query->whereRaw('false');
+        }
+
+        return $query->where(function ($q) use ($professionalId) {
+            $q->whereExists(fn ($s) => $s->selectRaw('1')->from('appointments as va')->whereColumn('va.customer_id', 'customers.id')->where('va.professional_id', $professionalId))
+                ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('care_records as vr')->whereColumn('vr.customer_id', 'customers.id')->where('vr.professional_id', $professionalId));
+
+            if (\App\Support\CustomerProfile::fieldsReady()) {
+                $q->orWhere('customers.preferred_professional_id', $professionalId);
+            }
+        });
+    }
+
+    public static function clinicalAllowed(mixed $viewer = null): bool
+    {
+        $viewer ??= auth()->user();
+
+        if (!$viewer instanceof User || !$viewer->tenant_id || $viewer->isTenantAdmin()) {
+            return true;
+        }
+
+        return $viewer->allows('records.view') || $viewer->allows('records.edit') || $viewer->allows('records.all');
+    }
+
+    public function toArray()
+    {
+        $data = parent::toArray();
+
+        return self::clinicalAllowed() ? $data : array_diff_key($data, array_flip(self::CLINICAL));
+    }
+
     protected $casts = [
         'birth_date' => 'date',
         'last_activity_at' => 'datetime',

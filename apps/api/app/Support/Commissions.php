@@ -69,18 +69,20 @@ class Commissions
     public const LABELS = [
         'exception' => 'Excepción',
         'service'   => 'Comisión del servicio',
+        'category'  => 'Comisión de la categoría',
         'own'       => 'Su porcentaje',
         'product'   => 'Comisión del producto',
         'products'  => 'Comisión de productos',
     ];
 
-    public static function match(Collection $rules, string $kind, string $professionalId, ?string $referenceId): ?array
+    public static function match(Collection $rules, string $kind, string $professionalId, ?string $referenceId, ?string $categoryId = null): ?array
     {
         $pick = fn (string $source, ?object $rule) => $rule ? ['source' => $source, 'rule' => $rule] : null;
 
         if ($kind === 'service') {
             return $pick('exception', $rules->first(fn ($r) => $r->professional_id === $professionalId && $r->service_id === $referenceId))
-                ?? $pick('service', $rules->first(fn ($r) => !$r->professional_id && $r->service_id === $referenceId));
+                ?? $pick('service', $rules->first(fn ($r) => !$r->professional_id && $r->service_id && $r->service_id === $referenceId))
+                ?? ($categoryId ? $pick('category', $rules->first(fn ($r) => !$r->professional_id && !$r->service_id && ($r->category_id ?? null) === $categoryId)) : null);
         }
 
         return $pick('product', $rules->first(fn ($r) => $r->product_id && $r->product_id === $referenceId))
@@ -91,7 +93,8 @@ class Commissions
     {
         $key = "{$tenant->id}:{$kind}";
         self::$rules[$key] ??= self::activeRules($tenant->id, $kind);
-        $found = self::match(self::$rules[$key], $kind, $professionalId, $referenceId);
+        $categoryId = $kind === 'service' && $referenceId ? DB::table('services')->where('tenant_id', $tenant->id)->where('id', $referenceId)->value('category_id') : null;
+        $found = self::match(self::$rules[$key], $kind, $professionalId, $referenceId, $categoryId);
 
         if ($found) {
             return [
@@ -100,6 +103,7 @@ class Commissions
                 'fixed'     => (float) $found['rule']->fixed,
                 'rule_id'   => $found['rule']->id,
                 'rule_name' => self::LABELS[$found['source']],
+                'category_id' => $found['rule']->category_id ?? null,
             ];
         }
 
@@ -132,7 +136,7 @@ class Commissions
             return [
                 'found'   => false,
                 'message' => $kind === 'service'
-                    ? "{$professional} no gana comisión en {$item->name}: no tiene porcentaje propio y el servicio no tiene una comisión."
+                    ? "{$professional} no gana comisión en {$item->name}: no tiene porcentaje propio y ni el servicio ni su categoría tienen una comisión."
                     : "No gana comisión por {$item->name}: no hay una comisión de productos.",
             ];
         }
@@ -141,7 +145,8 @@ class Commissions
         $how = match ($rule['source']) {
             'exception' => 'por su excepción en este servicio',
             'service'   => 'por la comisión del servicio, que vale para todos',
-            'own'       => 'por su porcentaje propio, porque el servicio no tiene otra comisión',
+            'category'  => 'por la comisión de la categoría ' . (DB::table('service_categories')->where('id', $rule['category_id'] ?? null)->value('name') ?? '') . ', porque el servicio no tiene una propia',
+            'own'       => 'por su porcentaje propio, porque ni el servicio ni su categoría tienen otra comisión',
             'product'   => 'por la comisión de este producto',
             default     => 'por la comisión de productos, que vale para todos',
         };
@@ -292,7 +297,7 @@ class Commissions
         $taxRate = $sale ? (float) $sale->tax_rate : $salesRules['tax_rate'];
         $included = $sale ? (bool) $sale->prices_include_tax : $salesRules['prices_include_tax'];
         $rules = self::rules($tenant);
-        $base = $rules['base'] === 'gross' ? round((float) ($item->unit_price ?? $value), 2) : self::netOf($value, $taxRate, $included);
+        $base = $rules['base'] === 'gross' ? round($value, 2) : self::netOf($value, $taxRate, $included);
         $rule = self::explain($tenant, 'service', $usage->professional_id, $usage->service_id);
 
         if (!$rule) {

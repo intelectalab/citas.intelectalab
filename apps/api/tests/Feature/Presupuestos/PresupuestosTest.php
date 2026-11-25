@@ -85,7 +85,8 @@ it('un aprobado no se edita ni cambia de estado; se descuentan sesiones del plan
 
 it('rechazado se reabre como borrador; anulado no se reabre', function () {
     $q = ($this->crear)();
-    ($this->estado)($q, 'rejected')->assertOk();
+    ($this->estado)($q, 'rejected')->assertStatus(422)->assertJsonValidationErrors('note');
+    ($this->estado)($q, 'rejected', ['note' => 'Le pareció caro'])->assertOk();
     ($this->estado)($q, 'accepted')->assertStatus(422);
     ($this->estado)($q, 'draft')->assertOk();
     ($this->estado)($q, 'cancelled')->assertOk();

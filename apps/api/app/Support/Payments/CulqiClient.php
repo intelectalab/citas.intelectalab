@@ -127,15 +127,21 @@ class CulqiClient
         return $this->call('delete', '/cards/' . rawurlencode($cardId));
     }
 
-    public function charge(float $amount, string $currency, string $email, string $source, string $description, array $metadata = []): array
+    public const THREE_DS_KEYS = ['eci', 'xid', 'cavv', 'protocolVersion', 'directoryServerTransactionId'];
+
+    public function charge(float $amount, string $currency, string $email, string $source, string $description, array $metadata = [], ?array $authentication = null, ?string $device = null): array
     {
+        $authentication = $authentication ? array_filter(array_intersect_key($authentication, array_flip(self::THREE_DS_KEYS)), fn ($value) => is_scalar($value) && $value !== '') : null;
+
         return $this->call('post', '/charges', array_filter([
-            'amount'        => self::cents($amount),
-            'currency_code' => strtoupper(substr($currency, 0, 3)),
-            'email'         => $email,
-            'source_id'     => $source,
-            'description'   => mb_substr($description, 0, 80),
-            'metadata'      => $metadata ?: null,
+            'amount'             => self::cents($amount),
+            'currency_code'      => strtoupper(substr($currency, 0, 3)),
+            'email'              => $email,
+            'source_id'          => $source,
+            'description'        => mb_substr($description, 0, 80),
+            'metadata'           => $metadata ?: null,
+            'antifraud_details'  => $device ? ['device_finger_print_id' => mb_substr($device, 0, 120)] : null,
+            'authentication_3DS' => $authentication ?: null,
         ], fn ($value) => $value !== null));
     }
 

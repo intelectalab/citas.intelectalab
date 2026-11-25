@@ -15,7 +15,7 @@ import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { apiError } from '@/features/appointments/appointments';
 import type { WebPost } from '@/features/web/web';
 
-type AdminPost = WebPost & { seo_warnings: string[] };
+type AdminPost = WebPost & { seo_warnings: string[]; leads?: number; signups?: number };
 
 interface Option {
   value: string;
@@ -29,7 +29,10 @@ const TABS = [
 
 const slugify = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 
-const EMPTY = { title: '', slug: '', excerpt: '', body: '', business_type: '', seo_title: '', seo_description: '', author: '', status: 'draft' as 'draft' | 'published' };
+const EMPTY = { title: '', slug: '', excerpt: '', body: '', business_type: '', seo_title: '', seo_description: '', author: '', keyword: '', status: 'draft' as 'draft' | 'published' };
+
+const plainText = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+const fold = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 function liveWarnings(form: typeof EMPTY, hasCover: boolean): string[] {
   const out: string[] = [];
@@ -38,6 +41,22 @@ function liveWarnings(form: typeof EMPTY, hasCover: boolean): string[] {
   if (!form.seo_description.trim()) out.push('Falta la descripción para buscadores.');
   else if (form.seo_description.length > 160) out.push(`La descripción para buscadores pasa de 160 caracteres (${form.seo_description.length}).`);
   if (!hasCover) out.push('No tiene portada: al compartirlo saldrá sin imagen.');
+  const text = plainText(form.body);
+  const words = text ? text.split(' ').length : 0;
+  if (!form.excerpt.trim()) out.push('Falta el resumen: es lo que se ve en la lista del blog.');
+  if (words < 300) out.push(`El artículo es corto (${words} palabras): a Google le van mejor los de 300 palabras o más.`);
+  if (!/<h[23][\s>]/i.test(form.body)) out.push('No tiene subtítulos: divide el texto con al menos un subtítulo.');
+  if (/<img\b(?![^>]*\balt="[^"]+")[^>]*>/i.test(form.body)) out.push('Hay imágenes sin texto alternativo: descríbelas para buscadores y lectores de pantalla.');
+  if (!/href="\/(register|precios|rubros|blog)/i.test(form.body)) out.push('No enlaza a otras páginas del sitio (por ejemplo a Precios o a la prueba gratis).');
+  const keyword = fold(form.keyword.trim());
+  if (!keyword) {
+    out.push('Falta la palabra clave: la frase que la gente escribiría en Google para encontrarlo.');
+  } else {
+    if (!fold(form.title).includes(keyword) && !fold(form.seo_title).includes(keyword)) out.push('La palabra clave no está en el título.');
+    if (form.seo_description.trim() && !fold(form.seo_description).includes(keyword)) out.push('La palabra clave no está en la descripción para buscadores.');
+    if (!fold(text.slice(0, 600)).includes(keyword)) out.push('La palabra clave no aparece al comienzo del texto.');
+    if (!form.slug.includes(slugify(keyword))) out.push('La dirección del artículo no lleva la palabra clave.');
+  }
   return out;
 }
 
@@ -80,7 +99,7 @@ export default function BlogAdminPage() {
 
   const startEdit = (post: AdminPost) => {
     setEditing(post);
-    setForm({ title: post.title, slug: post.slug, excerpt: post.excerpt ?? '', body: post.body ?? '', business_type: post.business_type ?? '', seo_title: post.seo_title ?? '', seo_description: post.seo_description ?? '', author: post.author ?? '', status: post.status });
+    setForm({ title: post.title, slug: post.slug, excerpt: post.excerpt ?? '', body: post.body ?? '', business_type: post.business_type ?? '', seo_title: post.seo_title ?? '', seo_description: post.seo_description ?? '', author: post.author ?? '', keyword: post.keyword ?? '', status: post.status });
     setSlugTouched(true);
     setFormError('');
     setOpen(true);
@@ -156,6 +175,7 @@ export default function BlogAdminPage() {
         ? <span className="inline-flex items-start gap-1.5 text-xs text-amber-800" title={p.seo_warnings.join('\n')} data-seo-warnings={p.seo_warnings.length}><AlertTriangle size={14} className="shrink-0" /> {p.seo_warnings.length === 1 ? p.seo_warnings[0] : `${p.seo_warnings.length} cosas por revisar`}</span>
         : <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700"><CheckCircle2 size={14} /> Listo</span>),
     },
+    { header: 'Visitas', cell: (p) => <span className="text-xs text-slate-600 tabular-nums" data-post-stats><strong className="text-sm text-brand-ink">{p.views ?? 0}</strong> visitas<span className="block">{p.leads ?? 0} contactos · {p.signups ?? 0} registros</span></span> },
     { header: 'Estado', cell: (p) => <Badge tone={p.status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} bold>{p.status === 'published' ? 'Publicado' : 'Borrador'}</Badge> },
     {
       header: 'Acciones',
@@ -211,6 +231,8 @@ export default function BlogAdminPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={labelClass}>Rubro</label><Select ariaLabel="Rubro" value={form.business_type} onChange={(e) => setForm({ ...form, business_type: String(e.target.value ?? '') })} options={types} placeholder="Para todos los rubros" /></div>
             <div><label className={labelClass} htmlFor="post-author">Autor (opcional)</label><input id="post-author" maxLength={150} value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} className={inputClass} /></div>
+            <div className="sm:col-span-2"><label className={labelClass} htmlFor="post-keyword">Palabra clave</label><input id="post-keyword" maxLength={80} value={form.keyword} onChange={(e) => setForm({ ...form, keyword: e.target.value })} className={inputClass} placeholder="Ej. reducir inasistencias" /><p className="text-xs text-slate-500 mt-1">La frase que alguien escribiría en Google para encontrar este artículo. Úsala en el título, al comienzo del texto y en la descripción.</p></div>
+            {editing && <p className="sm:col-span-2 text-xs text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2" data-post-stats-detail>Este artículo tuvo <strong>{editing.views ?? 0}</strong> visitas. Llegaron desde él {editing.leads ?? 0} contactos y {editing.signups ?? 0} registros.</p>}
           </div>
           <div>
             <label className={labelClass} htmlFor="post-excerpt">Resumen</label>
@@ -218,7 +240,8 @@ export default function BlogAdminPage() {
           </div>
           <div>
             <label className={labelClass}>Contenido</label>
-            <RichTextEditor value={form.body} onChange={(html) => setForm((f) => ({ ...f, body: html }))} minHeight={240} />
+            <RichTextEditor value={form.body} onChange={(html) => setForm((f) => ({ ...f, body: html }))} minHeight={240} sitePaths linkVariables={[{ token: '/register', label: 'Prueba gratis' }, { token: '/precios', label: 'Precios' }, { token: '/rubros', label: 'Rubros' }, { token: '/blog', label: 'Blog' }]} />
+            <p className="text-xs text-slate-500 mt-1.5">Para enlazar a otra página de este sitio escribe su dirección empezando con /, por ejemplo /precios o /rubros/barberia.</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 p-4 space-y-3" data-seo-box>

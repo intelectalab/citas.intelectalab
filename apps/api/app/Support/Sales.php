@@ -27,9 +27,10 @@ class Sales
         'gateway'   => 'Devolución por la pasarela',
         'gift_card' => 'Gift card',
         'points'    => 'Puntos',
+        'credit'    => 'Saldo a favor',
     ];
 
-    public const LOYALTY_METHODS = ['gift_card', 'points'];
+    public const LOYALTY_METHODS = ['gift_card', 'points', 'credit'];
 
     public const NEEDS_REFERENCE = ['card', 'transfer', 'yape', 'plin'];
 
@@ -61,13 +62,14 @@ class Sales
             'arrive_minutes'     => max(0, min(240, (int) AppointmentFlow::rule($tenant, 'pos.arrive_minutes'))),
             'cash_review_over'   => max(0, round((float) AppointmentFlow::rule($tenant, 'cash.review_over'), 2)),
             'refund_approval_over' => max(0, round((float) AppointmentFlow::rule($tenant, 'pos.refund_approval_over'), 2)),
-        ];
+        ] + self::discountRules($tenant);
     }
 
-    public static function totals(array $rules, float $gross, float $discount = 0): array
+    public static function totals(array $rules, float $gross, float $discount = 0, float $tip = 0): array
     {
         $net = max(0, round($gross - $discount, 2));
         $rate = $rules['tax_rate'] / 100;
+        $tip = max(0, round($tip, 2));
 
         $tax = $rules['prices_include_tax'] ? round($net - $net / (1 + $rate), 2) : round($net * $rate, 2);
 
@@ -75,7 +77,23 @@ class Sales
             'subtotal' => round($gross, 2),
             'discount' => round($discount, 2),
             'tax'      => $tax,
-            'total'    => $rules['prices_include_tax'] ? $net : round($net + $tax, 2),
+            'tip'      => $tip,
+            'total'    => round(($rules['prices_include_tax'] ? $net : $net + $tax) + $tip, 2),
+        ];
+    }
+
+    public static function discountReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= Schema::hasColumn('sales', 'manual_discount');
+    }
+
+    public static function discountRules(Tenant $tenant): array
+    {
+        return [
+            'tips_enabled' => (bool) AppointmentFlow::rule($tenant, 'pos.tips_enabled'),
+            'max_discount' => max(0, min(100, (float) AppointmentFlow::rule($tenant, 'pos.max_discount'))),
         ];
     }
 
@@ -219,6 +237,8 @@ class Sales
             $reference = Loyalty::payWithGiftCard($tenant, $sale, $amount, $reference, $user);
         } elseif ($method === 'points') {
             $reference = Loyalty::payWithPoints($tenant, $sale, $amount, $user);
+        } elseif ($method === 'credit') {
+            $reference = CustomerCredit::pay($tenant, $sale, $amount);
         }
 
         $session = null;
@@ -293,11 +313,11 @@ class Sales
         $packages = [];
 
         if ($isPaid) {
+            Inventory::deductForSale($tenant, $sale, $user, strict: true);
             Invoicing::issue($tenant, $sale, $doc, $user);
             $packages = Packages::issueForSale($tenant, $sale, $user);
             $memberships = Memberships::issueForSale($tenant, $sale, $user);
             $giftCards = Loyalty::issueForSale($tenant, $sale, $user);
-            Inventory::deductForSale($tenant, $sale, $user);
             Loyalty::earnForSale($tenant, $sale, $user);
             Commissions::forSale($tenant, $sale);
             Webhooks::salePaid($tenant->id, $sale);
@@ -332,6 +352,10 @@ class Sales
             return 'Adelanto por devolver';
         }
 
+        if (($sale->deposit_outcome ?? null) === 'credited' && $sale->status === 'paid') {
+            return 'Quedó como saldo a favor';
+        }
+
         return self::STATUS_LABELS[$sale->status] ?? $sale->status;
     }
 
@@ -356,6 +380,9 @@ class Sales
             'subtotal'           => round((float) $sale->subtotal, 2),
             'discount'           => round((float) $sale->discount, 2),
             'tax'                => round((float) $sale->tax, 2),
+            'tip'                => round((float) ($sale->tip ?? 0), 2),
+            'manual_discount'    => round((float) ($sale->manual_discount ?? 0), 2),
+            'discount_reason'    => $sale->discount_reason ?? null,
             'total'              => round((float) $sale->total, 2),
             'paid'               => round((float) $sale->paid, 2),
             'balance'            => round((float) $sale->balance, 2),

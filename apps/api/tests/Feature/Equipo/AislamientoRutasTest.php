@@ -8,10 +8,12 @@ use Illuminate\Support\Str;
 const TABLE_BY_PARAM = [
     'appointment'        => 'appointments',
     'automation'         => 'automation_rules',
+    'survey'             => 'surveys',
     'availability_block' => 'availability_blocks',
     'branch'             => 'branches',
     'campaign'           => 'marketing_campaigns',
     'careRecord'         => 'care_records',
+    'recordFile'         => 'care_record_files',
     'register'           => 'cash_registers',
     'session'            => 'cash_sessions',
     'rule'               => 'commission_rules',
@@ -65,6 +67,7 @@ const TABLE_BY_ROUTE = [
     'api/billing/invoices/{invoice}/receipt' => ['invoice' => 'subscription_invoices'],
     'api/billing/transfers/{id}/voucher'     => ['id' => 'plan_payments'],
     'api/support/tickets/{ticket}/files/{message}' => ['message' => 'saas_support_messages'],
+    'api/membership-plans/{plan}'            => ['plan' => 'membership_plans'],
 ];
 
 const PLATFORM_PREFIXES = ['api/admin', 'api/tenants', 'api/saas-plans', 'api/tenant-contacts'];
@@ -75,6 +78,7 @@ const NOT_A_RECORD = [
     'variant' => 'Es la versión del logo (clara u oscura) de la propia empresa: no es un registro que se pueda pedir de otra.',
     'kind'    => 'Es el tipo de aviso (recordatorio, confirmación...) de la propia empresa: no es un registro que se pueda pedir de otra.',
     'method'  => 'Es el medio de pago (Yape, Plin...) cuyo QR se guarda en la propia empresa: no es un registro que se pueda pedir de otra.',
+    'addon'   => 'Es un complemento del catálogo de la plataforma (igual para todas las empresas); se quita o se mantiene solo el de la propia empresa.',
 ];
 
 const JUSTIFIED_ROUTES = [

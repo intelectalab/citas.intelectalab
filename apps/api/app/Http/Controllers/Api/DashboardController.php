@@ -55,7 +55,7 @@ class DashboardController extends Controller
         $scheduled = \App\Support\WorkMinutes::compute($tenant, $dayStart, $dayStart->copy()->addDay(), $limit, $own)['total'];
         $booked = $active->sum(fn (Appointment $a) => $a->starts_at->diffInMinutes($a->ends_at));
 
-        $upcoming = $today->filter(fn (Appointment $a) => in_array($a->status, self::OPEN, true) && $a->ends_at->gte($now))->take(6)->values();
+        $upcoming = $today->filter(fn (Appointment $a) => in_array($a->status, self::OPEN, true) && $a->ends_at->gte($now))->take(8)->values();
         $branches = $own ? collect() : $active->groupBy('branch_id')->map(fn ($group) => ['name' => $group->first()->branch?->name, 'count' => $group->count()])->sortByDesc('count')->values();
 
         $monthAgo = $dayStart->copy()->subDays(30);
@@ -108,19 +108,41 @@ class DashboardController extends Controller
             ];
         }
 
+        if ($tenant->hasModule('inventory') && ($user->allows('products.view') || $user->allows('inventory.view')) && AppointmentFlow::rule($tenant, 'inventory.alert_min_stock')) {
+            $pending[] = [
+                'key'   => 'low_stock',
+                'count' => \Illuminate\Support\Facades\DB::table('stock_balances as sb')
+                    ->join('products as p', 'p.id', '=', 'sb.product_id')
+                    ->join('warehouses as w', 'w.id', '=', 'sb.warehouse_id')
+                    ->where('sb.tenant_id', $tenant->id)
+                    ->where('p.track_stock', true)->where('p.status', 'active')->whereNull('p.deleted_at')
+                    ->where('p.min_stock', '>', 0)->whereColumn('sb.quantity', '<=', 'p.min_stock')
+                    ->when($limit, fn ($q, $id) => $q->where('w.branch_id', $id))
+                    ->count(),
+                'href'  => '/products',
+            ];
+        }
+
+        $pending = array_merge($pending, \App\Support\HomeBoard::attention($tenant, $user, $own, $limit, $now));
+
         $activity = AppointmentStatusHistory::where('tenant_id', $tenant->id)
             ->where('created_at', '<=', $now->toIso8601String())
             ->when($own, fn ($q) => $q->whereHas('appointment', fn ($q) => $q->where('professional_id', $own)))
             ->with(['appointment.customer', 'appointment.dependent', 'appointment.service', 'actor', 'customerActor'])
             ->orderByDesc('created_at')->limit(8)->get();
 
+        $money = $own || $user->allows('reports.money') || $user->allows('sales.view');
+        $revenue = !$own && $money && \App\Support\Sales::ready() && $tenant->hasModule('pos') ? \App\Support\HomeBoard::revenue($tenant, $limit, $dayStart) : null;
+        $stockList = $tenant->hasModule('inventory') && ($user->allows('products.view') || $user->allows('inventory.view')) && AppointmentFlow::rule($tenant, 'inventory.alert_min_stock') ? \App\Support\HomeBoard::lowStock($tenant, $limit) : [];
+
         return response()->json([
             'scope' => $own ? 'own' : 'company',
+            'money' => $money,
             'today' => [
                 'total'        => $active->count(),
                 'last_week'    => $lastWeek,
                 'completed'    => $completed->count(),
-                'value'        => round((float) $completed->filter(fn ($a) => ($a->currency ?? $currency) === $currency)->sum('price'), 2),
+                'value'        => !$money ? null : ($own ? round((float) $completed->filter(fn ($a) => ($a->currency ?? $currency) === $currency)->sum('price'), 2) : $this->collected($tenant->id, $currency, $limit, $dayStart, $dayEnd)),
                 'waiting'      => $today->where('status', AppointmentFlow::CHECKED_IN)->count(),
                 'in_progress'  => $today->where('status', AppointmentFlow::IN_PROGRESS)->count(),
                 'to_confirm'   => $today->where('status', AppointmentFlow::PENDING)->filter(fn (Appointment $a) => $a->starts_at->gte($now))->count(),
@@ -136,6 +158,8 @@ class DashboardController extends Controller
                     'branch'       => $a->branch?->name,
                     'status'       => $a->status,
                     'status_name'  => AppointmentFlow::name($tenant, $a->status),
+                    'source'       => \App\Support\HomeBoard::source($a->source),
+                    'customer_id'  => $a->customer_id,
                 ]),
             ],
             'month' => [
@@ -143,11 +167,17 @@ class DashboardController extends Controller
                 'no_show'              => $noShow,
                 'cancelled'            => $cancelled,
                 'attendance'           => $attended + $noShow > 0 ? (int) round($attended * 100 / ($attended + $noShow)) : null,
-                'value'                => round((float) ($byStatus[AppointmentFlow::COMPLETED]->value ?? 0), 2),
+                'value'                => $money ? round((float) ($byStatus[AppointmentFlow::COMPLETED]->value ?? 0), 2) : null,
                 'new_customers'        => $newCustomers,
                 'new_customers_before' => $newCustomersBefore,
                 'top_services'         => $topServices->map(fn ($row) => ['name' => $row->name, 'count' => (int) $row->total]),
+                'ticket'               => $revenue['ticket'] ?? null,
+                'sales'                => $revenue['sales'] ?? null,
             ],
+            'revenue'   => $revenue['days'] ?? null,
+            'low_stock' => $stockList,
+            'marketing' => $own ? null : \App\Support\HomeBoard::marketing($tenant, $user),
+            'my_day'    => $own ? \App\Support\HomeBoard::myDay($tenant, $user, $own, $limit, $now) : null,
             'pending'  => $pending,
             'activity' => $activity->map(fn (AppointmentStatusHistory $event) => [
                 'at'      => $local($event->created_at),
@@ -185,6 +215,18 @@ class DashboardController extends Controller
                 }
             })
             ->count();
+    }
+
+    private function collected(string $tenantId, string $currency, ?string $branchId, Carbon $from, Carbon $to): float
+    {
+        return round((float) DB::table('payments')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('status', ['confirmed', 'refunded'])
+            ->when(Currency::ready(), fn ($q) => $q->where('currency', $currency))
+            ->when($branchId, fn ($q, $id) => $q->where('branch_id', $id))
+            ->whereRaw('coalesce(confirmed_at, created_at) >= ?', [$from->copy()->utc()->toIso8601String()])
+            ->whereRaw('coalesce(confirmed_at, created_at) < ?', [$to->copy()->utc()->toIso8601String()])
+            ->sum('amount'), 2);
     }
 
     private function ownProfessionalId(User $user): ?string

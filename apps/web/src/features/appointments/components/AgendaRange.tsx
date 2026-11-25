@@ -12,7 +12,7 @@ export interface RangeProfessional {
   id: string;
   display_name: string;
   color_code: string | null;
-  schedules: { weekday: number; starts: string; ends: string }[];
+  schedules: { weekday: number; starts: string; ends: string; date?: string }[];
 }
 
 export interface RangePayload {
@@ -82,10 +82,18 @@ const scheduleFor = (data: RangePayload, date: string, professionalId: string) =
   const weekday = weekdayOf(date);
   return data.professionals
     .filter((p) => !professionalId || p.id === professionalId)
-    .flatMap((p) => p.schedules.filter((s) => s.weekday === weekday));
+    .flatMap((p) => p.schedules.filter((s) => (s.date ? s.date === date : s.weekday === weekday)));
 };
 
 const closedOn = (data: RangePayload, date: string) => data.holidays.find((h) => h.date === date && h.closed);
+
+const occupancyOn = (data: RangePayload, day: string, professionalId: string, items: Appointment[]) => {
+  if (closedOn(data, day)) return null;
+  const scheduled = scheduleFor(data, day, professionalId).reduce((sum, s) => sum + toMinutes(s.ends) - toMinutes(s.starts), 0);
+  if (scheduled <= 0) return null;
+  const booked = items.filter((a) => dateOf(a.starts_at) === day && !RELEASED.includes(a.status)).reduce((sum, a) => sum + a.duration_minutes, 0);
+  return Math.min(100, Math.round((booked * 100) / scheduled));
+};
 
 interface ViewProps {
   data: RangePayload;
@@ -150,7 +158,7 @@ export function AgendaWeek({ data, days, appointments, professionalId, colors, i
                     <span className="w-12 shrink-0 text-sm font-bold text-brand-ink tabular-nums">{timeOf(appointment.starts_at)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-slate-800 truncate">{appointment.dependent?.name ?? appointment.customer?.name}</span>
-                      <span className="block text-xs text-slate-500 truncate">{appointment.service?.name}{appointment.professional ? ` · ${appointment.professional.display_name}` : ''}</span>
+                      <span className="block text-xs text-slate-500 truncate">{appointment.service?.name}{appointment.professional ? ` · ${appointment.professional.display_name}` : ''}{appointment.room ? ` · ${appointment.room.name}` : ''}</span>
                     </span>
                     <span className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${style.block}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />{appointment.status_name}
@@ -173,10 +181,22 @@ export function AgendaWeek({ data, days, appointments, professionalId, colors, i
           {days.map((day, index) => {
             const closed = closedOn(data, day);
             const holiday = data.holidays.find((h) => h.date === day);
+            const count = appointments.filter((a) => dateOf(a.starts_at) === day && !RELEASED.includes(a.status)).length;
+            const occ = occupancyOn(data, day, professionalId, appointments);
             return (
               <button key={day} type="button" data-week-head={day} onClick={() => onDay(day)} title="Ver este día" className={`flex-1 px-2 py-2 border-l border-slate-200 text-left hover:bg-white ${day === today ? 'bg-brand-soft/20' : ''}`}>
                 <span className="block text-[11px] font-bold uppercase text-slate-400">{WEEKDAY_NAMES[index]}</span>
                 <span className={`block text-lg font-extrabold leading-tight ${day === today ? 'text-brand-accent' : 'text-slate-800'}`}>{Number(day.slice(8, 10))}</span>
+                {!closed && (
+                  <span className="block text-[10px] font-semibold text-slate-500 truncate" data-week-summary={day}>
+                    {count} {count === 1 ? 'cita' : 'citas'}{occ !== null ? ` · ${occ} %` : ''}
+                  </span>
+                )}
+                {occ !== null && (
+                  <span className="mt-1 block h-1 rounded-full bg-slate-200 overflow-hidden" title={`Ocupación ${occ} %`}>
+                    <span className={`block h-full rounded-full ${occ >= 80 ? 'bg-rose-500' : occ >= 55 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${occ}%` }} />
+                  </span>
+                )}
                 {holiday && <span className={`block text-[10px] font-semibold truncate ${closed ? 'text-rose-700' : 'text-sky-700'}`}>{closed ? 'Cerrado' : 'Feriado'} · {holiday.name}</span>}
               </button>
             );
@@ -264,7 +284,7 @@ export function AgendaWeek({ data, days, appointments, professionalId, colors, i
                       }}
                       onDragEnd={() => { dragging.current = null; setDropTarget(null); }}
                       onClick={(event) => { event.stopPropagation(); onOpen(appointment.id); }}
-                      title={`${timeOf(appointment.starts_at)} · ${appointment.customer?.name ?? ''} · ${appointment.service?.name ?? ''} · ${appointment.professional?.display_name ?? ''} · ${appointment.status_name}`}
+                      title={`${timeOf(appointment.starts_at)} · ${appointment.customer?.name ?? ''} · ${appointment.service?.name ?? ''} · ${appointment.professional?.display_name ?? ''}${appointment.room ? ` · ${appointment.room.name}` : ''} · ${appointment.status_name}`}
                       className={`absolute rounded-md border px-1.5 py-0.5 text-left overflow-hidden shadow-xs hover:shadow-md transition-shadow ${appointment.can_reschedule ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${style.block} ${RELEASED.includes(appointment.status) ? 'opacity-70' : ''}`}
                       style={{
                         top: from + 1,

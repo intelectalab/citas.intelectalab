@@ -39,6 +39,8 @@ class Service extends Model
         'recall_days',
         'recall_service_id',
         'status_id',
+        'description',
+        'requires_record',
     ];
 
     protected $casts = [
@@ -52,6 +54,7 @@ class Service extends Model
         'is_virtual' => 'boolean',
         'capacity' => 'integer',
         'recall_days' => 'integer',
+        'requires_record' => 'boolean',
     ];
 
     public function category()
@@ -100,5 +103,52 @@ class Service extends Model
         $branches = $this->branch_ids;
 
         return !$branchId || $branches === [] || in_array($branchId, $branches, true);
+    }
+
+    private static ?bool $pricesReady = null;
+
+    public static function branchPricesReady(): bool
+    {
+        return self::$pricesReady ??= \Illuminate\Support\Facades\Schema::hasTable('service_branch_prices');
+    }
+
+    public function branchPrices(): array
+    {
+        if (!self::branchPricesReady() || !$this->id) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('service_branch_prices')
+            ->where('service_id', $this->id)
+            ->pluck('price', 'branch_id')
+            ->map(fn ($price) => (float) $price)
+            ->all();
+    }
+
+    public static function pricesAt(?string $branchId): array
+    {
+        if (!$branchId || !self::branchPricesReady()) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('service_branch_prices')
+            ->where('branch_id', $branchId)
+            ->pluck('price', 'service_id')
+            ->map(fn ($price) => (float) $price)
+            ->all();
+    }
+
+    public function priceAt(?string $branchId): string|float
+    {
+        if (!$branchId || !self::branchPricesReady()) {
+            return $this->price;
+        }
+
+        $price = \Illuminate\Support\Facades\DB::table('service_branch_prices')
+            ->where('service_id', $this->id)
+            ->where('branch_id', $branchId)
+            ->value('price');
+
+        return $price ?? $this->price;
     }
 }

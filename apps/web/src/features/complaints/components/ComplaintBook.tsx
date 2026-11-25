@@ -9,12 +9,13 @@ import { makeVocabulary } from '@/hooks/useVocabulary';
 import Select from '@/app/components/common/Select';
 import OptionCard from '@/app/components/common/OptionCard';
 import { ErrorAlert } from '@/app/components/common/Alert';
+import TurnstileBox from '@/app/components/common/TurnstileBox';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { apiError } from '@/features/appointments/appointments';
 import { money } from '@/features/sales/sales';
 import { KIND_HELP, longDate, type Complaint, type Issuer } from '../complaints';
 
-type Book = { issuer: Issuer; logo: string | null; vocabulary: Record<string, string> | null; currency: string; days: number; documents: string[] };
+type Book = { issuer: Issuer; logo: string | null; vocabulary: Record<string, string> | null; currency: string; days: number; documents: string[]; captcha_site_key?: string | null };
 
 const EMPTY = {
   name: '', document_type: 'DNI', document_number: '', address: '', phone: '', email: '',
@@ -45,6 +46,9 @@ export default function ComplaintBook({ code }: { code?: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState('');
+  const [captchaRound, setCaptchaRound] = useState(0);
+  const [captchaDown, setCaptchaDown] = useState(false);
   const [done, setDone] = useState<Complaint | null>(null);
   const endpoint = code ? `/complaints-book/${code}` : '/complaints-book';
 
@@ -67,13 +71,14 @@ export default function ComplaintBook({ code }: { code?: string }) {
     try {
       setBusy(true);
       setError('');
-      const res = await api.post(endpoint, { ...form, amount: form.amount === '' ? null : form.amount });
+      const res = await api.post(endpoint, { ...form, amount: form.amount === '' ? null : form.amount, ...(captcha ? { turnstile_token: captcha } : {}) });
       setDone(res.data.complaint);
       window.scrollTo({ top: 0 });
     } catch (err: any) {
       const list = err.response?.data?.errors as Record<string, string[]> | undefined;
       if (list) setErrors(Object.fromEntries(Object.entries(list).map(([k, v]) => [k, v[0]])));
       setError(apiError(err, 'No se pudo enviar. Revisa los datos e inténtalo de nuevo.'));
+      if (book?.captcha_site_key) setCaptchaRound((value) => value + 1);
     } finally {
       setBusy(false);
     }
@@ -246,9 +251,10 @@ export default function ComplaintBook({ code }: { code?: string }) {
           {errors.accepted && <p className="text-xs font-medium text-rose-600" data-field-error="accepted">{errors.accepted}</p>}
         </section>
 
+        <TurnstileBox siteKey={book?.captcha_site_key} onToken={setCaptcha} onUnavailable={() => setCaptchaDown(true)} resetKey={captchaRound} error={errors.turnstile_token} />
         <ErrorAlert message={error} />
         <p className="text-xs text-slate-500 px-1">Una vez enviado no se puede cambiar ni borrar. Presentar un reclamo no impide acudir a otras vías de solución ni es requisito para denunciar ante el Indecopi.</p>
-        <button type="submit" disabled={busy} data-complaint-submit className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">
+        <button type="submit" disabled={busy || Boolean(book?.captcha_site_key && !captcha && !captchaDown)} data-complaint-submit className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50">
           {busy && <Loader2 size={15} className="animate-spin" />} Enviar
         </button>
       </form>

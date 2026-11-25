@@ -5,7 +5,7 @@ import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, History } from 'lucide-rea
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { DataTable, type Column, type ExportColumn, type MetricCardItem } from '@/app/components/ui/table/DataTable';
-import { momentOf } from '@/features/sales/sales';
+import { momentOf, money } from '@/features/sales/sales';
 import MovementDrawer from './MovementDrawer';
 import { MOVEMENT_TONES, formatUnits, type InventoryMovement } from '../inventory';
 import { useInventoryBoard } from '../useInventoryBoard';
@@ -130,6 +130,14 @@ export default function InventoryKardex() {
       cell: (m) => <span key={`ma-${m.id}`} className="text-sm font-semibold text-slate-800 tabular-nums">{formatUnits(m.balance_after)} u.</span>,
     },
     {
+      header: 'Costo',
+      cell: (m) => <span key={`mc-${m.id}`} className="text-sm text-slate-700 tabular-nums">{m.unit_cost > 0 ? money(m.unit_cost, inv.currency) : '—'}</span>,
+    },
+    {
+      header: 'Referencia',
+      cell: (m) => <span key={`mref-${m.id}`} className="text-xs text-slate-600">{m.reference_label ?? '—'}</span>,
+    },
+    {
       header: 'Motivo / Responsable',
       cell: (m) => (
         <div key={`mr-${m.id}`} className="text-xs">
@@ -149,6 +157,7 @@ export default function InventoryKardex() {
     { header: 'Cantidad', type: 'number', value: (m) => m.quantity },
     { header: 'Saldo después', type: 'number', value: (m) => m.balance_after },
     { header: 'Costo unitario', type: 'money', value: (m) => m.unit_cost },
+    { header: 'Referencia', value: (m) => m.reference_label ?? '' },
     { header: 'Motivo', value: (m) => m.reason },
     { header: 'Registrado por', value: (m) => m.by },
   ];
@@ -157,6 +166,11 @@ export default function InventoryKardex() {
     <div className="space-y-6 mb-8">
       <ErrorAlert message={inv.error} />
       <SuccessAlert message={inv.notice} />
+      {board?.movements_cut && (
+        <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" data-kardex-cut>
+          Se muestran los últimos {board.movements_cut.toLocaleString('es-PE')} movimientos. Los más antiguos están en el reporte de Inventario.
+        </p>
+      )}
 
       <DataTable<InventoryMovement>
         title="Kárdex"

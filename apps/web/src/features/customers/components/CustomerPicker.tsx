@@ -48,7 +48,7 @@ export default function CustomerPicker({ value, onChange, active = true, require
 
     setSearching(true);
     const timer = setTimeout(() => {
-      api.get('/customers', { params: { search: query.trim() } })
+      api.get('/customers', { params: { search: query.trim(), pick: 1 } })
         .then((res) => setResults(res.data?.data ?? []))
         .catch(() => setResults([]))
         .finally(() => setSearching(false));

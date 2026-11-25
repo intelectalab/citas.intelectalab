@@ -4,7 +4,7 @@ import Button from '@/app/components/common/Button';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
-import { CalendarClock, Mail, Send } from 'lucide-react';
+import { CalendarClock, Mail, MessageCircle, Send } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import DateField from '@/app/components/common/DateField';
@@ -44,6 +44,8 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
   const [time, setTime] = useState('09:00');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [channel, setChannel] = useState<'email' | 'whatsapp'>('email');
+  const [channels, setChannels] = useState<{ email: { available: boolean; reason: string | null }; whatsapp: { available: boolean; reason: string | null }; variables: { token: string; label: string }[] } | null>(null);
 
   const company = user?.tenant?.name ?? '';
 
@@ -74,7 +76,12 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
   useEffect(() => {
     if (!isOpen || editing) return;
     setEmail(undefined);
+    setChannel('email');
+    setChannels(null);
     if (!picked) return;
+    api.get(`/customers/${picked.id}/channels`)
+      .then((res) => setChannels(res.data))
+      .catch(() => setChannels(null));
     api.get(`/customers/${picked.id}`)
       .then((res) => setEmail(res.data.customer?.email ?? null))
       .catch(() => setEmail(null));
@@ -101,7 +108,7 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
       setError('');
       const res = editing
         ? await api.put(`/messages/${editing.id}`, payload)
-        : await api.post('/messages', { ...payload, customer_id: picked?.id });
+        : await api.post('/messages', { ...payload, customer_id: picked?.id, channel });
       const message: Message = res.data;
       const notice = message.status === 'scheduled'
         ? `Mensaje programado para el ${new Date(message.scheduled_at!).toLocaleString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false })}. Puedes cambiarlo o cancelarlo mientras no salga.`
@@ -132,12 +139,28 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
             <CustomerPicker value={picked} onChange={(c) => { setPicked(c); if (c && starter) setBody((current) => current.replace(/Hola [^:<]*:/, `Hola ${c.first_name}:`)); }} locked={Boolean(customer)} />
           )}
 
-          {email === null && (editing || picked) && (
+          {!editing && channels && (
+            <div>
+              <span className={labelClass}>¿Por dónde le escribes?</span>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Canal del mensaje">
+                {([['email', 'Correo', <Mail key="i" size={15} />], ['whatsapp', 'WhatsApp', <MessageCircle key="i" size={15} />]] as ['email' | 'whatsapp', string, React.ReactNode][]).map(([key, label, icon]) => (
+                  <button key={key} type="button" role="radio" aria-checked={channel === key} data-channel={key} disabled={!channels[key].available} title={channels[key].reason ?? undefined} onClick={() => setChannel(key)}
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${channel === key ? 'border-brand bg-brand-soft/15 text-brand-ink ring-2 ring-brand/10' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    {icon} {label}
+                  </button>
+                ))}
+              </div>
+              {!channels.whatsapp.available && channels.whatsapp.reason && <p className="mt-1.5 text-xs text-slate-500" data-whatsapp-reason>WhatsApp no está disponible: {channels.whatsapp.reason}</p>}
+              {channel === 'whatsapp' && <p className="mt-1.5 text-xs text-slate-500">Sale como texto simple: el formato y el asunto no se ven en WhatsApp.</p>}
+            </div>
+          )}
+
+          {email === null && channel === 'email' && (editing || picked) && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-no-email>
               Este cliente no tiene un correo registrado: agrégalo en su ficha para poder escribirle.
             </p>
           )}
-          {email && <p className="-mt-2 text-xs text-slate-500">Se envía a <span className="font-semibold text-slate-700">{email}</span>.</p>}
+          {email && channel === 'email' && <p className="-mt-2 text-xs text-slate-500">Se envía a <span className="font-semibold text-slate-700">{email}</span>.</p>}
 
           {emailState === 'none' && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -164,7 +187,7 @@ export default function ComposePanel({ isOpen, onClose, customer = null, editing
             </div>
           )}
 
-          <MessageFields idPrefix="compose" subject={subject} onSubject={setSubject} body={body} onBody={setBody} subjectPlaceholder="Ej. Tus resultados están listos" />
+          <MessageFields idPrefix="compose" subject={subject} onSubject={setSubject} body={body} onBody={setBody} variables={editing ? [] : channels?.variables ?? []} subjectPlaceholder="Ej. Tus resultados están listos" />
 
           <div>
             <span className={labelClass}>¿Cuándo sale?</span>

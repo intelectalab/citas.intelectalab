@@ -47,9 +47,16 @@ class Announcements
         };
     }
 
+    public static function linkReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= Schema::hasColumn('saas_announcements', 'published');
+    }
+
     public static function live()
     {
-        return DB::table('saas_announcements')->where('starts_at', '<=', now())
+        return DB::table('saas_announcements')->when(self::linkReady(), fn ($q) => $q->where('published', true))->where('starts_at', '<=', now())
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()));
     }
 
@@ -74,6 +81,8 @@ class Announcements
                 'kind_label' => self::KINDS[$row->kind] ?? $row->kind,
                 'starts_at'  => Carbon::parse($row->starts_at)->toIso8601String(),
                 'ends_at'    => $row->ends_at ? Carbon::parse($row->ends_at)->toIso8601String() : null,
+                'link_url'   => $row->link_url ?? null,
+                'link_label' => !empty($row->link_url) ? ($row->link_label ?: 'Ver más') : null,
                 'dismissed'  => in_array($row->id, $dismissed, true),
             ])->values()->all();
     }
@@ -122,6 +131,9 @@ class Announcements
             'starts_at'         => $start->toIso8601String(),
             'ends_at'           => $end?->toIso8601String(),
             'state'             => $start->gt($now) ? 'scheduled' : ($end && $end->lte($now) ? 'ended' : 'live'),
+            'published'         => (bool) ($row->published ?? true),
+            'link_url'          => $row->link_url ?? null,
+            'link_label'        => $row->link_label ?? null,
             'reach'             => self::reachCount($row),
             'dismissals'        => DB::table('saas_announcement_dismissals')->where('announcement_id', $row->id)->count(),
         ];
@@ -140,7 +152,11 @@ class Announcements
             'starts_at'         => Carbon::parse($data['starts_on'], $zone)->startOfDay()->utc(),
             'ends_at'           => !empty($data['ends_on']) ? Carbon::parse($data['ends_on'], $zone)->addDay()->startOfDay()->utc() : null,
             'updated_at'        => now(),
-        ];
+        ] + (self::linkReady() ? [
+            'link_url'          => !empty($data['link_url']) ? trim($data['link_url']) : null,
+            'link_label'        => !empty($data['link_url']) && !empty($data['link_label']) ? trim($data['link_label']) : null,
+            'published'         => (bool) ($data['published'] ?? true),
+        ] : []);
 
         if ($id) {
             DB::table('saas_announcements')->where('id', $id)->update($values);

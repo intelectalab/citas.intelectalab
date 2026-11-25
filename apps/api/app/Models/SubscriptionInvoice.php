@@ -26,6 +26,7 @@ class SubscriptionInvoice extends Model
         'period_start',
         'period_end',
         'notes',
+        'list_amount',
     ];
 
     protected $casts = [
@@ -35,6 +36,9 @@ class SubscriptionInvoice extends Model
         'paid_at'      => 'datetime',
         'period_start' => 'datetime',
         'period_end'   => 'datetime',
+        'issued_at'    => 'datetime',
+        'next_attempt_at' => 'datetime',
+        'simulated'    => 'boolean',
     ];
 
     public function subscription(): BelongsTo

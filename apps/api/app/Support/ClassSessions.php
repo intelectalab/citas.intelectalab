@@ -166,6 +166,19 @@ class ClassSessions
                 $result['overridable'] = false;
                 $result['reasons'][] = ['code' => 'ROOM_BUSY', 'message' => 'La sala ya tiene otra clase a esa hora', 'detail' => "{$other->title} {$from}"];
             }
+
+            $appointment = \App\Models\Appointment::where('tenant_id', $tenant->id)
+                ->where('room_id', $roomId)
+                ->whereNotIn('status', AppointmentFlow::RELEASED)
+                ->where('starts_at', '<', $end->toIso8601String())
+                ->where('ends_at', '>', $start->toIso8601String())
+                ->first();
+
+            if ($appointment) {
+                $result['ok'] = false;
+                $result['overridable'] = false;
+                $result['reasons'][] = ['code' => 'ROOM_BUSY', 'message' => 'La sala ya tiene una cita a esa hora', 'detail' => $appointment->code . ' ' . $appointment->starts_at->copy()->setTimezone($start->getTimezone())->format('H:i')];
+            }
         }
 
         return $result;

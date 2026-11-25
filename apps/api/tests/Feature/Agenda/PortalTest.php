@@ -96,6 +96,7 @@ describe('adelanto', function () {
     it('si otra persona toma el horario antes del pago, el link se anula y no se cobra', function () {
         $token = ($this->reservar)($this->at($this->co->tenant, '10:00'))->assertStatus(202)->json('deposit.token');
         $otra = $this->customer($this->co->tenant, 'Marta', 'Quispe');
+        $this->travelTo(now()->addMinutes(\App\Support\PaymentLinks::HOLD_MINUTES + 1));
         $this->book($this->co, $otra, $this->servicio, $this->ana, $this->at($this->co->tenant, '10:00'))->assertCreated();
 
         $this->postJson("/api/pay/{$token}/simulate", ['result' => 'approved'])->assertStatus(422);
@@ -202,6 +203,13 @@ describe('quién entra al portal', function () {
     it('una clienta no entra a las pantallas del personal', function () {
         $this->as($this->clienta)->getJson('/api/appointments')->assertForbidden();
         $this->as($this->clienta)->getJson('/api/sales')->assertForbidden();
+    });
+
+    it('el portal sabe qué módulos usa la empresa para no pedir los apagados', function () {
+        $modules = $this->as($this->clienta)->getJson('/api/portal/overview')->assertOk()->json('modules');
+        foreach (['classes', 'memberships', 'quotes', 'packages'] as $m) {
+            expect(in_array($m, $modules, true))->toBe($this->co->tenant->fresh()->hasModule($m));
+        }
     });
 
     it('sin iniciar sesión no entra nadie', function () {

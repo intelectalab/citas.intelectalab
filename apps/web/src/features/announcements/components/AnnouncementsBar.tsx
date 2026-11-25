@@ -6,6 +6,16 @@ import { api } from '@/lib/axios';
 import RichTextView from '@/app/components/common/RichTextView';
 import { useAuth } from '@/hooks/useAuth';
 import { KIND_CARD, type FeedItem } from '../announcements';
+import Link from 'next/link';
+
+export function AnnouncementLink({ item }: { item: FeedItem }) {
+  if (!item.link_url) return null;
+  const external = item.link_url.startsWith('http');
+  const className = 'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-bold hover:bg-brand-hover';
+  return external
+    ? <a href={item.link_url} target="_blank" rel="noopener noreferrer" data-announcement-link className={className}>{item.link_label ?? 'Ver más'}</a>
+    : <Link href={item.link_url} data-announcement-link className={className}>{item.link_label ?? 'Ver más'}</Link>;
+}
 
 const ICON = { news: Megaphone, maintenance: Wrench, important: AlertTriangle };
 
@@ -40,6 +50,10 @@ export default function AnnouncementsBar() {
               <span>{item.title}</span>
             </p>
             <RichTextView body={item.body} className="mt-1 text-sm text-slate-700" />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {item.link_url && <AnnouncementLink item={item} />}
+              <Link href="/news" data-announcement-news className="text-xs font-semibold text-brand-accent hover:text-brand-ink">Ver novedades</Link>
+            </div>
             <button type="button" aria-label="Cerrar el anuncio" onClick={() => dismiss(item.id)} className="absolute top-2.5 right-2.5 p-1.5 rounded-lg text-slate-400 hover:text-brand-ink hover:bg-white/70 cursor-pointer" data-announcement-close>
               <X size={16} />
             </button>

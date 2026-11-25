@@ -4,7 +4,7 @@ export interface Message {
   id: string;
   kind: string;
   kind_label: string;
-  channel: 'email' | 'whatsapp';
+  channel: 'email' | 'whatsapp' | 'call';
   status: MessageStatus;
   status_label: string;
   to: string | null;
@@ -151,6 +151,7 @@ export interface WhatsAppConversation {
   status: 'open' | 'needs_human' | 'closed';
   status_label: string;
   handoff_reason: string | null;
+  handoff_summary?: string | null;
   unread: number;
   window_open: boolean;
   window_ends_at: string | null;
@@ -173,6 +174,7 @@ export interface WhatsAppMessage {
   at: string | null;
   delivered_at: string | null;
   read_at: string | null;
+  media?: { mime: string | null; name: string | null; image: boolean } | null;
 }
 
 export interface WhatsAppThread {

@@ -144,7 +144,7 @@ class CampaignController extends Controller
             'by'           => ($author = $campaign->created_by ? DB::table('users')->where('id', $campaign->created_by)->first() : null) ? Person::name($author) : null,
             'stats'        => $stats,
             'results'      => $withResults && in_array($campaign->status, ['sending', 'sent'], true) ? Campaigns::results($campaign) : null,
-            'editable'     => $campaign->status === 'scheduled',
+            'editable'     => in_array($campaign->status, ['scheduled', 'draft'], true),
         ];
     }
 
@@ -201,9 +201,29 @@ class CampaignController extends Controller
         $tenant = $this->tenant($request);
         $validated = $request->validate($this->segmentRules($tenant) + $this->channelRule(), self::SEGMENT_MESSAGES + self::CHANNEL_MESSAGES);
         $channel = $validated['channel'] ?? 'email';
-        $audience = Campaigns::audience($tenant, $this->segment($tenant, $validated, $request->user()), false, $channel);
+        $audience = Campaigns::audience($tenant, $this->segment($tenant, $validated, $request->user()), true, $channel);
+        $firstId = collect($audience['ids'] ?? [])->flatMap(fn ($byReason) => $byReason['eligible'] ?? [])->first();
+        $sample = $firstId ? DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $firstId)->first(['first_name', 'last_name']) : null;
+        unset($audience['ids']);
 
-        return response()->json($audience + ['quota' => Campaigns::quotas($tenant, $audience, $audience['channel'])]);
+        return response()->json($audience + [
+            'quota'  => Campaigns::quotas($tenant, $audience, $audience['channel']),
+            'sample' => $sample ? ['first_name' => $sample->first_name, 'name' => Person::name($sample)] : null,
+        ]);
+    }
+
+    public function segments(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $only = Access::branchLimit($request->user());
+
+        return response()->json([
+            'segments' => collect(Campaigns::groups($tenant))
+                ->filter(fn ($g) => !$g['needs'])
+                ->map(fn ($g) => $g + ['count' => Campaigns::customers($tenant, array_filter(['group' => $g['key'], 'only_branch' => $only]))->count()])
+                ->values(),
+            'branch' => $only ? DB::table('branches')->where('id', $only)->value('name') : null,
+        ]);
     }
 
     private const CHANNEL_MESSAGES = [
@@ -221,16 +241,17 @@ class CampaignController extends Controller
         $channels = Campaigns::channelsOf($channel);
         $withEmail = in_array('email', $channels, true);
         $withWhatsApp = in_array('whatsapp', $channels, true);
+        $draft = $request->input('send') === 'draft';
 
         $validated = $request->validate($this->segmentRules($tenant) + $this->channelRule() + [
             'name'         => 'required|string|max:150',
-            'subject'      => [$withEmail ? 'required' : 'nullable', 'string', 'max:200'],
-            'body'         => [$withEmail ? 'required' : 'nullable', 'string', 'max:20000'],
+            'subject'      => [$withEmail && !$draft ? 'required' : 'nullable', 'string', 'max:200'],
+            'body'         => [$withEmail && !$draft ? 'required' : 'nullable', 'string', 'max:20000'],
             'coupon_id'    => ['nullable', 'uuid', Rule::exists('coupons', 'id')->where('tenant_id', $tenant->id)],
-            'send'         => ['required', Rule::in(['now', 'scheduled'])],
+            'send'         => ['required', Rule::in(['now', 'scheduled', 'draft'])],
             'scheduled_at' => 'required_if:send,scheduled|nullable|date_format:' . self::LOCAL_FORMAT,
         ] + ($withWhatsApp ? [
-            'wa_template' => ['required', 'string', 'max:512', 'regex:/^[a-z0-9_]+$/'],
+            'wa_template' => [$draft ? 'nullable' : 'required', 'string', 'max:512', 'regex:/^[a-z0-9_]+$/'],
             'wa_language' => ['nullable', 'string', 'max:15', 'regex:/^[A-Za-z]{2,3}(_[A-Za-z]{2,4})?$/'],
             'wa_params'   => ['nullable', 'array', 'max:' . Campaigns::WA_MAX_PARAMS],
             'wa_params.*' => ['required', Rule::in(array_keys(Campaigns::WA_VARIABLES))],
@@ -245,11 +266,33 @@ class CampaignController extends Controller
         $subject = (string) ($validated['subject'] ?? '');
         $body = (string) ($validated['body'] ?? '');
 
-        if (empty($validated['coupon_id']) && (($withEmail && (str_contains($body, '[Cupón]') || str_contains($subject, '[Cupón]'))) || in_array('Cupón', $params, true))) {
+        if (!$draft && empty($validated['coupon_id']) && (($withEmail && (str_contains($body, '[Cupón]') || str_contains($subject, '[Cupón]'))) || in_array('Cupón', $params, true))) {
             throw ValidationException::withMessages(['coupon_id' => 'El mensaje usa el dato [Cupón], pero no elegiste un cupón. Elige uno o quita ese dato del mensaje.']);
         }
 
         $at = null;
+
+        if ($draft) {
+            $segment = $this->segment($tenant, $validated, $request->user());
+            $at = !empty($validated['scheduled_at']) ? Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['scheduled_at'], $tenant->zone()) : null;
+
+            return [
+                'name'           => trim($validated['name']),
+                'segment'        => json_encode($segment),
+                'audience_label' => mb_substr(Campaigns::label($tenant, $segment), 0, 200),
+                'subject'        => $withEmail ? ($subject ?: null) : null,
+                'body'           => $withEmail && $body !== '' ? \App\Support\RichText::normalize($body) : null,
+                'coupon_id'      => $validated['coupon_id'] ?? null,
+                'scheduled_at'   => $at?->copy()->utc(),
+                'channel'        => $channel,
+            ] + (Campaigns::whatsappReady() ? [
+                'whatsapp' => $withWhatsApp && !empty($validated['wa_template']) ? json_encode([
+                    'template' => $validated['wa_template'],
+                    'language' => $validated['wa_language'] ?? null ?: 'es',
+                    'params'   => $params,
+                ]) : null,
+            ] : []);
+        }
 
         if ($validated['send'] === 'scheduled') {
             $at = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['scheduled_at'], $tenant->zone());
@@ -318,7 +361,7 @@ class CampaignController extends Controller
         DB::table('marketing_campaigns')->insert($data + [
             'id'         => $id,
             'tenant_id'  => $tenant->id,
-            'status'     => 'scheduled',
+            'status'     => $request->input('send') === 'draft' ? 'draft' : 'scheduled',
             'stats'      => '{}',
             'created_by' => $request->user()->id,
             'created_at' => now(),
@@ -332,7 +375,9 @@ class CampaignController extends Controller
             Campaigns::dispatch($tenant, $created);
         }
 
-        $this->auditDelivery($request, $created);
+        if ($created->status !== 'draft') {
+            $this->auditDelivery($request, $created);
+        }
 
         return response()->json($this->present($tenant, DB::table('marketing_campaigns')->where('id', $id)->first()), 201);
     }
@@ -473,10 +518,11 @@ class CampaignController extends Controller
     {
         $tenant = $this->tenant($request);
         $row = $this->find($tenant, $campaign);
-        abort_unless($row->status === 'scheduled', 422, 'Solo se puede cambiar una campaña programada que aún no sale.');
+        abort_unless(in_array($row->status, ['scheduled', 'draft'], true), 422, 'Solo se puede cambiar una campaña programada o en borrador que aún no sale.');
 
         $data = $this->input($request, $tenant);
-        DB::table('marketing_campaigns')->where('id', $row->id)->where('status', 'scheduled')->update($data + ['updated_at' => now()]);
+        $status = $request->input('send') === 'draft' ? 'draft' : 'scheduled';
+        DB::table('marketing_campaigns')->where('id', $row->id)->where('status', $row->status)->update($data + ['status' => $status, 'updated_at' => now()]);
         $fresh = DB::table('marketing_campaigns')->where('id', $row->id)->first();
         [$before, $after] = Audit::changed($this->auditable($row), $this->auditable($fresh));
 
@@ -488,7 +534,9 @@ class CampaignController extends Controller
             Campaigns::dispatch($tenant, $fresh);
         }
 
-        $this->auditDelivery($request, $fresh, $row);
+        if ($status !== 'draft') {
+            $this->auditDelivery($request, $fresh, $row);
+        }
 
         return response()->json($this->present($tenant, DB::table('marketing_campaigns')->where('id', $row->id)->first()));
     }
@@ -497,9 +545,9 @@ class CampaignController extends Controller
     {
         $tenant = $this->tenant($request);
         $row = $this->find($tenant, $campaign);
-        abort_unless($row->status === 'scheduled', 422, 'Solo se puede cancelar una campaña programada que aún no sale.');
+        abort_unless(in_array($row->status, ['scheduled', 'draft'], true), 422, 'Solo se puede cancelar una campaña programada o en borrador que aún no sale.');
 
-        DB::table('marketing_campaigns')->where('id', $row->id)->where('status', 'scheduled')->update(['status' => 'cancelled', 'updated_at' => now()]);
+        DB::table('marketing_campaigns')->where('id', $row->id)->where('status', $row->status)->update(['status' => 'cancelled', 'updated_at' => now()]);
         Audit::log($request, 'campaign.cancelled', [
             'tenant'       => $tenant->id,
             'entity_type'  => 'campaign',

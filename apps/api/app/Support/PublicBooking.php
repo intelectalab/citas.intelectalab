@@ -41,6 +41,7 @@ class PublicBooking
     {
         return $tenant->hasModule('booking')
             && (bool) AppointmentFlow::rule($tenant, 'booking.enabled')
+            && (bool) (self::pageReady() ? ($tenant->settings?->booking_page['published'] ?? true) : true)
             && !Subscriptions::lockedFor($tenant);
     }
 
@@ -65,6 +66,7 @@ class PublicBooking
             'cover_url'     => self::coverPath($tenant->id) ? rtrim((string) config('app.url'), '/') . '/api/public/booking/' . $tenant->slug . '/cover?v=' . ($stored['cover_version'] ?? 0) : null,
             'socials'       => $socials,
             'show_policies' => (bool) ($stored['show_policies'] ?? true),
+            'published'     => (bool) ($stored['published'] ?? true),
         ];
     }
 

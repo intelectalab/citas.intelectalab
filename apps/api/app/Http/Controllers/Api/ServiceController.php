@@ -41,7 +41,112 @@ class ServiceController extends Controller
             default => null,
         };
 
-        return response()->json($query->orderBy('created_at', 'desc')->get());
+        $services = $query->orderBy('created_at', 'desc')->get();
+        $prices = Service::branchPricesReady()
+            ? DB::table('service_branch_prices')->where('tenant_id', $currentUser->tenant_id)->get(['service_id', 'branch_id', 'price'])->groupBy('service_id')
+            : collect();
+
+        $rooms = \App\Support\RoomBooking::ready()
+            ? DB::table('service_rooms')->where('tenant_id', $currentUser->tenant_id)->get(['service_id', 'room_id'])->groupBy('service_id')
+            : collect();
+
+        $professionals = \App\Support\ServiceProfessionals::map($currentUser->tenant_id);
+        $team = \App\Support\CatalogExtras::activeProfessionals($currentUser->tenant_id);
+        $teamNames = $team->pluck('display_name', 'id');
+        $roomNames = $rooms->isNotEmpty() ? DB::table('rooms')->where('tenant_id', $currentUser->tenant_id)->pluck('name', 'id') : collect();
+        $branchNames = DB::table('branches')->where('tenant_id', $currentUser->tenant_id)->orderBy('name')->pluck('name', 'id');
+
+        return response()->json($services->map(function (Service $service) use ($rooms, $professionals, $prices, $teamNames, $roomNames, $branchNames) {
+            $roomIds = ($rooms[$service->id] ?? collect())->pluck('room_id')->values()->all();
+            $proIds = $professionals[$service->id] ?? [];
+            $doers = $proIds ? $teamNames->only($proIds) : $teamNames;
+
+            return $service->toArray() + [
+                'room_ids'      => $roomIds,
+                'room_names'    => collect($roomIds)->map(fn ($id) => $roomNames[$id] ?? null)->filter()->sort()->values()->all(),
+                'professional_ids' => $proIds,
+                'professional_names' => $doers->values()->sort()->values()->all(),
+                'branch_names'  => ($service->branch_ids ?: null) ? collect($service->branch_ids)->map(fn ($id) => $branchNames[$id] ?? null)->filter()->sort()->values()->all() : [],
+                'branch_prices' => ($prices[$service->id] ?? collect())->map(fn ($row) => ['branch_id' => $row->branch_id, 'price' => (float) $row->price])->values()->all(),
+            ];
+        }));
+    }
+
+    public function impact(Request $request, $id)
+    {
+        $tenantId = $request->user()->tenant_id;
+        $service = Service::where('tenant_id', $tenantId)->findOrFail($id);
+        $query = $this->futureAppointments($service);
+
+        return response()->json([
+            'future_count' => (clone $query)->count(),
+            'has_history'  => DB::table('appointments')->where('service_id', $service->id)->exists(),
+            'appointments' => (clone $query)->with(['customer:id,first_name,last_name', 'branch:id,name,timezone', 'professional:id,display_name'])->orderBy('starts_at')->limit(20)->get()
+                ->map(fn ($a) => [
+                    'id'           => $a->id,
+                    'code'         => $a->code,
+                    'starts_at'    => $a->starts_at->copy()->setTimezone($a->branch?->timezone ?: 'America/Lima')->format('Y-m-d\TH:i'),
+                    'customer'     => $a->customer ? \App\Support\Person::name($a->customer) : null,
+                    'professional' => $a->professional?->display_name,
+                ]),
+        ]);
+    }
+
+    public function nextCode(Request $request)
+    {
+        $tenantId = $request->user()->tenant_id;
+        $categoryId = $request->query('category_id');
+        $name = $categoryId ? DB::table('service_categories')->where('tenant_id', $tenantId)->where('id', $categoryId)->value('name') : null;
+
+        return response()->json(['code' => self::suggestCode($tenantId, $name)]);
+    }
+
+    public static function suggestCode(string $tenantId, ?string $categoryName): string
+    {
+        $letters = preg_replace('/[^A-Z]/', '', strtoupper(Str::ascii(explode(' ', trim((string) $categoryName))[0] ?? '')));
+        $prefix = strlen($letters) >= 2 ? substr($letters, 0, 3) : 'SRV';
+        $highest = DB::table('services')->where('tenant_id', $tenantId)->whereNotNull('code')
+            ->pluck('code')
+            ->map(fn ($code) => preg_match('/^' . $prefix . '-(\d+)$/i', trim((string) $code), $m) ? (int) $m[1] : 0)
+            ->max() ?? 0;
+
+        return $prefix . '-' . str_pad((string) ($highest + 1), 2, '0', STR_PAD_LEFT);
+    }
+
+    private function futureAppointments(Service $service)
+    {
+        return \App\Models\Appointment::where('tenant_id', $service->tenant_id)
+            ->where('service_id', $service->id)
+            ->where('starts_at', '>', now())
+            ->whereIn('status', [\App\Support\AppointmentFlow::PENDING, \App\Support\AppointmentFlow::CONFIRMED, \App\Support\AppointmentFlow::CHECKED_IN]);
+    }
+
+    private function saveBranchPrices(Service $service, ?array $rows): void
+    {
+        if ($rows === null || !Service::branchPricesReady()) {
+            return;
+        }
+
+        DB::table('service_branch_prices')->where('service_id', $service->id)->delete();
+
+        $seen = [];
+        foreach ($rows as $row) {
+            $price = $row['price'] ?? null;
+
+            if ($price === null || $price === '' || isset($seen[$row['branch_id']]) || round((float) $price, 2) === round((float) $service->price, 2)) {
+                continue;
+            }
+
+            $seen[$row['branch_id']] = true;
+            DB::table('service_branch_prices')->insert([
+                'tenant_id'  => $service->tenant_id,
+                'service_id' => $service->id,
+                'branch_id'  => $row['branch_id'],
+                'price'      => round((float) $price, 2),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     private function rules(Request $request, ?string $serviceId = null): array
@@ -51,13 +156,26 @@ class ServiceController extends Controller
         return [
             'category_id' => ['nullable', Rule::exists('service_categories', 'id')->where('tenant_id', $tenantId)],
             'name' => 'required|string|max:150',
-            'code' => 'nullable|string|max:30',
-            'duration_minutes' => 'required|integer|min:1',
+            'code' => ['nullable', 'string', 'max:30', function ($attribute, $value, $fail) use ($tenantId, $serviceId) {
+                if (is_string($value) && \App\Support\CatalogExtras::codeTaken($tenantId, $value, $serviceId)) {
+                    $fail('Ya hay otro servicio con ese código. Usa uno distinto.');
+                }
+            }],
+            'description' => 'sometimes|nullable|string|max:2000',
+            'requires_record' => 'sometimes|boolean',
+            'duration_minutes' => 'required|integer|min:5|max:720',
+            'branch_prices' => 'sometimes|nullable|array',
+            'branch_prices.*.branch_id' => ['required', 'uuid', Rule::exists('branches', 'id')->where('tenant_id', $tenantId)],
+            'branch_prices.*.price' => 'nullable|numeric|min:0|max:9999999',
             'buffer_before_minutes' => 'nullable|integer|min:0',
             'buffer_after_minutes' => 'nullable|integer|min:0',
             'price' => 'required|numeric|min:0',
             'branch_ids' => 'sometimes|nullable|array',
             'branch_ids.*' => ['uuid', Rule::exists('branches', 'id')->where('tenant_id', $tenantId)],
+            'room_ids' => 'sometimes|nullable|array|max:50',
+            'room_ids.*' => ['uuid', Rule::exists('rooms', 'id')->where('tenant_id', $tenantId)->where('kind', 'room')],
+            'professional_ids' => 'sometimes|nullable|array|max:200',
+            'professional_ids.*' => ['uuid', Rule::exists('professionals', 'id')->where('tenant_id', $tenantId)],
             'requires_deposit' => 'sometimes|boolean',
             'deposit_type' => ['sometimes', Rule::in(['percent', 'amount'])],
             'deposit_value' => 'sometimes|numeric|min:0|max:99999',
@@ -83,6 +201,8 @@ class ServiceController extends Controller
     private const MESSAGES = [
         'status_id.required' => 'Elige el estado del servicio: Activo o Inactivo.',
         'status_id.exists'   => 'Ese estado no es válido para un servicio.',
+        'duration_minutes.min' => 'La duración mínima de un servicio es de 5 minutos.',
+        'duration_minutes.max' => 'La duración máxima de un servicio es de 12 horas (720 minutos).',
     ];
 
     private function normalize(array $data, ?Service $service = null): array
@@ -91,6 +211,16 @@ class ServiceController extends Controller
 
         if ($kind !== Service::KIND_GROUP) {
             $data['capacity'] = 1;
+        }
+
+        if (array_key_exists('code', $data)) {
+            $data['code'] = trim((string) $data['code']) ?: null;
+        }
+
+        if (!\App\Support\CatalogExtras::serviceFields()) {
+            unset($data['description'], $data['requires_record']);
+        } elseif (array_key_exists('description', $data)) {
+            $data['description'] = trim((string) $data['description']) ?: null;
         }
 
         if (!\App\Support\VideoLinks::ready()) {
@@ -165,12 +295,18 @@ class ServiceController extends Controller
         $validated['buffer_after_minutes'] = $validated['buffer_after_minutes'] ?? 0;
 
         $branchIds = $validated['branch_ids'] ?? null;
-        unset($validated['branch_ids']);
+        $branchPrices = $validated['branch_prices'] ?? null;
+        $roomIds = $validated['room_ids'] ?? null;
+        $professionalIds = $validated['professional_ids'] ?? null;
+        unset($validated['branch_ids'], $validated['branch_prices'], $validated['room_ids'], $validated['professional_ids']);
         $service = Service::create($validated);
         $this->saveBranches($service, $branchIds);
+        \App\Support\RoomBooking::save($service, $roomIds);
+        \App\Support\ServiceProfessionals::save($service, $professionalIds, \App\Support\ServiceProfessionals::visibleTo($currentUser));
+        $this->saveBranchPrices($service, $branchPrices);
         $this->audit($request, 'service.created', $service, [], array_filter($this->auditable($service->fresh()), fn ($value) => $value !== null && $value !== false));
 
-        return response()->json($service->load('category'), 201);
+        return response()->json($service->load('category')->toArray() + ['room_ids' => \App\Support\RoomBooking::roomIdsOf($service->id), 'professional_ids' => \App\Support\ServiceProfessionals::idsOf($service->id)], 201);
     }
 
     public function update(Request $request, $id)
@@ -188,24 +324,66 @@ class ServiceController extends Controller
 
         $previous = $this->auditable($service);
         $branchIds = array_key_exists('branch_ids', $validated) ? ($validated['branch_ids'] ?? []) : null;
-        unset($validated['branch_ids']);
+        $branchPrices = array_key_exists('branch_prices', $validated) ? ($validated['branch_prices'] ?? []) : null;
+        $roomIds = array_key_exists('room_ids', $validated) ? ($validated['room_ids'] ?? []) : null;
+        $professionalIds = array_key_exists('professional_ids', $validated) ? ($validated['professional_ids'] ?? []) : null;
+        $wasActive = $service->status?->slug !== 'inactive';
+        unset($validated['branch_ids'], $validated['branch_prices'], $validated['room_ids'], $validated['professional_ids']);
         $service->update($this->normalize($validated, $service));
         $this->saveBranches($service, $branchIds);
+        \App\Support\RoomBooking::save($service, $roomIds);
+        \App\Support\ServiceProfessionals::save($service, $professionalIds, \App\Support\ServiceProfessionals::visibleTo($currentUser));
+        $this->saveBranchPrices($service, $branchPrices);
         [$before, $after] = Audit::changed($previous, $this->auditable($service->fresh()));
 
         if ($after) {
             $this->audit($request, 'service.updated', $service, $before, $after);
         }
 
-        return response()->json($service->load(['category', 'status']));
+        $service->load(['category', 'status']);
+        $future = $wasActive && $service->status?->slug === 'inactive' ? $this->futureAppointments($service)->count() : 0;
+
+        return response()->json($service->toArray() + [
+            'room_ids'            => \App\Support\RoomBooking::roomIdsOf($service->id),
+            'professional_ids'    => \App\Support\ServiceProfessionals::idsOf($service->id),
+            'branch_prices'       => collect($service->branchPrices())->map(fn ($price, $branch) => ['branch_id' => $branch, 'price' => $price])->values()->all(),
+            'future_appointments' => $future,
+            'notice'              => $future > 0 ? "Quedó inactivo. Ya no se puede agendar, pero sus {$future} citas por venir se mantienen: revísalas en Citas." : null,
+        ]);
     }
 
     public function destroy(Request $request, $id)
     {
         $currentUser = $request->user();
 
-        $service = Service::where('tenant_id', $currentUser->tenant_id)->findOrFail($id);
-        $service->delete();
+        $service = Service::where('tenant_id', $currentUser->tenant_id)->with('status')->findOrFail($id);
+        $future = $this->futureAppointments($service)->count();
+        $history = DB::table('appointments')->where('service_id', $service->id)->exists()
+            || (\Illuminate\Support\Facades\Schema::hasTable('sale_items') && DB::table('sale_items')->where('reference_id', $service->id)->exists());
+
+        if ($future > 0 || $history) {
+            $inactive = Status::whereHas('module', fn ($q) => $q->where('name', 'services'))->whereNull('tenant_id')->where('slug', 'inactive')->value('id');
+
+            if ($inactive && $service->status_id !== $inactive) {
+                $previous = $this->auditable($service);
+                $service->update(['status_id' => $inactive]);
+                [$before, $after] = Audit::changed($previous, $this->auditable($service->fresh()));
+                $this->audit($request, 'service.deactivated', $service, $before, $after + ['reason' => $future > 0 ? 'Tiene citas por venir' : 'Tiene historial']);
+            }
+
+            return response()->json([
+                'deactivated'         => true,
+                'future_appointments' => $future,
+                'message'             => $future > 0
+                    ? "No se eliminó: tiene {$future} " . ($future === 1 ? 'cita por venir' : 'citas por venir') . '. Lo dejamos inactivo para que ya no se agende; esas citas se mantienen.'
+                    : 'No se eliminó porque ya tiene citas o ventas en su historial. Lo dejamos inactivo para que ya no se agende.',
+            ]);
+        }
+
+        DB::transaction(function () use ($service) {
+            DB::table('service_professionals')->where('service_id', $service->id)->delete();
+            $service->delete();
+        });
         Audit::log($request, 'service.deleted', [
             'tenant'       => $currentUser->tenant_id,
             'entity_type'  => 'service',
@@ -240,11 +418,16 @@ class ServiceController extends Controller
             'branches'              => ($ids = Service::branchMap($service->tenant_id)[$service->id] ?? []) ? DB::table('branches')->whereIn('id', $ids)->orderBy('name')->pluck('name')->implode(', ') : 'Todas las sedes',
             'service_kind'          => $service->kind === Service::KIND_GROUP ? 'Grupal' : 'Individual',
             'capacity'              => (int) $service->capacity,
+            'rooms'                 => ($roomIds = \App\Support\RoomBooking::roomIdsOf($service->id)) ? DB::table('rooms')->whereIn('id', $roomIds)->orderBy('name')->pluck('name')->implode(', ') : null,
+            'professionals'         => \App\Support\ServiceProfessionals::names($service->id),
             'deposit'               => $deposit,
             'recall_label'          => $service->recall_label,
             'recall_days'           => $service->recall_days,
             'recall_service'        => $service->recall_service_id ? Service::where('id', $service->recall_service_id)->value('name') : null,
-        ];
+        ] + (\App\Support\CatalogExtras::serviceFields() ? [
+            'description'           => $service->description,
+            'requires_record'       => (bool) $service->requires_record,
+        ] : []);
     }
 
     private function audit(Request $request, string $action, Service $service, array $before, array $after): void

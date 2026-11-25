@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 
 class SignupGuard
@@ -21,12 +20,12 @@ class SignupGuard
 
     public static function siteKey(): ?string
     {
-        return self::turnstileOn() ? config('services.turnstile.site_key') : null;
+        return Captcha::siteKey('signup');
     }
 
     public static function turnstileOn(): bool
     {
-        return filled(config('services.turnstile.site_key')) && filled(config('services.turnstile.secret_key'));
+        return Captcha::on('signup');
     }
 
     public static function check(Request $request): void
@@ -51,11 +50,7 @@ class SignupGuard
             self::fail('Llenaste el formulario demasiado rápido. Revisa tus datos y vuelve a intentarlo en unos segundos.', 'SIGNUP_TOO_FAST');
         }
 
-        if (self::turnstileOn() && !self::turnstilePassed($request)) {
-            throw ValidationException::withMessages([
-                'turnstile_token' => 'Confirma que no eres un robot antes de continuar.',
-            ]);
-        }
+        Captcha::assert($request, 'signup');
     }
 
     public static function ownerEmailTaken(string $email): bool
@@ -93,27 +88,6 @@ class SignupGuard
         }
 
         return is_array($data) && is_int($data['t'] ?? null) ? $data['t'] : null;
-    }
-
-    private static function turnstilePassed(Request $request): bool
-    {
-        $response = trim((string) $request->input('turnstile_token', ''));
-
-        if ($response === '') {
-            return false;
-        }
-
-        try {
-            $result = Http::asForm()->timeout(8)->post(config('services.turnstile.verify_url'), [
-                'secret'   => config('services.turnstile.secret_key'),
-                'response' => $response,
-                'remoteip' => $request->ip(),
-            ]);
-        } catch (\Throwable) {
-            return false;
-        }
-
-        return $result->ok() && $result->json('success') === true;
     }
 
     private static function fail(string $message, string $code): never

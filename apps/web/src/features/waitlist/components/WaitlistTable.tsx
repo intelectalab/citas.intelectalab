@@ -1,7 +1,7 @@
 'use client';
 
 import Badge from '@/app/components/common/Badge';
-import { ErrorAlert } from '@/app/components/common/Alert';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarSearch, Edit2, Eye, Hourglass, PhoneCall, RotateCcw, Star, UserRound, XCircle } from 'lucide-react';
@@ -52,6 +52,7 @@ export default function WaitlistTable() {
   const [removing, setRemoving] = useState<WaitlistEntry | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const [finding, setFinding] = useState<WaitlistEntry | null>(null);
   const [slotDays, setSlotDays] = useState<WaitlistSlotDay[]>([]);
@@ -93,7 +94,10 @@ export default function WaitlistTable() {
     try {
       setBusyId(entry.id);
       setError('');
-      await api.post(`/waitlist/${entry.id}/status`, { status });
+      setNotice('');
+      const res = await api.post(`/waitlist/${entry.id}/status`, { status });
+      const sent = res.data?.notice;
+      if (sent) (sent.sent ? setNotice : setError)(sent.message);
       load();
     } catch (err) {
       setError(apiError(err, 'No se pudo actualizar la lista de espera.'));
@@ -307,7 +311,7 @@ export default function WaitlistTable() {
             {can('waitlist.edit') && (<button
               data-notify={e.id}
               aria-pressed={e.status === 'notified'}
-              title={e.status === 'notified' ? 'Ya se le avisó. Clic para quitar la marca' : 'Marcar que ya se le avisó'}
+              title={e.status === 'notified' ? 'Ya se le avisó. Clic para quitar la marca' : 'Avisarle por correo o WhatsApp del primer horario libre que le sirve'}
               disabled={busy}
               onClick={() => changeStatus(e, e.status === 'notified' ? 'waiting' : 'notified')}
               className={`${iconButton} ${e.status === 'notified' ? 'text-sky-600 bg-sky-50' : 'hover:text-sky-600 hover:bg-sky-50'}`}
@@ -329,6 +333,7 @@ export default function WaitlistTable() {
   return (
     <div className="space-y-6 mb-8">
       <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
       {user?.tenant?.rules?.['waitlist.enabled'] === false && (
         <p data-waitlist-off className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           La lista de espera está apagada: no se avisa a nadie cuando se libera un horario y en el portal no aparece. Lo anotado se conserva. Puedes encenderla en Configuración → Lista de espera.

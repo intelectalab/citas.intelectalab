@@ -3,7 +3,7 @@
 import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, Eye, EyeOff, FileCheck2, FilePen, Lock } from 'lucide-react';
+import { ClipboardList, Eye, EyeOff, FileCheck2, FilePen } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
@@ -22,8 +22,7 @@ const PERIODS: { id: string; label: string; days: number | null }[] = [
 
 const CARDS: { id: string; title: string; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
   { id: 'draft', title: 'Borradores', icon: <FilePen size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
-  { id: 'signed', title: 'Firmadas', icon: <FileCheck2 size={18} />, color: 'text-emerald-600', active: 'border-emerald-500 ring-2 ring-emerald-500/20', hover: 'hover:border-emerald-300' },
-  { id: 'locked', title: 'Bloqueadas', icon: <Lock size={18} />, color: 'text-slate-500', active: 'border-slate-500 ring-2 ring-slate-500/20', hover: 'hover:border-slate-400' },
+  { id: 'locked', title: 'Firmadas', icon: <FileCheck2 size={18} />, color: 'text-emerald-600', active: 'border-emerald-500 ring-2 ring-emerald-500/20', hover: 'hover:border-emerald-300' },
 ];
 
 export default function RecordsTable() {

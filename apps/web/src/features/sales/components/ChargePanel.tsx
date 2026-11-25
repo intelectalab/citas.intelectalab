@@ -34,6 +34,7 @@ const METHOD_ICONS: Record<string, React.ReactNode> = {
   plin: <Smartphone size={16} />,
   gift_card: <Gift size={16} />,
   points: <Sparkles size={16} />,
+  credit: <Wallet size={16} />,
   link: <Link2 size={16} />,
   deposit: <Link2 size={16} />,
   gateway: <Link2 size={16} />,
@@ -122,10 +123,12 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
   const isCash = method === 'cash';
   const isGiftCard = method === 'gift_card';
   const isPoints = method === 'points';
+  const isCredit = method === 'credit';
+  const creditBalance = context?.credit?.balance ?? 0;
   const loyalty = context?.loyalty ?? null;
   const pointsInfo = loyalty?.points ?? null;
   const needsReference = isGiftCard || (context?.methods.find((m) => m.value === method)?.needs_reference ?? false);
-  const allowPartial = Boolean(context?.partial_payments || isGiftCard || isPoints);
+  const allowPartial = Boolean(context?.partial_payments || isGiftCard || isPoints || isCredit);
   const cashClosed = Boolean(context && isCash && context.cash.required && context.cash.sessions.length === 0);
   const amountNumber = Number(amount || 0);
   const pointsNeeded = isPoints && pointsInfo && pointsInfo.point_value > 0 ? Math.ceil(amountNumber / pointsInfo.point_value) : 0;
@@ -341,7 +344,7 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass} htmlFor="charge-ruc">RUC *</label>
-            <input id="charge-ruc" inputMode="numeric" maxLength={11} placeholder="20123456789" className={inputClass} value={ruc} onChange={(e) => setRuc(e.target.value.replace(/\D/g, ''))} />
+            <input id="charge-ruc" inputMode="numeric" maxLength={11} placeholder="20123456786" className={inputClass} value={ruc} onChange={(e) => setRuc(e.target.value.replace(/\D/g, ''))} />
           </div>
           <div>
             <label className={labelClass} htmlFor="charge-business">Razón social *</label>
@@ -397,12 +400,19 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
                 </div>
               )}
 
+              {(sale?.manual_discount ?? 0) > 0 && (
+                <div className="flex items-start justify-between gap-3 text-emerald-700" data-charge-manual-discount>
+                  <span className="font-medium">Descuento a mano{sale?.discount_reason ? ` (${sale.discount_reason})` : ''}</span>
+                  <span className="font-semibold tabular-nums">− {money(sale?.manual_discount ?? 0, context?.sale?.currency ?? context?.preview.currency)}</span>
+                </div>
+              )}
               <div className="pt-2 mt-2 border-t border-dashed border-slate-200 space-y-1 text-slate-500">
-                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(totals.total - totals.tax, context?.sale?.currency ?? context?.preview.currency)}</span></div>
+                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(totals.total - (sale?.tip ?? 0) - totals.tax, context?.sale?.currency ?? context?.preview.currency)}</span></div>
                 <div className="flex justify-between">
                   <span>IGV {totals.tax_rate}%{totals.prices_include_tax ? ' (incluido en el precio)' : ''}</span>
                   <span className="tabular-nums" data-tax>{money(totals.tax, context?.sale?.currency ?? context?.preview.currency)}</span>
                 </div>
+                {(sale?.tip ?? 0) > 0 && <div className="flex justify-between" data-charge-tip><span>Propina</span><span className="tabular-nums">{money(sale?.tip ?? 0, context?.sale?.currency ?? context?.preview.currency)}</span></div>}
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
@@ -541,6 +551,23 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
                       <Sparkles size={16} /> Puntos ({pointsInfo.balance} pts)
                     </button>
                   )}
+                  {creditBalance > 0 && (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isCredit}
+                      data-method="credit"
+                      onClick={() => {
+                        setMethod('credit');
+                        setError('');
+                        setReference('');
+                        setAmount(Math.min(balance, creditBalance).toFixed(2));
+                      }}
+                      className={chip(isCredit)}
+                    >
+                      <Wallet size={16} /> Saldo a favor ({money(creditBalance, context?.sale?.currency ?? context?.preview.currency)})
+                    </button>
+                  )}
                   {links?.ready && (
                     <button type="button" role="radio" aria-checked={isLink} data-method="link" onClick={() => { setMethod('link'); setError(''); }} className={chip(isLink)}>
                       <Link2 size={16} /> Link de pago
@@ -647,6 +674,12 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
                     })}
                   </div>
                 </div>
+              )}
+
+              {isCredit && (
+                <p data-credit-note className="rounded-xl border border-brand-soft bg-brand-soft/10 p-3.5 text-xs text-slate-700">
+                  El cliente tiene <strong className="text-brand-ink">{money(creditBalance, context?.sale?.currency ?? context?.preview.currency)}</strong> de saldo a favor, de adelantos de citas que canceló a tiempo. Si no cubre el total, cobra el resto con otro medio.
+                </p>
               )}
 
               {isPoints && pointsInfo && (
@@ -825,7 +858,7 @@ export default function ChargePanel({ appointmentId, saleId = null, initialAmoun
                 </dl>
 
                 <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
-                  invoice.sunat_status === 'rejected' ? 'bg-rose-50 text-rose-700' : invoice.sunat_status === 'pending' ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-700'
+                  invoice.sunat_status === 'rejected' ? 'bg-rose-50 text-rose-700' : invoice.sunat_status === 'pending' || invoice.sunat_status === 'observed' ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-700'
                 }`} data-sunat={invoice.sunat_status}>
                   <BadgeCheck size={15} className="shrink-0 mt-0.5" />
                   <span>

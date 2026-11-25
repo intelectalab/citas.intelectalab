@@ -73,6 +73,7 @@ export interface User {
   plan_slug?: string | null;
   features?: UserFeatures;
   currencies?: CurrencyInfo[];
+  branch_choices?: { id: string; name: string }[];
 }
 
 interface AuthContextType {

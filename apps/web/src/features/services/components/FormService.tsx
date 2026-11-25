@@ -11,6 +11,8 @@ import Select from '@/app/components/common/Select';
 import { cleanAmount, money } from '@/features/sales/sales';
 import { apiError } from '@/features/appointments/appointments';
 import { currencySymbol } from '@/lib/currency';
+import { taxNote } from '../services';
+import { useVocabulary } from '@/hooks/useVocabulary';
 import ServiceSuppliesFields, { toLines, validLines, type ServiceSuppliesData, type SupplyLine } from '@/features/inventory/components/ServiceSuppliesFields';
 
 interface ServiceCategory {
@@ -40,6 +42,11 @@ interface Service {
   recall_days?: number | null;
   recall_service_id?: string | null;
   branch_ids?: string[];
+  branch_prices?: { branch_id: string; price: number }[];
+  room_ids?: string[];
+  professional_ids?: string[];
+  description?: string | null;
+  requires_record?: boolean;
 }
 
 const EMPTY_FORM = {
@@ -62,6 +69,8 @@ const EMPTY_FORM = {
   recall_label: '',
   recall_days: '' as number | '',
   recall_service_id: '',
+  description: '',
+  requires_record: false,
 };
 
 interface FormServiceProps {
@@ -86,7 +95,8 @@ export default function FormService({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<number | string>(1);
 
-  const { hasModule, can } = useAuth();
+  const { hasModule, can, user } = useAuth();
+  const usesRecords = hasModule('records');
   const canUseClasses = hasModule('classes');
   const [otherServices, setOtherServices] = useState<{ id: string; name: string }[]>([]);
 
@@ -94,16 +104,26 @@ export default function FormService({
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [allBranches, setAllBranches] = useState(true);
   const [branchIds, setBranchIds] = useState<string[]>([]);
+  const [samePrice, setSamePrice] = useState(true);
+  const [branchPrices, setBranchPrices] = useState<Record<string, string>>({});
+  const usesRooms = hasModule('resources');
+  const [rooms, setRooms] = useState<{ id: string; name: string; branch_id: string; branch_name: string | null; kind: string; effective_status: string }[]>([]);
+  const [roomIds, setRoomIds] = useState<string[]>([]);
+  const vocab = useVocabulary();
+  const [team, setTeam] = useState<{ id: string; display_name: string; inactive: boolean }[]>([]);
+  const [allTeam, setAllTeam] = useState(true);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
 
   const usesSupplies = hasModule('inventory') && (can('inventory.view') || can('services.view'));
   const [supplies, setSupplies] = useState<ServiceSuppliesData | null>(null);
   const [suppliesError, setSuppliesError] = useState('');
   const [supplyLines, setSupplyLines] = useState<SupplyLine[]>([]);
+  const [codeTouched, setCodeTouched] = useState(false);
   const [suppliesTouched, setSuppliesTouched] = useState(false);
 
   const sections = [
     { id: 1, title: '1. Información del Servicio' },
-    { id: 2, title: '2. Tiempos y Tiempos de Espera (Buffers)' },
+    { id: 2, title: '2. Duración, preparación y limpieza' },
     { id: 3, title: '3. Precios y Estado' },
     { id: 4, title: '4. Reserva y Seguimiento' },
     ...(usesSupplies && form.kind !== 'group' ? [{ id: 5, title: '5. Insumos que consume' }] : []),
@@ -124,6 +144,17 @@ export default function FormService({
   useEffect(() => {
     setCategories(initialCategories);
   }, [initialCategories]);
+
+  useEffect(() => {
+    if (isOpen) setCodeTouched(false);
+  }, [isOpen, initialData?.id]);
+
+  useEffect(() => {
+    if (!isOpen || initialData || codeTouched) return;
+    api.get('/services/next-code', { params: { category_id: form.category_id || undefined } })
+      .then((res) => { if (res.data?.code) setForm((current) => ({ ...current, code: res.data.code })); })
+      .catch(() => undefined);
+  }, [isOpen, initialData, codeTouched, form.category_id]);
 
   useEffect(() => {
     if (initialData) {
@@ -147,12 +178,19 @@ export default function FormService({
         recall_label: initialData.recall_label || '',
         recall_days: initialData.recall_days ?? '',
         recall_service_id: initialData.recall_service_id || '',
+        description: initialData.description || '',
+        requires_record: Boolean(initialData.requires_record),
       });
     } else {
       setForm(EMPTY_FORM);
     }
     setAllBranches(!(initialData?.branch_ids?.length));
     setBranchIds(initialData?.branch_ids ?? []);
+    setSamePrice(!(initialData?.branch_prices?.length));
+    setBranchPrices(Object.fromEntries((initialData?.branch_prices ?? []).map((row) => [row.branch_id, String(row.price)])));
+    setRoomIds(initialData?.room_ids ?? []);
+    setAllTeam(!(initialData?.professional_ids?.length));
+    setTeamIds(initialData?.professional_ids ?? []);
     setSaveError('');
   }, [initialData, isOpen]);
 
@@ -165,6 +203,23 @@ export default function FormService({
       })
       .catch(() => setBranches([]));
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/professionals')
+      .then((res) => {
+        const list = (Array.isArray(res.data) ? res.data : res.data?.data ?? []) as { id: string; display_name: string; status?: { slug?: string } | null }[];
+        setTeam(list.map((p) => ({ id: p.id, display_name: p.display_name, inactive: p.status?.slug === 'inactive' })).sort((a, b) => a.display_name.localeCompare(b.display_name)));
+      })
+      .catch(() => setTeam([]));
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !usesRooms) return;
+    api.get('/rooms')
+      .then((res) => setRooms((res.data?.rooms ?? []).filter((room: { kind: string }) => room.kind === 'room')))
+      .catch(() => setRooms([]));
+  }, [isOpen, usesRooms]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -223,6 +278,11 @@ export default function FormService({
       setSaveError('Marca al menos una sede donde se da el servicio, o elige "Todas las sedes".');
       return;
     }
+    if (team.length > 1 && !allTeam && teamIds.filter((id) => team.some((p) => p.id === id)).length === 0) {
+      setActiveAccordion(4);
+      setSaveError(`Marca al menos ${vocab.pick('pro', 'un', 'una')} ${vocab.pro.toLowerCase()} que hace este servicio, o elige "${vocab.pick('pro', 'Todos', 'Todas')}".`);
+      return;
+    }
     try {
       setLoading(true);
       setSaveError('');
@@ -235,6 +295,9 @@ export default function FormService({
         recall_service_id: hasRecall ? form.recall_service_id || null : null,
         deposit_value: Number(form.deposit_value || 0),
         ...(branches.length > 1 ? { branch_ids: allBranches ? [] : branchIds } : {}),
+        ...(team.length > 1 ? { professional_ids: allTeam ? [] : teamIds.filter((id) => team.some((p) => p.id === id)) } : {}),
+        ...(usesRooms && rooms.length > 0 ? { room_ids: form.kind === 'group' || form.is_virtual ? [] : roomIds.filter((id) => rooms.some((room) => room.id === id && (allBranches || branches.length <= 1 || branchIds.includes(room.branch_id)))) } : {}),
+        ...(branches.length > 1 ? { branch_prices: samePrice ? [] : branches.filter((b) => allBranches || branchIds.includes(b.id)).map((b) => ({ branch_id: b.id, price: branchPrices[b.id] === undefined || branchPrices[b.id] === '' ? null : Number(branchPrices[b.id]) })) } : {}),
       };
 
       const res = initialData?.id
@@ -318,10 +381,11 @@ export default function FormService({
                               type="text"
                               maxLength={30}
                               value={form.code}
-                              onChange={(e) => setForm({ ...form, code: e.target.value })}
+                              onChange={(e) => { setCodeTouched(true); setForm({ ...form, code: e.target.value }); }}
                               className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 font-mono focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                               placeholder="Ej. COR-01"
                             />
+                            {!initialData && <p className="text-xs text-slate-400 mt-1">Sigue el orden de la categoría. Puedes cambiarlo.</p>}
                           </div>
 
                           <div>
@@ -343,6 +407,20 @@ export default function FormService({
                               options={categories.filter((cat) => cat.value).map((cat) => ({ value: cat.value, label: cat.label }))}
                             />
                           </div>
+
+                          <div>
+                            <label htmlFor="service-description" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Descripción para el cliente</label>
+                            <textarea
+                              id="service-description"
+                              rows={3}
+                              maxLength={2000}
+                              value={form.description}
+                              onChange={(e) => setForm({ ...form, description: e.target.value })}
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none resize-y"
+                              placeholder="Ej. Limpieza profunda con extracción y mascarilla hidratante."
+                            />
+                            <span className="block text-xs text-slate-400 mt-1">Se muestra en la reserva en línea y en el portal, debajo del nombre.</span>
+                          </div>
                         </div>
                       )}
 
@@ -352,7 +430,8 @@ export default function FormService({
                             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Duración (minutos) *</label>
                             <input
                               type="number"
-                              min="1"
+                              min="5"
+                              max="720"
                               required
                               value={form.duration_minutes}
                               onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })}
@@ -361,7 +440,7 @@ export default function FormService({
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Buffer Antes (mins)</label>
+                              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Preparación antes (min)</label>
                               <input
                                 type="number"
                                 min="0"
@@ -371,7 +450,7 @@ export default function FormService({
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Buffer Después (mins)</label>
+                              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Limpieza después (min)</label>
                               <input
                                 type="number"
                                 min="0"
@@ -387,7 +466,7 @@ export default function FormService({
                       {sec.id === 3 && (
                         <div className="space-y-4">
                           <div>
-                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Precio ($) *</label>
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Precio ({currencySymbol()}, {taxNote(user?.tenant?.rules)}) *</label>
                             <input
                               type="number"
                               step="0.01"
@@ -450,11 +529,121 @@ export default function FormService({
                               )}
                             </div>
                           )}
+                          {branches.length > 1 && (
+                            <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-service-branch-prices>
+                              <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600">¿Cuesta lo mismo en todas las sedes?</span>
+                              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Precio por sede">
+                                {([['same', 'Sí, el mismo precio'], ['each', 'Cambia por sede']] as const).map(([value, label]) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={(value === 'same') === samePrice}
+                                    data-price-mode={value}
+                                    onClick={() => setSamePrice(value === 'same')}
+                                    className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${(value === 'same') === samePrice ? 'border-brand bg-brand-soft/20 text-brand-ink' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                              {!samePrice && (
+                                <div className="space-y-2">
+                                  {branches.filter((b) => allBranches || branchIds.includes(b.id)).map((branch) => (
+                                    <div key={branch.id} className="flex items-center justify-between gap-3">
+                                      <span className="text-sm text-slate-800 min-w-0 truncate">{branch.name}</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        aria-label={`Precio en ${branch.name}`}
+                                        placeholder={String(form.price)}
+                                        value={branchPrices[branch.id] ?? ''}
+                                        onChange={(e) => setBranchPrices({ ...branchPrices, [branch.id]: e.target.value })}
+                                        className="w-32 text-sm text-right border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                                      />
+                                    </div>
+                                  ))}
+                                  <span className="block text-xs text-slate-400">Si dejas una sede vacía, cobra el precio general ({form.price}). La cita toma el precio de la sede donde se agenda.</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {team.length > 1 && (
+                            <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-service-professionals>
+                              <div>
+                                <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600">{`${vocab.pros} que lo hacen`}</span>
+                                <span className="block text-xs text-slate-400 mt-1">Solo a quienes marques se les puede agendar este servicio, también en la reserva en línea y en la cola sin cita.</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={`${vocab.pros} que lo hacen`}>
+                                {([['all', vocab.pick('pro', 'Todos', 'Todas')], ['some', vocab.pick('pro', 'Solo algunos', 'Solo algunas')]] as const).map(([value, label]) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={(value === 'all') === allTeam}
+                                    data-team-mode={value}
+                                    onClick={() => setAllTeam(value === 'all')}
+                                    className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${(value === 'all') === allTeam ? 'border-brand bg-brand-soft/20 text-brand-ink' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                              {!allTeam && (
+                                <div className="space-y-1.5">
+                                  {team.filter((p) => !p.inactive || teamIds.includes(p.id)).map((p) => (
+                                    <label key={p.id} className="flex items-center gap-2.5 cursor-pointer" data-service-professional={p.id}>
+                                      <input
+                                        type="checkbox"
+                                        checked={teamIds.includes(p.id)}
+                                        onChange={(e) => setTeamIds(e.target.checked ? [...teamIds, p.id] : teamIds.filter((id) => id !== p.id))}
+                                        className="rounded border-slate-300 text-brand-ink focus:ring-brand"
+                                      />
+                                      <span className="text-sm text-slate-800">{p.display_name}</span>
+                                      {p.inactive && <span className="text-xs text-amber-700">Inactivo</span>}
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {usesRooms && form.kind !== 'group' && !form.is_virtual && rooms.length > 0 && (() => {
+                            const visible = rooms.filter((room) => allBranches || branches.length <= 1 || branchIds.includes(room.branch_id));
+                            const groups = Array.from(new Set(visible.map((room) => room.branch_id)));
+                            return (
+                              <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-service-rooms>
+                                <div>
+                                  <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600">¿En qué salas se hace?</span>
+                                  <span className="block text-xs text-slate-400 mt-1">Si marcas salas, solo se ofrecen las horas en que alguna de ellas está libre y la cita queda con una. Sin salas marcadas, se agenda como siempre.</span>
+                                </div>
+                                {groups.map((branchId) => (
+                                  <div key={branchId} className="space-y-1.5">
+                                    {groups.length > 1 && <span className="block text-xs font-semibold text-slate-500">{visible.find((room) => room.branch_id === branchId)?.branch_name}</span>}
+                                    {visible.filter((room) => room.branch_id === branchId).map((room) => (
+                                      <label key={room.id} className="flex items-center gap-2.5 cursor-pointer" data-service-room={room.id}>
+                                        <input
+                                          type="checkbox"
+                                          checked={roomIds.includes(room.id)}
+                                          onChange={(e) => setRoomIds(e.target.checked ? [...roomIds, room.id] : roomIds.filter((id) => id !== room.id))}
+                                          className="rounded border-slate-300 text-brand-ink focus:ring-brand"
+                                        />
+                                        <span className="text-sm text-slate-800">{room.name}</span>
+                                        {room.effective_status !== 'active' && <span className="text-xs text-amber-700">Fuera de uso</span>}
+                                      </label>
+                                    ))}
+                                  </div>
+                                ))}
+                                {groups.length > 1 && <span className="block text-xs text-slate-400">En una sede sin salas marcadas, el servicio se agenda como siempre.</span>}
+                              </div>
+                            );
+                          })()}
                           <div className="space-y-2.5">
                             {[
                               { key: 'online_booking' as const, label: 'Se puede reservar en línea', hint: 'Aparece en el portal del cliente y en la reserva pública.' },
                               { key: 'requires_deposit' as const, label: 'Exige adelanto', hint: 'La reserva se confirma cuando el cliente paga el adelanto.' },
                               { key: 'is_virtual' as const, label: 'Atención por videollamada', hint: 'No ocupa sala ni equipo.' },
+                              ...(usesRecords ? [{ key: 'requires_record' as const, label: 'Exige la ficha de atención firmada', hint: 'No se puede dar la cita por atendida sin la ficha firmada, aunque la regla general esté apagada. Necesita una plantilla de ficha para este servicio.' }] : []),
                             ].map((option) => (
                               <label key={option.key} className="flex items-start gap-2.5 cursor-pointer">
                                 <input

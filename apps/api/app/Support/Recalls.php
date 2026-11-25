@@ -8,6 +8,11 @@ use App\Models\Tenant;
 
 class Recalls
 {
+    public static function noticeDays(?\App\Models\Tenant $tenant): int
+    {
+        return $tenant ? max(0, min(90, (int) AppointmentFlow::rule($tenant, 'recalls.notify_days'))) : 3;
+    }
+
     public static function book(Recall $recall, Appointment $appointment): void
     {
         $recall->update(['status' => Recall::BOOKED, 'appointment_id' => $appointment->id]);

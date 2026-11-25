@@ -39,6 +39,36 @@ class AppointmentController extends Controller
     protected const RELATIONS = ['customer', 'dependent', 'service', 'professional', 'branch', 'record'];
     protected const MAX_ROWS = 500;
 
+    public const ORIGINS = [
+        'staff'        => 'Recepción',
+        'online'       => 'En línea',
+        'portal'       => 'Portal de clientes',
+        'walkin'       => 'Sin cita',
+        'kiosk'        => 'Sin cita',
+        'payment_link' => 'Link de pago',
+        'package'      => 'Paquete',
+        'api'          => 'Integración',
+    ];
+
+    public const CANCEL_REASONS = [
+        'Lo pidió la persona',
+        'Inconveniente de salud',
+        'Quien atiende no está disponible',
+        'Se agendó por error',
+        'Reprogramará más adelante',
+    ];
+
+    public static function originLabel(?string $source, ?string $channel = null): string
+    {
+        $label = self::ORIGINS[$source] ?? ($source ? ucfirst($source) : 'Sin dato');
+
+        if ($channel && isset(\App\Support\Channels::CHANNELS[$channel]) && !in_array($channel, ['direct', 'portal'], true)) {
+            return $label . ' · ' . \App\Support\Channels::CHANNELS[$channel];
+        }
+
+        return $label;
+    }
+
     protected function tenant(Request $request): Tenant
     {
         $tenant = $request->user()->tenant;
@@ -83,12 +113,15 @@ class AppointmentController extends Controller
             'customer_id'     => 'nullable|uuid',
             'status'          => 'nullable|string',
             'search'          => 'nullable|string|max:100',
+            'source'          => 'nullable|string|max:30',
+            'all'             => 'nullable|boolean',
         ]);
 
         $from = $validated['date'] ?? $validated['from'] ?? null;
         $to = $validated['date'] ?? $validated['to'] ?? null;
+        $sources = !empty($validated['source']) ? ($validated['source'] === 'walkin' ? ['walkin', 'kiosk'] : [$validated['source']]) : [];
 
-        if (!$from && !$to && empty($validated['customer_id']) && empty($validated['search'])) {
+        if (!$from && !$to && empty($validated['customer_id']) && empty($validated['search']) && empty($validated['all'])) {
             $from = $to = now($timezone)->format('Y-m-d');
         }
 
@@ -104,6 +137,7 @@ class AppointmentController extends Controller
             ->when($validated['customer_id'] ?? null, fn ($q, $id) => $q->where('customer_id', $id))
             ->when($own ?? ($validated['professional_id'] ?? null), fn ($q, $id) => $q->where('professional_id', $id))
             ->when($statuses, fn ($q) => $q->whereIn('status', $statuses))
+            ->when($sources, fn ($q) => $q->whereIn('source', $sources))
             ->when($validated['search'] ?? null, function ($q, $search) {
                 $q->where(fn ($q) => Search::contains($q, 'code', $search)
                     ->orWhereHas('customer', function ($q) use ($search) {
@@ -114,11 +148,17 @@ class AppointmentController extends Controller
                         });
                     }));
             })
-            ->orderBy('starts_at')
-            ->limit(self::MAX_ROWS)
+            ->orderBy('starts_at', !$from && !$to && !empty($validated['all']) ? 'desc' : 'asc')
+            ->limit(self::MAX_ROWS + 1)
             ->get();
+        $cut = $appointments->count() > self::MAX_ROWS;
 
-        return response()->json($appointments->map(fn (Appointment $a) => $this->present($a, $tenant)));
+        $withPaid = $request->boolean('with_paid') && \App\Support\Sales::ready();
+
+        return response()->json($appointments->take(self::MAX_ROWS)->map(fn (Appointment $a) => $this->present($a, $tenant) + ($withPaid
+            ? ['paid' => $a->status === AppointmentFlow::COMPLETED ? \App\Support\Sales::appointmentPaid($tenant->id, $a->id) : null]
+            : []))->values())
+            ->withHeaders($cut ? ['X-Rows-Cut' => (string) self::MAX_ROWS] : []);
     }
 
     public function context(Request $request)
@@ -147,7 +187,7 @@ class AppointmentController extends Controller
                 ])->values(),
             'services' => Service::where('tenant_id', $tenant->id)
                 ->where('kind', Service::KIND_INDIVIDUAL)
-                ->with('status')
+                ->with(['status', 'category'])
                 ->orderBy('name')
                 ->get()
                 ->reject(fn (Service $s) => $s->status?->slug === 'inactive')
@@ -158,9 +198,22 @@ class AppointmentController extends Controller
                     'price'            => $s->price,
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
                     'branch_ids'       => $s->branch_ids,
+                    'category'         => $s->category?->name,
+                    'buffer_before'    => (int) $s->buffer_before_minutes,
+                    'buffer_after'     => (int) $s->buffer_after_minutes,
+                    'deposit'          => $s->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit')
+                        ? ['label' => \App\Support\PaymentLinks::depositLabel($s), 'amount' => \App\Support\PaymentLinks::depositAmount($s)]
+                        : null,
                 ])->values(),
             'can_override' => (bool) AppointmentFlow::rule($tenant, 'agenda.allow_override') && $request->user()->allows('agenda.override'),
             'slot_interval' => (int) AppointmentFlow::rule($tenant, 'agenda.slot_interval'),
+            'respect_buffers' => (bool) AppointmentFlow::rule($tenant, 'agenda.respect_buffers'),
+            'origins'      => collect(self::ORIGINS)->except('kiosk')->map(fn (string $label, string $key) => ['value' => $key, 'label' => $label])->values(),
+            'cancel_reasons' => self::CANCEL_REASONS,
+            'rooms'        => \App\Support\RoomBooking::enabled($tenant)
+                ? DB::table('rooms')->where('tenant_id', $tenant->id)->where('kind', 'room')->where('status', 'active')
+                    ->when($limit, fn ($q, $id) => $q->where('branch_id', $id))->orderBy('name')->get(['id', 'name', 'branch_id'])
+                : [],
         ]);
     }
 
@@ -189,11 +242,10 @@ class AppointmentController extends Controller
             ->orderBy('starts_at')
             ->get();
 
-        $schedules = ProfessionalSchedule::where('tenant_id', $tenant->id)
+        $schedules = ProfessionalSchedule::effective(ProfessionalSchedule::where('tenant_id', $tenant->id)
             ->where('branch_id', $branch->id)
-            ->where('weekday', $dayStart->dayOfWeek)
             ->orderBy('starts_local')
-            ->get()
+            ->get(), $validated['date'])
             ->groupBy('professional_id');
 
         $blocks = AvailabilityBlock::where('tenant_id', $tenant->id)
@@ -212,6 +264,7 @@ class AppointmentController extends Controller
 
         $holidays = \App\Support\Holidays::on($tenant, $branch->id, $validated['date']);
         $closedBy = $holidays->firstWhere('closed', true);
+        $deposits = $this->paidDeposits($tenant->id, $appointments->pluck('id')->all());
 
         $professionals = Professional::where('tenant_id', $tenant->id)
             ->when($own, fn ($q) => $q->where('id', $own))
@@ -226,6 +279,7 @@ class AppointmentController extends Controller
                     'starts' => substr($s->starts_local, 0, 5),
                     'ends'   => substr($s->ends_local, 0, 5),
                 ])->values(),
+                'occupancy'    => $this->occupancy($schedules[$p->id] ?? collect(), $appointments->where('professional_id', $p->id)),
                 'blocks'       => $blocks
                     ->filter(fn (AvailabilityBlock $b) => $b->professional_id === $p->id || (!$b->professional_id && $b->branch_id === $branch->id))
                     ->map(fn (AvailabilityBlock $b) => ['starts' => $clip($b->starts_at), 'ends' => $clip($b->ends_at), 'reason' => $b->reason, 'kind' => $b->kindKey()])
@@ -240,9 +294,62 @@ class AppointmentController extends Controller
             'now'           => now($timezone)->format(self::LOCAL_FORMAT),
             'holidays'      => $holidays->map(fn ($h) => ['name' => $h->name, 'closed' => (bool) $h->closed])->values(),
             'professionals' => $professionals,
+            'rooms'         => $own ? [] : $this->agendaDayRooms($tenant, $branch, $dayStart, $dayEnd, $clip, $closedBy),
+            'respect_buffers' => (bool) AppointmentFlow::rule($tenant, 'agenda.respect_buffers'),
             'my_professional_id' => Professional::where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->value('id'),
-            'appointments'  => $appointments->map(fn (Appointment $a) => $this->present($a, $tenant)),
+            'appointments'  => $appointments->map(fn (Appointment $a) => $this->present($a, $tenant) + ['deposit_paid' => in_array($a->id, $deposits, true)]),
         ]);
+    }
+
+    protected function paidDeposits(string $tenantId, array $appointmentIds): array
+    {
+        if ($appointmentIds === [] || !Schema::hasTable('payment_links')) {
+            return [];
+        }
+
+        return DB::table('payment_links')->where('tenant_id', $tenantId)->whereIn('appointment_id', $appointmentIds)
+            ->where('purpose', 'deposit')->where('status', 'paid')->pluck('appointment_id')->all();
+    }
+
+    protected function agendaDayRooms(Tenant $tenant, Branch $branch, Carbon $dayStart, Carbon $dayEnd, callable $clip, ?object $closedBy): array
+    {
+        if (!\App\Support\RoomBooking::enabled($tenant)) {
+            return [];
+        }
+
+        $rooms = DB::table('rooms')->where('tenant_id', $tenant->id)->where('branch_id', $branch->id)->where('kind', 'room')->orderBy('name')->get(['id', 'name', 'status', 'description']);
+
+        if ($rooms->isEmpty()) {
+            return [];
+        }
+
+        $blocks = \App\Support\RoomBlocks::between($tenant->id, $rooms->pluck('id')->all(), $dayStart, $dayEnd);
+
+        return $rooms->map(fn (object $room) => [
+            'id'          => $room->id,
+            'name'        => $room->name,
+            'description' => $room->description,
+            'active'      => $room->status === 'active',
+            'blocks'      => collect($blocks[$room->id] ?? [])
+                ->map(fn (object $b) => ['starts' => $clip($b->starts_at), 'ends' => $clip($b->ends_at), 'reason' => $b->reason, 'kind' => 'room', 'id' => $b->id])
+                ->when($room->status !== 'active', fn ($list) => $list->prepend(['starts' => '00:00', 'ends' => '24:00', 'reason' => 'Fuera de uso', 'kind' => 'room']))
+                ->when($closedBy, fn ($list) => $list->prepend(['starts' => '00:00', 'ends' => '24:00', 'reason' => $closedBy->name, 'kind' => 'holiday']))
+                ->values()
+                ->all(),
+        ])->values()->all();
+    }
+
+    protected function occupancy($schedules, $appointments): array
+    {
+        $minutes = fn (string $time) => ((int) substr($time, 0, 2)) * 60 + (int) substr($time, 3, 2);
+        $scheduled = (int) $schedules->sum(fn (ProfessionalSchedule $s) => max(0, $minutes(substr($s->ends_local, 0, 5)) - $minutes(substr($s->starts_local, 0, 5))));
+        $booked = (int) $appointments->whereNotIn('status', AppointmentFlow::RELEASED)->sum(fn (Appointment $a) => $a->starts_at->diffInMinutes($a->ends_at));
+
+        return [
+            'scheduled_minutes' => $scheduled,
+            'booked_minutes'    => $booked,
+            'percent'           => $scheduled > 0 ? min(100, (int) round($booked * 100 / $scheduled)) : null,
+        ];
     }
 
     public function range(Request $request)
@@ -296,6 +403,12 @@ class AppointmentController extends Controller
                 ->get()
             : collect();
 
+        $dated = $schedules->flatten(1)->contains(fn (ProfessionalSchedule $s) => ProfessionalSchedule::periodKey($s) !== '|');
+        $perDay = $dated
+            ? collect(\Carbon\CarbonPeriod::create($from, '1 day', $to->copy()->subDay()))->flatMap(fn ($day) => ProfessionalSchedule::effective($schedules->flatten(1), $day->format('Y-m-d'))
+                ->map(fn (ProfessionalSchedule $s) => ['row' => $s, 'date' => $day->format('Y-m-d')]))->groupBy(fn (array $item) => $item['row']->professional_id)
+            : collect();
+
         $professionals = Professional::where('tenant_id', $tenant->id)
             ->when($own, fn ($q) => $q->where('id', $own))
             ->whereIn('id', $schedules->keys()->merge($appointments->pluck('professional_id'))->unique())
@@ -305,11 +418,18 @@ class AppointmentController extends Controller
                 'id'           => $p->id,
                 'display_name' => $p->display_name,
                 'color_code'   => $p->color_code,
-                'schedules'    => ($schedules[$p->id] ?? collect())->map(fn (ProfessionalSchedule $s) => [
-                    'weekday' => (int) $s->weekday,
-                    'starts'  => substr($s->starts_local, 0, 5),
-                    'ends'    => substr($s->ends_local, 0, 5),
-                ])->values(),
+                'schedules'    => $dated
+                    ? ($perDay[$p->id] ?? collect())->map(fn (array $item) => [
+                        'weekday' => (int) $item['row']->weekday,
+                        'starts'  => substr($item['row']->starts_local, 0, 5),
+                        'ends'    => substr($item['row']->ends_local, 0, 5),
+                        'date'    => $item['date'],
+                    ])->values()
+                    : ($schedules[$p->id] ?? collect())->map(fn (ProfessionalSchedule $s) => [
+                        'weekday' => (int) $s->weekday,
+                        'starts'  => substr($s->starts_local, 0, 5),
+                        'ends'    => substr($s->ends_local, 0, 5),
+                    ])->values(),
             ])->values();
 
         return response()->json([
@@ -357,7 +477,248 @@ class AppointmentController extends Controller
                     ->where('status', AppointmentFlow::COMPLETED)
                     ->get()
             ),
+            'customer_profile' => $this->appointmentCustomerProfile($request, $this->tenant($request), $appointment),
+            'dependent_detail' => $this->appointmentDependentDetail($appointment),
+            'deposit'          => $this->appointmentDeposit($this->tenant($request), $appointment),
+            'messages'         => $this->appointmentMessages($appointment),
+            'can_waive_penalty' => $request->user()->allows('sales.delete'),
+            'cancel_reasons'   => self::CANCEL_REASONS,
         ]);
+    }
+
+    protected function appointmentCustomerProfile(Request $request, Tenant $tenant, Appointment $appointment): ?array
+    {
+        $customer = $appointment->customer;
+
+        if (!$customer) {
+            return null;
+        }
+
+        $user = $request->user();
+        $seesMoney = $user->allows('sales.view') || $user->allows('customers.view');
+        $money = $seesMoney ? \App\Support\CustomerProfile::money($tenant, $customer->id) : null;
+
+        $spend = $seesMoney && \App\Support\Sales::ready()
+            ? round((float) DB::table('sales')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)
+                ->whereIn('status', ['paid', 'partial', 'partially_refunded'])
+                ->where('created_at', '>=', now()->subMonths(12)->toIso8601String())
+                ->sum('paid'), 2)
+            : null;
+
+        try {
+            $segments = $user->allows('customers.view') ? \App\Support\CustomerProfile::segments($tenant, $customer->id) : [];
+        } catch (\Throwable $e) {
+            report($e);
+            $segments = [];
+        }
+
+        return [
+            'visits'      => Appointment::where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('status', AppointmentFlow::COMPLETED)->count(),
+            'no_shows'    => Appointment::where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('status', AppointmentFlow::NO_SHOW)->count(),
+            'spend_12m'   => $spend,
+            'balance'     => $money ? $money['balance'] : null,
+            'points'      => \App\Support\Loyalty::ready() && \App\Support\Loyalty::enabled($tenant) ? \App\Support\Loyalty::customerPoints($tenant->id, $customer->id) : null,
+            'segments'    => collect($segments)->map(fn (array $s) => ['key' => $s['key'], 'label' => $s['label']])->values()->all(),
+            'tags'        => $user->allows('customers.view') ? \App\Support\CustomerProfile::tagsOf($customer->id) : [],
+            'alert'       => Schema::hasColumn('customers', 'alert') && trim((string) $customer->alert) !== '' ? trim((string) $customer->alert) : null,
+            'block_after' => (int) AppointmentFlow::rule($tenant, 'noshow.block_after') ?: null,
+            'document'    => trim(($customer->document_number ?? '')) ?: null,
+        ];
+    }
+
+    protected function appointmentDependentDetail(Appointment $appointment): ?array
+    {
+        $dependent = $appointment->dependent;
+
+        if (!$dependent) {
+            return null;
+        }
+
+        $birth = $dependent->birth_date ? Carbon::parse($dependent->birth_date) : null;
+        $age = null;
+
+        if ($birth) {
+            $years = (int) $birth->diffInYears(now());
+            $months = (int) $birth->diffInMonths(now());
+            $age = $years >= 1 ? ($years === 1 ? '1 año' : "{$years} años") : ($months === 1 ? '1 mes' : "{$months} meses");
+        }
+
+        return [
+            'species' => $dependent->species,
+            'breed'   => $dependent->breed,
+            'sex'     => ['M' => 'Macho', 'F' => 'Hembra', 'O' => 'Otro'][$dependent->biological_sex ?? ''] ?? null,
+            'age'     => $age,
+            'kind'    => $dependent->kind,
+        ];
+    }
+
+    protected function appointmentDeposit(Tenant $tenant, Appointment $appointment): ?array
+    {
+        $service = $appointment->service;
+
+        if (!$service) {
+            return null;
+        }
+
+        $link = Schema::hasTable('payment_links')
+            ? DB::table('payment_links')->where('tenant_id', $tenant->id)->where('appointment_id', $appointment->id)->where('purpose', 'deposit')->where('status', 'paid')->orderByDesc('paid_at')->first(['amount', 'currency'])
+            : null;
+
+        if ($link) {
+            return ['status' => 'paid', 'amount' => round((float) $link->amount, 2), 'currency' => $link->currency];
+        }
+
+        if (!$service->requires_deposit || !AppointmentFlow::rule($tenant, 'booking.require_deposit') || in_array($appointment->status, [AppointmentFlow::COMPLETED, ...AppointmentFlow::RELEASED], true)) {
+            return null;
+        }
+
+        $sale = \App\Support\Sales::ready() ? \App\Support\Sales::ofAppointment($tenant->id, $appointment->id) : null;
+
+        if ($sale && (float) $sale->paid > 0) {
+            return (float) $sale->balance > 0 ? ['status' => 'paid', 'amount' => round((float) $sale->paid, 2), 'currency' => $sale->currency ?? $appointment->currency] : null;
+        }
+
+        $amount = \App\Support\PaymentLinks::depositAmount($service, $appointment->branch_id);
+
+        return $amount > 0 ? ['status' => 'pending', 'amount' => $amount, 'currency' => $appointment->currency] : null;
+    }
+
+    protected function appointmentMessages(Appointment $appointment): array
+    {
+        if (!\App\Support\Messaging::ready()) {
+            return [];
+        }
+
+        $timezone = AppointmentScheduler::timezone($appointment->branch ?? new Branch(), $this->tenant(request()));
+        $statuses = \App\Support\Messaging::STATUS_LABELS;
+
+        return DB::table('messages')
+            ->where('tenant_id', $appointment->tenant_id)
+            ->where('entity_type', 'appointment')
+            ->where('entity_id', $appointment->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get(['id', 'channel', 'kind', 'status', 'error', 'sent_at', 'created_at'])
+            ->map(fn (object $m) => [
+                'id'           => $m->id,
+                'channel'      => $m->channel === 'whatsapp' ? 'WhatsApp' : 'Correo',
+                'kind'         => \App\Support\Messaging::KINDS[$m->kind]['label'] ?? 'Mensaje',
+                'status'       => $m->status,
+                'status_label' => $statuses[$m->status] ?? $m->status,
+                'error'        => in_array($m->status, ['failed', 'not_sent'], true) ? $m->error : null,
+                'at'           => Carbon::parse($m->sent_at ?? $m->created_at)->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+            ])
+            ->all();
+    }
+
+    public function customerDuplicates(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        $validated = $request->validate([
+            'phone'           => 'nullable|string|max:50',
+            'email'           => 'nullable|string|max:255',
+            'document_number' => 'nullable|string|max:50',
+        ]);
+
+        $digits = preg_replace('/\D+/', '', (string) ($validated['phone'] ?? ''));
+        $email = mb_strtolower(trim((string) ($validated['email'] ?? '')));
+        $document = trim((string) ($validated['document_number'] ?? ''));
+
+        if (strlen($digits) < 6 && $email === '' && $document === '') {
+            return response()->json(['matches' => []]);
+        }
+
+        $matches = Customer::visibleTo($request->user())
+            ->where(function ($q) use ($digits, $email, $document) {
+                if (strlen($digits) >= 6) {
+                    $q->orWhereRaw("right(regexp_replace(coalesce(customers.phone, ''), '\\D', '', 'g'), 9) = ?", [substr($digits, -9)]);
+                }
+                if ($email !== '') {
+                    $q->orWhereRaw('lower(customers.email) = ?', [$email]);
+                }
+                if ($document !== '') {
+                    $q->orWhere('customers.document_number', $document);
+                }
+            })
+            ->orderBy('customers.first_name')
+            ->limit(5)
+            ->get(['customers.id', 'customers.code', 'customers.first_name', 'customers.last_name', 'customers.phone', 'customers.email', 'customers.document_number']);
+
+        return response()->json(['matches' => $matches->map(fn (Customer $c) => [
+            'id'              => $c->id,
+            'code'            => $c->code,
+            'first_name'      => $c->first_name,
+            'last_name'       => $c->last_name,
+            'name'            => \App\Support\Person::name($c),
+            'phone'           => $c->phone,
+            'document_number' => $c->document_number,
+            'dependents'      => $tenant->dependents()['enabled']
+                ? CustomerDependent::where('tenant_id', $tenant->id)->where('customer_id', $c->id)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'species'])
+                : [],
+            'by'              => array_values(array_filter([
+                strlen($digits) >= 6 && substr(preg_replace('/\D+/', '', (string) $c->phone), -9) === substr($digits, -9) ? 'celular' : null,
+                $email !== '' && mb_strtolower((string) $c->email) === $email ? 'correo' : null,
+                $document !== '' && $c->document_number === $document ? 'documento' : null,
+            ])),
+        ])->values()]);
+    }
+
+    public function customerConsent(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $validated = $request->validate(['customer_id' => 'required|uuid']);
+        $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
+
+        abort_if($customer->created_at && $customer->created_at->lt(now()->subHour()), 403, 'Los permisos de una ficha que ya existía se cambian desde su página.');
+
+        $after = \App\Http\Controllers\Api\MessageController::saveConsents($tenant->id, $customer->id, ['email' => true, 'whatsapp' => true], 'staff');
+
+        Audit::log($request, 'customer.consent_changed', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'customer',
+            'entity_id'    => $customer->id,
+            'entity_label' => \App\Support\Person::name($customer),
+            'after'        => ['Correo' => 'Aceptado', 'WhatsApp' => 'Aceptado'],
+        ]);
+
+        return response()->json(['consents' => $after]);
+    }
+
+    public function waivePenalty(Request $request, string $appointment)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($request->user()->allows('sales.delete'), 403, 'Tu cuenta no tiene permiso para perdonar penalidades.');
+
+        $validated = $request->validate(['reason' => 'required|string|max:255'], ['reason.required' => 'Elige o escribe por qué se perdona.']);
+
+        return DB::transaction(function () use ($request, $appointment, $tenant, $validated) {
+            $appointment = $this->find($request, $appointment);
+            Access::assertBranch($request->user(), $appointment->branch_id, true);
+            $penalty = \App\Support\Penalties::find($tenant->id, $appointment->id);
+
+            if (!$penalty) {
+                return response()->json(['message' => 'Esta cita no tiene penalidad.', 'code' => 'INVALID_STATE'], 422);
+            }
+
+            $penalty = DB::table('sales')->where('id', $penalty->id)->lockForUpdate()->first();
+
+            if ($blocked = \App\Support\Refunds::voidBlocked($penalty)) {
+                return response()->json(['message' => $penalty->status === 'void' ? 'La penalidad ya está perdonada.' : 'La penalidad ya tiene un pago: devuélvelo desde Ventas.', 'code' => 'INVALID_STATE'], 422);
+            }
+
+            $reason = trim($validated['reason']);
+            \App\Support\Refunds::void($penalty, 'Penalidad perdonada: ' . $reason);
+            $this->auditAppointment($request, 'appointment.penalty_waived', $appointment, array_filter([
+                'reason'  => $reason,
+                'total'   => round((float) $penalty->total, 2),
+                'penalty' => $penalty->code,
+            ]));
+
+            return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true) + [
+                'penalty' => \App\Support\Penalties::present(\App\Support\Penalties::find($tenant->id, $appointment->id)),
+            ]);
+        });
     }
 
     public function metrics(Request $request)
@@ -411,6 +772,7 @@ class AppointmentController extends Controller
             'date'            => 'required|date_format:Y-m-d',
             'professional_id' => 'nullable|uuid',
             'ignore_id'       => 'nullable|uuid',
+            'with_busy'       => 'nullable|boolean',
         ]);
 
         $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
@@ -421,12 +783,18 @@ class AppointmentController extends Controller
             : Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
 
         $date = Carbon::createFromFormat('Y-m-d', $validated['date'], AppointmentScheduler::timezone($branch, $tenant));
+        $scheduler = new AppointmentScheduler($tenant);
+        $withBusy = !empty($validated['with_busy']);
+        $groups = $scheduler->slots($service, $branch, $date, $professional, $validated['ignore_id'] ?? null, null, $withBusy);
+        $free = collect($groups)->sum(fn (array $group) => count($group['slots']));
 
         return response()->json([
             'date'             => $validated['date'],
             'duration_minutes' => $service->duration_minutes,
-            'professionals'    => (new AppointmentScheduler($tenant))->slots($service, $branch, $date, $professional, $validated['ignore_id'] ?? null),
-        ]);
+            'professionals'    => $groups,
+        ] + ($withBusy ? [
+            'next_days' => $free === 0 ? $scheduler->nextDays($service, $branch, $date, $professional, $validated['ignore_id'] ?? null) : [],
+        ] : []));
     }
 
     public function store(Request $request)
@@ -467,6 +835,179 @@ class AppointmentController extends Controller
         } finally {
             $lock->release();
         }
+    }
+
+    public function series(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+
+        if (!\App\Support\AppointmentSeries::ready()) {
+            return response()->json([
+                'message' => 'Las citas que se repiten todavía no están listas en tu sistema. Pide que se actualice la base de datos.',
+                'code'    => 'NOT_READY',
+            ], 409);
+        }
+
+        $validated = $request->validate([
+            'customer_id'           => 'required|uuid',
+            'customer_dependent_id' => 'nullable|uuid',
+            'service_id'            => 'required|uuid',
+            'professional_id'       => 'required|uuid',
+            'branch_id'             => 'required|uuid',
+            'starts_at'             => 'required|date_format:' . self::LOCAL_FORMAT,
+            'notes'                 => 'nullable|string|max:2000',
+            'frequency'             => ['required', Rule::in(\App\Support\AppointmentSeries::FREQUENCIES)],
+            'every'                 => 'nullable|integer|min:1|max:90',
+            'until_date'            => 'nullable|required_without:occurrences|date_format:Y-m-d',
+            'occurrences'           => 'nullable|required_without:until_date|integer|min:2|max:' . \App\Support\AppointmentSeries::MAX,
+            'preview'               => 'nullable|boolean',
+        ], [
+            'until_date.required_without'  => 'Indica hasta qué fecha se repite o cuántas veces.',
+            'occurrences.required_without' => 'Indica cuántas veces se repite o hasta qué fecha.',
+            'occurrences.min'              => 'Una cita que se repite tiene al menos 2 fechas.',
+            'occurrences.max'              => 'Se pueden agendar hasta ' . \App\Support\AppointmentSeries::MAX . ' fechas de una vez.',
+        ]);
+
+        $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
+        $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
+        $professional = Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
+        $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        Access::assertBranch($user, $branch->id, true);
+
+        $own = $this->ownProfessionalId($user);
+        abort_if($own && $professional->id !== $own, 403, 'Solo puedes agendar citas para ti.');
+
+        $timezone = AppointmentScheduler::timezone($branch, $tenant);
+        $first = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], $timezone)->startOfMinute();
+        $time = $first->format('H:i');
+        $every = (int) ($validated['every'] ?? 1);
+
+        if (!empty($validated['until_date']) && $validated['until_date'] < $first->format('Y-m-d')) {
+            throw ValidationException::withMessages(['until_date' => 'La fecha final debe ser después de la primera cita.']);
+        }
+
+        $dates = \App\Support\AppointmentSeries::dates($validated['frequency'], $every, $first->format('Y-m-d'), $validated['until_date'] ?? null, $validated['occurrences'] ?? null);
+
+        if (count($dates) < 2) {
+            throw ValidationException::withMessages(['until_date' => 'Con esa fecha final solo sale una cita. Elige una fecha más lejana o usa «Agendar cita».']);
+        }
+
+        if (!empty($validated['preview'])) {
+            $scheduler = new AppointmentScheduler($tenant);
+            $duration = (int) $service->duration_minutes;
+
+            return response()->json([
+                'label' => \App\Support\AppointmentSeries::describe($validated['frequency'], $every),
+                'dates' => array_map(function (string $date) use ($scheduler, $service, $professional, $branch, $timezone, $time, $duration, $tenant, $customer) {
+                    $start = Carbon::createFromFormat('Y-m-d H:i', "{$date} {$time}", $timezone);
+                    $check = $scheduler->check($service, $professional, $branch, $start, $duration);
+                    $reason = $check['ok'] ? null : collect($check['reasons'])->map(fn (array $r) => $r['message'] . ($r['detail'] !== '' ? " ({$r['detail']})" : ''))->join(' · ');
+
+                    if (!$reason) {
+                        try {
+                            $this->assertCustomerFree($tenant, $customer, $start, $start->copy()->addMinutes($duration));
+                        } catch (\Illuminate\Http\Exceptions\HttpResponseException $e) {
+                            $reason = $e->getResponse()->getData(true)['message'] ?? 'Choca con otra cita';
+                        }
+                    }
+
+                    return ['date' => $date, 'starts_at' => "{$date}T{$time}", 'ok' => $reason === null, 'reason' => $reason];
+                }, $dates),
+            ]);
+        }
+
+        $seriesId = (string) \Illuminate\Support\Str::uuid();
+        DB::table('appointment_series')->insert([
+            'id'              => $seriesId,
+            'tenant_id'       => $tenant->id,
+            'customer_id'     => $customer->id,
+            'service_id'      => $service->id,
+            'professional_id' => $professional->id,
+            'branch_id'       => $branch->id,
+            'frequency'       => $validated['frequency'],
+            'every'           => $every,
+            'first_date'      => $dates[0],
+            'time_local'      => $time,
+            'until_date'      => $validated['until_date'] ?? null,
+            'occurrences'     => $validated['occurrences'] ?? null,
+            'created_by'      => $user->id,
+            'created_at'      => now(),
+            'updated_at'      => now(),
+        ]);
+
+        $base = array_intersect_key($validated, array_flip(['customer_id', 'customer_dependent_id', 'service_id', 'professional_id', 'branch_id', 'notes']));
+        $created = [];
+        $skipped = [];
+
+        $held = \App\Support\Messaging::hold(function () use ($dates, $base, $time, $request, $seriesId, &$created, &$skipped) {
+            foreach ($dates as $index => $date) {
+                $payload = $base + ['starts_at' => "{$date}T{$time}"];
+                $sub = $request->duplicate($request->query->all(), $payload);
+                $sub->setJson(new \Symfony\Component\HttpFoundation\InputBag($payload));
+
+                try {
+                    $response = $this->create($sub);
+                    $data = $response->getData(true);
+                    $ok = $response->getStatusCode() < 400;
+                    $reason = $ok ? null : ($data['message'] ?? 'No se pudo agendar');
+                } catch (ValidationException $e) {
+                    $ok = false;
+                    $reason = collect($e->errors())->flatten()->first() ?? 'No se pudo agendar';
+                } catch (\Illuminate\Http\Exceptions\HttpResponseException $e) {
+                    $ok = false;
+                    $reason = $e->getResponse()->getData(true)['message'] ?? 'No se pudo agendar';
+                } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+                    $ok = false;
+                    $reason = $e->getMessage() ?: 'No se pudo agendar';
+                }
+
+                if ($ok) {
+                    Appointment::whereKey($data['id'])->update(['series_id' => $seriesId, 'series_number' => $index + 1]);
+                    $created[] = ['id' => $data['id'], 'code' => $data['code'], 'date' => $date, 'starts_at' => "{$date}T{$time}"];
+                } else {
+                    $skipped[] = ['date' => $date, 'starts_at' => "{$date}T{$time}", 'reason' => $reason];
+                }
+            }
+        });
+
+        \App\Support\Messaging::releaseSeries($tenant, $held, $seriesId, \App\Support\AppointmentSeries::describe($validated['frequency'], $every));
+
+        if ($created === []) {
+            DB::table('appointment_series')->where('id', $seriesId)->delete();
+
+            return response()->json([
+                'message' => 'No se pudo agendar ninguna de las fechas.',
+                'code'    => 'SERIES_EMPTY',
+                'skipped' => $skipped,
+            ], 409);
+        }
+
+        DB::table('appointment_series')->where('id', $seriesId)->update([
+            'created_count' => count($created),
+            'skipped'       => json_encode($skipped, JSON_UNESCAPED_UNICODE),
+            'updated_at'    => now(),
+        ]);
+
+        Audit::log($request, 'appointment.series_created', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'appointment_series',
+            'entity_id'    => $seriesId,
+            'entity_label' => \App\Support\Person::name($customer) . ' · ' . $service->name,
+            'after'        => [
+                'frequency' => \App\Support\AppointmentSeries::describe($validated['frequency'], $every),
+                'created'   => count($created),
+                'skipped'   => count($skipped),
+            ],
+        ]);
+
+        return response()->json([
+            'series_id' => $seriesId,
+            'label'     => \App\Support\AppointmentSeries::describe($validated['frequency'], $every),
+            'created'   => $created,
+            'skipped'   => $skipped,
+            'first'     => $this->present(Appointment::with(self::RELATIONS)->findOrFail($created[0]['id']), $tenant, true),
+        ], 201);
     }
 
     protected function create(Request $request): JsonResponse
@@ -542,7 +1083,7 @@ class AppointmentController extends Controller
                 'ends_at'               => $end,
                 'status'                => $status,
                 'source'                => $walkin ? 'walkin' : ($request->attributes->get('appointment_source') ?: 'staff'),
-                'price'                 => $service->price,
+                'price'                 => $service->priceAt($branch->id),
             ] + Currency::column($tenant) + [
                 'notes'                 => $validated['notes'] ?? null,
                 'override_reason'       => $override,
@@ -583,6 +1124,42 @@ class AppointmentController extends Controller
         return response()->json($this->present($appointment, $this->tenant($request), true));
     }
 
+    public function changeRoom(Request $request, string $appointment)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless(\App\Support\RoomBooking::enabled($tenant), 403, 'Tu empresa no tiene encendido el módulo de salas y equipos.');
+
+        $validated = $request->validate(['room_id' => 'required|uuid'], ['room_id.required' => 'Elige la sala.']);
+
+        return DB::transaction(function () use ($request, $appointment, $tenant, $validated) {
+            DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
+
+            $appointment = $this->find($request, $appointment);
+            Access::assertBranch($request->user(), $appointment->branch_id, true);
+
+            if (!in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true)) {
+                return response()->json([
+                    'message' => 'Una cita «' . AppointmentFlow::name($tenant, $appointment->status) . '» ya no cambia de sala.',
+                    'code'    => 'INVALID_TRANSITION',
+                ], 422);
+            }
+
+            if ($appointment->room_id === $validated['room_id']) {
+                return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true));
+            }
+
+            \App\Support\RoomBooking::assertCanUse($tenant, $appointment, $validated['room_id']);
+
+            $before = \App\Support\RoomBooking::name($appointment->room_id);
+            $appointment->update(['room_id' => $validated['room_id']]);
+            $after = \App\Support\RoomBooking::name($validated['room_id']);
+
+            $this->auditAppointment($request, 'appointment.room_changed', $appointment, ['room' => $after], array_filter(['room' => $before]));
+
+            return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true));
+        });
+    }
+
     public function changeStatus(Request $request, string $appointment)
     {
         $tenant = $this->tenant($request);
@@ -592,13 +1169,103 @@ class AppointmentController extends Controller
             'status' => ['required', Rule::in(AppointmentFlow::keys())],
             'reason' => 'nullable|string|max:255',
             'by_customer' => 'nullable|boolean',
+            'series_scope' => ['nullable', Rule::in(['one', 'following', 'all'])],
         ]);
 
         $to = $validated['status'];
         $reason = trim((string) ($validated['reason'] ?? '')) ?: null;
         $byCustomer = (bool) ($validated['by_customer'] ?? false);
+        $scope = $validated['series_scope'] ?? 'one';
 
-        return DB::transaction(function () use ($request, $appointment, $tenant, $user, $to, $reason, $byCustomer) {
+        if ($to !== AppointmentFlow::CANCELLED || $scope === 'one') {
+            return $this->applyStatus($request, $appointment, $tenant, $user, $to, $reason, $byCustomer);
+        }
+
+        $response = null;
+        $cancelled = 0;
+        $kept = [];
+        $seriesKey = $appointment;
+
+        $held = \App\Support\Messaging::hold(function () use ($request, $appointment, $tenant, $user, $to, $reason, $byCustomer, $scope, &$response, &$cancelled, &$kept, &$seriesKey) {
+            $response = $this->applyStatus($request, $appointment, $tenant, $user, $to, $reason, $byCustomer);
+
+            if ($response->getStatusCode() >= 400) {
+                return;
+            }
+
+            $current = Appointment::where('tenant_id', $tenant->id)->find($appointment);
+            $seriesKey = ($current?->series_id ?? $appointment) . ':' . now()->timestamp;
+
+            foreach ($current ? \App\Support\AppointmentSeries::siblingsToCancel($current, $scope) : [] as $siblingId) {
+                try {
+                    $result = $this->applyStatus($request, $siblingId, $tenant, $user, $to, $reason, $byCustomer);
+                    $result->getStatusCode() < 400 ? $cancelled++ : $kept[] = $result->getData(true)['message'] ?? '';
+                } catch (\Throwable $e) {
+                    if (!$e instanceof \Symfony\Component\HttpKernel\Exception\HttpException && !$e instanceof ValidationException && !$e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
+                        throw $e;
+                    }
+                    $kept[] = $e->getMessage();
+                }
+            }
+        });
+
+        \App\Support\Messaging::releaseSeries($tenant, $held, $seriesKey);
+
+        if ($response->getStatusCode() >= 400) {
+            return $response;
+        }
+
+        return response()->json($response->getData(true) + ['series_cancelled' => $cancelled, 'series_kept' => count($kept)], $response->getStatusCode());
+    }
+
+    public function bulkStatus(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'ids'    => 'required|array|min:1|max:100',
+            'ids.*'  => 'uuid|distinct',
+            'status' => ['required', Rule::in([AppointmentFlow::CONFIRMED, AppointmentFlow::CANCELLED])],
+            'reason' => 'nullable|string|max:255',
+        ], [
+            'ids.required' => 'Elige al menos una cita.',
+            'ids.max'      => 'Puedes cambiar hasta 100 citas a la vez.',
+        ]);
+
+        $reason = trim((string) ($validated['reason'] ?? '')) ?: null;
+
+        if ($validated['status'] === AppointmentFlow::CANCELLED && !$reason && AppointmentFlow::rule($tenant, 'cancel.require_reason')) {
+            throw ValidationException::withMessages(['reason' => 'Indica el motivo de la cancelación.']);
+        }
+
+        $done = 0;
+        $failed = [];
+
+        foreach ($validated['ids'] as $id) {
+            try {
+                $result = $this->applyStatus($request, $id, $tenant, $user, $validated['status'], $reason, false);
+                if ($result->getStatusCode() < 400) {
+                    $done++;
+                } else {
+                    $failed[] = ['id' => $id, 'message' => $result->getData(true)['message'] ?? 'No se pudo cambiar.'];
+                }
+            } catch (\Throwable $e) {
+                $missing = $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                    || ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpException && $e->getStatusCode() === 404);
+                if (!$missing && !$e instanceof \Symfony\Component\HttpKernel\Exception\HttpException && !$e instanceof ValidationException && !$e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
+                    throw $e;
+                }
+                $failed[] = ['id' => $id, 'message' => $missing ? 'No se encontró la cita.' : $e->getMessage()];
+            }
+        }
+
+        return response()->json(['done' => $done, 'failed' => $failed]);
+    }
+
+    protected function applyStatus(Request $request, string $appointment, Tenant $tenant, mixed $user, string $to, ?string $reason, bool $byCustomer, ?string $cancelledBy = null): JsonResponse
+    {
+        return DB::transaction(function () use ($request, $appointment, $tenant, $user, $to, $reason, $byCustomer, $cancelledBy) {
             $appointment = $this->find($request, $appointment);
             $appointment = Appointment::whereKey($appointment->id)->lockForUpdate()->first()->load(self::RELATIONS);
             $from = $appointment->status;
@@ -624,13 +1291,14 @@ class AppointmentController extends Controller
             }
 
             if ($to === AppointmentFlow::COMPLETED
-                && AppointmentFlow::rule($tenant, 'records.require_on_complete')
+                && AppointmentFlow::recordRequired($tenant, $appointment)
                 && $this->usesRecord($tenant, $appointment)
                 && (!$appointment->record || $appointment->record->status === CareRecord::DRAFT)) {
                 return response()->json([
                     'message' => 'Este servicio exige la ficha de atención firmada antes de darla por atendida.',
                     'code'    => 'RECORD_REQUIRED',
-                ], 422);
+                    'appointment_id' => $appointment->id,
+                ], 409);
             }
 
             if (in_array($to, [AppointmentFlow::IN_PROGRESS, AppointmentFlow::COMPLETED], true)
@@ -684,7 +1352,7 @@ class AppointmentController extends Controller
                 case AppointmentFlow::CANCELLED:
                     $changes['cancelled_at'] = $now;
                     $changes['cancel_reason'] = $reason;
-                    $changes['cancelled_by'] = $byCustomer && \App\Support\OnlineBooking::lateCancelPreview($tenant, $appointment) ? 'customer' : 'staff';
+                    $changes['cancelled_by'] = $cancelledBy ?? ($byCustomer && \App\Support\OnlineBooking::lateCancelPreview($tenant, $appointment) ? 'customer' : 'staff');
                     break;
             }
 
@@ -776,6 +1444,7 @@ class AppointmentController extends Controller
 
             $this->assertCustomerFree($tenant, $appointment->customer, $start, $end, $appointment->id);
             $auditBefore = $this->auditPlace($appointment);
+            $freed = $this->freedSlot($appointment);
 
             $appointment->update([
                 'starts_at'        => $start,
@@ -791,12 +1460,93 @@ class AppointmentController extends Controller
             $this->log($appointment, $appointment->status, $appointment->status, $user, $reason ? "{$detail} · {$reason}" : $detail);
             $this->auditRescheduled($request, $appointment->fresh(self::RELATIONS), $auditBefore, $reason);
 
+            $this->offerFreedSlot($tenant, $freed);
+
             if ($override) {
                 $this->auditAppointment($request, 'appointment.forced', $appointment, ['override_reason' => $override, 'appointment_at' => $start->toIso8601String()]);
             }
 
             return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true));
         });
+    }
+
+    protected function freedSlot(Appointment $appointment): Appointment
+    {
+        $freed = $appointment->replicate();
+        $freed->id = $appointment->id;
+        $freed->status = AppointmentFlow::CANCELLED;
+
+        return $freed;
+    }
+
+    protected function offerFreedSlot(Tenant $tenant, Appointment $freed): void
+    {
+        if (\App\Support\Waitlist::stillFree($freed)) {
+            \App\Support\Waitlist::slotFreed($tenant, $freed);
+        }
+    }
+
+    public function undoNoShow(Request $request, string $appointment)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+
+        return DB::transaction(function () use ($request, $appointment, $tenant, $user) {
+            $appointment = $this->find($request, $appointment);
+            $appointment = Appointment::whereKey($appointment->id)->lockForUpdate()->first()->load(self::RELATIONS);
+            Access::assertBranch($user, $appointment->branch_id, true);
+
+            if ($appointment->status !== AppointmentFlow::NO_SHOW) {
+                return response()->json(['message' => 'Esta cita no está marcada como «' . AppointmentFlow::name($tenant, AppointmentFlow::NO_SHOW) . '».', 'code' => 'INVALID_TRANSITION'], 422);
+            }
+
+            $blocked = $this->noShowUndoBlocked($tenant, $appointment);
+
+            if ($blocked) {
+                return response()->json(['message' => $blocked, 'code' => 'POLICY'], 422);
+            }
+
+            $penalty = \App\Support\Penalties::find($tenant->id, $appointment->id);
+            $waived = null;
+
+            if ($penalty && in_array($penalty->status, ['pending', 'partial'], true)) {
+                \App\Support\Refunds::void($penalty, 'Se deshizo «No asistió» de la cita ' . $appointment->code);
+                $waived = $penalty;
+            }
+
+            $back = AppointmentStatusHistory::where('appointment_id', $appointment->id)->where('to_status', AppointmentFlow::NO_SHOW)->orderByDesc('created_at')->value('from_status');
+            $back = in_array($back, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true) ? $back : AppointmentFlow::CONFIRMED;
+
+            $appointment->update(['status' => $back] + ($back === AppointmentFlow::CONFIRMED ? ['confirmed_at' => $appointment->confirmed_at ?? now()] : []));
+            $this->log($appointment, AppointmentFlow::NO_SHOW, $back, $user, 'Se deshizo «No asistió»' . ($waived ? " y se perdonó la penalidad {$waived->code}" : ''));
+            $this->auditAppointment($request, 'appointment.no_show_undone', $appointment, $this->auditFacts($appointment) + array_filter(['penalty_waived' => $waived?->code]));
+
+            return response()->json($this->present($appointment->fresh(self::RELATIONS), $tenant, true) + [
+                'penalty'        => \App\Support\Penalties::present(\App\Support\Penalties::find($tenant->id, $appointment->id)),
+                'penalty_waived' => $waived ? ['code' => $waived->code, 'total' => round((float) $waived->total, 2), 'currency' => $waived->currency ?? null] : null,
+            ]);
+        });
+    }
+
+    private function noShowUndoBlocked(Tenant $tenant, Appointment $appointment): ?string
+    {
+        $penalty = \App\Support\Penalties::find($tenant->id, $appointment->id);
+
+        if ($penalty && (float) $penalty->paid > 0) {
+            return "La penalidad {$penalty->code} ya tiene un pago. Primero devuélvelo desde Ventas y luego deshaz «No asistió».";
+        }
+
+        if (Schema::hasTable('package_usages') && DB::table('package_usages')->where('appointment_id', $appointment->id)->exists()) {
+            return 'Por la falta ya se descontó una sesión del paquete. No se puede deshacer desde aquí.';
+        }
+
+        $sale = \App\Support\Sales::ready() ? \App\Support\Sales::ofAppointment($tenant->id, $appointment->id) : null;
+
+        if ($sale && ($sale->deposit_outcome ?? null) === 'retained') {
+            return "El adelanto de esta cita ya quedó retenido por la falta (venta {$sale->code}). No se puede deshacer desde aquí.";
+        }
+
+        return null;
     }
 
     public function customerNotes(Request $request)
@@ -806,6 +1556,7 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'customer_id' => 'required|uuid',
             'service_id'  => 'nullable|uuid',
+            'customer_dependent_id' => 'nullable|uuid',
         ]);
 
         $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($validated['customer_id']);
@@ -815,6 +1566,14 @@ class AppointmentController extends Controller
 
         if (Schema::hasColumn('customers', 'alert') && trim((string) $customer->alert) !== '') {
             $notes[] = ['kind' => 'alert', 'tone' => 'warn', 'title' => 'Alerta', 'text' => trim((string) $customer->alert)];
+        }
+
+        if (!empty($validated['customer_dependent_id']) && $tenant->dependents()['enabled'] && CustomerDependent::alertReady()) {
+            $dependent = CustomerDependent::where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->find($validated['customer_dependent_id']);
+
+            if ($dependent && trim((string) $dependent->alert) !== '') {
+                $notes[] = ['kind' => 'dependent_alert', 'tone' => 'warn', 'title' => "Alerta de {$dependent->name}", 'text' => trim((string) $dependent->alert)];
+            }
         }
 
         if (\App\Support\Sales::ready()) {
@@ -883,7 +1642,16 @@ class AppointmentController extends Controller
             }
         }
 
-        return response()->json(['notes' => $notes]);
+        try {
+            $segments = $request->user()->allows('customers.view')
+                ? collect(\App\Support\CustomerProfile::segments($tenant, $customer->id))->map(fn (array $s) => ['key' => $s['key'], 'label' => $s['label']])->values()->all()
+                : [];
+        } catch (\Throwable $e) {
+            report($e);
+            $segments = [];
+        }
+
+        return response()->json(['notes' => $notes, 'segments' => $segments]);
     }
 
     public function remind(Request $request, string $appointment)
@@ -1178,17 +1946,26 @@ class AppointmentController extends Controller
             'next_statuses'    => AppointmentFlow::allowedNext($tenant, $appointment->status, $viewer),
             'can_remind'       => $viewer instanceof User && $viewer->allows('agenda.confirm') && in_array($appointment->status, [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true) && $appointment->starts_at->isFuture(),
             'can_reschedule'   => $canEdit && in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true),
+            'can_undo_no_show' => $appointment->status === AppointmentFlow::NO_SHOW && $viewer instanceof User && $viewer->allows('agenda.noshow'),
             'starts_at'        => $local($appointment->starts_at),
             'ends_at'          => $local($appointment->ends_at),
             'duration_minutes' => (int) $appointment->starts_at->diffInMinutes($appointment->ends_at),
             'price'            => $appointment->price,
             'currency'         => $appointment->currency ?? Currency::DEFAULT,
             'source'           => $appointment->source,
+            'source_label'     => self::originLabel($appointment->source, $appointment->getAttribute('channel')),
+            'buffers'          => [
+                'before' => (int) ($appointment->service?->buffer_before_minutes ?? 0),
+                'after'  => (int) ($appointment->service?->buffer_after_minutes ?? 0),
+            ],
             'notes'            => $appointment->notes,
             'video_url'        => \App\Support\VideoLinks::for($appointment),
             'own_video_url'    => \App\Support\VideoLinks::ready() ? $appointment->video_url : null,
             'is_virtual'       => (bool) $appointment->service?->is_virtual,
             'reschedule_count' => $appointment->reschedule_count,
+            'series'           => $withHistory
+                ? \App\Support\AppointmentSeries::present($appointment)
+                : ($appointment->series_id ? ['id' => $appointment->series_id, 'number' => $appointment->series_number] : null),
             'override_reason'  => $appointment->override_reason,
             'cancel_reason'    => $appointment->cancel_reason,
             'confirmed_at'     => $local($appointment->confirmed_at),
@@ -1200,8 +1977,9 @@ class AppointmentController extends Controller
             'confirmation_overdue' => \App\Support\Confirmations::overdue($tenant, $appointment),
             'timing'           => AppointmentTiming::of($appointment),
             'record'           => [
-                'uses'   => $this->usesRecord($tenant, $appointment),
-                'status' => $appointment->record?->currentStatus(),
+                'uses'     => $uses = $this->usesRecord($tenant, $appointment),
+                'status'   => $appointment->record?->currentStatus(),
+                'required' => $uses && AppointmentFlow::recordRequired($tenant, $appointment),
             ],
             'occupied_until'   => $local(AppointmentTiming::occupiedUntil($appointment)),
             'customer'         => $customer ? [
@@ -1215,6 +1993,7 @@ class AppointmentController extends Controller
                 'name'    => $dependent->name,
                 'species' => $dependent->species,
             ] : null,
+            'dependent_alert'  => $dependent && trim((string) $dependent->getAttribute('alert')) !== '' ? trim((string) $dependent->getAttribute('alert')) : null,
             'service'          => $appointment->service ? [
                 'id'   => $appointment->service->id,
                 'name' => $appointment->service->name,
@@ -1228,9 +2007,17 @@ class AppointmentController extends Controller
                 'id'   => $appointment->branch->id,
                 'name' => $appointment->branch->name,
             ] : null,
+            'room'             => $appointment->room_id && ($roomName = \App\Support\RoomBooking::name($appointment->room_id)) !== null ? [
+                'id'   => $appointment->room_id,
+                'name' => $roomName,
+            ] : null,
         ];
 
         if ($withHistory) {
+            $data['room_options'] = \App\Support\RoomBooking::enabled($tenant) && $canEdit && in_array($appointment->status, AppointmentFlow::RESCHEDULABLE, true)
+                ? \App\Support\RoomBooking::options($tenant, $appointment)
+                : null;
+
             $data['history'] = $appointment->history()->with(['actor:id,first_name,last_name', 'customerActor:id,first_name,last_name'])->get()
                 ->map(fn (AppointmentStatusHistory $step) => [
                     'from'      => $step->from_status,

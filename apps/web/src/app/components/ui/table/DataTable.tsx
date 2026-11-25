@@ -87,6 +87,7 @@ export interface MetricCardItem {
   onClick?: () => void;
   borderColorClass?: string;
   iconColorClass?: string;
+  hint?: string;
 }
 
 interface DataTableProps<T> {
@@ -124,6 +125,7 @@ interface DataTableProps<T> {
   exportColumns?: ExportColumn<T>[];
   exportTitle?: string;
   exportScreen?: string;
+  exportPermission?: string;
   exportFilters?: string[];
   exportNotice?: string;
   boardView?: (rows: T[]) => ReactNode;
@@ -162,6 +164,7 @@ export function DataTable<T extends Record<string, any>>({
   exportColumns,
   exportTitle,
   exportScreen,
+  exportPermission,
   exportFilters = [],
   exportNotice,
   boardView,
@@ -418,6 +421,7 @@ export function DataTable<T extends Record<string, any>>({
                     <div className="mt-0.5 text-lg sm:text-2xl font-extrabold tracking-tight text-slate-900">
                       {card.value}
                     </div>
+                    {card.hint && <span className="block text-[11px] text-slate-500 leading-snug">{card.hint}</span>}
                   </div>
                   {card.icon && (
                     <div className={`hidden sm:block p-2 rounded-xl bg-slate-50 border border-slate-100 ${card.iconColorClass || 'text-slate-500'}`}>
@@ -498,7 +502,7 @@ export function DataTable<T extends Record<string, any>>({
                 ))}
               </div>
             )}
-            {exportColumns && exportColumns.length > 0 && (can('data.export') || (!user?.tenant && Boolean(user?.is_saas_admin))) && (
+            {exportColumns && exportColumns.length > 0 && ((can('data.export') && (!exportPermission || can(exportPermission))) || (!user?.tenant && Boolean(user?.is_saas_admin))) && (
               <ExportMenu
                 title={exportTitle ?? title}
                 screen={exportScreen ?? (exportTitle ?? title)}

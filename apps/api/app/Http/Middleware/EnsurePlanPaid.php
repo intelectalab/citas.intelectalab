@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsurePlanPaid
 {
     private const OPEN = [
-        'api/billing/*', 'api/subscriptions/*', 'api/account/*', 'api/notifications*', 'api/data-exports', 'api/logout', 'api/impersonation/*', 'api/complaints/*', 'api/support/*', 'api/announcements/*',
+        'api/billing/*', 'api/subscriptions/*', 'api/account/*', 'api/notifications*', 'api/data-exports', 'api/reports/export', 'api/logout', 'api/impersonation/*', 'api/complaints/*', 'api/support/*', 'api/announcements/*',
     ];
 
     public function handle(Request $request, Closure $next, ?string $area = null): Response
@@ -27,7 +27,7 @@ class EnsurePlanPaid
 
         return response()->json([
             'message' => $area === 'portal' ? Subscriptions::PORTAL_LOCKED : Subscriptions::lockMessage($tenantId),
-            'code'    => 'PLAN_LOCKED',
-        ], 402);
+            'code'    => 'TENANT_SUSPENDED',
+        ], 423);
     }
 }

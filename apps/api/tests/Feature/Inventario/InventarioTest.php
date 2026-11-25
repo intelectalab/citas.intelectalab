@@ -72,7 +72,8 @@ it('el conteo físico ajusta a lo contado y si no hay diferencia no crea movimie
     $w = ($this->almacen)();
     ($this->mover)(['mode' => 'entry', 'warehouse_id' => $w, 'product_id' => $p->id, 'quantity' => 8])->assertCreated();
 
-    ($this->mover)(['mode' => 'count', 'warehouse_id' => $w, 'product_id' => $p->id, 'quantity' => 6])->assertCreated();
+    ($this->mover)(['mode' => 'count', 'warehouse_id' => $w, 'product_id' => $p->id, 'quantity' => 6])->assertStatus(422)->assertJsonValidationErrors('reason');
+    ($this->mover)(['mode' => 'count', 'warehouse_id' => $w, 'product_id' => $p->id, 'quantity' => 6, 'reason' => 'Inventario mensual: faltan dos'])->assertCreated();
     $ajuste = DB::table('inventory_movements')->where('product_id', $p->id)->where('type', 'adjustment')->first();
     expect(($this->stock)($p->id, $w))->toBe(6.0)->and((float) $ajuste->quantity)->toBe(-2.0);
 

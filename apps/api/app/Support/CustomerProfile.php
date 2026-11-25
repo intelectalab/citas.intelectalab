@@ -78,7 +78,8 @@ class CustomerProfile
             ->whereNull('c.deleted_at')
             ->where('a.tenant_id', $tenantId)
             ->groupBy('a.customer_tag_id')
-            ->pluck(DB::raw('count(*)'), 'a.customer_tag_id');
+            ->selectRaw('a.customer_tag_id, count(*) as total')
+            ->pluck('total', 'customer_tag_id');
 
         return DB::table('customer_tags')->where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'name', 'color'])
             ->map(fn ($tag) => ['id' => $tag->id, 'name' => $tag->name, 'color' => $tag->color, 'customers' => (int) ($counts[$tag->id] ?? 0)])

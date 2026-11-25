@@ -29,6 +29,8 @@ export default function FormRecordTemplate({ isOpen, onClose, initialData, servi
   const [consentText, setConsentText] = useState('');
   const [requireConsent, setRequireConsent] = useState(false);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [confidential, setConfidential] = useState(false);
+  const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,6 +44,8 @@ export default function FormRecordTemplate({ isOpen, onClose, initialData, servi
     setConsentText(initialData?.consent_text ?? '');
     setRequireConsent(Boolean(initialData?.require_consent));
     setServiceIds([...(initialData?.service_ids ?? [])]);
+    setConfidential(Boolean(initialData?.is_confidential));
+    setActive(initialData?.active ?? true);
   }, [isOpen, initialData]);
 
   const toggleService = (id: string, on: boolean) =>
@@ -57,6 +61,8 @@ export default function FormRecordTemplate({ isOpen, onClose, initialData, servi
       consent_text: consentText || null,
       require_consent: requireConsent,
       service_ids: serviceIds,
+      is_confidential: confidential,
+      active,
     };
 
     try {
@@ -128,6 +134,23 @@ export default function FormRecordTemplate({ isOpen, onClose, initialData, servi
               <span className="block text-xs text-slate-400">Lo que se llena en cada atención, en este orden.</span>
             </div>
             <RecordFieldsEditor value={fields} onChange={setFields} />
+          </div>
+
+          <div className="space-y-3 pt-5 border-t border-slate-100" data-template-privacy>
+            <label className="flex items-start justify-between gap-3 text-sm font-semibold text-slate-700">
+              <span>
+                Confidencial
+                <span className="block text-xs font-normal text-slate-500">Las fichas de esta plantilla son privadas: solo las ve quien las escribe. Sirve para notas de psicología o datos delicados.</span>
+              </span>
+              <Switch checked={confidential} onChange={setConfidential} label="Las fichas de esta plantilla son confidenciales" />
+            </label>
+            <label className="flex items-start justify-between gap-3 text-sm font-semibold text-slate-700">
+              <span>
+                Activa
+                <span className="block text-xs font-normal text-slate-500">Si la apagas, ya no se abre al atender sus servicios ni se ofrece para fichas sin cita. Las fichas ya llenadas no cambian.</span>
+              </span>
+              <Switch checked={active} onChange={setActive} label="La plantilla está activa" />
+            </label>
           </div>
 
           <div className="space-y-3 pt-5 border-t border-slate-100">

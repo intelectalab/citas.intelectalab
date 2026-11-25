@@ -64,6 +64,7 @@ export interface InventoryMovement {
   balance_after: number;
   reference_type: string | null;
   reference_id: string | null;
+  reference_label?: string | null;
   reason: string | null;
   by: string;
   created_at: string;
@@ -148,6 +149,7 @@ export interface PurchaseOrder {
 }
 
 export interface InventoryBoardData {
+  movements_cut?: number | null;
   currency: string;
   rules: InventoryRules;
   branch_limit: string | null;

@@ -34,6 +34,9 @@ const empty = {
   trackStock: false,
   kind: 'retail' as Product['kind'],
   categoryId: '',
+  brandId: '',
+  unitId: '',
+  barcode: '',
   active: true,
 };
 
@@ -48,6 +51,8 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
   const [form, setForm] = useState(empty);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [newCategory, setNewCategory] = useState<string | null>(null);
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [newBrand, setNewBrand] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,6 +62,8 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
     setError('');
     setNewCategory(null);
     setCategories(catalog?.categories ?? []);
+    setBrands(catalog?.brands ?? []);
+    setNewBrand(null);
     setForm(initialData ? {
       name: initialData.name,
       sku: initialData.sku,
@@ -66,6 +73,9 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
       trackStock: initialData.track_stock ?? false,
       kind: initialData.kind,
       categoryId: initialData.category_id ?? '',
+      brandId: initialData.brand_id ?? '',
+      unitId: initialData.unit_id ?? '',
+      barcode: initialData.barcode ?? '',
       active: initialData.status === 'active',
     } : empty);
   }, [isOpen, initialData, catalog]);
@@ -86,10 +96,32 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
     }
   };
 
+  const createBrand = async () => {
+    if (!newBrand?.trim()) return;
+
+    try {
+      setError('');
+      const res = await api.post('/product-brands', { name: newBrand.trim() });
+      setBrands((current) => [...current, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+      set({ brandId: res.data.id });
+      setNewBrand(null);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo crear la marca.'));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (form.kind !== 'supply' && Number(form.price || 0) <= 0) {
+      setError('Un producto que se vende necesita un precio mayor que 0.');
+      return;
+    }
+
     const payload = {
+      brand_id: form.brandId || null,
+      unit_id: form.unitId || null,
+      barcode: form.barcode.trim() || null,
       name: form.name.trim(),
       sku: form.sku.trim() || null,
       price: Number(form.price || 0),
@@ -186,6 +218,39 @@ export default function FormProduct({ isOpen, onClose, initialData, catalog, onS
                 <button type="button" onClick={() => setNewCategory(null)} className="shrink-0 px-3 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>
               </div>
             )}
+          </div>
+
+          <div>
+            <Select
+              label="Marca"
+              placeholder="Sin marca"
+              value={form.brandId}
+              onChange={(e) => set({ brandId: String(e.target.value) })}
+              options={brands.map((b) => ({ value: b.id, label: b.name }))}
+              onAdd={can('products.create') ? () => setNewBrand('') : undefined}
+              addLabel="Nueva marca"
+            />
+            {newBrand !== null && (
+              <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5" data-new-brand>
+                <input autoFocus maxLength={120} placeholder="Ej. L'Oréal" className={inputClass} value={newBrand} onChange={(e) => setNewBrand(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createBrand(); } }} />
+                <button type="button" data-save-brand disabled={!newBrand.trim()} onClick={createBrand} className="shrink-0 px-3.5 py-2.5 text-sm font-bold bg-brand text-white rounded-lg disabled:opacity-50">Crear</button>
+                <button type="button" onClick={() => setNewBrand(null)} className="shrink-0 px-3 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Unidad"
+              placeholder="Unidad"
+              value={form.unitId}
+              onChange={(e) => set({ unitId: String(e.target.value) })}
+              options={(catalog?.units ?? []).map((u) => ({ value: u.id, label: `${u.name} (${u.abbreviation})` }))}
+            />
+            <div>
+              <label className={labelClass} htmlFor="product-barcode">Código de barras</label>
+              <input id="product-barcode" maxLength={60} inputMode="numeric" placeholder="Lo puedes escanear" className={inputClass} value={form.barcode} onChange={(e) => set({ barcode: e.target.value.replace(/\s+/g, '') })} />
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3">

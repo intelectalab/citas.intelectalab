@@ -23,7 +23,8 @@ interface FormCustomerProps {
 export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuccess }: FormCustomerProps) {
   const vocab = useVocabulary();
   const clientLower = vocab.client.toLowerCase();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const seesHealth = can('records.view|records.edit|records.all');
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const clinical = Boolean(user?.tenant?.rules?.['customers.clinical_fields']);
   const [pendingDependents, setPendingDependents] = useState<CustomerDependent[]>([]);
@@ -264,7 +265,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             options={[{ value: 'M', label: 'Masculino' }, { value: 'F', label: 'Femenino' }]}
                           />
                         </div>
-                        {clinical && (
+                        {clinical && seesHealth && (
                         <div data-field="blood-type">
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Tipo de Sangre</label>
                           <Select
@@ -418,7 +419,8 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             options={professionals.map((p) => ({ value: p.id, label: p.display_name }))}
                           />
                         </div>
-                        <div>
+                        {seesHealth && (
+                        <div data-field="medical-notes">
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">{clinical ? 'Antecedentes y observaciones' : 'Observaciones'}</label>
                           <textarea
                             rows={3}
@@ -428,6 +430,7 @@ export default function FormCustomer({ isOpen, onClose, initialData, onSubmitSuc
                             placeholder={clinical ? 'Alergias, antecedentes y otros datos relevantes...' : 'Preferencias o datos a tener en cuenta...'}
                           />
                         </div>
+                        )}
                         {board && (
                         <div data-field="stage">
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Etapa en el tablero</label>

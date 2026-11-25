@@ -38,6 +38,7 @@ class BusinessType extends Model
 
     protected $hidden = [
         'template',
+        'factory',
     ];
 
     public function tenants(): HasMany

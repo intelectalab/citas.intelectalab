@@ -10,6 +10,7 @@ export interface Lead {
   source: string;
   source_label: string;
   utm: Record<string, string>;
+  heard_from_label?: string | null;
   stage: 'new' | 'contacted' | 'trial' | 'paid' | 'lost';
   stage_label: string;
   coupon: string | null;
@@ -24,7 +25,7 @@ export interface Lead {
 
 export interface LeadEvent {
   id: string;
-  kind: 'stage' | 'note';
+  kind: 'stage' | 'note' | 'chat';
   from: string | null;
   to: string | null;
   from_label: string | null;

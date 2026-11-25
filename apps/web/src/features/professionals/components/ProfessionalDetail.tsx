@@ -12,6 +12,8 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import FormProfessional from './FormProfessional';
 import ProfessionalSchedule from './ProfessionalSchedule';
 import ProfessionalCommissions from './ProfessionalCommissions';
+import ProfessionalPerformance from './ProfessionalPerformance';
+import Link from 'next/link';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { PagedList } from '@/app/components/common/Pager';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
@@ -25,6 +27,7 @@ interface ProfessionalData {
   document_number?: string | null;
   phone?: string | null;
   bio?: string | null;
+  color_code?: string | null;
   created_at?: string;
   type_document?: { name?: string; code?: string } | null;
   status?: { id: string; name: string; slug?: string } | null;
@@ -72,6 +75,7 @@ export default function ProfessionalDetail() {
   const [schedule, setSchedule] = useState<ScheduleData | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [pastBlocks, setPastBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
@@ -100,6 +104,9 @@ export default function ProfessionalDetail() {
       api.get('/availability-blocks', { params: { professional_id: params.id, period: 'current' } })
         .then((res) => setBlocks((Array.isArray(res.data) ? res.data : []).filter((b: Block) => b.professional_id === params.id)))
         .catch(() => setBlocks([]));
+      api.get('/availability-blocks', { params: { professional_id: params.id, period: 'past' } })
+        .then((res) => setPastBlocks((Array.isArray(res.data) ? res.data : []).filter((b: Block) => b.professional_id === params.id).slice(0, 5)))
+        .catch(() => setPastBlocks([]));
     }
   }, [params.id, usesAgenda]);
 
@@ -210,7 +217,7 @@ export default function ProfessionalDetail() {
         <section className={`${card} p-6 space-y-5`} data-card="professional">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-12 h-12 rounded-2xl bg-brand text-brand-soft flex items-center justify-center text-base font-black shrink-0">{initials(professional.display_name)}</span>
+              <span className="w-12 h-12 rounded-2xl bg-brand text-brand-soft flex items-center justify-center text-base font-black shrink-0" style={professional.color_code ? { backgroundColor: professional.color_code, color: '#fff' } : undefined}>{initials(professional.display_name)}</span>
               <div className="min-w-0">
                 <h1 className="text-xl font-black text-brand-ink tracking-tight truncate">{professional.display_name}</h1>
                 <p className="text-xs text-slate-500">
@@ -231,9 +238,16 @@ export default function ProfessionalDetail() {
             )}
           </div>
 
-          <Badge tone={inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} className="inline-flex" data-status>
-            {professional.status?.name ?? 'Activo'}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Badge tone={inactive ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} className="inline-flex" data-status>
+              {professional.status?.name ?? 'Activo'}
+            </Badge>
+            {usesAgenda && (
+              <Link href="/agenda" data-action="open-agenda" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-accent hover:text-brand-ink hover:bg-slate-100 rounded-lg transition-colors">
+                <CalendarDays size={13} /> Ver agenda
+              </Link>
+            )}
+          </div>
 
           <dl className="space-y-3">
             {facts.filter(([, , value]) => value).map(([icon, label, value]) => (
@@ -352,14 +366,19 @@ export default function ProfessionalDetail() {
 
           {usesAgenda && (
             <div className="px-6 py-4 border-t border-slate-100" data-card="blocks">
-              <span className={`flex items-center gap-1.5 ${smallLabel}`}><CalendarOff size={13} /> Ausencias vigentes y próximas</span>
-              {blocks.length === 0 ? (
+              <span className={`flex items-center gap-1.5 ${smallLabel}`}><CalendarOff size={13} /> Ausencias</span>
+              {blocks.length + pastBlocks.length === 0 ? (
                 <p className="text-sm text-slate-400 mt-1.5">Ninguna registrada.</p>
               ) : (
                 <ul className="mt-2 space-y-1.5">
-                  {blocks.map((block) => (
-                    <li key={block.id} className="flex items-center justify-between gap-3 text-sm">
+                  {[...blocks, ...pastBlocks.filter((p) => !blocks.some((b) => b.id === p.id))].map((block) => {
+                    const nowLocal = new Date().toLocaleString('sv-SE').replace(' ', 'T').slice(0, 16);
+                    const phase = block.ends_at.slice(0, 16) < nowLocal ? 'past' : block.starts_at.slice(0, 16) <= nowLocal ? 'now' : 'next';
+                    const tag = { past: ['Pasada', 'bg-slate-100 text-slate-500'], now: ['En curso', 'bg-amber-50 text-amber-700'], next: ['Programada', 'bg-sky-50 text-sky-700'] }[phase];
+                    return (
+                    <li key={block.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm" data-block-phase={phase}>
                       <span className="text-slate-700">
+                        <span className={`mr-1.5 px-2 py-0.5 text-[11px] font-semibold rounded-full ${tag[1]}`}>{tag[0]}</span>
                         <span className="font-semibold">{block.kind_label}</span>
                         {block.reason ? ` · ${block.reason}` : ''}
                       </span>
@@ -369,7 +388,8 @@ export default function ProfessionalDetail() {
                           : `${formatDate(dateOf(block.starts_at), { day: 'numeric', month: 'short' })} al ${formatDate(dateOf(block.ends_at), { day: 'numeric', month: 'short' })}`}
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -380,6 +400,8 @@ export default function ProfessionalDetail() {
         {hasModule('commissions') && (can('commissions.view') || professional.user?.id === user?.id) && (
           <ProfessionalCommissions professionalId={professional.id} reload={commissionsReload} onEdit={() => setEditing(true)} />
         )}
+
+        {usesAgenda && <ProfessionalPerformance professionalId={professional.id} color={professional.color_code} />}
 
         {usesAgenda && (
           <section className={`${card} xl:col-span-3 overflow-hidden scroll-mt-4`} data-card="appointments">

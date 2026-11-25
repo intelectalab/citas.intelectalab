@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Support\Audit;
+use App\Support\Campaigns;
 use App\Support\Currency;
 use App\Support\Loyalty;
 use App\Support\Person;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -31,8 +33,10 @@ class LoyaltyController extends Controller
         $user = $request->user();
         Loyalty::expireDue($tenant->id);
         Loyalty::expirePointsDue($tenant->id);
+        Loyalty::settlePendingReferrals($tenant);
 
         $rules = Loyalty::rules($tenant);
+        $vipIds = array_flip(Campaigns::customers($tenant, ['group' => 'vip'])->pluck('c.id')->all());
         $iso = fn ($value) => $value ? Carbon::parse($value)->toIso8601String() : null;
 
         $txStats = DB::table('loyalty_transactions')
@@ -60,7 +64,7 @@ class LoyaltyController extends Controller
             ->orderBy('last_name')
             ->limit(600)
             ->get(['id', 'first_name', 'last_name', 'document_number', 'email', 'phone'])
-            ->map(function ($c) use ($txStats, $latestBalances, $rules, $iso) {
+            ->map(function ($c) use ($txStats, $latestBalances, $rules, $iso, $vipIds) {
                 $stat = $txStats[$c->id] ?? null;
                 $points = max(0, (int) ($latestBalances[$c->id] ?? 0));
                 $earned = (int) ($stat->earned ?? 0);
@@ -79,6 +83,8 @@ class LoyaltyController extends Controller
                     'movements_count'  => $movementsCount,
                     'redeemable_value' => round($points * $rules['point_value'], 2),
                     'can_redeem'       => $points >= $rules['min_redeem_points'],
+                    'tier'             => Loyalty::tierOf($earned, $rules),
+                    'vip'              => isset($vipIds[$c->id]),
                     'last_movement_at' => $iso($stat->last_movement_at ?? null),
                 ];
             })
@@ -135,6 +141,7 @@ class LoyaltyController extends Controller
             ->leftJoin('customers as r', 'r.id', '=', 'gc.recipient_customer_id')
             ->leftJoin('sales as s', 's.id', '=', 'gc.sale_id')
             ->where('gc.tenant_id', $tenant->id)
+            ->where('gc.code', 'not like', \App\Support\CustomerCredit::PREFIX . '%')
             ->orderByDesc('gc.created_at')
             ->limit(300)
             ->get([
@@ -176,6 +183,7 @@ class LoyaltyController extends Controller
             ->join('gift_cards as gc', 'gc.id', '=', 'gct.gift_card_id')
             ->leftJoin('sales as s', 's.id', '=', 'gct.sale_id')
             ->where('gct.tenant_id', $tenant->id)
+            ->where('gc.code', 'not like', \App\Support\CustomerCredit::PREFIX . '%')
             ->orderByDesc('gct.created_at')
             ->limit(250)
             ->get([
@@ -184,6 +192,7 @@ class LoyaltyController extends Controller
                 'gct.type',
                 'gct.amount',
                 'gct.created_at',
+                ...($this->hasReason() ? ['gct.reason'] : []),
                 'gc.code as gift_card_code',
                 'gc.recipient_name',
                 's.code as sale_code',
@@ -196,6 +205,7 @@ class LoyaltyController extends Controller
                 'type'           => $m->type,
                 'type_label'     => Loyalty::GIFT_CARD_TX_TYPES[$m->type] ?? $m->type,
                 'amount'         => round((float) $m->amount, 2),
+                'reason'         => $m->reason ?? null,
                 'sale_code'      => $m->sale_code,
                 'created_at'     => $iso($m->created_at),
             ])
@@ -213,6 +223,9 @@ class LoyaltyController extends Controller
             'point_movements'     => $pointMovements,
             'gift_cards'          => $giftCards,
             'gift_card_movements' => $giftCardMovements,
+            'summary'             => $this->summary($tenant, $rules, $latestBalances),
+            'referrals'           => $this->referrals($tenant),
+            'tiers'               => collect(Loyalty::TIERS)->map(fn ($tier, $key) => ['key' => $key, 'label' => $tier['label'], 'from' => $tier['from']])->values(),
         ]);
     }
 
@@ -479,8 +492,11 @@ class LoyaltyController extends Controller
         $tenant = $this->tenant($request);
 
         $validated = $request->validate([
-            'days' => 'required|integer|min:1|max:1095',
+            'days'   => 'required|integer|min:1|max:1095',
+            'reason' => 'required|string|min:3|max:255',
         ], [
+            'reason.required' => 'Escribe el motivo.',
+            'reason.min'      => 'Escribe el motivo.',
             'days.required' => 'Escribe los días a ampliar.',
             'days.min'      => 'Amplía al menos 1 día.',
         ]);
@@ -519,13 +535,13 @@ class LoyaltyController extends Controller
                 'amount'       => round((float) $card->balance, 2),
                 'sale_id'      => null,
                 'created_at'   => now(),
-            ]);
+            ] + $this->reasonColumn($validated['reason']));
 
             return [$card, $newExpires];
         });
 
         $this->auditGiftCard($request, $tenant, 'gift_card.extended', $card, [
-            'days' => (int) $validated['days'], 'ends_at' => $newExpires->toIso8601String(),
+            'days' => (int) $validated['days'], 'ends_at' => $newExpires->toIso8601String(), 'reason' => trim($validated['reason']),
         ], ['ends_at' => $card->expires_at ? Carbon::parse($card->expires_at)->toIso8601String() : null]);
 
         return $this->index($request);
@@ -535,7 +551,14 @@ class LoyaltyController extends Controller
     {
         $tenant = $this->tenant($request);
 
-        [$card, $remaining] = DB::transaction(function () use ($tenant, $giftCard) {
+        $validated = $request->validate([
+            'reason' => 'required|string|min:3|max:255',
+        ], [
+            'reason.required' => 'Escribe el motivo de la anulación.',
+            'reason.min'      => 'Escribe el motivo de la anulación.',
+        ]);
+
+        [$card, $remaining] = DB::transaction(function () use ($tenant, $giftCard, $validated) {
             $card = DB::table('gift_cards')
                 ->where('tenant_id', $tenant->id)
                 ->where('id', $giftCard)
@@ -564,15 +587,152 @@ class LoyaltyController extends Controller
                 'amount'       => $remaining,
                 'sale_id'      => null,
                 'created_at'   => now(),
-            ]);
+            ] + $this->reasonColumn($validated['reason']));
 
             return [$card, $remaining];
         });
 
         $this->auditGiftCard($request, $tenant, 'gift_card.cancelled', $card, [
-            'status' => Loyalty::GIFT_CARD_STATUSES['cancelled'], 'balance' => 0,
+            'status' => Loyalty::GIFT_CARD_STATUSES['cancelled'], 'balance' => 0, 'reason' => trim($validated['reason']),
         ], ['status' => Loyalty::GIFT_CARD_STATUSES[$card->status] ?? $card->status, 'balance' => $remaining]);
 
         return $this->index($request);
+    }
+
+    private function hasReason(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('gift_card_transactions', 'reason');
+    }
+
+    private function reasonColumn(string $reason): array
+    {
+        return $this->hasReason() ? ['reason' => mb_substr(trim($reason), 0, 255)] : [];
+    }
+
+    private function summary(Tenant $tenant, array $rules, $latestBalances): array
+    {
+        $since = now()->subDays(30);
+        $circulation = (int) collect($latestBalances)->sum(fn ($balance) => max(0, (int) $balance));
+
+        $moves = DB::table('loyalty_transactions')
+            ->where('tenant_id', $tenant->id)
+            ->where('created_at', '>=', $since)
+            ->selectRaw("coalesce(sum(points) FILTER (WHERE points > 0 AND type IN ('earn', 'referral', 'adjust')), 0) AS issued")
+            ->selectRaw("coalesce(sum(-points) FILTER (WHERE type = 'redeem'), 0) AS redeemed")
+            ->first();
+
+        $cards = DB::table('gift_cards')
+            ->where('tenant_id', $tenant->id)
+            ->selectRaw("coalesce(sum(balance) FILTER (WHERE status = 'active'), 0) AS pending")
+            ->selectRaw("coalesce(sum(initial_amount) FILTER (WHERE status <> 'cancelled'), 0) AS sold")
+            ->selectRaw("count(*) FILTER (WHERE status = 'expired') AS expired")
+            ->first();
+
+        return [
+            'points_in_circulation' => $circulation,
+            'points_debt'           => round($circulation * $rules['point_value'], 2),
+            'issued_30d'            => (int) $moves->issued,
+            'redeemed_30d'          => (int) $moves->redeemed,
+            'gift_cards_pending'    => round((float) $cards->pending, 2),
+            'gift_cards_sold'       => round((float) $cards->sold, 2),
+            'gift_cards_expired'    => (int) $cards->expired,
+        ];
+    }
+
+    private function referrals(Tenant $tenant): array
+    {
+        if (!Loyalty::referralsReady()) {
+            return [];
+        }
+
+        return DB::table('customer_referrals as r')
+            ->join('customers as a', 'a.id', '=', 'r.referrer_customer_id')
+            ->join('customers as b', 'b.id', '=', 'r.referred_customer_id')
+            ->where('r.tenant_id', $tenant->id)
+            ->orderByDesc('r.created_at')
+            ->limit(200)
+            ->get(['r.id', 'r.referrer_customer_id', 'r.referred_customer_id', 'r.bonus_points', 'r.status', 'r.created_at', 'r.rewarded_at', 'a.first_name as a_first', 'a.last_name as a_last', 'b.first_name as b_first', 'b.last_name as b_last'])
+            ->map(fn ($r) => [
+                'id'            => $r->id,
+                'referrer_id'   => $r->referrer_customer_id,
+                'referrer_name' => trim("{$r->a_first} {$r->a_last}"),
+                'referred_id'   => $r->referred_customer_id,
+                'referred_name' => trim("{$r->b_first} {$r->b_last}"),
+                'bonus_points'  => (int) $r->bonus_points,
+                'status'        => $r->status,
+                'status_label'  => Loyalty::REFERRAL_STATUSES[$r->status] ?? $r->status,
+                'created_at'    => Carbon::parse($r->created_at)->toIso8601String(),
+                'rewarded_at'   => $r->rewarded_at ? Carbon::parse($r->rewarded_at)->toIso8601String() : null,
+            ])
+            ->all();
+    }
+
+    public function storeReferral(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless(Loyalty::referralsReady(), 503, Loyalty::NOT_READY);
+
+        $validated = $request->validate([
+            'referrer_id'  => 'required|uuid',
+            'referred_id'  => 'required|uuid|different:referrer_id',
+            'bonus_points' => 'required|integer|min:0|max:100000',
+        ], [
+            'referrer_id.required'  => 'Elige al cliente que recomendó.',
+            'referred_id.required'  => 'Elige al cliente que llegó recomendado.',
+            'referred_id.different' => 'Elige dos clientes distintos.',
+            'bonus_points.required' => 'Escribe los puntos de bono.',
+        ]);
+
+        $found = DB::table('customers')
+            ->where('tenant_id', $tenant->id)
+            ->whereNull('deleted_at')
+            ->whereIn('id', [$validated['referrer_id'], $validated['referred_id']])
+            ->count();
+
+        if ($found !== 2) {
+            throw ValidationException::withMessages(['referrer_id' => 'Esos clientes no son de tu empresa.']);
+        }
+
+        $credited = DB::transaction(function () use ($tenant, $validated, $request) {
+            $exists = DB::table('customer_referrals')
+                ->where('tenant_id', $tenant->id)
+                ->where('referred_customer_id', $validated['referred_id'])
+                ->lockForUpdate()
+                ->exists();
+
+            if ($exists) {
+                throw ValidationException::withMessages(['referred_id' => 'Ese cliente ya tiene registrado quién lo recomendó.']);
+            }
+
+            DB::table('customer_referrals')->insert([
+                'id'                   => (string) Str::uuid(),
+                'tenant_id'            => $tenant->id,
+                'referrer_customer_id' => $validated['referrer_id'],
+                'referred_customer_id' => $validated['referred_id'],
+                'bonus_points'         => (int) $validated['bonus_points'],
+                'status'               => 'pending',
+                'created_by'           => $request->user()->id,
+                'created_at'           => now(),
+                'updated_at'           => now(),
+            ]);
+
+            return Loyalty::settleReferrals($tenant, $validated['referred_id'], $request->user());
+        });
+
+        Audit::log($request, 'loyalty.referral_registered', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'customer',
+            'entity_id'    => $validated['referrer_id'],
+            'entity_label' => $this->customerName($validated['referrer_id']),
+            'after'        => [
+                'referred'     => $this->customerName($validated['referred_id']),
+                'bonus_points' => (int) $validated['bonus_points'],
+                'credited'     => $credited > 0 ? 'Sí' : 'Al completar su primera atención',
+            ],
+        ]);
+
+        return $this->index($request)->header('X-Referral-Credited', $credited > 0 ? '1' : '0');
     }
 }

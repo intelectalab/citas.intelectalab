@@ -89,6 +89,8 @@ export interface QuoteRow {
   customer_email: string | null;
   professional_id: string | null;
   professional_name: string | null;
+  customer_dependent_id: string | null;
+  dependent_name: string | null;
   subtotal: number;
   discount: number;
   tax: number;
@@ -120,10 +122,11 @@ export interface QuotesBoardData {
   rules: QuoteRules;
   tax: { rate: number; included: boolean };
   can: { create: boolean; edit: boolean; delete: boolean; charge: boolean };
+  discount_limit?: { max_percent: number; can_exceed: boolean };
   branches: { id: string; name: string }[];
   customers: { id: string; name: string; document_number: string | null; phone: string | null; email: string | null }[];
   professionals: { id: string; display_name: string }[];
-  services: { id: string; name: string; price: number; duration_minutes: number }[];
+  services: { id: string; name: string; price: number; duration_minutes: number; branch_prices?: Record<string, number> }[];
   products: { id: string; name: string; sku: string | null; price: number }[];
   packages: { id: string; name: string; price: number; sessions_total: number }[];
   quotes: QuoteRow[];

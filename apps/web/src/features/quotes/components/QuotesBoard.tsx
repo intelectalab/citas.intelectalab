@@ -5,6 +5,8 @@ import Link from 'next/link';
 import {
   AlertTriangle,
   CheckCircle2,
+  Percent,
+  Coins,
   Clock,
   Eye,
   FileText,
@@ -22,13 +24,15 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import ChargePanel from '@/features/sales/components/ChargePanel';
 import { api } from '@/lib/axios';
-import { apiError } from '@/features/appointments/appointments';
+import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money } from '@/features/sales/sales';
 import { useAuth } from '@/hooks/useAuth';
 import { QUOTE_STATUS_BADGES, type QuoteRow, type QuotesBoardData } from '../quotes';
 import QuoteFormDrawer from './QuoteFormDrawer';
 import QuoteDetailDrawer from './QuoteDetailDrawer';
 import QuoteCancelDrawer from './QuoteCancelDrawer';
+import type { PickedCustomer } from '@/features/customers/components/CustomerPicker';
+import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
 
 type QuotesFilter = 'all' | 'pending' | 'accepted' | 'in_progress' | 'overdue' | 'closed';
 
@@ -53,6 +57,8 @@ export default function QuotesBoard() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<QuoteRow | null>(null);
   const [charging, setCharging] = useState<{ saleId: string; amount?: number } | null>(null);
+  const [presetCustomer, setPresetCustomer] = useState<PickedCustomer | null>(null);
+  const { openNew: openAppointment, panels: appointmentPanels } = useAppointmentPanels(() => load());
 
   const load = useCallback(async () => {
     try {
@@ -69,8 +75,22 @@ export default function QuotesBoard() {
 
   useEffect(() => {
     load();
-    const wanted = new URLSearchParams(window.location.search).get('quote');
+    const query = new URLSearchParams(window.location.search);
+    const wanted = query.get('quote');
     if (wanted) setSelectedQuoteId(wanted);
+    const forCustomer = query.get('cliente');
+    if (query.get('nuevo') === '1') {
+      window.history.replaceState(null, '', '/quotes');
+      if (forCustomer) {
+        api.get(`/customers/${forCustomer}`)
+          .then((res) => { const c = res.data.customer; setPresetCustomer({ id: c.id, code: c.code, first_name: c.first_name, last_name: c.last_name, phone: c.phone, document_number: c.document_number }); })
+          .catch(() => setPresetCustomer(null))
+          .finally(() => { setEditingQuote(null); setFormOpen(true); });
+      } else {
+        setEditingQuote(null);
+        setFormOpen(true);
+      }
+    }
   }, [load]);
 
   const handleSaved = (next: QuotesBoardData, message: string) => {
@@ -97,6 +117,8 @@ export default function QuotesBoard() {
       accepted: accepted.length,
       acceptedTotal: accepted.reduce((sum, q) => sum + q.total, 0),
       inProgress: quotes.filter(inProgress).length,
+      decided: quotes.filter((q) => ['accepted', 'rejected', 'expired'].includes(q.status)).length,
+      receivable: accepted.reduce((sum, q) => sum + (q.sale_balance || 0), 0),
       overdue: quotes.filter(hasOverdue).length,
       closed: quotes.filter(isClosed).length,
     };
@@ -113,7 +135,7 @@ export default function QuotesBoard() {
       if (quoteFilters.status && row.status !== quoteFilters.status) return false;
       if (quoteFilters.professional_id && row.professional_id !== quoteFilters.professional_id) return false;
       if (!term) return true;
-      return [row.code, row.title, row.customer_name, row.customer_document, row.professional_name, row.plan?.code].some((v) =>
+      return [row.code, row.title, row.customer_name, row.customer_document, row.professional_name, row.dependent_name, row.plan?.code].some((v) =>
         v?.toLowerCase().includes(term),
       );
     });
@@ -152,11 +174,16 @@ export default function QuotesBoard() {
       cell: (row) => (
         <div>
           <span className="block font-bold text-slate-800">{row.customer_name}</span>
+          {row.dependent_name && <span className="block text-xs font-semibold text-amber-700" data-quote-dependent>{row.dependent_name}</span>}
           <span className="block text-xs text-slate-500">
             {[row.customer_document, row.customer_phone].filter(Boolean).join(' · ') || '—'}
           </span>
         </div>
       ),
+    },
+    {
+      header: 'Profesional',
+      cell: (row) => <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{row.professional_name ?? '—'}</span>,
     },
     {
       header: 'Avance de sesiones',
@@ -204,7 +231,7 @@ export default function QuotesBoard() {
       cell: (row) => (
         <div className="space-y-1">
           <Badge tone={QUOTE_STATUS_BADGES[row.status]} bold>{row.status_label}</Badge>
-          {row.valid_until && isPending(row) && <span className="block text-[11px] text-slate-500">Vence {row.valid_until}</span>}
+          {row.valid_until && isPending(row) && <span className="block text-[11px] text-slate-500">Vence {formatDate(row.valid_until.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
         </div>
       ),
     },
@@ -259,6 +286,23 @@ export default function QuotesBoard() {
       borderColorClass: quotesFilter === 'overdue' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'hover:border-slate-300',
       onClick: () => toggle('overdue'),
     }] : []),
+    {
+      title: 'Tasa de aceptación',
+      value: stats.decided > 0 ? `${Math.round((stats.accepted / stats.decided) * 100)} %` : '—',
+      hint: stats.decided > 0 ? `De ${stats.decided} presupuestos ya decididos (aprobados, rechazados o vencidos).` : 'Aún no hay presupuestos decididos.',
+      icon: <Percent size={18} />,
+      iconColorClass: 'text-brand-accent',
+      borderColorClass: 'hover:border-slate-300',
+    },
+    {
+      title: 'Por cobrar de los planes',
+      value: money(stats.receivable, currency),
+      hint: 'Saldo pendiente de los presupuestos aprobados.',
+      icon: <Coins size={18} />,
+      iconColorClass: 'text-rose-600',
+      borderColorClass: quotesFilter === 'accepted' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'hover:border-slate-300',
+      onClick: () => toggle('accepted'),
+    },
     {
       title: 'Rechazados, vencidos o anulados',
       value: stats.closed,
@@ -344,6 +388,7 @@ export default function QuotesBoard() {
           { header: 'Código', value: (q) => q.code },
           { header: 'Título', value: (q) => q.title },
           { header: 'Cliente', value: (q) => q.customer_name },
+          { header: 'Dependiente', value: (q) => q.dependent_name },
           { header: 'Profesional', value: (q) => q.professional_name },
           { header: 'Estado', value: (q) => q.status_label },
           { header: 'Plan de tratamiento', value: (q) => q.plan?.code ?? null },
@@ -361,9 +406,10 @@ export default function QuotesBoard() {
       {data && (
         <QuoteFormDrawer
           isOpen={formOpen}
-          onClose={() => { setFormOpen(false); setEditingQuote(null); }}
+          onClose={() => { setFormOpen(false); setEditingQuote(null); setPresetCustomer(null); }}
           board={data}
           editingQuote={editingQuote}
+          initialCustomer={presetCustomer}
           onSaved={handleSaved}
         />
       )}
@@ -377,7 +423,19 @@ export default function QuotesBoard() {
         onOpenCharge={(saleId, amount) => { setSelectedQuoteId(null); setCharging({ saleId, amount }); }}
         onCancelAccepted={(q) => { setSelectedQuoteId(null); setCancelling(q); }}
         onUpdated={handleSaved}
+        onSchedule={(q, serviceId) => {
+          setSelectedQuoteId(null);
+          openAppointment({
+            customer: { id: q.customer_id, code: '', first_name: q.customer_name, last_name: '', phone: q.customer_phone },
+            service_id: serviceId ?? undefined,
+            customer_dependent_id: q.customer_dependent_id ?? undefined,
+            professional_id: q.professional_id ?? undefined,
+            branch_id: q.branch_id ?? undefined,
+          });
+        }}
       />
+
+      {appointmentPanels}
 
       <QuoteCancelDrawer
         quote={cancelling}

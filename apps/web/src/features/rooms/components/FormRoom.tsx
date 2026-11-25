@@ -23,7 +23,7 @@ interface FormRoomProps {
 }
 
 
-const empty = { branch_id: '', parent_id: '', name: '', description: '', kind: 'room' as RoomRow['kind'], active: true };
+const empty = { branch_id: '', parent_id: '', name: '', description: '', kind: 'room' as RoomRow['kind'], active: true, capacity: '1' };
 
 export default function FormRoom({ isOpen, onClose, initialData, branches, rooms, defaultBranchId, onSaved }: FormRoomProps) {
   const [form, setForm] = useState(empty);
@@ -41,6 +41,7 @@ export default function FormRoom({ isOpen, onClose, initialData, branches, rooms
       description: initialData.description ?? '',
       kind: initialData.kind,
       active: initialData.status === 'active',
+      capacity: String((initialData as RoomRow & { capacity?: number }).capacity ?? 1),
     } : { ...empty, branch_id: defaultBranchId || (branches.length === 1 ? branches[0].id : '') });
   }, [isOpen, initialData, defaultBranchId, branches]);
 
@@ -60,6 +61,7 @@ export default function FormRoom({ isOpen, onClose, initialData, branches, rooms
       kind: form.kind,
       status: form.active ? 'active' : 'inactive',
       parent_id: form.kind === 'equipment' && form.parent_id ? form.parent_id : null,
+      capacity: Math.max(1, Number(form.capacity) || 1),
     };
 
     try {
@@ -148,6 +150,12 @@ export default function FormRoom({ isOpen, onClose, initialData, branches, rooms
           <div>
             <label className={labelClass} htmlFor="room-description">Descripción</label>
             <input id="room-description" type="text" maxLength={255} placeholder={isEquipment ? 'Ej. Para ecografías obstétricas' : 'Ej. Segundo piso, con camilla'} className={inputClass} value={form.description} onChange={(e) => set({ description: e.target.value })} />
+          </div>
+
+          <div data-field="capacity">
+            <label className={labelClass} htmlFor="room-capacity">Capacidad simultánea</label>
+            <input id="room-capacity" inputMode="numeric" className={`${inputClass} w-32`} value={form.capacity} onChange={(e) => set({ capacity: e.target.value.replace(/\D/g, '').slice(0, 3) })} />
+            <p className="text-xs text-slate-500 mt-1.5">Cuántas personas caben a la vez (ej.: una sala grupal con 10 cupos; una cabina es 1). Por ahora es un dato de referencia: la agenda sigue dando la sala a una cita a la vez.</p>
           </div>
 
           <div className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3">

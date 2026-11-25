@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Building2, Pencil, Trash2, Eye, CheckCircle, XCircle, LogIn, Ban } from 'lucide-react';
 import SuspendTenantDrawer from './SuspendTenantDrawer';
+import { DeleteTenantDrawer } from './TenantDeletionDrawers';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormTenant from './FormTenant';
@@ -13,6 +14,7 @@ import { AppModal } from '@/app/components/ui/modals/AppModal';
 import ImpersonateDrawer from '@/features/support/components/ImpersonateDrawer';
 import { api } from '@/lib/axios';
 import { BILLING_STATES, type BillingState } from '@/features/billing/billing';
+import { money } from '@/features/sales/sales';
 
 interface Tenant {
   id: string;
@@ -25,6 +27,10 @@ interface Tenant {
   subscription?: { status?: string; plan?: { name?: string; is_public_catalog?: boolean } | null } | null;
   users?: Array<{ is_owner?: boolean; account_type?: string }>;
   billing_state?: BillingState;
+  mrr?: number;
+  active_users?: number;
+  appointments_30d?: number;
+  trial_ends_on?: string | null;
 }
 
 const SUBSCRIPTION_STATUS: Record<string, string> = { active: 'Activa', trialing: 'En prueba', past_due: 'Pago vencido', expired: 'Prueba vencida', canceled: 'Cancelada' };
@@ -34,6 +40,7 @@ export default function TenantsTable() {
   const [entering, setEntering] = useState<{ id: string; name: string } | null>(null);
   const canManage = Boolean(user?.is_saas_admin);
   const [suspending, setSuspending] = useState<Tenant | null>(null);
+  const [deleting, setDeleting] = useState<Tenant | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -207,30 +214,6 @@ export default function TenantsTable() {
     fetchTenants(searchTerm, filters);
   };
 
-  const handleDelete = (id: string) => {
-    setModalConfig({
-      isOpen: true,
-      type: 'confirm',
-      variant: 'danger',
-      title: '¿Eliminar tenant?',
-      message: '¿Estás seguro de que deseas eliminar este tenant? Se perderán todos los datos asociados de manera permanente.',
-      confirmText: 'Sí, eliminar',
-      cancelText: 'Cancelar',
-      onConfirm: async () => {
-        try {
-          setIsActionLoading(true);
-          await api.delete(`/tenants/${id}`);
-          fetchTenants(searchTerm, filters);
-          setModalConfig(prev => ({ ...prev, isOpen: false }));
-        } catch (error) {
-          console.error('Error al eliminar tenant:', error);
-        } finally {
-          setIsActionLoading(false);
-        }
-      }
-    });
-  };
-
   const handleImpersonate = (tenant: Tenant) => setEntering({ id: tenant.id, name: tenant.name });
 
   const columns: Column<Tenant>[] = [
@@ -275,6 +258,24 @@ export default function TenantsTable() {
           ) : (
             <span className="text-slate-400 italic">Sin plan</span>
           )}
+        </div>
+      ),
+    },
+    {
+      header: 'Ingreso al mes',
+      cell: (tenant) => (
+        <div key={`mrr-${tenant.id}`} className="text-xs" data-tenant-mrr>
+          <span className="font-semibold text-slate-700 tabular-nums">{money(tenant.mrr ?? 0)}</span>
+          {tenant.trial_ends_on && <span className="block text-[11px] text-sky-700">Prueba hasta el {new Date(`${tenant.trial_ends_on}T12:00:00`).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}</span>}
+        </div>
+      ),
+    },
+    {
+      header: 'Uso',
+      cell: (tenant) => (
+        <div key={`use-${tenant.id}`} className="text-xs text-slate-600" data-tenant-use>
+          <span className="block">{tenant.active_users ?? 0} {(tenant.active_users ?? 0) === 1 ? 'usuario' : 'usuarios'}</span>
+          <span className="block text-[11px] text-slate-400">{tenant.appointments_30d ?? 0} citas en 30 días</span>
         </div>
       ),
     },
@@ -327,9 +328,10 @@ export default function TenantsTable() {
                 </button>
               )}
               <button
-                onClick={() => handleDelete(tenant.id)}
+                onClick={() => setDeleting(tenant)}
                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Eliminar"
+                title="Borrar empresa"
+                aria-label={`Borrar ${tenant.name}`}
               >
                 <Trash2 size={16} />
               </button>
@@ -348,6 +350,10 @@ export default function TenantsTable() {
     { header: 'Plan a medida', value: (t) => (t.subscription?.plan ? (t.subscription.plan.is_public_catalog === false ? 'Sí' : 'No') : null) },
     { header: 'Suscripción', value: (t) => (t.billing_state ? BILLING_STATES[t.billing_state].label : t.subscription?.status ? SUBSCRIPTION_STATUS[t.subscription.status] ?? t.subscription.status : null) },
     { header: 'Estado', value: (t) => (TENANT_STATUS[t.status] ?? TENANT_STATUS.inactive).label },
+    { header: 'Ingreso al mes', value: (t) => t.mrr ?? 0 },
+    { header: 'Usuarios activos', value: (t) => t.active_users ?? 0 },
+    { header: 'Citas en 30 días', value: (t) => t.appointments_30d ?? 0 },
+    { header: 'Fin de la prueba', type: 'date', value: (t) => t.trial_ends_on ?? null },
     { header: 'Zona horaria', value: (t) => t.timezone },
     { header: 'Fecha de alta', type: 'date', value: (t) => t.created_at },
   ];
@@ -409,6 +415,18 @@ export default function TenantsTable() {
       />
 
       {entering && <ImpersonateDrawer isOpen onClose={() => setEntering(null)} tenant={entering} />}
+      {deleting && (
+        <DeleteTenantDrawer
+          isOpen
+          onClose={() => setDeleting(null)}
+          tenant={deleting}
+          onSubmit={async (values) => {
+            const res = await api.delete(`/tenants/${deleting.id}`, { data: values });
+            fetchTenants(searchTerm, filters);
+            setModalConfig({ isOpen: true, type: 'alert', title: 'Borrado programado', message: res.data?.message ?? 'La empresa quedó desactivada.', confirmText: 'Entendido' });
+          }}
+        />
+      )}
       {suspending && <SuspendTenantDrawer isOpen onClose={() => setSuspending(null)} onDone={() => fetchTenants(searchTerm, filters)} tenant={suspending} />}
     </div>
   );

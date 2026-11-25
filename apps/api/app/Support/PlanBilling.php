@@ -420,7 +420,7 @@ class PlanBilling
         }
 
         $row = DB::table('plan_payments')->where('id', $row->id)->first();
-        self::authorized($subscription, $row, $info['brand'], $info['last4']);
+        self::authorized($subscription, $row, $info['brand'], $info['last4'], CardExpiry::from($card['data']));
 
         return self::afterAuthorized($subscription->fresh('plan'), $row, $user);
     }
@@ -492,6 +492,16 @@ class PlanBilling
             return ['ok' => false, 'skipped' => true, 'message' => 'El plan no tiene costo.'];
         }
 
+        return self::chargeCard($subscription, $plan, $cycle, $amount, $reason);
+    }
+
+    public static function chargeCard(Subscription $subscription, SaaSPlan $plan, string $cycle, float $amount, string $reason): array
+    {
+        if (!self::savedCard($subscription)) {
+            return ['ok' => false, 'skipped' => true, 'message' => 'No hay una tarjeta guardada para cobrar.'];
+        }
+
+        $planId = $plan->id;
         $provider = $subscription->external_provider;
         $row = self::insert($subscription, [
             'plan_id'       => $planId,
@@ -604,7 +614,7 @@ class PlanBilling
         }
 
         if ($row->kind === 'card') {
-            self::authorized($subscription, $row, 'visa', $result === 'nofunds' ? self::SIMULATED_NO_FUNDS : '4242');
+            self::authorized($subscription, $row, 'visa', $result === 'nofunds' ? self::SIMULATED_NO_FUNDS : '4242', ['month' => 12, 'year' => (int) now()->addYears(3)->year]);
 
             return self::afterAuthorized($subscription->fresh('plan'), $row, $row->created_by ? User::find($row->created_by) : null);
         }
@@ -614,11 +624,11 @@ class PlanBilling
         return ['status' => 'paid', 'message' => 'Pago confirmado: tu plan quedó activo.'];
     }
 
-    private static function authorized(Subscription $subscription, object $row, ?string $brand, ?string $last4): void
+    private static function authorized(Subscription $subscription, object $row, ?string $brand, ?string $last4, ?array $expiry = null): void
     {
         $previous = $subscription->external_provider === 'mercadopago' ? $subscription->external_subscription_id : null;
 
-        DB::transaction(function () use ($subscription, $row, $brand, $last4) {
+        DB::transaction(function () use ($subscription, $row, $brand, $last4, $expiry) {
             DB::table('plan_payments')->where('id', $row->id)->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
 
             $update = [
@@ -638,6 +648,7 @@ class PlanBilling
             }
 
             $subscription->update($update);
+            CardExpiry::save($subscription->id, $expiry);
         });
 
         if ($previous && $previous !== ($row->external_id ?? $row->id) && self::connected('mercadopago')) {
@@ -651,6 +662,32 @@ class PlanBilling
     private static function paid(Subscription $subscription, object $row, string $reference, ?string $reason = null): void
     {
         $intent = $row->intent ?? null;
+
+        if ($intent === 'upgrade') {
+            $plan = SaaSPlan::findOrFail($row->plan_id);
+            $invoice = Subscriptions::recordUpgrade($subscription->fresh('plan'), $plan, $row->billing_cycle, (float) $row->amount, ['reference' => $reference]);
+            DB::table('plan_payments')->where('id', $row->id)->update(['status' => 'paid', 'paid_at' => now(), 'invoice_id' => $invoice->id, 'message' => null, 'updated_at' => now()]);
+            self::notify($subscription->tenant_id, 'subscription.charged', 'Cambiaste de plan', Currency::format((float) $row->amount, $row->currency) . " por los días que faltan · Plan {$plan->name} desde hoy.", "plan-paid:{$row->id}");
+
+            return;
+        }
+
+        if ($intent === 'yearly_now') {
+            $plan = SaaSPlan::findOrFail($row->plan_id);
+            $invoice = Subscriptions::recordYearlyNow($subscription->fresh('plan'), $plan, (float) $row->amount, ['reference' => $reference]);
+            DB::table('plan_payments')->where('id', $row->id)->update(['status' => 'paid', 'paid_at' => now(), 'invoice_id' => $invoice->id, 'message' => null, 'updated_at' => now()]);
+            self::notify($subscription->tenant_id, 'subscription.charged', 'Pasaste al pago anual', Currency::format((float) $row->amount, $row->currency) . " · Plan {$plan->name} al año, desde hoy.", "plan-paid:{$row->id}");
+
+            return;
+        }
+
+        if ($intent === 'addon') {
+            $invoice = Addons::invoice($subscription->fresh('plan'), $row, $reference);
+            DB::table('plan_payments')->where('id', $row->id)->update(['status' => 'paid', 'paid_at' => now(), 'invoice_id' => $invoice->id, 'message' => null, 'updated_at' => now()]);
+
+            return;
+        }
+
         $invoice = Subscriptions::recordPayment($subscription->fresh(), [
             'plan_id'       => $row->plan_id,
             'billing_cycle' => $row->billing_cycle,
@@ -743,7 +780,7 @@ class PlanBilling
                 $status = $result['data']['status'] ?? null;
 
                 if ($status === 'authorized') {
-                    self::authorized($subscription->fresh(), $row, $result['data']['payment_method_id'] ?? null, null);
+                    self::authorized($subscription->fresh(), $row, $result['data']['payment_method_id'] ?? null, null, CardExpiry::from((array) ($result['data'] ?? [])));
                 } elseif (in_array($status, ['cancelled', 'canceled'], true)) {
                     DB::table('plan_payments')->where('id', $row->id)->update(['status' => 'cancelled', 'updated_at' => now()]);
                 }

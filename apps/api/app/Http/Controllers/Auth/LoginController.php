@@ -23,7 +23,7 @@ class LoginController extends Controller
 
         $email = trim($credentials['email']);
 
-        $staff = User::with('tenant.businessType')->where('email', $email)->get();
+        $staff = User::with('tenant.businessType')->whereRaw('lower(email) = ?', [mb_strtolower($email)])->get();
 
         $customers = Customer::with('tenant.businessType')
             ->whereRaw('lower(email) = ?', [mb_strtolower($email)])

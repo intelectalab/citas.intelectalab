@@ -85,7 +85,9 @@ class Cancellations
             $price = round($price * (100 - (float) $subscription->discount_percent) / 100, 2);
         }
 
-        return PlanCoupons::apply($subscription, $plan instanceof \App\Models\SaaSPlan ? $plan : null, $cycle, $price);
+        $price = PlanCoupons::apply($subscription, $plan instanceof \App\Models\SaaSPlan ? $plan : null, $cycle, $price);
+
+        return round($price + ($price > 0 || Subscriptions::price($plan instanceof \App\Models\SaaSPlan ? $plan : null, $cycle) > 0 ? Addons::total($subscription->tenant_id, $cycle) : 0), 2);
     }
 
     public static function usedDiscount(Subscription $subscription, string $cycle): array
@@ -144,6 +146,8 @@ class Cancellations
             if ($acceptOffer && $offer) {
                 DB::table('saas_cancellations')->insert($row + ['status' => 'kept', 'offer_accepted' => true]);
                 $subscription->update(['discount_percent' => $offer['percent'], 'discount_cycles' => $offer['months']]);
+                Subscriptions::forget($subscription->tenant_id);
+                SaasEvents::record($subscription->tenant_id, null, ['meta' => ['reason' => 'offer']]);
                 PlanBilling::notify($subscription->tenant_id, 'subscription.offer', 'Te quedas con descuento', "Aplicamos {$offer['text']} a tu plan. Gracias por quedarte.", "offer:{$subscription->id}");
 
                 return ['kept' => true, 'offer' => $offer];
@@ -172,6 +176,7 @@ class Cancellations
             }
 
             Subscriptions::forget($subscription->tenant_id);
+            SaasEvents::record($subscription->tenant_id, 'cancel_scheduled', ['meta' => ['reason' => $reason]]);
 
             return ['kept' => false, 'effective_at' => $effective];
         });
@@ -189,6 +194,7 @@ class Cancellations
         DB::table('saas_cancellations')->where('id', $row->id)->update(['status' => 'resumed', 'resumed_at' => now(), 'updated_at' => now()]);
         $subscription->update(['cancel_at' => null]);
         Subscriptions::forget($subscription->tenant_id);
+        SaasEvents::record($subscription->tenant_id, 'cancel_resumed');
         PlanBilling::notify($subscription->tenant_id, 'subscription.resumed', 'Sigues con tu plan', 'Anulaste la baja: tu plan sigue como siempre.', "resumed:{$row->id}");
     }
 
@@ -197,6 +203,7 @@ class Cancellations
         $subscription->update(['status' => 'canceled', 'canceled_at' => now(), 'cancel_at' => null]);
         DB::table('saas_cancellations')->where('subscription_id', $subscription->id)->where('status', 'scheduled')->update(['status' => 'done', 'updated_at' => now()]);
         Subscriptions::forget($subscription->tenant_id);
+        SaasEvents::record($subscription->tenant_id, null, ['meta' => ['reason' => 'cancelled']]);
         PlanBilling::notify($subscription->tenant_id, 'subscription.canceled', 'Tu empresa se dio de baja', 'Tu plan terminó como pediste. Tus datos se conservan: puedes verlos y descargarlos, y si pagas el plan vuelve todo como estaba.', "canceled:{$subscription->id}");
     }
 

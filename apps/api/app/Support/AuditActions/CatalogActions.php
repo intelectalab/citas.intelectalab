@@ -8,6 +8,9 @@ class CatalogActions
         'service.created'          => ['Creó un servicio', 'catalog'],
         'service.updated'          => ['Cambió un servicio', 'catalog'],
         'service_category.created' => ['Creó una categoría de servicios', 'catalog'],
+        'service_category.updated' => ['Cambió una categoría de servicios', 'catalog'],
+        'room.maintenance_started' => ['Puso una sala o equipo en mantenimiento', 'catalog'],
+        'room.maintenance_ended'   => ['Volvió a poner en uso una sala o equipo', 'catalog'],
         'product.created'          => ['Creó un producto', 'catalog'],
         'product.updated'          => ['Cambió un producto', 'catalog'],
         'inventory.movement'       => ['Registró un movimiento de stock', 'catalog'],
@@ -35,6 +38,7 @@ class CatalogActions
         'message.scheduled'        => ['Programó un mensaje a un cliente', 'marketing'],
         'whatsapp.replied'         => ['Respondió a un cliente por WhatsApp', 'marketing'],
         'whatsapp.handled'         => ['Marcó como atendida una conversación de WhatsApp', 'marketing'],
+        'assistant.acted'          => ['El asistente de WhatsApp hizo un cambio en una cita', 'marketing'],
     ];
 
     public const FIELDS = [
@@ -45,6 +49,8 @@ class CatalogActions
         'online_booking'        => 'Se reserva en línea',
         'is_virtual'            => 'Atención virtual',
         'branches'              => 'Sedes donde se da',
+        'rooms'                 => 'Salas donde se hace',
+        'professionals'         => 'Profesionales que lo hacen',
         'service_kind'          => 'Tipo de atención',
         'capacity'              => 'Cupos',
         'deposit'               => 'Adelanto',
@@ -84,5 +90,10 @@ class CatalogActions
         'send_time'             => 'Hora de envío',
         'delay_minutes'         => 'Minutos después',
         'repeat_days'           => 'Se repite cada (días)',
+        'requires_record'       => 'Exige la ficha firmada',
+        'agenda_color'          => 'Color en la agenda',
+        'bio'                   => 'Presentación',
+        'room_capacity'         => 'Capacidad',
+        'maintenance_reason'    => 'Mantenimiento',
     ];
 }

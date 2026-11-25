@@ -13,6 +13,7 @@ import {
   History,
   Settings,
   Sparkles,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import {
@@ -24,7 +25,6 @@ import {
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
-import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
@@ -33,6 +33,9 @@ import {
   GIFT_CARD_STATUS_BADGES,
   GIFT_CARD_TX_BADGES,
   POINT_TYPE_BADGES,
+  REFERRAL_BADGES,
+  TIER_BADGES,
+  type ReferralRow,
   type GiftCardMovementRow,
   type GiftCardRow,
   type LoyaltyBoardData,
@@ -42,9 +45,10 @@ import {
 import PointsAdjustDrawer from './PointsAdjustDrawer';
 import GiftCardDrawer from './GiftCardDrawer';
 import GiftCardActionDrawer from './GiftCardActionDrawer';
+import ReferralDrawer from './ReferralDrawer';
 
 type Section = 'points' | 'gift_cards';
-type PointsFilter = 'all' | 'with_points' | 'can_redeem' | 'movements';
+type PointsFilter = 'all' | 'with_points' | 'can_redeem' | 'movements' | 'referrals';
 type GiftCardsFilter = 'all' | 'active' | 'expiring' | 'closed' | 'gc_movements';
 
 export default function LoyaltyBoard({ section }: { section: Section }) {
@@ -73,9 +77,9 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
 
   const [gcDrawerOpen, setGcDrawerOpen] = useState(false);
   const [gcActionTarget, setGcActionTarget] = useState<GiftCardRow | null>(null);
-  const [gcActionMode, setGcActionMode] = useState<'redeem' | 'extend' | null>(null);
-  const [gcCancelTarget, setGcCancelTarget] = useState<GiftCardRow | null>(null);
-  const [cancellingGc, setCancellingGc] = useState(false);
+  const [gcActionMode, setGcActionMode] = useState<'redeem' | 'extend' | 'cancel' | null>(null);
+  const [referralOpen, setReferralOpen] = useState(false);
+  const [referralSearch, setReferralSearch] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -110,22 +114,6 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
     }
   };
 
-  const handleCancelGiftCard = async () => {
-    if (!gcCancelTarget) return;
-    try {
-      setCancellingGc(true);
-      setError('');
-      const res = await api.post<LoyaltyBoardData>(`/loyalty/gift-cards/${gcCancelTarget.id}/cancel`);
-      setData(res.data);
-      setNotice(`Gift card ${gcCancelTarget.code} anulada.`);
-      setGcCancelTarget(null);
-    } catch (err) {
-      setError(apiError(err, 'No se pudo anular la gift card.'));
-    } finally {
-      setCancellingGc(false);
-    }
-  };
-
   const currency = data?.currency ?? 'PEN';
   const rules = data?.rules ?? {
     points_enabled: true,
@@ -141,6 +129,18 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
   const pointMovements = data?.point_movements ?? [];
   const giftCards = data?.gift_cards ?? [];
   const gcMovements = data?.gift_card_movements ?? [];
+  const referrals = data?.referrals ?? [];
+  const summary = data?.summary;
+  const vipMultiplier = rules.vip_multiplier ?? 1;
+  const rulesText = rules.points_enabled
+    ? `1 punto por cada ${money(rules.amount_per_point, currency)} pagado${vipMultiplier > 1 ? ` (x${vipMultiplier} para clientes VIP)` : ''}. 1 punto = ${money(rules.point_value, currency)} · canje desde ${rules.min_redeem_points} puntos · ${rules.points_validity_days > 0 ? `vencen a los ${rules.points_validity_days} días` : 'no vencen'}. La propina no da puntos y las devoluciones los descuentan.`
+    : 'Los puntos están apagados en las reglas: las compras no suman puntos.';
+
+  const filteredReferrals = useMemo(() => {
+    const q = referralSearch.trim().toLowerCase();
+    if (!q) return referrals;
+    return referrals.filter((r) => [r.referrer_name, r.referred_name, r.status_label].some((v) => v.toLowerCase().includes(q)));
+  }, [referrals, referralSearch]);
 
   const pointsStats = useMemo(() => {
     const withPoints = customers.filter((c) => c.points > 0);
@@ -227,6 +227,7 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
           </span>
           <div>
             <span className={styles.customerName}>{row.name}</span>
+            {row.vip && <Badge tone="bg-brand-soft/30 text-brand-ink" bold>VIP</Badge>}
             <span className="block text-xs text-slate-400">
               {[row.document_number, row.phone, row.email].filter(Boolean).join(' · ') || 'Sin documento ni contacto'}
             </span>
@@ -246,6 +247,10 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
           ) : null}
         </div>
       ),
+    },
+    {
+      header: 'Nivel',
+      cell: (row) => (row.tier ? <Badge tone={TIER_BADGES[row.tier.key]} bold>{row.tier.label}</Badge> : null),
     },
     {
       header: 'Valor canjeable',
@@ -479,7 +484,10 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
           {data?.can.delete && row.status === 'active' && (
             <button
               type="button"
-              onClick={() => setGcCancelTarget(row)}
+              onClick={() => {
+                setGcActionTarget(row);
+                setGcActionMode('cancel');
+              }}
               className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-rose-700 hover:bg-rose-50 transition-colors"
             >
               Anular
@@ -519,15 +527,37 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
     },
     {
       header: 'Venta vinculada',
-      cell: (row) => <span className="text-xs text-slate-500">{row.sale_code ? `Venta ${row.sale_code}` : 'Manual'}</span>,
+      cell: (row) => (
+        <div>
+          <span className="text-xs text-slate-500">{row.sale_code ? `Venta ${row.sale_code}` : 'Manual'}</span>
+          {row.reason && <span className="block text-xs text-slate-600">Motivo: {row.reason}</span>}
+        </div>
+      ),
+    },
+  ];
+
+  const referralColumns: Column<ReferralRow>[] = [
+    { header: 'Fecha', cell: (row) => <span className="text-xs text-slate-600">{momentOf(row.created_at)}</span> },
+    { header: 'Recomendó', cell: (row) => <Link href={`/customers/${row.referrer_id}`} className="font-bold text-brand-ink hover:underline">{row.referrer_name}</Link> },
+    { header: 'Llegó recomendado', cell: (row) => <Link href={`/customers/${row.referred_id}`} className="font-semibold text-slate-700 hover:underline">{row.referred_name}</Link> },
+    { header: 'Bono', cell: (row) => <span className="font-bold tabular-nums text-slate-800">{row.bonus_points} pts</span> },
+    {
+      header: 'Estado',
+      cell: (row) => (
+        <div>
+          <Badge tone={REFERRAL_BADGES[row.status]} bold>{row.status_label}</Badge>
+          {row.rewarded_at && row.status === 'rewarded' && <span className="block text-xs text-slate-500 mt-0.5">{momentOf(row.rewarded_at)}</span>}
+        </div>
+      ),
     },
   ];
 
   const pointsMetricCards: MetricCardItem[] = [
     {
-      title: 'Clientes en el padrón',
-      value: pointsStats.totalCustomers,
-      icon: <Users size={18} />,
+      title: 'Puntos en circulación',
+      value: (summary?.points_in_circulation ?? pointsStats.totalPoints).toLocaleString('es-PE'),
+      hint: `Se debe ${money(summary?.points_debt ?? pointsStats.totalRedeemable, currency)} en canjes`,
+      icon: <Sparkles size={18} />,
       iconColorClass: 'text-brand-ink',
       borderColorClass: pointsFilter === 'all' ? 'border-brand ring-2 ring-brand/20' : 'hover:border-slate-300',
       onClick: () => {
@@ -536,9 +566,22 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
       },
     },
     {
-      title: 'Con saldo de puntos',
-      value: `${pointsStats.withPointsCount} (${money(pointsStats.totalRedeemable, currency)})`,
-      icon: <Sparkles size={18} />,
+      title: 'Ganados (30 días)',
+      value: (summary?.issued_30d ?? 0).toLocaleString('es-PE'),
+      icon: <Award size={18} />,
+      iconColorClass: 'text-brand-accent',
+    },
+    {
+      title: 'Canjeados (30 días)',
+      value: (summary?.redeemed_30d ?? 0).toLocaleString('es-PE'),
+      hint: summary && summary.issued_30d > 0 ? `${Math.round((summary.redeemed_30d / summary.issued_30d) * 100)} % de lo ganado` : undefined,
+      icon: <Gift size={18} />,
+      iconColorClass: 'text-sky-600',
+    },
+    {
+      title: 'Clientes con puntos',
+      value: pointsStats.withPointsCount,
+      icon: <Users size={18} />,
       iconColorClass: 'text-brand-accent',
       borderColorClass: pointsFilter === 'with_points' ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => {
@@ -549,7 +592,7 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
     {
       title: 'Listos para canjear',
       value: pointsStats.canRedeemCount,
-      icon: <Award size={18} />,
+      icon: <CheckCircle2 size={18} />,
       iconColorClass: 'text-emerald-600',
       borderColorClass: pointsFilter === 'can_redeem' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'hover:border-slate-300',
       onClick: () => {
@@ -558,12 +601,13 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
       },
     },
     {
-      title: 'Historial de puntos',
-      value: pointsStats.movementsCount,
-      icon: <History size={18} />,
+      title: 'Referidos',
+      value: referrals.length,
+      hint: referrals.some((r) => r.status === 'pending') ? `${referrals.filter((r) => r.status === 'pending').length} esperan su primera atención` : undefined,
+      icon: <UserPlus size={18} />,
       iconColorClass: 'text-violet-600',
-      borderColorClass: pointsFilter === 'movements' ? 'border-violet-500 ring-2 ring-violet-500/20' : 'hover:border-slate-300',
-      onClick: () => setPointsFilter(pointsFilter === 'movements' ? 'all' : 'movements'),
+      borderColorClass: pointsFilter === 'referrals' ? 'border-violet-500 ring-2 ring-violet-500/20' : 'hover:border-slate-300',
+      onClick: () => setPointsFilter(pointsFilter === 'referrals' ? 'all' : 'referrals'),
     },
   ];
 
@@ -578,7 +622,8 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
     },
     {
       title: 'Vigentes con saldo',
-      value: `${gcStats.activeCount} (${money(gcStats.activeBalance, currency)})`,
+      value: gcStats.activeCount,
+      hint: `Saldo por canjear: ${money(summary?.gift_cards_pending ?? gcStats.activeBalance, currency)}`,
       icon: <CheckCircle2 size={18} />,
       iconColorClass: 'text-emerald-600',
       borderColorClass: gcFilter === 'active' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'hover:border-slate-300',
@@ -593,6 +638,12 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
       onClick: () => setGcFilter(gcFilter === 'expiring' ? 'all' : 'expiring'),
     },
     {
+      title: 'Vendido (histórico)',
+      value: money(summary?.gift_cards_sold ?? giftCards.filter((g) => g.status !== 'cancelled').reduce((sum, g) => sum + g.initial_amount, 0), currency),
+      icon: <CreditCard size={18} />,
+      iconColorClass: 'text-brand-ink',
+    },
+    {
       title: 'Canjeadas o cerradas',
       value: gcStats.closedCount,
       icon: <Ban size={18} />,
@@ -603,7 +654,7 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
     {
       title: 'Movimientos de gift cards',
       value: gcStats.movementsCount,
-      icon: <CreditCard size={18} />,
+      icon: <History size={18} />,
       iconColorClass: 'text-brand-accent',
       borderColorClass: gcFilter === 'gc_movements' ? 'border-brand-accent ring-2 ring-brand-accent/20' : 'hover:border-slate-300',
       onClick: () => setGcFilter(gcFilter === 'gc_movements' ? 'all' : 'gc_movements'),
@@ -619,6 +670,10 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
       <ErrorAlert message={error} />
       <SuccessAlert message={notice} />
 
+      {section === 'points' && (
+        <p className="text-sm text-slate-600 bg-white border border-slate-100 rounded-2xl px-4 py-3" data-rules-text>{rulesText}</p>
+      )}
+
       <div className="flex flex-wrap items-center justify-end gap-2">
         {section === 'points' && pointsFilter === 'movements' && customerHistoryFilter && (
           <button
@@ -627,6 +682,16 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
             className="mr-auto px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-soft/20 text-brand-ink hover:bg-brand-soft/35 transition-colors"
           >
             Viendo 1 cliente · Ver todos
+          </button>
+        )}
+
+        {section === 'points' && data?.can.create && (
+          <button
+            type="button"
+            onClick={() => setReferralOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <UserPlus size={14} /> Registrar referido
           </button>
         )}
 
@@ -641,7 +706,41 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
       </div>
 
       {section === 'points' ? (
-        pointsFilter === 'movements' ? (
+        pointsFilter === 'referrals' ? (
+          <DataTable<ReferralRow>
+            title="Referidos"
+            primaryActionLabel={data?.can.create ? 'Registrar referido' : undefined}
+            onPrimaryAction={data?.can.create ? () => setReferralOpen(true) : undefined}
+            tabs={[
+              { id: 'all', label: 'Clientes', count: pointsStats.totalCustomers },
+              { id: 'with_points', label: 'Con puntos', count: pointsStats.withPointsCount },
+              { id: 'can_redeem', label: 'Listos para canjear', count: pointsStats.canRedeemCount },
+              { id: 'movements', label: 'Historial de puntos', count: pointsStats.movementsCount },
+              { id: 'referrals', label: 'Referidos', count: referrals.length },
+            ]}
+            activeTab={pointsFilter}
+            onTabChange={(id) => {
+              setCustomerHistoryFilter(null);
+              setPointsFilter(id as PointsFilter);
+            }}
+            searchTerm={referralSearch}
+            onSearchChange={setReferralSearch}
+            columns={referralColumns}
+            data={filteredReferrals}
+            exportTitle="Referidos"
+            exportScreen="loyalty_referrals"
+            exportColumns={[
+              { header: 'Fecha', type: 'datetime', value: (r) => r.created_at },
+              { header: 'Recomendó', value: (r) => r.referrer_name },
+              { header: 'Llegó recomendado', value: (r) => r.referred_name },
+              { header: 'Bono', type: 'number', value: (r) => r.bonus_points },
+              { header: 'Estado', value: (r) => r.status_label },
+            ]}
+            getItemKey={(r) => r.id}
+            entityLabel={filteredReferrals.length === 1 ? 'referido' : 'referidos'}
+            metricCards={pointsMetricCards}
+          />
+        ) : pointsFilter === 'movements' ? (
           <DataTable<PointMovementRow>
             title="Historial de puntos"
             primaryActionLabel={data?.can.create ? 'Movimiento de puntos' : undefined}
@@ -659,6 +758,7 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
               { id: 'with_points', label: 'Con puntos', count: pointsStats.withPointsCount },
               { id: 'can_redeem', label: 'Listos para canjear', count: pointsStats.canRedeemCount },
               { id: 'movements', label: 'Historial de puntos', count: pointsStats.movementsCount },
+              { id: 'referrals', label: 'Referidos', count: referrals.length },
             ]}
             activeTab={pointsFilter}
             onTabChange={(id) => {
@@ -725,6 +825,7 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
               { id: 'with_points', label: 'Con puntos', count: pointsStats.withPointsCount },
               { id: 'can_redeem', label: 'Listos para canjear', count: pointsStats.canRedeemCount },
               { id: 'movements', label: 'Historial de puntos', count: pointsStats.movementsCount },
+              { id: 'referrals', label: 'Referidos', count: referrals.length },
             ]}
             activeTab={pointsFilter}
             onTabChange={(id) => {
@@ -750,6 +851,7 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
               { header: 'Valor canjeable', type: 'money', total: true, value: (c) => c.redeemable_value },
               { header: 'Ganados', type: 'number', value: (c) => c.earned },
               { header: 'Canjeados', type: 'number', value: (c) => c.redeemed },
+              { header: 'Nivel', value: (c) => c.tier?.label ?? '' },
             ]}
             getItemKey={(c) => c.id}
             entityLabel={filteredCustomers.length === 1 ? 'cliente' : 'clientes'}
@@ -897,20 +999,13 @@ export default function LoyaltyBoard({ section }: { section: Section }) {
         onSaved={handleSaved}
       />
 
-      <AppModal
-        isOpen={gcCancelTarget !== null}
-        type="confirm"
-        variant="danger"
-        title="¿Anular gift card?"
-        message={
-          gcCancelTarget
-            ? `Se anulará la gift card ${gcCancelTarget.code} y su saldo disponible de ${money(gcCancelTarget.balance, currency)} quedará en cero.`
-            : ''
-        }
-        confirmText={cancellingGc ? 'Anulando...' : 'Sí, anular gift card'}
-        cancelText="Volver"
-        onConfirm={handleCancelGiftCard}
-        onClose={() => setGcCancelTarget(null)}
+      <ReferralDrawer
+        isOpen={referralOpen}
+        onClose={() => setReferralOpen(false)}
+        customers={customers}
+        rules={rules}
+        currency={currency}
+        onSaved={handleSaved}
       />
     </div>
   );

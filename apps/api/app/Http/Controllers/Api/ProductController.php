@@ -32,14 +32,30 @@ class ProductController extends Controller
         return $user->tenant_id;
     }
 
-    private function present(object $product, array $categories, array $sold, array $stocks, string $currency): array
+    private function brands(string $tenantId): array
+    {
+        return DB::table('product_brands')->where('tenant_id', $tenantId)->orderBy('name')->pluck('name', 'id')->all();
+    }
+
+    private function units(string $tenantId): array
+    {
+        return DB::table('units')->where(fn ($q) => $q->whereNull('tenant_id')->orWhere('tenant_id', $tenantId))->orderBy('name')->get(['id', 'name', 'abbreviation'])->keyBy('id')->all();
+    }
+
+    private function present(object $product, array $categories, array $sold, array $stocks, string $currency, array $brands = [], array $units = []): array
     {
         $stockRow = $stocks[$product->id] ?? null;
+        $unit = $product->unit_id ? ($units[$product->unit_id] ?? null) : null;
 
         return [
             'id'              => $product->id,
             'name'            => $product->name,
             'sku'             => $product->sku,
+            'barcode'         => $product->barcode ?? null,
+            'brand_id'        => $product->brand_id ?? null,
+            'brand'           => $product->brand_id ? ($brands[$product->brand_id] ?? null) : null,
+            'unit_id'         => $product->unit_id ?? null,
+            'unit'            => $unit ? $unit->abbreviation : null,
             'price'           => round((float) $product->price, 2),
             'cost'            => round((float) ($product->cost ?? 0), 2),
             'min_stock'       => Inventory::qty($product->min_stock ?? 0),
@@ -63,6 +79,8 @@ class ProductController extends Controller
             'name'         => $product->name,
             'sku'          => $product->sku,
             'category'     => $product->category_id ? DB::table('product_categories')->where('id', $product->category_id)->value('name') : null,
+            'brand'        => $product->brand_id ? DB::table('product_brands')->where('id', $product->brand_id)->value('name') : null,
+            'barcode'      => $product->barcode ?? null,
             'product_kind' => self::KINDS[$product->kind] ?? $product->kind,
             'price'        => round((float) $product->price, 2),
             'cost'         => round((float) ($product->cost ?? 0), 2),
@@ -129,6 +147,8 @@ class ProductController extends Controller
             $this->sold($tenantId, [$id]),
             $this->stocks($tenantId, [$id]),
             Currency::of($request->user()->tenant),
+            $this->brands($tenantId),
+            $this->units($tenantId),
         );
     }
 
@@ -146,7 +166,14 @@ class ProductController extends Controller
             'kind'        => ['required', Rule::in(array_keys(self::KINDS))],
             'category_id' => ['nullable', 'uuid', Rule::exists('product_categories', 'id')->where('tenant_id', $tenantId)],
             'status'      => ['nullable', Rule::in(['active', 'inactive'])],
+            'brand_id'    => ['nullable', 'uuid', Rule::exists('product_brands', 'id')->where('tenant_id', $tenantId)],
+            'unit_id'     => ['nullable', 'uuid', Rule::exists('units', 'id')->where(fn ($q) => $q->whereNull('tenant_id')->orWhere('tenant_id', $tenantId))],
+            'barcode'     => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9-]+$/', Rule::unique('products', 'barcode')->where('tenant_id', $tenantId)->whereNull('deleted_at')->ignore($ignoreId)],
         ], [
+            'brand_id.exists' => 'Esa marca ya no existe.',
+            'unit_id.exists'  => 'Esa unidad ya no existe.',
+            'barcode.unique'  => 'Ya tienes un producto con ese código de barras.',
+            'barcode.regex'   => 'El código de barras lleva solo números y letras, sin espacios.',
             'name.required'  => 'Escribe el nombre del producto.',
             'sku.unique'     => 'Ya tienes un producto con ese código.',
             'price.required' => 'Escribe el precio.',
@@ -159,9 +186,16 @@ class ProductController extends Controller
             'category_id.exists' => 'Esa categoría ya no existe.',
         ]);
 
+        if ($validated['kind'] !== 'supply' && round((float) $validated['price'], 2) <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['price' => 'Un producto que se vende necesita un precio mayor que 0.']);
+        }
+
         return [
             'name'        => trim($validated['name']),
             'price'       => round((float) $validated['price'], 2),
+            'brand_id'    => $validated['brand_id'] ?? null,
+            'unit_id'     => $validated['unit_id'] ?? null,
+            'barcode'     => isset($validated['barcode']) ? (trim((string) $validated['barcode']) ?: null) : null,
             'kind'        => $validated['kind'],
             'category_id' => $validated['category_id'] ?? null,
             'status'      => $validated['status'] ?? 'active',
@@ -182,13 +216,95 @@ class ProductController extends Controller
         $sold = $this->sold($tenantId, $ids);
         $stocks = $this->stocks($tenantId, $ids);
         $currency = Currency::of($tenant);
+        $brands = $this->brands($tenantId);
+        $units = $this->units($tenantId);
 
         return response()->json([
             'inventory_enabled' => Inventory::enabled($tenant),
             'kinds'      => collect(self::KINDS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'categories' => collect($categories)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->sortBy('name')->values(),
-            'products'   => $products->map(fn ($p) => $this->present($p, $categories, $sold, $stocks, $currency))->values(),
+            'brands'     => collect($brands)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'units'      => collect($units)->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'abbreviation' => $u->abbreviation])->values(),
+            'products'   => $products->map(fn ($p) => $this->present($p, $categories, $sold, $stocks, $currency, $brands, $units))->values(),
         ]);
+    }
+
+    public function show(Request $request, string $product)
+    {
+        $tenantId = $this->tenantId($request);
+        $tenant = $request->user()->tenant;
+        $row = DB::table('products')->where('tenant_id', $tenantId)->whereNull('deleted_at')->where('id', $product)->first();
+        abort_unless($row, 404);
+
+        $withStock = Inventory::enabled($tenant) && $request->user()->allows('inventory.view');
+        $branchLimit = \App\Support\Access::branchLimit($request->user());
+
+        $warehouses = $withStock ? DB::table('warehouses as w')
+            ->join('branches as b', 'b.id', '=', 'w.branch_id')
+            ->leftJoin('stock_balances as s', fn ($j) => $j->on('s.warehouse_id', '=', 'w.id')->where('s.product_id', '=', $row->id))
+            ->where('w.tenant_id', $tenantId)
+            ->when($branchLimit, fn ($q, $id) => $q->where('w.branch_id', $id))
+            ->orderBy('b.name')
+            ->get(['w.id', 'b.name as branch_name', 's.quantity', 's.in_transit'])
+            ->map(fn ($w) => ['id' => $w->id, 'name' => $w->branch_name, 'quantity' => Inventory::qty($w->quantity ?? 0), 'in_transit' => Inventory::qty($w->in_transit ?? 0)])
+            ->values() : collect();
+
+        $usedIn = DB::table('service_supplies as ss')
+            ->join('services as sv', 'sv.id', '=', 'ss.service_id')
+            ->where('ss.product_id', $row->id)
+            ->where('sv.tenant_id', $tenantId)
+            ->orderBy('sv.name')
+            ->get(['sv.id', 'sv.name', 'ss.quantity'])
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'quantity' => Inventory::qty($s->quantity)])
+            ->values();
+
+        $movements = $withStock ? DB::table('inventory_movements as m')
+            ->join('warehouses as w', 'w.id', '=', 'm.warehouse_id')
+            ->join('branches as b', 'b.id', '=', 'w.branch_id')
+            ->leftJoin('users as u', 'u.id', '=', 'm.actor_user_id')
+            ->where('m.tenant_id', $tenantId)
+            ->where('m.product_id', $row->id)
+            ->when($branchLimit, fn ($q, $id) => $q->where('w.branch_id', $id))
+            ->orderByDesc('m.created_at')
+            ->limit(10)
+            ->get(['m.id', 'm.type', 'm.quantity', 'm.balance_after', 'm.unit_cost', 'm.reason', 'm.created_at', 'b.name as branch_name', 'u.first_name', 'u.last_name'])
+            ->map(fn ($m) => [
+                'id'            => $m->id,
+                'type_label'    => Inventory::MOVEMENT_LABELS[$m->type] ?? $m->type,
+                'quantity'      => Inventory::qty($m->quantity),
+                'balance_after' => Inventory::qty($m->balance_after),
+                'unit_cost'     => $m->unit_cost !== null ? round((float) $m->unit_cost, 2) : null,
+                'reason'        => $m->reason,
+                'branch_name'   => $m->branch_name,
+                'by'            => \App\Support\Person::name($m) ?: 'Sistema',
+                'created_at'    => Carbon::parse($m->created_at)->toIso8601String(),
+            ])
+            ->values() : collect();
+
+        return response()->json([
+            'product'    => $this->one($request, $tenantId, $row->id),
+            'with_stock' => $withStock,
+            'warehouses' => $warehouses,
+            'used_in'    => $usedIn,
+            'movements'  => $movements,
+        ]);
+    }
+
+    public function storeBrand(Request $request)
+    {
+        $tenantId = $this->tenantId($request);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120', Rule::unique('product_brands', 'name')->where('tenant_id', $tenantId)],
+        ], [
+            'name.required' => 'Escribe el nombre de la marca.',
+            'name.unique'   => 'Ya tienes una marca con ese nombre.',
+        ]);
+
+        $id = (string) Str::uuid();
+        DB::table('product_brands')->insert(['id' => $id, 'tenant_id' => $tenantId, 'name' => trim($validated['name']), 'created_at' => now(), 'updated_at' => now()]);
+
+        return response()->json(['id' => $id, 'name' => trim($validated['name'])], 201);
     }
 
     public function store(Request $request)

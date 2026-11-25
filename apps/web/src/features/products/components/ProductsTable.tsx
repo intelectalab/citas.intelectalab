@@ -48,6 +48,7 @@ interface StockInfo {
   value: number;
   low: boolean;
   out: boolean;
+  perWarehouse: Record<string, number>;
   source: InventoryProduct;
 }
 
@@ -57,7 +58,7 @@ export default function ProductsTable() {
   const [view, setView] = useState('all');
   const [stockView, setStockView] = useState<StockView>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, string>>({ kind: '', category_id: '' });
+  const [filters, setFilters] = useState<Record<string, string>>({ kind: '', category_id: '', brand_id: '' });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
@@ -91,6 +92,7 @@ export default function ProductsTable() {
         value: Math.round(Math.max(0, quantity) * p.cost * 100) / 100,
         out: p.track_stock && quantity <= 0,
         low: p.track_stock && quantity > 0 && p.min_stock > 0 && quantity <= p.min_stock,
+        perWarehouse: Object.fromEntries(Object.entries(p.stocks).map(([wid, s]) => [wid, s?.quantity ?? 0])),
         source: p,
       });
     }
@@ -114,7 +116,8 @@ export default function ProductsTable() {
     (!withStock || matchesStock(product, stockView)) &&
     (!filters.kind || product.kind === filters.kind) &&
     (!filters.category_id || product.category_id === filters.category_id) &&
-    (!term || `${product.name} ${product.sku} ${product.category ?? ''}`.toLowerCase().includes(term)),
+    (!filters.brand_id || product.brand_id === filters.brand_id) &&
+    (!term || `${product.name} ${product.sku} ${product.barcode ?? ''} ${product.brand ?? ''} ${product.category ?? ''}`.toLowerCase().includes(term)),
   );
 
   const remove = async () => {
@@ -148,7 +151,10 @@ export default function ProductsTable() {
     ...(withStock ? inv.warehouseFilterConfig : []),
     { id: 'kind', label: 'Para qué es', type: 'select', options: (catalog?.kinds ?? []).map((k) => ({ value: k.value, label: k.label })) },
     ...((catalog?.categories.length ?? 0) > 0 ? [{ id: 'category_id', label: 'Categoría', type: 'select' as const, options: (catalog?.categories ?? []).map((c) => ({ value: c.id, label: c.name })) }] : []),
+    ...((catalog?.brands?.length ?? 0) > 0 ? [{ id: 'brand_id', label: 'Marca', type: 'select' as const, options: (catalog?.brands ?? []).map((b) => ({ value: b.id, label: b.name })) }] : []),
   ];
+
+  const splitWarehouses = withStock && warehouses.length > 1 && !warehouseFilter;
 
   const stockCount = (wanted: StockView) => all.filter((p) => matchesStock(p, wanted)).length;
   const toggleStock = (wanted: StockView) => setStockView(stockView === wanted ? 'all' : wanted);
@@ -218,6 +224,8 @@ export default function ProductsTable() {
   const exportColumns: ExportColumn<Product>[] = [
     { header: 'Producto', value: (p) => p.name },
     { header: 'Código (SKU)', value: (p) => p.sku },
+    { header: 'Código de barras', value: (p) => p.barcode ?? '' },
+    { header: 'Marca', value: (p) => p.brand ?? '' },
     { header: 'Categoría', value: (p) => p.category },
     { header: 'Precio', type: 'money', value: (p) => p.price },
     { header: 'Para qué es', value: (p) => p.kind_label },
@@ -236,8 +244,8 @@ export default function ProductsTable() {
     if (!info) return <span key={`stock-${product.id}`} className="text-xs text-slate-400">—</span>;
     if (!info.track) return <span key={`stock-${product.id}`} className="text-xs text-slate-400" title="Empieza a controlarse con su primera entrada">Sin control</span>;
 
-    const tone = info.out ? 'bg-red-50 text-red-600' : info.low ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700';
-    const perBranch = warehouses.length > 1 && !warehouseFilter;
+    const tone = info.out || info.low ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700';
+    const perBranch = false;
 
     return (
       <div key={`stock-${product.id}`} className="space-y-1">
@@ -266,10 +274,10 @@ export default function ProductsTable() {
         <div key={`name-${product.id}`} className="flex items-center gap-3">
           <span className="p-2 rounded-lg shrink-0 bg-brand-soft/20 text-brand-ink"><Package size={16} /></span>
           <div>
-            <button type="button" data-edit={product.name} onClick={() => open(product)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}>
+            <Link href={`/products/${product.id}`} data-edit={product.name} className={`${styles.customerName} hover:text-brand-accent hover:underline transition-colors text-left`}>
               {product.name}
-            </button>
-            <span className="block text-xs text-slate-400 font-mono">{product.sku}</span>
+            </Link>
+            <span className="block text-xs text-slate-400 font-mono">{product.sku}{product.brand ? <span className="font-sans"> · {product.brand}</span> : null}</span>
           </div>
         </div>
       ),
@@ -280,7 +288,12 @@ export default function ProductsTable() {
     },
     {
       header: 'Precio',
-      cell: (product) => <span key={`price-${product.id}`} className="text-sm font-semibold text-slate-800 tabular-nums">{money(product.price, product.currency)}</span>,
+      cell: (product) => (
+        <span key={`price-${product.id}`} className="text-sm font-semibold text-slate-800 tabular-nums">
+          {money(product.price, product.currency)}
+          {withStock && (product.cost ?? 0) > 0 && <span className="block text-xs font-normal text-slate-400">Costo {money(product.cost ?? 0, product.currency)}</span>}
+        </span>
+      ),
     },
     {
       header: 'Para qué es',
@@ -292,7 +305,19 @@ export default function ProductsTable() {
     },
     ...(withStock
       ? [
-          { header: 'Existencia', cell: stockCell },
+          ...(splitWarehouses
+            ? warehouses.map((w) => ({
+                header: w.branch_name,
+                cell: (product: Product) => {
+                  const info = stockOf(product);
+                  if (!info?.track) return <span key={`w-${w.id}-${product.id}`} className="text-xs text-slate-400">—</span>;
+                  const qty = info.perWarehouse[w.id] ?? 0;
+                  const under = qty <= 0 || ((product.min_stock ?? 0) > 0 && qty <= (product.min_stock ?? 0));
+                  return <span key={`w-${w.id}-${product.id}`} data-warehouse-stock={w.branch_name} className={`text-sm font-bold tabular-nums ${under ? 'text-red-600' : 'text-slate-800'}`}>{formatUnits(qty)}</span>;
+                },
+              }))
+            : []),
+          { header: splitWarehouses ? 'Total' : 'Existencia', cell: stockCell },
           {
             header: 'Mínimo',
             cell: (product: Product) => (

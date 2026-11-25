@@ -68,6 +68,13 @@ export default function PaymentsTable({ initial }: { initial?: PaymentsFilter } 
   const current = currentCurrency();
   const todays = all.filter((p) => dayOf(p.at) === today && (!p.currency || p.currency === current));
   const sum = (list: PaymentRow[]) => list.reduce((total, p) => total + p.amount, 0);
+  const byMethod = [...todays.filter((p) => p.kind === 'payment').reduce((acc, p) => {
+    const row = acc.get(p.method) ?? { method: p.method, label: p.method_label, total: 0, count: 0 };
+    row.total += p.amount;
+    row.count += 1;
+    return acc.set(p.method, row);
+  }, new Map<string, { method: string; label: string; total: number; count: number }>()).values()].sort((a, b) => b.total - a.total);
+  const topMethod = Math.max(1, ...byMethod.map((m) => m.total));
 
   const used = new Set(all.map((p) => p.method));
   const branchOptions = [...new Map(all.filter((p) => p.branch_id).map((p) => [p.branch_id as string, p.branch_name ?? 'Sede'])).entries()].map(([value, label]) => ({ value, label }));
@@ -173,6 +180,23 @@ export default function PaymentsTable({ initial }: { initial?: PaymentsFilter } 
   return (
     <div className="space-y-6 mb-8">
       <ErrorAlert message={error} />
+
+      {byMethod.length > 0 && (
+        <section className="bg-white rounded-3xl border border-slate-200/80 px-5 py-4" data-today-by-method>
+          <h2 className="text-sm font-bold text-brand-ink">Cobrado hoy por medio de pago</h2>
+          <ul className="mt-3 space-y-2.5">
+            {byMethod.map((m) => (
+              <li key={m.method} className="grid grid-cols-[7.5rem_minmax(0,1fr)_auto] sm:grid-cols-[10rem_minmax(0,1fr)_auto] items-center gap-3 text-sm">
+                <span className="flex items-center gap-1.5 text-slate-700 truncate">{METHOD_ICONS[m.method] ?? <Wallet size={16} />}{m.label}</span>
+                <span className="h-2.5 rounded-full bg-slate-100 overflow-hidden" aria-hidden>
+                  <span className="block h-full rounded-full bg-[var(--brand-link)]" style={{ width: `${Math.max(3, (m.total / topMethod) * 100)}%` }} />
+                </span>
+                <span className="font-bold tabular-nums text-slate-800 text-right">{money(m.total)} <span className="font-normal text-xs text-slate-500">· {m.count}</span></span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <DataTable<PaymentRow>
         title="Pagos"

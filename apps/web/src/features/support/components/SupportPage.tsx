@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Copy, Gift, LifeBuoy, Loader2, Send } from 'lucide-react';
+import { Check, Copy, Gift, LifeBuoy, Loader2, MessageCircle, Send } from 'lucide-react';
+import { PagedList } from '@/app/components/common/Pager';
 import { api } from '@/lib/axios';
 import Badge from '@/app/components/common/Badge';
 import Select from '@/app/components/common/Select';
@@ -14,7 +15,7 @@ import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError } from '@/features/appointments/appointments';
 import { AttachmentPicker } from './TicketDetail';
-import { STATUS_TONE, dateTime, type Option, type Ticket } from '../support';
+import { PRIORITY_TONE, STATUS_TONE, dateTime, type Option, type Ticket } from '../support';
 
 interface Payload {
   ready: boolean;
@@ -32,6 +33,8 @@ interface Referral {
   code?: string | null;
   reward?: string;
   rows?: { id: string; name: string; status: string; status_label: string; note: string | null; created_at: string }[];
+  stats?: { referred: number; subscribed: number; days: number; discounts: number };
+  share_text?: string;
 }
 
 const TABS = [
@@ -41,6 +44,12 @@ const TABS = [
 ];
 
 const EMPTY = { subject: '', topic: 'other', priority: 'normal', body: '', allow_access: false };
+
+const REFERRAL_TONE: Record<string, string> = {
+  pending: 'bg-amber-50 text-amber-800',
+  rewarded: 'bg-emerald-50 text-emerald-700',
+  void: 'bg-slate-100 text-slate-600',
+};
 
 function ReferralCard() {
   const [data, setData] = useState<Referral | null>(null);
@@ -53,6 +62,7 @@ function ReferralCard() {
   if (!data?.enabled || !data.code) return null;
 
   const link = typeof window === 'undefined' ? '' : `${window.location.origin}/register?ref=${data.code}`;
+  const whatsapp = `https://wa.me/?text=${encodeURIComponent(`${data.share_text ?? ''}${link}`)}`;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link);
@@ -62,6 +72,8 @@ function ReferralCard() {
       setCopied(false);
     }
   };
+  const stats = data.stats;
+  const rows = data.rows ?? [];
 
   return (
     <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-referral-card>
@@ -72,16 +84,40 @@ function ReferralCard() {
         <button type="button" onClick={copy} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-brand-ink border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
           {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copiado' : 'Copiar enlace'}
         </button>
+        <a href={whatsapp} target="_blank" rel="noopener noreferrer" data-referral-whatsapp className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700">
+          <MessageCircle size={15} /> Compartir por WhatsApp
+        </a>
       </div>
-      {(data.rows ?? []).length > 0 && (
-        <ul className="divide-y divide-slate-100 text-sm">
-          {(data.rows ?? []).map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <span className="font-semibold text-slate-800">{r.name}</span>
-              <span className="text-xs text-slate-500">{r.note ?? r.status_label}</span>
-            </li>
+      {stats && (
+        <div className="grid grid-cols-3 gap-2" data-referral-stats>
+          {[
+            { label: 'Recomendados', value: String(stats.referred) },
+            { label: 'Ya pagaron', value: String(stats.subscribed) },
+            { label: 'Ganado', value: stats.days > 0 ? `${stats.days} ${stats.days === 1 ? 'día gratis' : 'días gratis'}${stats.discounts ? ` y ${stats.discounts} ${stats.discounts === 1 ? 'descuento' : 'descuentos'}` : ''}` : stats.discounts ? `${stats.discounts} ${stats.discounts === 1 ? 'descuento' : 'descuentos'}` : 'Aún nada' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-2xl bg-slate-50 border border-slate-100 px-3 py-2.5">
+              <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">{item.label}</span>
+              <span className="block text-base font-black text-brand-ink">{item.value}</span>
+            </div>
           ))}
-        </ul>
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 overflow-hidden flex flex-col" data-referral-rows>
+          <PagedList
+            items={rows}
+            empty="Todavía nadie se registró con tu enlace."
+            renderRow={(r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <span className="flex-1 min-w-0">
+                  <span className="block font-semibold text-slate-800 truncate">{r.name}</span>
+                  <span className="block text-xs text-slate-500">Se registró el {new Date(r.created_at).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })}{r.note && r.status !== 'pending' ? ` · ${r.note}` : ''}</span>
+                </span>
+                <Badge tone={REFERRAL_TONE[r.status] ?? REFERRAL_TONE.void} bold>{r.status_label}</Badge>
+              </li>
+            )}
+          />
+        </div>
       )}
     </section>
   );
@@ -140,6 +176,7 @@ export default function SupportPage() {
   const columns: Column<Ticket>[] = [
     { header: 'Pedido', cell: (t) => <Link href={`/support/${t.id}`} data-ticket-link={t.code} className="block"><span className="block font-bold text-brand-accent hover:text-brand-ink">{t.code}</span><span className="block text-sm text-slate-700">{t.subject}</span></Link> },
     { header: 'Tema', cell: (t) => t.topic_label },
+    { header: 'Prioridad', cell: (t) => <Badge tone={PRIORITY_TONE[t.priority] ?? PRIORITY_TONE.normal} bold>{t.priority_label}</Badge> },
     { header: 'Abierto por', cell: (t) => t.created_by ?? '—' },
     { header: 'Última novedad', cell: (t) => dateTime(t.last_message_at) },
     { header: 'Estado', cell: (t) => <Badge tone={STATUS_TONE[t.status]} bold>{t.status_label}</Badge> },

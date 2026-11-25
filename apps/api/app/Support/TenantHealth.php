@@ -23,7 +23,12 @@ class TenantHealth
         'failed'     => ['label' => 'Mensajes que fallaron', 'points' => 5],
         'leaving'    => ['label' => 'Pidió la baja', 'points' => 30],
         'near'       => ['label' => 'Cerca del tope', 'points' => 0],
+        'whatsapp'   => ['label' => 'WhatsApp sobre el 85 %', 'points' => 0],
     ];
+
+    public const WHATSAPP_ALERT = 85;
+
+    public const UPSELL = ['near', 'whatsapp'];
 
     public static function report(): array
     {
@@ -38,8 +43,9 @@ class TenantHealth
             ->groupBy('tenant_id')->selectRaw('tenant_id, count(*) as total')->pluck('total', 'tenant_id');
         $leaving = Cancellations::ready() ? DB::table('saas_cancellations')->where('status', 'scheduled')->pluck('tenant_id')->flip() : collect();
         $loginReady = $usage['login_ready'];
+        $tenants = \App\Models\Tenant::with(['settings', 'activeSubscription.plan'])->whereIn('id', collect($usage['rows'])->pluck('id'))->get()->keyBy('id');
 
-        $rows = collect($usage['rows'])->filter(fn ($r) => !in_array($r['status'], ['canceled', 'suspended'], true))->map(function ($r) use ($customers, $appointments, $failed, $leaving, $loginReady) {
+        $rows = collect($usage['rows'])->filter(fn ($r) => !in_array($r['status'], ['canceled', 'suspended'], true))->map(function ($r) use ($customers, $appointments, $failed, $leaving, $loginReady, $tenants) {
             $state = Subscriptions::state($r['id']);
             $trialLeft = $r['status'] === 'trial' && $state['ends_at'] ? max(0, (int) ceil(now()->diffInSeconds($state['ends_at'], false) / 86400)) : null;
             $loaded = (int) ($customers[$r['id']] ?? 0) + (int) ($appointments[$r['id']] ?? 0);
@@ -71,6 +77,22 @@ class TenantHealth
                 $signals[] = 'near';
             }
 
+            $whatsapp = null;
+            $tenant = $tenants[$r['id']] ?? null;
+
+            if ($tenant) {
+                try {
+                    $limit = MessageQuota::limit($tenant, 'whatsapp');
+                    $whatsapp = $limit && $limit > 0 ? (int) floor(MessageQuota::used($tenant, 'whatsapp') * 100 / $limit) : null;
+                } catch (\Throwable $e) {
+                    $whatsapp = null;
+                }
+            }
+
+            if ($whatsapp !== null && $whatsapp >= self::WHATSAPP_ALERT) {
+                $signals[] = 'whatsapp';
+            }
+
             $score = min(100, array_sum(array_map(fn ($s) => self::SIGNALS[$s]['points'], $signals)));
 
             return [
@@ -90,6 +112,8 @@ class TenantHealth
                 'customers'     => (int) ($customers[$r['id']] ?? 0),
                 'failed'        => (int) ($failed[$r['id']] ?? 0),
                 'top'           => $r['top'],
+                'whatsapp_percent' => $whatsapp,
+                'upsell'        => (bool) array_intersect($signals, self::UPSELL) && !in_array('overdue', $signals, true) && !in_array('leaving', $signals, true),
             ];
         })->sortByDesc('score')->values();
 
@@ -101,6 +125,8 @@ class TenantHealth
                 'alerts' => $rows->where('alert', true)->count(),
             ],
             'alerts'      => $rows->where('alert', true)->values()->all(),
+            'upsell'      => $rows->where('upsell', true)->values()->all(),
+            'whatsapp_alert' => self::WHATSAPP_ALERT,
             'rows'        => $rows->all(),
             'signals'     => collect(self::SIGNALS)->map(fn ($s, $key) => ['key' => $key, 'label' => $s['label']])->values()->all(),
             'idle_days'   => self::IDLE_DAYS,

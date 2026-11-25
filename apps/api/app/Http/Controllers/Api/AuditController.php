@@ -77,11 +77,23 @@ class AuditController extends Controller
             'to'        => 'nullable|date',
             'tenant_id' => 'nullable|uuid',
             'limit'     => 'nullable|integer|min:1|max:' . self::MAX_ROWS,
+            'code'      => 'nullable|string|max:20',
         ]);
 
         $from = isset($validated['from']) ? Carbon::parse($validated['from'], 'America/Lima')->startOfDay() : now('America/Lima')->subDays(29)->startOfDay();
         $to = isset($validated['to']) ? Carbon::parse($validated['to'], 'America/Lima')->endOfDay() : now('America/Lima')->endOfDay();
         $limit = (int) ($validated['limit'] ?? self::MAX_ROWS);
+
+        if (\App\Support\PlatformLog::ready()) {
+            $log = \App\Support\PlatformLog::list(['from' => $from, 'to' => $to, 'tenant_id' => $validated['tenant_id'] ?? null, 'code' => $request->input('code')], $limit);
+
+            return response()->json($log + [
+                'ready'    => true,
+                'separate' => true,
+                'tenants'  => Tenant::orderBy('name')->get(['id', 'name']),
+                'areas'    => Audit::AREAS,
+            ]);
+        }
 
         $query = AuditEvent::query()
             ->select('audit_events.*')

@@ -180,11 +180,14 @@ test('5. Portal del cliente: ver y confirmar su próxima cita', async ({ page, r
   const confirm = next.getByRole('button', { name: 'Confirmar asistencia' });
 
   if (await confirm.isVisible()) {
+    const confirmed = page.waitForResponse((r) => /\/portal\/appointments\/[^/]+\/confirm$/.test(r.url()));
     await confirm.click();
-    await expect(next.getByRole('button', { name: 'Confirmar asistencia' })).toHaveCount(0);
+    expect((await confirmed).status()).toBe(200);
+    await expect(page.getByText('Gracias: tu asistencia quedó confirmada.')).toBeVisible();
+  } else {
+    await expect(next.getByText(/Confirmada/)).toBeVisible();
   }
 
-  await expect(next.getByText(/Confirmada/)).toBeVisible();
   await page.getByRole('button', { name: /Ver todas/ }).click();
   await expect(page.getByText(/Corte de dama/).first()).toBeVisible();
 });

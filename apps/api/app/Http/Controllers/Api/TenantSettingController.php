@@ -33,6 +33,7 @@ class TenantSettingController extends Controller
         'none'  => 'No pasa nada',
         'note'  => 'Dejar una nota',
         'block' => 'Nota y dejar de reservar en línea',
+        'deposit' => 'Nota y pedir adelanto para reservar en línea',
     ];
 
     private const AUDIT_EQUIPMENT_DOWN = [
@@ -89,13 +90,17 @@ class TenantSettingController extends Controller
             'sales_rules.arrive_minutes'     => 'sometimes|integer|min:0|max:240',
             'sales_rules.cash_review_over'   => 'sometimes|numeric|min:0|max:9999999',
             'sales_rules.refund_approval_over' => 'sometimes|numeric|min:0|max:9999999',
+            'sales_rules.tips_enabled'     => 'sometimes|boolean',
+            'sales_rules.max_discount'     => 'sometimes|numeric|min:0|max:100',
             'payment_rules' => 'sometimes|array',
             'payment_rules.require_deposit'      => 'required_with:payment_rules|boolean',
             'payment_rules.deposit_minutes'      => 'required_with:payment_rules|integer|min:5|max:1440',
             'payment_rules.deposit_refund_hours' => 'required_with:payment_rules|integer|min:0|max:720',
+            'payment_rules.deposit_on_cancel'    => ['sometimes', Rule::in(['credit', 'refund'])],
             'payment_rules.link_hours'           => 'required_with:payment_rules|integer|min:1|max:720',
             'booking_misses' => 'sometimes|array',
-            'booking_misses.action'     => ['required_with:booking_misses', Rule::in(['none', 'note', 'block'])],
+            'booking_misses.action'     => ['required_with:booking_misses', Rule::in(['none', 'note', 'block', 'deposit'])],
+            'booking_misses.deposit_percent' => 'sometimes|integer|min:1|max:100',
             'booking_misses.limit'      => 'required_with:booking_misses|integer|min:1|max:20',
             'booking_misses.block_days' => 'required_with:booking_misses|integer|min:0|max:3650',
             'booking_misses.count_late_cancel' => 'sometimes|boolean',
@@ -123,6 +128,7 @@ class TenantSettingController extends Controller
             'loyalty_rules.points_validity_days'    => 'required_with:loyalty_rules|integer|min:0|max:3650',
             'loyalty_rules.gift_cards_enabled'      => 'required_with:loyalty_rules|boolean',
             'loyalty_rules.gift_card_validity_days' => 'required_with:loyalty_rules|integer|min:0|max:3650',
+            'loyalty_rules.vip_multiplier'          => 'sometimes|numeric|min:1|max:5',
             'commission_rules' => 'sometimes|array',
             'commission_rules.base'           => 'required_with:commission_rules|in:net,gross',
             'commission_rules.on_products'    => 'required_with:commission_rules|boolean',
@@ -174,6 +180,7 @@ class TenantSettingController extends Controller
             'sales_rules.cash_tolerance.*' => 'Escribe la tolerancia como un monto entre 0 y 9999.',
             'payment_rules.deposit_minutes.*'      => 'El tiempo para pagar el adelanto va de 5 a 1440 minutos.',
             'payment_rules.deposit_refund_hours.*' => 'Las horas para devolver el adelanto van de 0 a 720.',
+            'payment_rules.deposit_on_cancel.*'    => 'Elige si el adelanto queda como saldo a favor o se devuelve.',
             'payment_rules.link_hours.*'           => 'Un link de pago vence entre 1 y 720 horas después.',
             'session_idle_minutes.*'               => 'El tiempo sin actividad va de 5 a 1440 minutos (24 horas).',
             'session_idle_roles.*.*'               => 'El tiempo sin actividad de cada rol va de 5 a 1440 minutos (24 horas).',
@@ -255,7 +262,9 @@ class TenantSettingController extends Controller
               + (array_key_exists('pay_before_service', $validated['sales_rules']) ? ['pos.pay_before_service' => (bool) $validated['sales_rules']['pay_before_service']] : [])
               + (array_key_exists('arrive_minutes', $validated['sales_rules']) ? ['pos.arrive_minutes' => (int) $validated['sales_rules']['arrive_minutes']] : [])
               + (array_key_exists('cash_review_over', $validated['sales_rules']) ? ['cash.review_over' => round((float) $validated['sales_rules']['cash_review_over'], 2)] : [])
-              + (array_key_exists('refund_approval_over', $validated['sales_rules']) ? ['pos.refund_approval_over' => round((float) $validated['sales_rules']['refund_approval_over'], 2)] : []));
+              + (array_key_exists('refund_approval_over', $validated['sales_rules']) ? ['pos.refund_approval_over' => round((float) $validated['sales_rules']['refund_approval_over'], 2)] : [])
+              + (array_key_exists('tips_enabled', $validated['sales_rules']) ? ['pos.tips_enabled' => (bool) $validated['sales_rules']['tips_enabled']] : [])
+              + (array_key_exists('max_discount', $validated['sales_rules']) ? ['pos.max_discount' => round((float) $validated['sales_rules']['max_discount'], 2)] : []));
         }
 
         if (isset($validated['payment_rules'])) {
@@ -263,6 +272,7 @@ class TenantSettingController extends Controller
                 'booking.require_deposit'      => (bool) $validated['payment_rules']['require_deposit'],
                 'booking.deposit_minutes'      => (int) $validated['payment_rules']['deposit_minutes'],
                 'booking.deposit_refund_hours' => (int) $validated['payment_rules']['deposit_refund_hours'],
+                'booking.deposit_on_cancel'    => ($validated['payment_rules']['deposit_on_cancel'] ?? AppointmentFlow::rule($tenant, 'booking.deposit_on_cancel')) === 'refund' ? 'refund' : 'credit',
                 'payments.link_hours'          => (int) $validated['payment_rules']['link_hours'],
             ]);
         }
@@ -272,7 +282,8 @@ class TenantSettingController extends Controller
                 'booking.miss_action' => $validated['booking_misses']['action'],
                 'booking.miss_limit'  => (int) $validated['booking_misses']['limit'],
                 'booking.block_days'  => (int) $validated['booking_misses']['block_days'],
-            ] + (array_key_exists('count_late_cancel', $validated['booking_misses']) ? ['booking.count_late_cancel' => (bool) $validated['booking_misses']['count_late_cancel']] : []));
+            ] + (array_key_exists('count_late_cancel', $validated['booking_misses']) ? ['booking.count_late_cancel' => (bool) $validated['booking_misses']['count_late_cancel']] : [])
+              + (array_key_exists('deposit_percent', $validated['booking_misses']) ? ['booking.miss_deposit_percent' => (int) $validated['booking_misses']['deposit_percent']] : []));
         }
 
         if (array_key_exists('mfa_admin', $validated)) {
@@ -325,7 +336,7 @@ class TenantSettingController extends Controller
                 'loyalty.points_validity_days'    => (int) $validated['loyalty_rules']['points_validity_days'],
                 'loyalty.gift_cards_enabled'      => (bool) $validated['loyalty_rules']['gift_cards_enabled'],
                 'loyalty.gift_card_validity_days' => (int) $validated['loyalty_rules']['gift_card_validity_days'],
-            ]);
+            ], isset($validated['loyalty_rules']['vip_multiplier']) ? ['loyalty.vip_multiplier' => round((float) $validated['loyalty_rules']['vip_multiplier'], 2)] : []);
         }
 
         if (isset($validated['commission_rules'])) {
@@ -406,7 +417,19 @@ class TenantSettingController extends Controller
         return response()->json($this->payload($fresh));
     }
 
-    private function payload(Tenant $tenant): array
+    private const FACTORY_KEYS = ['booking_rules', 'resources', 'sales_rules', 'inventory_rules', 'loyalty_rules', 'quote_rules', 'commission_rules', 'walkin_rules', 'classes_rules', 'waitlist_rules', 'membership_rules', 'penalty_rules', 'session_idle_minutes', 'help_enabled', 'mfa_admin', 'session_portal_idle_minutes', 'customer_groups', 'booking_misses', 'payment_rules'];
+
+    private function factory(Tenant $tenant): array
+    {
+        $copy = clone $tenant;
+        $settings = $tenant->settings ? clone $tenant->settings : null;
+        $settings?->forceFill(['rules' => []]);
+        $copy->setRelation('settings', $settings);
+
+        return array_intersect_key($this->payload($copy, false), array_flip(self::FACTORY_KEYS));
+    }
+
+    private function payload(Tenant $tenant, bool $withFactory = true): array
     {
         $plan = $tenant->activeSubscription?->plan;
         $planKeys = $plan?->moduleKeys() ?? [];
@@ -486,10 +509,11 @@ class TenantSettingController extends Controller
                 'require_deposit'      => (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit'),
                 'deposit_minutes'      => (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes'),
                 'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
+                'deposit_on_cancel'    => \App\Support\PaymentLinks::onCancel($tenant),
                 'link_hours'           => (int) AppointmentFlow::rule($tenant, 'payments.link_hours'),
                 'booking'              => $tenant->hasModule('booking'),
             ] : null,
-        ];
+        ] + ($withFactory ? ['factory' => $this->factory($tenant)] : []);
     }
 
     private function auditSnapshot(Tenant $tenant): array
@@ -541,6 +565,8 @@ class TenantSettingController extends Controller
                 'arrive_minutes'     => $sales['arrive_minutes'],
                 'cash_review_over'   => $sales['cash_review_over'] ?? 0,
                 'refund_approval_over' => $sales['refund_approval_over'] ?? 0,
+                'tips_enabled'       => $sales['tips_enabled'] ?? false,
+                'max_discount'       => $sales['max_discount'] ?? 0,
             ],
             'Presupuestos y planes' => [
                 'quote_validity_days'  => $quotes['validity_days'],
@@ -566,6 +592,7 @@ class TenantSettingController extends Controller
                 'points_validity_days'    => $loyalty['points_validity_days'],
                 'gift_cards_enabled'      => $loyalty['gift_cards_enabled'],
                 'gift_card_validity_days' => $loyalty['gift_card_validity_days'],
+                'vip_multiplier'          => $loyalty['vip_multiplier'],
             ],
             'Comisiones' => [
                 'commission_base'           => ($commissions = Commissions::rules($tenant))['base'] === 'gross' ? 'Precio de lista' : 'Neto',
@@ -577,6 +604,7 @@ class TenantSettingController extends Controller
                 'require_deposit'      => (bool) AppointmentFlow::rule($tenant, 'booking.require_deposit'),
                 'deposit_minutes'      => (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes'),
                 'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
+                'deposit_on_cancel'    => \App\Support\PaymentLinks::onCancel($tenant),
                 'link_hours'           => (int) AppointmentFlow::rule($tenant, 'payments.link_hours'),
             ],
             'Membresías' => [

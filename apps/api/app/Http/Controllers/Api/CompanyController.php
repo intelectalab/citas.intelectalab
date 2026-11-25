@@ -32,15 +32,18 @@ class CompanyController extends Controller
         $validated = $request->validate([
             'name'       => 'required|string|max:150',
             'legal_name' => 'nullable|string|max:200',
-            'tax_id'     => ['nullable', 'regex:/^\d{11}$/'],
+            'tax_id'     => ['nullable', 'regex:/^(10|20)\d{9}$/'],
             'phone'      => 'nullable|string|max:30',
             'address'    => 'nullable|string|max:255',
             'district'   => 'nullable|string|max:100',
             'department' => 'nullable|string|max:100',
         ], [
             'name.required' => 'Escribe el nombre de la empresa.',
-            'tax_id.regex'  => 'El RUC tiene 11 dígitos.',
+            'tax_id.regex'  => 'El RUC tiene 11 dígitos y empieza con 10 (persona) o 20 (empresa).',
         ]);
+
+        $fields = ['legal_name', 'tax_id', 'phone', 'address', 'district', 'department'];
+        $before = ['name' => $tenant->name] + collect($fields)->mapWithKeys(fn ($key) => [$key => $tenant->company?->{$key}])->all();
 
         DB::transaction(function () use ($tenant, $validated) {
             $name = trim($validated['name']);
@@ -58,7 +61,40 @@ class CompanyController extends Controller
             ])->save();
         });
 
-        return response()->json($this->payload($tenant->fresh(['settings', 'activeSubscription.plan', 'businessType', 'company']), true));
+        $fresh = $tenant->fresh(['settings', 'activeSubscription.plan', 'businessType', 'company']);
+        $after = ['name' => $fresh->name] + collect($fields)->mapWithKeys(fn ($key) => [$key => $fresh->company?->{$key}])->all();
+        $changed = array_keys(array_filter($after, fn ($value, $key) => ($before[$key] ?? null) !== $value, ARRAY_FILTER_USE_BOTH));
+
+        if ($changed) {
+            \App\Support\Audit::log($request, 'company.updated', ['tenant' => $tenant->id, 'entity_type' => 'tenant', 'entity_id' => $tenant->id, 'entity_label' => $fresh->name, 'before' => array_intersect_key($before, array_flip($changed)), 'after' => array_intersect_key($after, array_flip($changed))]);
+        }
+
+        return response()->json($this->payload($fresh, true));
+    }
+
+    public function catalogPreview(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $type = \App\Models\BusinessType::where('status', 'active')->findOrFail($request->validate(['business_type_id' => 'required|uuid'])['business_type_id']);
+
+        return response()->json(\App\Support\BusinessTemplates::catalogPreview($tenant, $type) + ['name' => $type->name]);
+    }
+
+    public function importCatalog(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($request->user()->allows('services.create'), 403, \App\Support\Access::denial('services.create', $tenant));
+        $type = \App\Models\BusinessType::where('status', 'active')->findOrFail($request->validate(['business_type_id' => 'required|uuid'])['business_type_id']);
+
+        $result = \App\Support\BusinessTemplates::importCatalog($tenant, $type);
+
+        \App\Support\Audit::log($request, 'catalog.imported', ['tenant' => $tenant->id, 'entity_type' => 'business_type', 'entity_id' => $type->id, 'entity_label' => $type->name, 'after' => ['servicios' => $result['services'], 'categorias' => $result['categories'], 'ya_estaban' => $result['skipped']]]);
+
+        $message = $result['services'] > 0
+            ? "Listo: se agregaron {$result['services']} " . ($result['services'] === 1 ? 'servicio' : 'servicios') . " del rubro {$type->name}" . ($result['skipped'] ? " ({$result['skipped']} ya los tenías y no se repitieron)" : '') . '. Revisa precios y duraciones en Servicios.'
+            : "No se agregó nada: ya tienes todos los servicios del rubro {$type->name}.";
+
+        return response()->json($result + ['message' => $message]);
     }
 
     private function payload(Tenant $tenant, bool $canEdit): array
@@ -66,7 +102,7 @@ class CompanyController extends Controller
         $company = $tenant->company;
         $subscription = $tenant->activeSubscription;
         $plan = $subscription?->plan;
-        $limits = $plan?->limits ?? [];
+        $limits = $tenant->planLimits();
         $usage = $tenant->usage();
         $timezone = $tenant->zone();
         $count = fn (string $table) => DB::table($table)->where('tenant_id', $tenant->id);
@@ -79,6 +115,8 @@ class CompanyController extends Controller
                 'timezone'      => $timezone,
                 'business_type' => $tenant->businessType?->name,
                 'member_since'  => $tenant->created_at?->copy()->setTimezone($timezone)->format('Y-m-d'),
+                'contact_email' => DB::table('tenant_contacts')->where('tenant_id', $tenant->id)->orderBy('created_at')->value('email') ?? DB::table('users')->where('tenant_id', $tenant->id)->where('is_owner', true)->value('email'),
+                'currency'      => \App\Support\Currency::ready() ? \App\Support\Currency::present(\App\Support\Currency::of($tenant)) : null,
             ],
             'company' => [
                 'legal_name' => $company?->legal_name,

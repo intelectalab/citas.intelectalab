@@ -1,6 +1,7 @@
 'use client';
 
 import Switch from '@/app/components/common/Switch';
+import Select from '@/app/components/common/Select';
 import { RULE_GROUPS, type RuleDefinition, type RuleValue } from '@/lib/rules';
 
 interface RulesEditorProps {
@@ -24,6 +25,20 @@ export default function RulesEditor({ value, onChange }: RulesEditorProps) {
 
     if (rule.type === 'boolean') {
       return <Switch checked={current === true} onChange={(checked) => setRule(rule.key, checked)} label={rule.label} />;
+    }
+
+    if (rule.type === 'choice') {
+      return (
+        <div className="w-56 shrink-0">
+          <Select
+            ariaLabel={rule.label}
+            placeholder="Como viene"
+            value={current === undefined ? '' : String(current)}
+            onChange={(e) => setRule(rule.key, e.target.value === '' ? undefined : String(e.target.value))}
+            options={rule.options ?? []}
+          />
+        </div>
+      );
     }
 
     return (
@@ -68,6 +83,7 @@ export default function RulesEditor({ value, onChange }: RulesEditorProps) {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 {rule.label}
                 {rule.type === 'number' && <span className="font-bold text-brand-ink">{String(value[rule.key])} {rule.unit}</span>}
+                {rule.type === 'choice' && <span className="font-bold text-brand-ink">{rule.options?.find((option) => option.value === value[rule.key])?.label ?? String(value[rule.key])}</span>}
               </span>
             ))}
           </div>

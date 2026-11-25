@@ -64,7 +64,7 @@ class AccessController extends Controller
 
     private function usage(Tenant $tenant): array
     {
-        $limit = $tenant->activeSubscription?->plan?->limits['users'] ?? null;
+        $limit = $tenant->planLimits()['users'] ?? null;
 
         return ['used' => $tenant->usage()['users'], 'limit' => is_numeric($limit) ? (int) $limit : null];
     }
@@ -93,7 +93,7 @@ class AccessController extends Controller
 
     private function staffOfBranch(User $actor): ?array
     {
-        $limit = Access::branchLimit($actor);
+        $limit = Access::ownBranchLimit($actor);
 
         if ($limit === null) {
             return null;
@@ -115,7 +115,7 @@ class AccessController extends Controller
 
     private function assertWholeCompany(User $actor): void
     {
-        abort_if(Access::branchLimit($actor) !== null, 403, 'Los roles valen para todas las sedes: los crea y los cambia quien administra la empresa.');
+        abort_if(Access::ownBranchLimit($actor) !== null, 403, 'Los roles valen para todas las sedes: los crea y los cambia quien administra la empresa.');
     }
 
     private function scopeOfRole(Role $role): string
@@ -144,7 +144,7 @@ class AccessController extends Controller
 
     private function roleOptions(Tenant $tenant, ?User $actor = null): array
     {
-        $scoped = $actor && Access::branchLimit($actor) !== null && Access::scopeReady();
+        $scoped = $actor && Access::ownBranchLimit($actor) !== null && Access::scopeReady();
 
         return Role::where('tenant_id', $tenant->id)->when($scoped, fn ($q) => $q->where('scope', '!=', 'tenant'))->get()
             ->sortBy(fn (Role $r) => [array_search($r->slug, array_keys(Access::FACTORY), true) === false ? 99 : array_search($r->slug, array_keys(Access::FACTORY), true), $r->name])
@@ -161,7 +161,7 @@ class AccessController extends Controller
     private function branchOptions(Tenant $tenant, ?User $actor = null): array
     {
         return DB::table('branches')->where('tenant_id', $tenant->id)->where('status', 'active')
-            ->when($actor ? Access::branchLimit($actor) : null, fn ($q, $id) => $q->where('id', $id))
+            ->when($actor ? Access::ownBranchLimit($actor) : null, fn ($q, $id) => $q->where('id', $id))
             ->orderBy('name')->get(['id', 'name'])->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->all();
     }
 
@@ -173,7 +173,7 @@ class AccessController extends Controller
         $mine = $this->staffOfBranch($actor);
         $users = User::where('tenant_id', $tenant->id)->when($mine !== null, fn ($q) => $q->whereIn('id', $mine))
             ->with('roles')->orderBy('first_name')->orderBy('last_name')->get();
-        $limit = Access::branchLimit($actor);
+        $limit = Access::ownBranchLimit($actor);
         $professionals = DB::table('professionals')->where('tenant_id', $tenant->id)->whereNotNull('user_id')->pluck('id', 'user_id');
         $branches = DB::table('branches')->where('tenant_id', $tenant->id)->pluck('name', 'id');
         $exceptions = DB::table('user_permissions')->where('tenant_id', $tenant->id)
@@ -290,7 +290,7 @@ class AccessController extends Controller
         $scope = Access::scopeReady() ? $role->scope : (Access::FACTORY[$role->slug]['scope'] ?? 'tenant');
         abort_if($scope === 'branch' && !$branchId, 422, "Quien tiene el rol {$role->name} trabaja solo con su sede: elige cuál es.");
 
-        if (($limit = Access::branchLimit($actor)) !== null) {
+        if (($limit = Access::ownBranchLimit($actor)) !== null) {
             abort_if($scope === 'tenant', 403, "El rol {$role->name} ve toda la empresa: solo lo da quien administra la empresa.");
             abort_if($branchId !== $limit, 403, 'Solo puedes registrar personal de tu sede. ' . Access::onlyBranch($actor));
         }
@@ -312,7 +312,7 @@ class AccessController extends Controller
         }
 
         $validated = $this->validateUser($request, $tenant);
-        $validated['branch_id'] = ($validated['branch_id'] ?? null) ?: Access::branchLimit($actor);
+        $validated['branch_id'] = ($validated['branch_id'] ?? null) ?: Access::ownBranchLimit($actor);
         $role = $this->findRole($tenant, $validated['role_id']);
         $this->assertRoleAllowed($role, $actor, false, $validated['branch_id'] ?? null);
 
@@ -349,8 +349,8 @@ class AccessController extends Controller
         $target = $this->findUser($tenant, $user);
         $this->assertMyStaff($actor, $target);
         $validated = $this->validateUser($request, $tenant, $target);
-        if (Access::branchLimit($actor) !== null && !DB::table('professionals')->where('user_id', $target->id)->exists()) {
-            $validated['branch_id'] = Access::branchLimit($actor);
+        if (Access::ownBranchLimit($actor) !== null && !DB::table('professionals')->where('user_id', $target->id)->exists()) {
+            $validated['branch_id'] = Access::ownBranchLimit($actor);
         }
         $role = $this->findRole($tenant, $validated['role_id']);
         $current = Access::roleOf($target);
@@ -369,7 +369,7 @@ class AccessController extends Controller
             $this->assertRoleAllowed($role, $actor, $isProfessional, $validated['branch_id'] ?? null);
         } else {
             abort_if($this->scopeOfRole($role) === 'branch' && empty($validated['branch_id']), 422, "Quien tiene el rol {$role->name} trabaja solo con su sede: elige cuál es.");
-            abort_if(($validated['branch_id'] ?? null) !== $target->branch_id && Access::branchLimit($actor) !== null && ($validated['branch_id'] ?? null) !== Access::branchLimit($actor), 403, Access::otherBranch($actor));
+            abort_if(($validated['branch_id'] ?? null) !== $target->branch_id && Access::ownBranchLimit($actor) !== null && ($validated['branch_id'] ?? null) !== Access::ownBranchLimit($actor), 403, Access::otherBranch($actor));
         }
 
         $branchChanges = ($validated['branch_id'] ?? null) !== $target->branch_id;
@@ -563,7 +563,7 @@ class AccessController extends Controller
         $users = DB::table('user_roles')->join('users', 'users.id', '=', 'user_roles.user_id')
             ->where('users.tenant_id', $tenant->id)->selectRaw('user_roles.role_id, count(*) as total')->groupBy('user_roles.role_id')->pluck('total', 'role_id');
 
-        $whole = Access::branchLimit($actor) === null;
+        $whole = Access::ownBranchLimit($actor) === null;
 
         return response()->json([
             'can'   => ['create' => $whole && $actor->allows('users.create'), 'edit' => $whole && $actor->allows('users.edit'), 'delete' => $whole && $actor->allows('users.delete')],
@@ -591,7 +591,7 @@ class AccessController extends Controller
             ->whereIn('id', DB::table('user_roles')->where('role_id', $role->id)->pluck('user_id'))
             ->orderBy('first_name')->get();
 
-        $whole = Access::branchLimit($actor) === null;
+        $whole = Access::ownBranchLimit($actor) === null;
         $mine = $this->staffOfBranch($actor);
         $people = $mine === null ? $people : $people->whereIn('id', $mine)->values();
 

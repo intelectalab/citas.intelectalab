@@ -22,6 +22,7 @@ export interface CartItem {
   details?: ScheduleDetails | null;
   gift?: GiftCardDetails | null;
   no_membership?: boolean;
+  discount_percent?: number | null;
 }
 
 export interface Cart {
@@ -30,6 +31,9 @@ export interface Cart {
   editBlocked: string | null;
   customer: PickedCustomer | null;
   coupon: string;
+  discount: string;
+  discountReason: string;
+  tip: string;
   items: CartItem[];
 }
 
@@ -86,6 +90,7 @@ export interface PosBoard {
   branch_id: string | null;
   currency: string;
   tax: { rate: number; included: boolean };
+  discounts?: { tips_enabled: boolean; max_discount: number; can_exceed: boolean; ready: boolean };
   products_ready: boolean;
   can: { create: boolean; edit: boolean; charge: boolean; walk_in: boolean; products: boolean; packages?: boolean };
   packages_enabled?: boolean;
@@ -108,6 +113,7 @@ export interface PreviewLine {
   quantity: number;
   unit_price: number;
   discount?: number;
+  discount_percent?: number | null;
   total: number;
   membership?: { code: string; included: number; label: string } | null;
   membership_plan?: { period_label: string; benefits_text: string; renews: boolean; replaces?: { code: string; name: string; ends_at: string } | null } | null;
@@ -122,7 +128,7 @@ export interface CartPreview {
   branch_id: string;
   customer: PickedCustomer | null;
   lines: PreviewLine[];
-  totals: { subtotal: number; discount: number; tax: number; total: number; tax_rate: number; prices_include_tax: boolean; currency: string };
+  totals: { subtotal: number; discount: number; manual_discount?: number; tip?: number; tax: number; total: number; tax_rate: number; prices_include_tax: boolean; currency: string };
   coupon: AppliedCoupon | null;
   membership?: MembershipSummary | null;
 }
@@ -134,8 +140,11 @@ export interface LoadedCart {
   branch_id: string;
   customer: PickedCustomer | null;
   coupon_code: string | null;
+  manual_discount?: number;
+  discount_reason?: string | null;
+  tip?: number;
   edit_blocked: string | null;
-  items: { type: CartItemType; id: string; quantity: number; professional_id: string | null; no_membership?: boolean; details?: (ScheduleDetails & Partial<GiftCardDetails>) | null }[];
+  items: { type: CartItemType; id: string; quantity: number; professional_id: string | null; no_membership?: boolean; discount_percent?: number | null; details?: (ScheduleDetails & Partial<GiftCardDetails>) | null }[];
 }
 
 export interface WalkInOptions {
@@ -146,7 +155,7 @@ export interface WalkInOptions {
   professionals: { id: string; display_name: string; free_now: boolean; now_reason: string | null; slots: string[] }[];
 }
 
-export const emptyCart = (): Cart => ({ saleId: null, code: null, editBlocked: null, customer: null, coupon: '', items: [] });
+export const emptyCart = (): Cart => ({ saleId: null, code: null, editBlocked: null, customer: null, coupon: '', discount: '', discountReason: '', tip: '', items: [] });
 
 const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 

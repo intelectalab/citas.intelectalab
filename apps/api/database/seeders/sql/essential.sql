@@ -80,6 +80,18 @@ INSERT INTO saas_plans (
     trial_config, subscription_config, modules, limits, consumption, support, features, status, presentation_order
 ) VALUES
 (
+    '44444444-4444-4444-4444-444444444444', 'Individual', 'individual', 'IND', 'Para quien atiende solo: agenda, reservas en línea, boleta, paquetes y fichas',
+    59.00, 590.00, 'PEN',
+    '{"has_trial": true, "trial_days": 14}'::jsonb,
+    '{"auto_renew": true, "default_period": "monthly"}'::jsonb,
+    '{"agenda": ["booking"], "sales": ["pos", "invoicing"], "loyalty": ["packages"], "operations": ["records"]}'::jsonb,
+    '{"users": 2, "branches": 1, "professionals": 1, "appointments_month": 300, "whatsapp_month": 100}'::jsonb,
+    '{"storage_gb": 5, "api_requests_monthly": 0}'::jsonb,
+    '{"level": "Estándar", "tickets_monthly": 5}'::jsonb,
+    '{"multi_tenant": true, "roles_and_permissions": true}'::jsonb,
+    'active', 0
+),
+(
     '11111111-1111-1111-1111-111111111111', 'Esencial', 'esencial', 'ESE', 'Agenda, reservas online, caja y fichas para negocios de una sede',
     149.00, 1490.00, 'PEN',
     '{"has_trial": true, "trial_days": 14}'::jsonb,

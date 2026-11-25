@@ -33,5 +33,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return null;
         });
+        $exceptions->reportable(fn (\Throwable $e) => \App\Support\ErrorLogs::capture($e));
         $exceptions->respond(fn ($response) => \App\Support\ErrorMessages::apply($response));
     })->create();

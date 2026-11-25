@@ -31,17 +31,17 @@ it('no acepta repetir la contraseña temporal como la nueva', function () {
 it('al crear su contraseña ya puede usar el sistema', function () {
     $token = segEntrar($this->recepcion->email, $this->temporal)->json('access_token');
 
-    segCon($token, 'PUT', '/api/account/password', ['current_password' => $this->temporal, 'password' => 'mi-clave-propia-1', 'password_confirmation' => 'mi-clave-propia-1'])
+    segCon($token, 'PUT', '/api/account/password', ['current_password' => $this->temporal, 'password' => 'Mi-clave-propia-1', 'password_confirmation' => 'Mi-clave-propia-1'])
         ->assertOk();
 
     segCon($token, 'GET', '/api/account/devices')->assertOk();
     expect((bool) $this->recepcion->refresh()->must_change_password)->toBeFalse();
-    segEntrar($this->recepcion->email, 'mi-clave-propia-1')->assertOk()->assertJsonPath('user.must_change_password', false);
+    segEntrar($this->recepcion->email, 'Mi-clave-propia-1')->assertOk()->assertJsonPath('user.must_change_password', false);
 });
 
 it('pide la contraseña temporal correcta para cambiarla', function () {
     $token = segEntrar($this->recepcion->email, $this->temporal)->json('access_token');
 
-    segCon($token, 'PUT', '/api/account/password', ['current_password' => 'no-es-esta', 'password' => 'mi-clave-propia-1', 'password_confirmation' => 'mi-clave-propia-1'])
+    segCon($token, 'PUT', '/api/account/password', ['current_password' => 'no-es-esta', 'password' => 'Mi-clave-propia-1', 'password_confirmation' => 'Mi-clave-propia-1'])
         ->assertStatus(422)->assertJsonValidationErrors('current_password');
 });

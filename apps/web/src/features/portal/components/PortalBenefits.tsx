@@ -51,10 +51,60 @@ export interface PortalBenefitsData {
     status_label: string;
     detail: string;
     total: number;
+    paid?: number;
+    balance?: number;
     currency: string;
     invoice_number: string | null;
     invoice_label: string | null;
   }[];
+  summary?: {
+    points: number | null;
+    points_value: number | null;
+    gift_balance: number | null;
+    balance_due: number;
+    credit_balance?: number;
+    memberships: { id: string; name: string | null; ends_at: string | null }[];
+    packages: { id: string; name: string; available: number; expires_at: string | null }[];
+  };
+}
+
+export function BenefitsSummary({ data, currency, onOpen }: { data: PortalBenefitsData; currency?: string | null; onOpen?: () => void }) {
+  const s = data.summary;
+  if (!s) return null;
+  const tiles = [
+    s.points !== null ? { label: 'Puntos', value: `${s.points} pts`, hint: s.points_value ? `Equivalen a ${money(s.points_value, currency)}` : null } : null,
+    (s.credit_balance ?? 0) > 0 ? { label: 'Saldo a favor', value: money(s.credit_balance ?? 0, currency), hint: 'Úsalo al pagar tu próxima compra o cita en la sede' } : null,
+    s.gift_balance !== null && s.gift_balance > 0 ? { label: 'Saldo en gift cards', value: money(s.gift_balance, currency), hint: 'Úsalo al pagar en el local' } : null,
+    ...s.packages.filter((p) => p.available > 0).slice(0, 2).map((p) => ({ label: p.name, value: `${p.available} ${p.available === 1 ? 'sesión' : 'sesiones'}`, hint: p.expires_at ? `Vence el ${shortDate(p.expires_at)}` : null })),
+    ...s.memberships.slice(0, 1).map((m) => ({ label: m.name || 'Membresía', value: 'Activa', hint: m.ends_at ? `Hasta el ${shortDate(m.ends_at)}` : null })),
+  ].filter(Boolean) as { label: string; value: string; hint: string | null }[];
+
+  if (tiles.length === 0 && s.balance_due <= 0) return null;
+
+  return (
+    <section className={`${cardClass} p-5 space-y-3`} data-portal-benefits-summary>
+      <div className="flex items-center justify-between gap-3">
+        <SectionTitle><Gift size={16} className="text-brand-accent" /> Mis beneficios</SectionTitle>
+        {onOpen && <button type="button" onClick={onOpen} data-action="open-benefits" className="text-xs font-bold text-brand-accent hover:text-brand-ink">Ver detalle</button>}
+      </div>
+      {tiles.length > 0 && (
+        <div className="grid grid-cols-2 gap-2.5">
+          {tiles.map((t) => (
+            <div key={t.label} className="rounded-2xl bg-brand-soft/15 border border-brand-soft/60 px-3.5 py-2.5 min-w-0">
+              <span className="block text-[11px] text-slate-500 truncate">{t.label}</span>
+              <span className="block text-base font-black text-brand-ink tabular-nums">{t.value}</span>
+              {t.hint && <span className="block text-[11px] text-slate-500 truncate">{t.hint}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {s.balance_due > 0 && (
+        <p className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5" data-balance-due>
+          Tienes un saldo pendiente de {money(s.balance_due, currency)}. Puedes pagarlo en tu próxima visita.
+        </p>
+      )}
+    </section>
+  );
 }
 
 const GIFT_TONES: Record<string, string> = {
@@ -179,7 +229,10 @@ export default function PortalBenefits({ data, currency }: { data: PortalBenefit
                   <span className="text-sm font-black text-brand-ink tabular-nums shrink-0">{money(p.total, p.currency)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs text-slate-500">{p.status_label}</span>
+                  <span className="text-xs text-slate-500">
+                    {p.status_label}
+                    {(p.balance ?? 0) > 0 && <strong className="ml-1.5 text-amber-700" data-purchase-balance>· saldo {money(p.balance ?? 0, p.currency)}</strong>}
+                  </span>
                   <Link href={`/print/mis-compras/${p.id}`} target="_blank" data-receipt-link className="text-sm font-bold text-brand-accent hover:text-brand-ink transition-colors">
                     Ver comprobante
                   </Link>

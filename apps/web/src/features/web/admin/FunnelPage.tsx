@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Filter, Loader2, UserPlus } from 'lucide-react';
+import { Filter, Hourglass, Loader2, MessageCircle, Phone, TicketPercent, UserPlus } from 'lucide-react';
 import { api } from '@/lib/axios';
 import Badge from '@/app/components/common/Badge';
 import Select from '@/app/components/common/Select';
@@ -10,7 +10,7 @@ import DateField from '@/app/components/common/DateField';
 import SectionTitle from '@/app/components/common/SectionTitle';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
-import { DataTable, type Column } from '@/app/components/ui/table/DataTable';
+import { DataTable, type Column, type ExportColumn, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { apiError } from '@/features/appointments/appointments';
 import { STAGE_TONE, when, type Lead } from './leads';
@@ -42,6 +42,18 @@ interface Funnel {
   visits_by_source: { source: string; visits: number }[];
   visits_by_page: { page: string; visits: number }[];
 }
+
+interface Extras {
+  days: number;
+  expiring: { tenant_id: string; name: string; plan: string; ends_on: string; days_left: number; owner: string | null; email: string | null; phone: string | null }[];
+  chatbot: number;
+  coupon: number;
+}
+
+const waLink = (phone: string) => {
+  const digits = phone.replace(/\D/g, '');
+  return `https://wa.me/${digits.length === 9 ? `51${digits}` : digits}`;
+};
 
 const PAGE_LABELS: Record<string, string> = { home: 'Portada', pricing: 'Precios', business: 'Rubros', blog: 'Blog', post: 'Artículos', legal: 'Legales', signup: 'Registro' };
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
@@ -87,6 +99,9 @@ export default function FunnelPage() {
   const today = new Date();
   const [range, setRange] = useState({ from: isoDay(new Date(today.getTime() - 29 * 86400000)), to: isoDay(today) });
   const [funnel, setFunnel] = useState<Funnel | null>(null);
+  const [extras, setExtras] = useState<Extras | null>(null);
+  const [only, setOnly] = useState<'' | 'chatbot' | 'coupon'>('');
+  const [changing, setChanging] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [options, setOptions] = useState<{ stages: Option[]; sources: Option[]; business_types: Option[] }>({ stages: [], sources: [], business_types: [] });
   const [tab, setTab] = useState('open');
@@ -101,6 +116,7 @@ export default function FunnelPage() {
 
   const loadFunnel = useCallback(() => {
     api.get('/admin/web/funnel', { params: range }).then((res) => setFunnel(res.data)).catch((err) => setError(apiError(err, 'No se pudo cargar el embudo.')));
+    api.get<Extras>('/admin/funnel/extras', { params: range }).then((res) => setExtras(res.data)).catch(() => setExtras(null));
   }, [range]);
 
   const loadLeads = useCallback(() => {
@@ -112,6 +128,22 @@ export default function FunnelPage() {
 
   useEffect(() => { loadFunnel(); }, [loadFunnel]);
   useEffect(() => { loadLeads(); }, [loadLeads]);
+
+  const changeStage = async (lead: Lead, stage: string) => {
+    if (!stage || stage === lead.stage) return;
+    try {
+      setChanging(lead.id);
+      setError('');
+      await api.put(`/admin/web/leads/${lead.id}/stage`, { stage });
+      setNotice(`${lead.name}: etapa cambiada.`);
+      loadLeads();
+      loadFunnel();
+    } catch (err) {
+      setError(apiError(err, 'No se pudo cambiar la etapa.'));
+    } finally {
+      setChanging('');
+    }
+  };
 
   const create = async () => {
     try {
@@ -142,18 +174,46 @@ export default function FunnelPage() {
     .filter(tabs.find((t) => t.id === tab)?.test ?? (() => true))
     .filter((l) => !filters.source || l.source === filters.source)
     .filter((l) => !filters.business_type || l.business_type === filters.business_type)
+    .filter((l) => only !== 'chatbot' || l.source === 'chatbot')
+    .filter((l) => only !== 'coupon' || Boolean(l.coupon))
     .filter((l) => !term || [l.name, l.business, l.email, l.phone].some((v) => (v ?? '').toLowerCase().includes(term)));
 
   const columns: Column<Lead>[] = [
     { header: 'Interesado', cell: (l) => <Link href={`/admin/funnel/${l.id}`} data-lead-link={l.name} className="block"><span className="block font-bold text-brand-accent hover:text-brand-ink">{l.name}</span><span className="block text-xs text-slate-500">{[l.business, l.phone, l.email].filter(Boolean).join(' · ')}</span></Link> },
     { header: 'Rubro', cell: (l) => l.business_type_name ?? '—' },
     { header: 'Fuente', cell: (l) => <span className="text-sm">{l.source_label}{l.utm.source && <span className="block text-xs text-slate-500">{l.utm.source}{l.utm.campaign ? ` · ${l.utm.campaign}` : ''}</span>}</span> },
-    { header: 'Etapa', cell: (l) => <Badge tone={STAGE_TONE[l.stage]} bold>{l.stage_label}</Badge> },
+    {
+      header: 'Etapa',
+      cell: (l) => (l.stage === 'new' || l.stage === 'contacted') ? (
+        <div className="min-w-[9rem]" data-lead-stage={l.id}>
+          <Select ariaLabel={`Etapa de ${l.name}`} clearable={false} disabled={changing === l.id} value={l.stage} onChange={(e) => changeStage(l, String(e.target.value))} options={options.stages.filter((s) => s.value === 'new' || s.value === 'contacted')} />
+        </div>
+      ) : <Badge tone={STAGE_TONE[l.stage]} bold>{l.stage_label}</Badge>,
+    },
     { header: 'Empresa', cell: (l) => (l.tenant_id ? <Link href={`/admin/tenants/${l.tenant_id}`} className="font-semibold text-brand-ink hover:text-brand-accent hover:underline">{l.tenant_name}</Link> : '—') },
     { header: 'Llegó', cell: (l) => <span className="text-sm">{when(l.created_at)}{l.notes ? <span className="block text-xs text-slate-500">{l.notes} {l.notes === 1 ? 'nota' : 'notas'}</span> : null}</span> },
   ];
 
   const top = funnel?.steps[0]?.value || 0;
+
+  const exportColumns: ExportColumn<Lead>[] = [
+    { header: 'Nombre', value: (l) => l.name },
+    { header: 'Negocio', value: (l) => l.business },
+    { header: 'Celular', value: (l) => l.phone },
+    { header: 'Correo', value: (l) => l.email },
+    { header: 'Rubro', value: (l) => l.business_type_name },
+    { header: 'Fuente', value: (l) => l.source_label },
+    { header: 'Cupón', value: (l) => l.coupon },
+    { header: 'Etapa', value: (l) => l.stage_label },
+    { header: 'Empresa', value: (l) => l.tenant_name },
+    { header: 'Llegó', type: 'date', value: (l) => l.created_at },
+  ];
+
+  const metricCards: MetricCardItem[] = extras ? [
+    { title: `Pruebas que vencen en ${extras.days} días`, value: extras.expiring.length, icon: <Hourglass size={18} />, iconColorClass: 'text-amber-600', onClick: () => document.getElementById('funnel-call-today')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+    { title: 'Llegaron por el chat', value: extras.chatbot, icon: <MessageCircle size={18} />, iconColorClass: 'text-sky-600', hint: 'En las fechas elegidas', onClick: () => { setOnly(only === 'chatbot' ? '' : 'chatbot'); setTab('all'); }, borderColorClass: only === 'chatbot' ? 'border-sky-500 ring-2 ring-sky-100 shadow-sm' : 'hover:border-sky-300' },
+    { title: 'Llegaron con cupón', value: extras.coupon, icon: <TicketPercent size={18} />, iconColorClass: 'text-emerald-600', hint: 'En las fechas elegidas', onClick: () => { setOnly(only === 'coupon' ? '' : 'coupon'); setTab('all'); }, borderColorClass: only === 'coupon' ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-sm' : 'hover:border-emerald-300' },
+  ] : [];
 
   return (
     <div className="space-y-5 pb-10 font-sans" data-funnel-page>
@@ -208,8 +268,35 @@ export default function FunnelPage() {
         </>
       )}
 
+      {extras && (
+        <div id="funnel-call-today" className={`${card} p-5 space-y-3`} data-funnel-expiring>
+          <SectionTitle><Phone size={16} className="text-brand-accent" /> Llamar hoy: pruebas por vencer</SectionTitle>
+          <p className="text-xs text-slate-500">Empresas en prueba gratis que terminan en los próximos {extras.days} días y aún no guardaron tarjeta. Una llamada a tiempo ayuda a que se queden.</p>
+          {extras.expiring.length === 0 ? <p className="text-sm text-slate-500">Ninguna prueba vence en estos días.</p> : (
+            <ul className="divide-y divide-slate-100">
+              {extras.expiring.map((row) => (
+                <li key={row.tenant_id} className="flex flex-wrap items-center gap-3 py-2.5" data-expiring={row.tenant_id}>
+                  <span className="flex-1 min-w-[12rem]">
+                    <Link href={`/admin/tenants/${row.tenant_id}`} className="block font-bold text-brand-ink hover:text-brand-accent">{row.name}</Link>
+                    <span className="block text-xs text-slate-500">{[row.owner, row.plan, row.days_left <= 0 ? 'vence hoy' : row.days_left === 1 ? 'vence mañana' : `vence en ${row.days_left} días`].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  {row.phone ? (
+                    <span className="flex gap-2">
+                      <a href={`tel:${row.phone}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-brand rounded-lg hover:bg-brand-hover"><Phone size={13} /> Llamar</a>
+                      <a href={waLink(row.phone)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50"><MessageCircle size={13} /> WhatsApp</a>
+                    </span>
+                  ) : row.email ? <a href={`mailto:${row.email}`} className="text-xs font-semibold text-brand-accent hover:text-brand-ink">{row.email}</a> : <span className="text-xs text-slate-400">Sin celular</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <DataTable<Lead>
         title="Interesados"
+        metricCards={metricCards}
+        exportColumns={exportColumns}
         primaryActionLabel="Nuevo interesado"
         onPrimaryAction={() => { setFormError(''); setOpen(true); }}
         tabs={tabs.map((t) => ({ id: t.id, label: t.label, count: leads.filter(t.test).length }))}
@@ -223,7 +310,7 @@ export default function FunnelPage() {
         ]}
         filterValues={filters}
         onFilterChange={(id, value) => setFilters({ ...filters, [id]: value ?? '' })}
-        onClearFilters={() => setFilters({ source: '', business_type: '' })}
+        onClearFilters={() => { setFilters({ source: '', business_type: '' }); setOnly(''); }}
         sortOptions={[{ id: 'created', label: 'Fecha de llegada', type: 'date', value: (l) => l.created_at }, { id: 'name', label: 'Nombre', value: (l) => l.name }]}
         columns={columns}
         data={shown}

@@ -63,7 +63,8 @@ class PlatformReports
             $state = Subscriptions::state($tenant->id);
             $plan = $subscription?->plan;
             $cycle = $subscription?->billing_cycle ?? 'monthly';
-            $price = Subscriptions::price($plan, $cycle);
+            $price = Subscriptions::charge($subscription);
+            $mrr = Subscriptions::mrr($subscription, $state);
 
             $status = match (true) {
                 $tenant->status !== 'active'                         => 'suspended',
@@ -80,8 +81,8 @@ class PlatformReports
                 'currency'      => substr($plan?->currency ?? Currency::DEFAULT, 0, 3),
                 'cycle'         => $cycle,
                 'price'         => $price,
-                'monthly'       => $cycle === 'yearly' ? round($price / 12, 2) : $price,
-                'free'          => (bool) ($state['free'] ?? false) || $price <= 0,
+                'monthly'       => $mrr,
+                'free'          => (bool) ($state['free'] ?? false) || Subscriptions::price($plan, $cycle) <= 0,
                 'status'        => $status,
                 'business_type' => $tenant->businessType?->name,
                 'created_at'    => $tenant->created_at,
@@ -108,7 +109,7 @@ class PlatformReports
 
     private function recurring(): Collection
     {
-        return $this->tenants()->filter(fn ($t) => in_array($t->status, ['active', 'grace'], true) && !$t->free);
+        return $this->tenants()->filter(fn ($t) => $t->monthly > 0);
     }
 
     private function owing(): Collection
@@ -302,6 +303,7 @@ class PlatformReports
             ? DB::table('saas_cancellations')->where('status', 'done')->whereNotNull('effective_at')->where('effective_at', '>=', $this->iso($first))->get(['tenant_id', 'effective_at'])
             : collect();
 
+        $firstEvent = SaasEvents::ready() ? Rls::bypass(fn () => DB::table('saas_events')->min('occurred_at')) : null;
         $months = [];
         for ($month = $first->copy(); $month->lte($current); $month->addMonth()) {
             $close = $month->copy()->addMonth()->min(now(self::ZONE));
@@ -312,7 +314,7 @@ class PlatformReports
 
             $months[] = [
                 'day'       => $month->format('Y-m-01'),
-                'mrr'       => round((float) $atClose->sum(), 2),
+                'mrr'       => $month->format('Y-m') === $current->format('Y-m') ? $mrr : ($firstEvent && Carbon::parse($firstEvent)->lte($close) ? SaasEvents::bookedMrr($close->copy()->utc()) : round((float) $atClose->sum(), 2)),
                 'paying'    => $atClose->count(),
                 'new'       => $atClose->keys()->diff($atStart->keys())->count(),
                 'lost'      => $lost,
@@ -336,8 +338,11 @@ class PlatformReports
                 ->get(['reason', 'details'])
             : collect();
 
+        $movements = SaasEvents::movements($this->from ?? now()->subMonth(), min($this->to ?? now(), now()));
+
         return [
-            'ready'   => ['cancellations' => $cancelReady],
+            'ready'   => ['cancellations' => $cancelReady, 'events' => SaasEvents::ready()],
+            'movements' => $movements,
             'summary' => [
                 'mrr'        => $summary['mrr'],
                 'arr'        => $summary['yearly'],

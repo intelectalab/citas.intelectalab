@@ -25,7 +25,7 @@ function webSignup($test, array $extra = [])
     TestCase::forgetCaches();
 
     return $test->postJson('/api/register-tenant', $extra + [
-        'ruc' => '20123456789', 'company_name' => 'Spa Nuevo ' . Str::upper(Str::random(4)), 'department' => 'Lima',
+        'ruc' => '20123456786', 'company_name' => 'Spa Nuevo ' . Str::upper(Str::random(4)), 'department' => 'Lima',
         'first_name' => 'Rosa', 'last_name' => 'Quispe', 'email' => 'rosa.' . Str::lower(Str::random(6)) . '@correo.test',
         'password' => 'clave-segura-123', 'plan_id' => TestCase::PLAN_PROFESIONAL,
         'form_token' => \App\Support\SignupGuard::token(now()->subMinute()),
@@ -93,6 +93,15 @@ describe('Precios y páginas públicas', function () {
             ->and($site['whatsapp'])->toBe('51999888777')
             ->and($site['analytics'])->toBe(['ga4_id' => 'G-AB12CD34EF', 'meta_pixel_id' => '123456789'])
             ->and(DB::table('audit_events')->where('action', 'web.settings_changed')->count())->toBe(1);
+    });
+
+    it('el aviso de cookies no menciona cookies de medición si no hay GA4 ni píxel', function () {
+        expect($this->getJson('/api/web/site')->json('site.cookie_text'))->toContain('solo cookies propias');
+
+        $admin = webAdmin();
+        $settings = $this->as($admin)->getJson('/api/admin/web/settings')->json('values');
+        $this->as($admin)->putJson('/api/admin/web/settings', array_merge($settings, ['ga4_id' => 'G-AB12CD34EF']))->assertOk();
+        expect($this->getJson('/api/web/site')->json('site.cookie_text'))->toContain('cookies de medición');
     });
 
     it('solo el Administrador SaaS entra a la consola del sitio', function () {

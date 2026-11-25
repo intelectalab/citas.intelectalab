@@ -72,7 +72,7 @@ class InvoicingSettingsController extends Controller
         $branches = DB::table('branches')
             ->where('tenant_id', $tenant->id)
             ->where('status', 'active')
-            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('id', $id))
+            ->when(Access::ownBranchLimit($request->user()), fn ($q, $id) => $q->where('id', $id))
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -99,7 +99,7 @@ class InvoicingSettingsController extends Controller
             'branches'    => $branches->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'series' => (object) Invoicing::branchSeries($b->id)])->values(),
             'pending'     => $pending,
             'void_days'   => Invoicing::VOID_DAYS,
-            'can_edit_all_branches' => !Access::branchLimit($request->user()),
+            'can_edit_all_branches' => !Access::ownBranchLimit($request->user()),
         ];
     }
 
@@ -239,7 +239,7 @@ class InvoicingSettingsController extends Controller
             'branches.*.series' => 'nullable|array',
         ]);
 
-        $limit = Access::branchLimit($request->user());
+        $limit = Access::ownBranchLimit($request->user());
         $row = Invoicing::integration($tenant->id);
         $settings = Invoicing::settingsOf($row);
         $beforeCompany = Invoicing::companySeries($tenant->id);

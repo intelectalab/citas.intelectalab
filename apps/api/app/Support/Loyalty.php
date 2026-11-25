@@ -38,6 +38,24 @@ class Loyalty
         'cancel' => 'Anulación',
     ];
 
+    public const VIP_MULTIPLIER = 2;
+
+    public const GIFT_CARD_MIN_SALE = 10;
+
+    public const GIFT_CARD_QUICK_AMOUNTS = [50, 100, 150, 200, 300];
+
+    public const REFERRAL_STATUSES = [
+        'pending'  => 'Espera su primera atención',
+        'rewarded' => 'Bono entregado',
+        'void'     => 'Sin bono',
+    ];
+
+    public const TIERS = [
+        'gold'   => ['label' => 'Oro', 'from' => 3000],
+        'silver' => ['label' => 'Plata', 'from' => 1200],
+        'bronze' => ['label' => 'Bronce', 'from' => 0],
+    ];
+
     public static function ready(): bool
     {
         static $ready = null;
@@ -62,6 +80,8 @@ class Loyalty
             'points_validity_days'    => max(0, (int) AppointmentFlow::rule($tenant, 'loyalty.points_validity_days')),
             'gift_cards_enabled'      => (bool) AppointmentFlow::rule($tenant, 'loyalty.gift_cards_enabled'),
             'gift_card_validity_days' => max(0, (int) AppointmentFlow::rule($tenant, 'loyalty.gift_card_validity_days')),
+            'vip_multiplier'          => max(1, min(5, round((float) (AppointmentFlow::rule($tenant, 'loyalty.vip_multiplier') ?? self::VIP_MULTIPLIER), 2))),
+            'vip_spend'               => (float) AppointmentFlow::rule($tenant, 'crm.vip_spend'),
         ];
     }
 
@@ -228,6 +248,7 @@ class Loyalty
                 ->where('status', 'active')
                 ->where('balance', '>', 0)
                 ->where(fn ($q) => $q->where('recipient_customer_id', $customerId)->orWhere('purchaser_customer_id', $customerId))
+                ->where('code', 'not like', CustomerCredit::PREFIX . '%')
                 ->orderBy('expires_at')
                 ->orderByDesc('balance')
                 ->get(['id', 'code', 'balance', 'initial_amount', 'expires_at'])
@@ -276,6 +297,10 @@ class Loyalty
 
         if (!$gc) {
             throw ValidationException::withMessages(['reference' => "No existe ninguna gift card con el código {$code}."]);
+        }
+
+        if (CustomerCredit::isCredit($gc->code)) {
+            throw ValidationException::withMessages(['reference' => 'Ese código es un saldo a favor del cliente: cóbralo con «Saldo a favor».']);
         }
 
         if ($gc->status !== 'active') {
@@ -389,11 +414,23 @@ class Loyalty
             ->whereNotIn('method', ['points', 'gift_card'])
             ->sum('amount');
 
-        $points = (int) floor(($realMoneyPaid + 0.001) / $rules['amount_per_point']);
+        $total = (float) ($sale->total ?? 0);
+        $tip = (float) ($sale->tip ?? 0);
+        $base = $total > 0 && $tip > 0 ? round($realMoneyPaid * max(0, $total - $tip) / $total, 2) : $realMoneyPaid;
+        $points = (int) floor(($base + 0.001) / $rules['amount_per_point']);
+        $vip = $points > 0 && $rules['vip_multiplier'] > 1 && self::isVip($tenant, $sale->customer_id);
+
+        if ($vip) {
+            $points = (int) floor($points * $rules['vip_multiplier']);
+        }
+
+        self::settleReferrals($tenant, $sale->customer_id, $actor);
 
         if ($points <= 0) {
             return 0;
         }
+
+        $multiplier = rtrim(rtrim(number_format($rules['vip_multiplier'], 2, '.', ''), '0'), '.');
 
         self::recordPoints(
             tenant: $tenant,
@@ -401,12 +438,110 @@ class Loyalty
             type: 'earn',
             points: $points,
             actor: $actor,
-            reason: "Compra {$sale->code}",
+            reason: "Compra {$sale->code}" . ($vip ? " (VIP x{$multiplier})" : ''),
             saleId: $sale->id,
             checkBalance: false,
         );
 
         return $points;
+    }
+
+    public static function isVip(Tenant $tenant, string $customerId): bool
+    {
+        return Campaigns::customers($tenant, ['group' => 'vip'])->where('c.id', $customerId)->exists();
+    }
+
+    public static function tierOf(int $earnedPoints, array $rules): array
+    {
+        $spent = $earnedPoints * $rules['amount_per_point'];
+
+        foreach (self::TIERS as $key => $tier) {
+            if ($spent >= $tier['from']) {
+                return ['key' => $key, 'label' => $tier['label']];
+            }
+        }
+
+        return ['key' => 'bronze', 'label' => 'Bronce'];
+    }
+
+    public static function referralsReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= Schema::hasTable('customer_referrals');
+    }
+
+    public static function hasFirstVisit(string $tenantId, string $customerId): bool
+    {
+        $attended = DB::table('appointments')
+            ->where('tenant_id', $tenantId)
+            ->where('customer_id', $customerId)
+            ->where('status', 'completed')
+            ->exists();
+
+        return $attended || DB::table('sales')
+            ->where('tenant_id', $tenantId)
+            ->where('customer_id', $customerId)
+            ->whereIn('status', ['paid', 'partially_refunded'])
+            ->exists();
+    }
+
+    public static function settleReferrals(Tenant $tenant, ?string $referredId, ?User $actor = null): int
+    {
+        if (!$referredId || !self::referralsReady() || !self::rules($tenant)['points_enabled']) {
+            return 0;
+        }
+
+        $pending = DB::table('customer_referrals')
+            ->where('tenant_id', $tenant->id)
+            ->where('referred_customer_id', $referredId)
+            ->where('status', 'pending')
+            ->lockForUpdate()
+            ->first();
+
+        if (!$pending || !self::hasFirstVisit($tenant->id, $referredId)) {
+            return 0;
+        }
+
+        $referrer = DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $pending->referrer_customer_id)->whereNull('deleted_at')->exists();
+        $referred = DB::table('customers')->where('id', $referredId)->first(['first_name', 'last_name']);
+
+        if ($referrer && (int) $pending->bonus_points > 0) {
+            self::recordPoints(
+                tenant: $tenant,
+                customerId: $pending->referrer_customer_id,
+                type: 'referral',
+                points: (int) $pending->bonus_points,
+                actor: $actor,
+                reason: 'Bono por referido: ' . Person::name($referred),
+                checkBalance: false,
+            );
+        }
+
+        DB::table('customer_referrals')->where('id', $pending->id)->update([
+            'status'      => $referrer ? 'rewarded' : 'void',
+            'rewarded_at' => now(),
+            'updated_at'  => now(),
+        ]);
+
+        return $referrer ? (int) $pending->bonus_points : 0;
+    }
+
+    public static function settlePendingReferrals(Tenant $tenant): void
+    {
+        if (!self::referralsReady()) {
+            return;
+        }
+
+        $ids = DB::table('customer_referrals')
+            ->where('tenant_id', $tenant->id)
+            ->where('status', 'pending')
+            ->limit(200)
+            ->pluck('referred_customer_id');
+
+        foreach ($ids as $id) {
+            DB::transaction(fn () => self::settleReferrals($tenant, $id));
+        }
     }
 
     public static function afterSaleRefunded(Tenant $tenant, object $sale, ?User $actor = null): void
@@ -415,67 +550,97 @@ class Loyalty
             return;
         }
 
-        if (!empty($sale->customer_id)) {
-            $alreadyReversed = DB::table('loyalty_transactions')
-                ->where('tenant_id', $tenant->id)
-                ->where('sale_id', $sale->id)
-                ->where('type', 'reversal')
-                ->exists();
+        self::reverseEarned($tenant, $sale, 1.0, $actor);
+        self::giveBack($tenant, $sale, 1.0, $actor);
+    }
 
-            if (!$alreadyReversed) {
-                $earned = (int) DB::table('loyalty_transactions')
-                    ->where('tenant_id', $tenant->id)
-                    ->where('sale_id', $sale->id)
-                    ->where('type', 'earn')
-                    ->sum('points');
-
-                if ($earned > 0) {
-                    $current = self::customerPoints($tenant->id, $sale->customer_id);
-                    $deduct = min($current, $earned);
-                    if ($deduct > 0) {
-                        self::recordPoints(
-                            tenant: $tenant,
-                            customerId: $sale->customer_id,
-                            type: 'reversal',
-                            points: -$deduct,
-                            actor: $actor,
-                            reason: "Reverso por devolución de venta {$sale->code}",
-                            saleId: $sale->id,
-                            checkBalance: false,
-                        );
-                    }
-                }
-            }
+    public static function reverseEarned(Tenant $tenant, object $sale, float $share, ?User $actor = null): int
+    {
+        if (!self::ready() || empty($sale->customer_id)) {
+            return 0;
         }
 
-        $gcRedemptions = DB::table('gift_card_transactions')
+        $rows = DB::table('loyalty_transactions')
             ->where('tenant_id', $tenant->id)
             ->where('sale_id', $sale->id)
-            ->where('type', 'redeem')
-            ->get();
+            ->whereIn('type', ['earn', 'reversal'])
+            ->get(['type', 'points']);
 
-        foreach ($gcRedemptions as $tx) {
-            $alreadyRefunded = DB::table('gift_card_transactions')
-                ->where('tenant_id', $tenant->id)
-                ->where('gift_card_id', $tx->gift_card_id)
-                ->where('sale_id', $sale->id)
-                ->where('type', 'refund')
-                ->exists();
+        $earned = (int) $rows->where('type', 'earn')->sum('points');
+        $reversed = -(int) $rows->where('type', 'reversal')->sum('points');
 
-            if ($alreadyRefunded) {
+        if ($earned <= 0) {
+            return 0;
+        }
+
+        $share = max(0.0, min(1.0, $share));
+        $target = $share >= 0.999 ? $earned : (int) round($earned * $share);
+        $deduct = min($target - $reversed, self::customerPoints($tenant->id, $sale->customer_id));
+
+        if ($deduct <= 0) {
+            return 0;
+        }
+
+        self::recordPoints(
+            tenant: $tenant,
+            customerId: $sale->customer_id,
+            type: 'reversal',
+            points: -$deduct,
+            actor: $actor,
+            reason: ($share >= 0.999 ? 'Reverso por devolución de venta ' : 'Reverso por devolución parcial de venta ') . $sale->code,
+            saleId: $sale->id,
+            checkBalance: false,
+        );
+
+        return $deduct;
+    }
+
+    public static function paidWithLoyalty(string $tenantId, string $saleId): array
+    {
+        if (!self::ready()) {
+            return ['gift_cards' => [], 'points' => 0, 'points_money' => 0.0, 'total' => 0.0];
+        }
+
+        $cards = DB::table('gift_card_transactions')
+            ->where('tenant_id', $tenantId)
+            ->where('sale_id', $saleId)
+            ->whereIn('type', ['redeem', 'refund'])
+            ->get(['gift_card_id', 'type', 'amount'])
+            ->groupBy('gift_card_id')
+            ->map(fn ($rows) => round($rows->sum(fn ($r) => $r->type === 'redeem' ? (float) $r->amount : -(float) $r->amount), 2))
+            ->filter(fn ($left) => $left > 0.001)
+            ->all();
+
+        $redeemed = -(int) DB::table('loyalty_transactions')->where('tenant_id', $tenantId)->where('sale_id', $saleId)->where('type', 'redeem')->sum('points');
+        $returned = (int) DB::table('loyalty_transactions')->where('tenant_id', $tenantId)->where('sale_id', $saleId)->where('type', 'adjust')->where('points', '>', 0)->sum('points');
+        $pointsMoney = round((float) DB::table('payments')->where('tenant_id', $tenantId)->where('sale_id', $saleId)->where('method', 'points')->where('status', 'confirmed')->sum('amount'), 2);
+        $points = max(0, $redeemed - $returned);
+        $moneyLeft = $redeemed > 0 ? round($pointsMoney * $points / $redeemed, 2) : 0.0;
+
+        return [
+            'gift_cards'   => $cards,
+            'points'       => $points,
+            'points_money' => $moneyLeft,
+            'total'        => round(array_sum($cards) + $moneyLeft, 2),
+        ];
+    }
+
+    public static function giveBack(Tenant $tenant, object $sale, float $share, ?User $actor = null): float
+    {
+        $left = self::paidWithLoyalty($tenant->id, $sale->id);
+        $share = max(0.0, min(1.0, $share));
+        $given = 0.0;
+
+        foreach ($left['gift_cards'] as $cardId => $amount) {
+            $back = $share >= 1.0 ? $amount : round($amount * $share, 2);
+            $gc = DB::table('gift_cards')->where('id', $cardId)->lockForUpdate()->first();
+
+            if (!$gc || $back <= 0.001) {
                 continue;
             }
-
-            $gc = DB::table('gift_cards')->where('id', $tx->gift_card_id)->lockForUpdate()->first();
-            if (!$gc) {
-                continue;
-            }
-
-            $refundAmt = round((float) $tx->amount, 2);
-            $newBalance = round((float) $gc->balance + $refundAmt, 2);
 
             DB::table('gift_cards')->where('id', $gc->id)->update([
-                'balance'    => $newBalance,
+                'balance'    => round((float) $gc->balance + $back, 2),
                 'status'     => $gc->status === 'redeemed' ? 'active' : $gc->status,
                 'updated_at' => now(),
             ]);
@@ -485,11 +650,32 @@ class Loyalty
                 'tenant_id'    => $tenant->id,
                 'gift_card_id' => $gc->id,
                 'type'         => 'refund',
-                'amount'       => $refundAmt,
+                'amount'       => $back,
                 'sale_id'      => $sale->id,
                 'created_at'   => now(),
             ]);
+            $given += $back;
         }
+
+        if ($left['points'] > 0 && !empty($sale->customer_id)) {
+            $points = $share >= 1.0 ? $left['points'] : (int) round($left['points'] * $share);
+
+            if ($points > 0) {
+                self::recordPoints(
+                    tenant: $tenant,
+                    customerId: $sale->customer_id,
+                    type: 'adjust',
+                    points: $points,
+                    actor: $actor,
+                    reason: "Devolución de los puntos canjeados en la venta {$sale->code}",
+                    saleId: $sale->id,
+                    checkBalance: false,
+                );
+                $given += $share >= 1.0 ? $left['points_money'] : round($left['points_money'] * $points / $left['points'], 2);
+            }
+        }
+
+        return round($given, 2);
     }
 
     public static function pointLots(string $tenantId, string $customerId): array
@@ -650,8 +836,8 @@ class Loyalty
         $details = (array) ($item['details'] ?? []);
         $amount = round((float) ($details['amount'] ?? 0), 2);
 
-        if ($amount < 1 || $amount > 999999) {
-            throw ValidationException::withMessages([$field => 'Escribe el monto de la gift card (desde 1).']);
+        if ($amount < self::GIFT_CARD_MIN_SALE || $amount > 999999) {
+            throw ValidationException::withMessages([$field => 'La gift card se vende desde ' . Currency::format(self::GIFT_CARD_MIN_SALE, $currency) . '.']);
         }
 
         if ((int) ($item['quantity'] ?? 1) > 1) {

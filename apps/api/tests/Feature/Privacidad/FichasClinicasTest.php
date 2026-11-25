@@ -52,12 +52,13 @@ it('las notas agregadas a una ficha firmada también se guardan cifradas', funct
         ->and(CareRecordAddendum::where('care_record_id', $id)->value('note'))->toBe('Mario refiere mejoría');
 });
 
-it('firmar sin cambios no se anota como corrección', function () {
+it('una ficha firmada queda cerrada al instante y no se anota corrección', function () {
     $id = ($this->escribirFicha)('Revisión', true);
 
-    $this->as($this->doctora->user)->putJson("/api/appointments/{$this->cita}/record", ['data' => ['motivo' => 'Revisión']])->assertOk();
+    $this->as($this->doctora->user)->putJson("/api/appointments/{$this->cita}/record", ['data' => ['motivo' => 'Revisión']])->assertStatus(422);
 
-    expect(DB::table('audit_events')->where('entity_id', $id)->where('action', 'record.corrected')->count())->toBe(0);
+    expect(CareRecord::find($id)->currentStatus())->toBe(CareRecord::LOCKED)
+        ->and(DB::table('audit_events')->where('entity_id', $id)->where('action', 'record.corrected')->count())->toBe(0);
 });
 
 it('una ficha antigua guardada sin cifrar se sigue leyendo', function () {

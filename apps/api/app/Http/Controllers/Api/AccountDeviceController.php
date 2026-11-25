@@ -22,6 +22,30 @@ class AccountDeviceController extends Controller
         ]);
     }
 
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+        $tenant = $user->tenant;
+        $role = $user->tenant_id ? \App\Support\Access::roleOf($user) : null;
+        $scope = \App\Support\Access::scopeOf($user);
+        $zone = $tenant?->zone() ?? 'America/Lima';
+        $previous = AccountSecurity::ready() && \Illuminate\Support\Facades\Schema::hasTable('audit_events')
+            ? \Illuminate\Support\Facades\DB::table('audit_events')->where('actor_user_id', $user->id)->where('action', 'auth.login')->orderByDesc('created_at')->skip(1)->value('created_at')
+            : null;
+
+        return response()->json([
+            'name'          => trim("{$user->first_name} {$user->last_name}"),
+            'email'         => $user->email,
+            'phone'         => $user->phone,
+            'company'       => $tenant?->name,
+            'role'          => $role?->name ?? ($user->is_owner ? 'Dueño' : ($user->tenant_id ? 'Sin rol' : ($user->isSaasAdmin() ? 'Administrador de la plataforma' : 'Soporte de la plataforma'))),
+            'scope'         => \App\Support\Access::SCOPES[$scope] ?? null,
+            'branch'        => $user->branch_id ? \Illuminate\Support\Facades\DB::table('branches')->where('id', $user->branch_id)->value('name') : null,
+            'code_required' => AccountSecurity::codeRequired($user),
+            'last_login_at' => ($previous ? \Illuminate\Support\Carbon::parse($previous) : $user->last_login_at)?->setTimezone($zone)->toIso8601String(),
+        ]);
+    }
+
     public function destroy(Request $request, string $device)
     {
         abort_unless(AccountSecurity::ready(), 404);

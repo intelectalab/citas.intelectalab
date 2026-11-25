@@ -13,6 +13,7 @@ import {
   Phone,
   ArrowRight,
   ArrowLeft,
+  MapPin,
 } from 'lucide-react';
 import { api } from '@/lib/axios';
 
@@ -31,6 +32,7 @@ type KioskData = {
   services: { id: string; name: string; duration_minutes: number; price_label: string }[];
   waiting_count: number;
   max_wait: number;
+  booking_url?: string | null;
 };
 
 type KioskChoices = {
@@ -45,6 +47,7 @@ type SuccessTicket = {
   estimated_at: string | null;
   service_name: string;
   branch_name: string;
+  message_sent?: boolean;
 };
 
 const waitText = (minutes: number | null) => {
@@ -69,15 +72,31 @@ export default function KioskPage() {
   const [selectedProId, setSelectedProId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [bookingLink, setBookingLink] = useState<string | null>(null);
   const [ticket, setTicket] = useState<SuccessTicket | null>(null);
   const [choices, setChoices] = useState<KioskChoices | null>(null);
+  const [branchId, setBranchId] = useState('');
+  const [choosingBranch, setChoosingBranch] = useState(false);
 
-  const loadKiosk = async () => {
+  const storageKey = `kiosk-branch:${code}`;
+
+  const savedBranch = () => {
+    try {
+      return new URLSearchParams(window.location.search).get('sede') || window.localStorage.getItem(storageKey) || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const loadKiosk = async (wanted: string = branchId) => {
     try {
       setLoading(true);
       setLoadError('');
-      const res = await api.get<KioskData>(`/kiosk/${code}`);
+      const res = await api.get<KioskData>(`/kiosk/${code}`, { params: wanted ? { branch_id: wanted } : {} });
       setData(res.data);
+      const known = wanted !== '' && res.data.branches.some((b) => b.id === wanted);
+      setBranchId(known ? wanted : res.data.branch.id);
+      setChoosingBranch(res.data.branches.length > 1 && !known);
     } catch (err: any) {
       setLoadError(
         err?.response?.data?.message || 'No se pudo cargar el kiosko. Verifica el código de empresa.',
@@ -89,7 +108,7 @@ export default function KioskPage() {
 
   useEffect(() => {
     if (code) {
-      loadKiosk();
+      loadKiosk(savedBranch());
     }
   }, [code]);
 
@@ -102,6 +121,19 @@ export default function KioskPage() {
   }, [step]);
 
   const resetForm = () => {
+    resetFields();
+    loadKiosk();
+  };
+
+  const chooseBranch = (id: string) => {
+    try {
+      window.localStorage.setItem(storageKey, id);
+    } catch {}
+    resetFields();
+    loadKiosk(id);
+  };
+
+  const resetFields = () => {
     setStep('phone');
     setPhone('');
     setName('');
@@ -109,9 +141,9 @@ export default function KioskPage() {
     setSelectedServiceId('');
     setSelectedProId('');
     setSubmitError('');
+    setBookingLink(null);
     setTicket(null);
     setChoices(null);
-    loadKiosk();
   };
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
@@ -146,6 +178,7 @@ export default function KioskPage() {
 
     setSubmitting(true);
     setSubmitError('');
+    setBookingLink(null);
 
     try {
       const cleanPhone = phone.replace(/\D/g, '');
@@ -162,6 +195,7 @@ export default function KioskPage() {
     } catch (err: any) {
       const resp = err?.response?.data;
       if (resp?.code === 'WAIT_TOO_LONG') {
+        setBookingLink(resp.booking_url ?? data?.booking_url ?? null);
         setSubmitError(
           resp.message ||
             'La espera estimada en este momento supera el tiempo máximo aceptado. Acércate a recepción.',
@@ -198,7 +232,7 @@ export default function KioskPage() {
           <p className="mb-6 text-sm text-slate-300">{loadError}</p>
           <button
             type="button"
-            onClick={loadKiosk}
+            onClick={() => loadKiosk()}
             className="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-teal-700"
           >
             Reintentar
@@ -248,14 +282,16 @@ export default function KioskPage() {
           )}
           <div>
             <h1 className="text-base font-bold text-white">{data.tenant.name}</h1>
-            <p className="text-xs text-slate-400">
-              {data.branch.name}{data.branch.address ? ` · ${data.branch.address}` : ''}
-            </p>
+            {!choosingBranch && (
+              <p className="text-xs text-slate-400">
+                {data.branch.name}{data.branch.address ? ` · ${data.branch.address}` : ''}
+              </p>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900 px-3.5 py-1 text-xs text-slate-300">
+          <div className={`${choosingBranch ? 'hidden' : 'flex'} items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900 px-3.5 py-1 text-xs text-slate-300`}>
             <Users size={14} className="text-teal-400" />
             <span>
               {data.waiting_count === 0
@@ -282,10 +318,42 @@ export default function KioskPage() {
           {submitError && (
             <div className="mb-6 rounded-2xl border border-rose-500/40 bg-rose-950/60 p-4 text-center text-sm font-medium text-rose-200">
               {submitError}
+              {bookingLink && (
+                <a href={bookingLink} target="_blank" rel="noopener noreferrer" data-kiosk-book className="mt-3 block rounded-xl bg-teal-600 px-5 py-3 text-sm font-bold text-white hover:bg-teal-700">
+                  Reservar una cita
+                </a>
+              )}
             </div>
           )}
 
-          {step === 'phone' && (
+          {choosingBranch && (
+            <div data-kiosk-branches className="rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
+              <div className="mb-6 text-center">
+                <h2 className="text-2xl font-extrabold text-white">¿En qué sede está esta pantalla?</h2>
+                <p className="mt-1 text-sm text-slate-400">Elígela una vez: los turnos se anotan en esa sede y la tableta lo recuerda.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5">
+                {data.branches.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    data-kiosk-branch={b.id}
+                    onClick={() => chooseBranch(b.id)}
+                    className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                      b.id === branchId && !choosingBranch
+                        ? 'border-teal-500 bg-teal-500/10 ring-2 ring-teal-500/30'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <MapPin size={18} className="text-teal-400" />
+                    <span className="font-semibold text-white">{b.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!choosingBranch && step === 'phone' && (
             <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
               <div className="mb-6 text-center">
                 <span className="inline-flex rounded-full bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-400">
@@ -331,7 +399,7 @@ export default function KioskPage() {
             </div>
           )}
 
-          {step === 'service' && (
+          {!choosingBranch && step === 'service' && (
             <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
               <div className="mb-6 flex items-center justify-between">
                 <div>
@@ -410,7 +478,7 @@ export default function KioskPage() {
             </div>
           )}
 
-          {step === 'pro' && (
+          {!choosingBranch && step === 'pro' && (
             <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
               <div className="mb-6 flex items-center justify-between">
                 <div>
@@ -487,7 +555,7 @@ export default function KioskPage() {
             </div>
           )}
 
-          {step === 'done' && ticket && (
+          {!choosingBranch && step === 'done' && ticket && (
             <div className="rounded-3xl border border-teal-500/30 bg-slate-900/95 p-8 text-center shadow-2xl backdrop-blur-xl">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-500/20 text-teal-400">
                 <CheckCircle2 size={36} />
@@ -536,7 +604,7 @@ export default function KioskPage() {
               </div>
 
               <p className="mt-6 text-xs text-slate-400">
-                Toma asiento. Te llamaremos por tu turno cuando te toque.
+                Toma asiento. Te llamaremos por tu turno cuando te toque.{ticket.message_sent ? ' También te enviamos tu turno por mensaje.' : ''}
               </p>
 
               <button
@@ -553,6 +621,11 @@ export default function KioskPage() {
 
       <footer className="border-t border-slate-900 bg-slate-950 px-6 py-3 text-center text-xs text-slate-500">
         Kiosko de autorregistro · Powered by ERP SaaS
+        {data.branches.length > 1 && step === 'phone' && !choosingBranch && (
+          <button type="button" data-kiosk-change-branch onClick={() => setChoosingBranch(true)} className="ml-3 font-semibold text-slate-400 underline underline-offset-2 hover:text-slate-200">
+            Cambiar sede
+          </button>
+        )}
       </footer>
     </div>
   );

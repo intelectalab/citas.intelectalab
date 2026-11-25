@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   ArrowLeft, Building2, CalendarClock, Check, ClipboardList, Clock, FileText, FolderOpen, Globe,
-  HandCoins, Layers, Loader2, Minus, PawPrint, Pencil, Puzzle, SlidersHorizontal, Type, Users, Video
+  HandCoins, Layers, Loader2, Minus, PawPrint, Pencil, Puzzle, SlidersHorizontal, Type, Users, Video, DoorOpen, RotateCcw
 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { CORE_MODULE_LABELS, MODULE_GROUPS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
@@ -14,6 +14,9 @@ import FormBusinessType, { type BusinessType } from './FormBusinessType';
 import BusinessTypeTenants from './BusinessTypeTenants';
 import RecordPreview from './RecordPreview';
 import { parseTemplate, type TemplateService } from './TemplateEditor';
+import { AppModal } from '@/app/components/ui/modals/AppModal';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
+import { apiError } from '@/features/appointments/appointments';
 
 const VOCABULARY: { key: string; label: string; fallback: string }[] = [
   { key: 'client', label: 'Cliente', fallback: 'Cliente' },
@@ -64,6 +67,27 @@ export default function BusinessTypeDetail() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [version, setVersion] = useState(0);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [resetError, setResetError] = useState('');
+
+  const reset = async () => {
+    try {
+      setResetting(true);
+      setResetError('');
+      const res = await api.post(`/admin/business-types/${params.id}/reset`);
+      setType(res.data);
+      setNotice(res.data.message ?? 'Plantilla restablecida.');
+      setVersion((v) => v + 1);
+      setConfirmReset(false);
+    } catch (err) {
+      setResetError(apiError(err, 'No se pudo restablecer la plantilla.'));
+      setConfirmReset(false);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const load = () => {
     api.get(`/admin/business-types/${params.id}`)
@@ -142,6 +166,16 @@ export default function BusinessTypeDetail() {
           >
             <Pencil size={15} /> Editar rubro
           </button>
+          {type.has_factory && (
+            <button
+              type="button"
+              data-business-type-reset
+              onClick={() => setConfirmReset(true)}
+              className="px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <RotateCcw size={15} /> Restablecer de fábrica
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/60">
@@ -160,6 +194,28 @@ export default function BusinessTypeDetail() {
           ))}
         </div>
       </div>
+
+      {notice && <SuccessAlert message={notice} />}
+      {resetError && <ErrorAlert message={resetError} />}
+
+      {((template.rooms ?? []).length > 0 || (template.packages ?? []).length > 0 || (template.memberships ?? []).length > 0) && (
+        <section className={cardClass} data-template-extras-summary>
+          <SectionTitle icon={<DoorOpen size={16} />} title="Salas, paquetes y membresías" />
+          <p className="text-xs text-slate-500">Se crean solos en cada empresa nueva de este rubro. Las que ya existen no cambian.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            {([
+              ['Salas y equipos', (template.rooms ?? []).map((room) => room.name)],
+              ['Paquetes', (template.packages ?? []).map((row) => `${row.name} · S/ ${Number(row.price).toFixed(2)}`)],
+              ['Membresías', (template.memberships ?? []).map((row) => `${row.name} · S/ ${Number(row.price).toFixed(2)} al mes`)],
+            ] as [string, string[]][]).map(([label, items]) => (
+              <div key={label}>
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{label}</span>
+                {items.length ? <ul className="space-y-0.5 text-slate-700">{items.map((item, i) => <li key={`${item}-${i}`}>{item}</li>)}</ul> : <span className="text-slate-400">Ninguno</span>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <BusinessTypeTenants
         businessTypeId={type.id}
@@ -243,7 +299,7 @@ export default function BusinessTypeDetail() {
                                 {current === true ? 'Sí' : 'No'}
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-md bg-brand/5 text-xs font-bold text-brand-ink shrink-0">{String(current)} {rule.unit}</span>
+                              <span className="px-2 py-0.5 rounded-md bg-brand/5 text-xs font-bold text-brand-ink shrink-0">{rule.type === 'choice' ? (rule.options?.find((option) => option.value === current)?.label ?? String(current)) : `${String(current)} ${rule.unit ?? ''}`}</span>
                             )}
                           </li>
                         );
@@ -321,6 +377,19 @@ export default function BusinessTypeDetail() {
         onClose={() => setShowForm(false)}
         initialData={type}
         onSubmitSuccess={() => { load(); setVersion((v) => v + 1); }}
+      />
+
+      <AppModal
+        isOpen={confirmReset}
+        type="confirm"
+        variant="danger"
+        title="¿Restablecer la plantilla de fábrica?"
+        message={`«${type.name}» vuelve a sus servicios, ficha, salas, paquetes, reglas, módulos y vocabulario de fábrica. Se pierden los cambios que le hiciste. Las empresas que ya usan este rubro no cambian.`}
+        confirmText="Restablecer"
+        cancelText="Cancelar"
+        onConfirm={reset}
+        onClose={() => setConfirmReset(false)}
+        isLoading={resetting}
       />
     </div>
   );

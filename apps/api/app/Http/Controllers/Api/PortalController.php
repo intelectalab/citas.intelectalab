@@ -49,8 +49,12 @@ class PortalController extends AppointmentController
             'arrive_minutes'     => \App\Support\Sales::rules($tenant)['arrive_minutes'],
             'deposit_minutes'    => max(5, (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes')),
             'deposit_refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
+            'deposit_on_cancel'  => \App\Support\PaymentLinks::onCancel($tenant),
             'miss'               => \App\Support\OnlineBooking::policy($tenant),
             'waitlist_enabled'   => \App\Support\Waitlist::enabled($tenant),
+            'late_fee_percent'   => \App\Support\Penalties::enabled($tenant) ? \App\Support\Penalties::rules($tenant)['late_cancel_percent'] : 0,
+            'noshow_fee_percent' => \App\Support\Penalties::enabled($tenant) ? \App\Support\Penalties::rules($tenant)['no_show_percent'] : 0,
+            'cancel_reason_required' => (bool) $rule('cancel.require_reason'),
         ];
     }
 
@@ -96,14 +100,17 @@ class PortalController extends AppointmentController
                 'last_name'  => $customer->last_name,
                 'phone'      => $customer->phone,
                 'email'      => $customer->email,
+                'birth_date' => $customer->birth_date?->format('Y-m-d'),
+                'district'   => $customer->district,
                 'must_change_password' => (bool) $customer->must_change_password,
             ],
             'policies'     => $this->policies($tenant),
-            'look'         => \App\Support\PortalLook::forPortal($tenant),
+            'modules'      => collect(['classes', 'memberships', 'quotes', 'packages'])->filter(fn (string $m) => $tenant->hasModule($m))->values(),
+            'look'       => \App\Support\PortalLook::forPortal($tenant),
             'privacy_accepted_at' => self::privacyAccepted($customer->id),
-            'consents'     => \App\Support\Messaging::ready() ? MessageController::consentsOf($customer->id) : null,
+            'consents'     => \App\Support\Messaging::ready() ? self::portalConsents($customer->id) : null,
             'booking_block' => ($state = \App\Support\OnlineBooking::state($tenant, $customer->id))
-                ? $state + ['message' => $state['blocked'] ? \App\Support\OnlineBooking::blockedMessage($tenant, $state) : null]
+                ? $state + ['message' => $state['blocked'] ? \App\Support\OnlineBooking::blockedMessage($tenant, $state) : (($state['deposit_required'] ?? false) ? \App\Support\OnlineBooking::depositMessage($tenant, $state) : null)]
                 : null,
             'dependents'   => [
                 'enabled'  => $dependents['enabled'],
@@ -130,6 +137,10 @@ class PortalController extends AppointmentController
                 ->flatMap(fn (array $p) => collect($p['items'])->filter(fn ($i) => $i['available'] > 0)->map(fn ($i) => ['service_id' => $i['service_id'], 'available' => $i['available'], 'code' => $p['code'], 'name' => $p['name']]))
                 ->groupBy('service_id')
             : collect();
+        $strike = $customer && (\App\Support\OnlineBooking::state($tenant, $customer->id)['deposit_required'] ?? false) && \App\Support\PaymentLinks::available($tenant);
+        $depositAt = fn (Service $s, ?string $branchId) => $depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s, $branchId) > 0
+            ? \App\Support\PaymentLinks::depositAmount($s, $branchId)
+            : ($strike ? \App\Support\OnlineBooking::strikeDeposit($tenant, $customer->id, $s, $branchId) : 0);
 
         return response()->json([
             'branches' => Branch::where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name']),
@@ -144,14 +155,18 @@ class PortalController extends AppointmentController
                     'id'               => $s->id,
                     'name'             => $s->name,
                     'category'         => $s->category?->name,
+                    'description'      => $s->description ? mb_substr(trim((string) $s->description), 0, 200) : null,
                     'duration_minutes' => $s->duration_minutes,
                     'price'            => $s->price,
                     'is_virtual'       => $s->is_virtual,
                     'branch_ids'       => $s->branch_ids,
                     'package'          => ($found = $packaged->get($s->id)) ? ['code' => $found->first()['code'], 'name' => $found->first()['name'], 'available' => $found->sum('available')] : null,
-                    'needs_deposit'    => !$packaged->has($s->id) && $depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0,
-                    'deposit_amount'   => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositAmount($s) : 0,
+                    'branch_prices'    => (object) $s->branchPrices(),
+                    'needs_deposit'    => !$packaged->has($s->id) && (($depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0) || $strike),
+                    'deposit_amount'   => $depositAt($s, null),
+                    'deposit_amounts'  => (object) collect($s->branchPrices())->map(fn ($price, $branchId) => $depositAt($s, (string) $branchId))->all(),
                     'deposit_label'    => $depositRule && $s->requires_deposit ? \App\Support\PaymentLinks::depositLabel($s) : null,
+                    'deposit_for_misses' => $strike && !($depositRule && $s->requires_deposit && \App\Support\PaymentLinks::depositAmount($s) > 0),
                     'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
                 ])->values(),
             'professionals' => Professional::where('tenant_id', $tenant->id)
@@ -191,7 +206,7 @@ class PortalController extends AppointmentController
         $ignoreId = empty($validated['ignore_id']) ? null : $this->ownAppointment($request, $validated['ignore_id'])->id;
 
         $date = Carbon::createFromFormat('Y-m-d', $validated['date'], AppointmentScheduler::timezone($branch, $tenant));
-        $groups = (new AppointmentScheduler($tenant, true))->slots($service, $branch, $date, $professional, $ignoreId);
+        $groups = (new AppointmentScheduler($tenant, true))->ignoringHoldsOf($request->user() instanceof Customer ? $request->user()->id : null)->slots($service, $branch, $date, $professional, $ignoreId);
 
         $times = collect($groups)->flatMap(fn (array $group) => $group['slots'])->unique()->sort()->values();
 
@@ -200,6 +215,54 @@ class PortalController extends AppointmentController
             'times'         => $times,
             'professionals' => AppointmentFlow::rule($tenant, 'booking.choose_professional') ? $groups : [],
         ]);
+    }
+
+    public function portalDays(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $this->assertBookingEnabled($tenant);
+
+        $validated = $request->validate([
+            'service_id'      => 'required|uuid',
+            'branch_id'       => 'required|uuid',
+            'from'            => 'required|date_format:Y-m-d',
+            'days'            => 'nullable|integer|min:1|max:14',
+            'professional_id' => 'nullable|uuid',
+            'ignore_id'       => 'nullable|uuid',
+        ]);
+
+        $service = Service::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['service_id']);
+        $branch = Branch::where('tenant_id', $tenant->id)->findOrFail($validated['branch_id']);
+        $professional = empty($validated['professional_id']) || !AppointmentFlow::rule($tenant, 'booking.choose_professional')
+            ? null
+            : Professional::where('tenant_id', $tenant->id)->with('status')->findOrFail($validated['professional_id']);
+        $ignoreId = empty($validated['ignore_id']) ? null : $this->ownAppointment($request, $validated['ignore_id'])->id;
+
+        $zone = AppointmentScheduler::timezone($branch, $tenant);
+        $today = Carbon::now($zone)->startOfDay();
+        $last = $today->copy()->addDays(max(1, (int) AppointmentFlow::rule($tenant, 'booking.max_days_ahead')));
+        $scheduler = (new AppointmentScheduler($tenant, true))->ignoringHoldsOf($request->user() instanceof Customer ? $request->user()->id : null);
+        $weekdays = ProfessionalSchedule::where('tenant_id', $tenant->id)->where('branch_id', $branch->id)
+            ->when($professional, fn ($q) => $q->where('professional_id', $professional->id))
+            ->pluck('weekday')->map(fn ($d) => (int) $d)->unique()->all();
+        $start = Carbon::createFromFormat('Y-m-d', $validated['from'], $zone)->startOfDay();
+
+        $days = collect(range(0, ($validated['days'] ?? 7) - 1))->map(function (int $offset) use ($start, $today, $last, $scheduler, $service, $branch, $professional, $ignoreId, $tenant, $weekdays) {
+            $date = $start->copy()->addDays($offset);
+
+            if ($date->lt($today) || $date->gt($last)) {
+                return ['date' => $date->toDateString(), 'free' => 0, 'state' => 'out'];
+            }
+
+            $opens = in_array($date->dayOfWeek, $weekdays, true) && \App\Support\PublicHours::opensOn($tenant, $branch, $date);
+            $free = $opens
+                ? collect($scheduler->slots($service, $branch, $date->copy(), $professional, $ignoreId))->flatMap(fn (array $group) => $group['slots'])->unique()->count()
+                : 0;
+
+            return ['date' => $date->toDateString(), 'free' => $free, 'state' => $free > 0 ? 'free' : ($opens ? 'full' : 'closed')];
+        })->values();
+
+        return response()->json(['days' => $days]);
     }
 
     public function book(Request $request)
@@ -225,6 +288,8 @@ class PortalController extends AppointmentController
             return response()->json(['message' => \App\Support\OnlineBooking::blockedMessage($tenant, $strikes), 'code' => 'BOOKING_BLOCKED'], 403);
         }
 
+        \App\Support\Channels::remember('portal');
+
         return $this->placeBooking($tenant, $customer, $validated);
     }
 
@@ -240,7 +305,12 @@ class PortalController extends AppointmentController
 
         $start = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], AppointmentScheduler::timezone($branch, $tenant))->startOfMinute();
         $package = \App\Support\Packages::linkable($tenant) ? (\App\Support\Packages::usable($tenant->id, $customer->id, $service->id, $start)[0] ?? null) : null;
-        $needsDeposit = !$package && $service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service) > 0;
+        $strikeDeposit = $package ? 0.0 : \App\Support\OnlineBooking::strikeDeposit($tenant, $customer->id, $service, $branch->id);
+        $needsDeposit = !$package && (($service->requires_deposit && AppointmentFlow::rule($tenant, 'booking.require_deposit') && \App\Support\PaymentLinks::depositAmount($service, $branch->id) > 0) || $strikeDeposit > 0);
+
+        if ($strikeDeposit > 0 && !\App\Support\PaymentLinks::available($tenant)) {
+            throw ValidationException::withMessages(['service_id' => 'Por inasistencias anteriores, tu próxima reserva en línea lleva un adelanto, y por ahora no se puede pagar en línea. Comunícate con la sede para agendar.']);
+        }
 
         if ($needsDeposit && !\App\Support\PaymentLinks::available($tenant)) {
             throw ValidationException::withMessages(['service_id' => 'Este servicio se reserva con un adelanto. Comunícate con la sede para agendarlo.']);
@@ -251,7 +321,7 @@ class PortalController extends AppointmentController
         $duration = (int) $service->duration_minutes;
         $end = $start->copy()->addMinutes($duration);
 
-        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit, $package, $staffNote, $newDependent) {
+        return DB::transaction(function () use ($tenant, $user, $customer, $validated, $service, $branch, $dependentId, $start, $end, $duration, $needsDeposit, $package, $staffNote, $newDependent, $strikeDeposit) {
             DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $tenant->id]);
 
             if ($newDependent) {
@@ -264,7 +334,7 @@ class PortalController extends AppointmentController
                 return response()->json(['message' => 'No hay cupos en línea para esa fecha. Comunícate con la sede.', 'code' => 'UNAVAILABLE'], 422);
             }
 
-            $scheduler = new AppointmentScheduler($tenant, true);
+            $scheduler = (new AppointmentScheduler($tenant, true))->ignoringHoldsOf($customer->id);
             [$professional, $check] = $this->pickProfessional($tenant, $scheduler, $service, $branch, $start, $duration, $validated['professional_id'] ?? null);
 
             if (!$professional) {
@@ -274,7 +344,7 @@ class PortalController extends AppointmentController
             $this->assertCustomerFree($tenant, $customer, $start, $end);
 
             if ($needsDeposit) {
-                $link = \App\Support\PaymentLinks::forDeposit($tenant, $customer, $service, $branch, $professional, $start, $end, $dependentId, $validated['notes'] ?? null);
+                $link = \App\Support\PaymentLinks::forDeposit($tenant, $customer, $service, $branch, $professional, $start, $end, $dependentId, $validated['notes'] ?? null, $strikeDeposit > 0 && \App\Support\PaymentLinks::depositAmount($service, $branch->id) <= 0 ? $strikeDeposit : null);
 
                 return response()->json([
                     'deposit' => \App\Support\PaymentLinks::present($link) + [
@@ -298,8 +368,8 @@ class PortalController extends AppointmentController
                 'ends_at'               => $end,
                 'status'                => $status,
                 'source'                => 'online',
-                'price'                 => $service->price,
-            ] + Currency::column($tenant) + [
+                'price'                 => $service->priceAt($branch->id),
+            ] + Currency::column($tenant) + \App\Support\Channels::column() + [
                 'notes'                 => $validated['notes'] ?? null,
                 'confirmed_at'          => $status === AppointmentFlow::CONFIRMED ? now() : null,
                 'created_by'            => null,
@@ -346,6 +416,7 @@ class PortalController extends AppointmentController
             'balance'     => round((float) $sale->balance, 2),
             'outcome'     => $sale->deposit_outcome,
             'refund_hours' => (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'),
+            'on_cancel'   => \App\Support\PaymentLinks::onCancel($tenant),
         ];
     }
 
@@ -404,23 +475,19 @@ class PortalController extends AppointmentController
             return response()->json(['message' => 'Las citas no se cancelan en línea. Comunícate con la sede.', 'code' => 'POLICY'], 403);
         }
 
-        $from = $appointment->status;
         $reason = trim((string) ($validated['reason'] ?? '')) ?: 'Cancelada por el cliente';
-        $late = $this->insideWindow($tenant, $appointment);
+        $response = $this->applyStatus($request, $appointment->id, $tenant, $request->user(), AppointmentFlow::CANCELLED, $reason, true, 'customer');
 
-        $appointment->update([
-            'status'        => AppointmentFlow::CANCELLED,
-            'cancelled_at'  => now(),
-            'cancel_reason' => $reason,
-            'cancelled_by'  => 'customer',
-        ]);
-        $this->log($appointment, $from, AppointmentFlow::CANCELLED, $request->user(), $reason);
-        $this->auditAppointment($request, 'appointment.cancelled', $appointment, $this->auditFacts($appointment) + ['reason' => $reason, 'late_cancel' => $late]);
-        \App\Support\Recalls::appointmentChanged($tenant, $appointment);
-        \App\Support\Waitlist::appointmentChanged($tenant, $appointment);
-        \App\Support\Walkin::appointmentChanged($tenant, $appointment);
+        if ($response->getStatusCode() >= 400) {
+            return $response;
+        }
 
-        return response()->json($this->presentForCustomer($appointment, $tenant));
+        return response()->json($this->presentForCustomer($this->ownAppointment($request, $appointment->id), $tenant));
+    }
+
+    protected function find(Request $request, string $id): Appointment
+    {
+        return $this->ownAppointment($request, $id);
     }
 
     public function move(Request $request, string $appointment)
@@ -478,6 +545,7 @@ class PortalController extends AppointmentController
 
             $this->assertCustomerFree($tenant, $appointment->customer, $start, $end, $appointment->id);
             $auditBefore = $this->auditPlace($appointment);
+            $freed = $this->freedSlot($appointment);
 
             $appointment->update([
                 'starts_at'        => $start,
@@ -489,6 +557,7 @@ class PortalController extends AppointmentController
             $this->log($appointment, $appointment->status, $appointment->status, $user,
                 'Reprogramada por el cliente de ' . $previous->format('d/m/Y H:i') . ' a ' . $start->format('d/m/Y H:i'));
             $this->auditRescheduled($request, $appointment->fresh(self::RELATIONS), $auditBefore, null);
+            $this->offerFreedSlot($tenant, $freed);
 
             return response()->json($this->presentForCustomer($appointment->fresh(self::RELATIONS), $tenant));
         });
@@ -706,24 +775,85 @@ class PortalController extends AppointmentController
         $customer = $this->customer($request);
 
         $validated = $request->validate([
-            'phone' => ['required', 'string', 'max:30', 'regex:/^[0-9+ ()-]{6,30}$/'],
-        ], ['phone.regex' => 'Escribe un número de celular válido.', 'phone.required' => 'Escribe tu celular.']);
+            'phone'      => [$request->hasAny(['birth_date', 'district']) ? 'sometimes' : 'required', 'string', 'max:30', 'regex:/^[0-9+ ()-]{6,30}$/'],
+            'birth_date' => 'sometimes|nullable|date_format:Y-m-d|before:today|after:1900-01-01',
+            'district'   => 'sometimes|nullable|string|max:100',
+        ], [
+            'phone.regex'       => 'Escribe un número de celular válido.',
+            'phone.required'    => 'Escribe tu celular.',
+            'birth_date.before' => 'La fecha de nacimiento debe ser anterior a hoy.',
+            'birth_date.after'  => 'Revisa el año de tu fecha de nacimiento.',
+        ]);
 
-        $previous = $customer->phone;
-        $customer->update(['phone' => \App\Support\Phones::normalize($validated['phone'], \App\Support\Phones::prefixForTenantId($customer->tenant_id)) ?? trim($validated['phone'])]);
+        $fields = ['phone', 'birth_date', 'district'];
+        $previous = collect($fields)->mapWithKeys(fn ($f) => [$f => $f === 'birth_date' ? $customer->birth_date?->format('Y-m-d') : $customer->{$f}])->all();
+        $changes = [];
 
-        if ($previous !== $customer->phone) {
+        if (array_key_exists('phone', $validated)) {
+            $changes['phone'] = \App\Support\Phones::normalize($validated['phone'], \App\Support\Phones::prefixForTenantId($customer->tenant_id)) ?? trim($validated['phone']);
+        }
+
+        if (array_key_exists('birth_date', $validated)) {
+            $changes['birth_date'] = $validated['birth_date'] ?: null;
+        }
+
+        if (array_key_exists('district', $validated)) {
+            $changes['district'] = trim((string) $validated['district']) ?: null;
+        }
+
+        $customer->update($changes);
+        $after = collect($fields)->mapWithKeys(fn ($f) => [$f => $f === 'birth_date' ? $customer->birth_date?->format('Y-m-d') : $customer->{$f}])->all();
+        $diff = array_keys(array_diff_assoc(array_map('strval', $after), array_map('strval', $previous)));
+
+        if ($diff) {
             \App\Support\Audit::log($request, 'customer.updated', [
                 'tenant'       => $customer->tenant_id,
                 'entity_type'  => 'customer',
                 'entity_id'    => $customer->id,
                 'entity_label' => \App\Support\Person::name($customer),
-                'before'       => ['phone' => $previous],
-                'after'        => ['phone' => $customer->phone],
+                'before'       => array_intersect_key($previous, array_flip($diff)),
+                'after'        => array_intersect_key($after, array_flip($diff)),
             ]);
         }
 
-        return response()->json(['phone' => $customer->phone]);
+        return response()->json($after);
+    }
+
+    public function dependentsWithControls(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $customer = $this->customer($request);
+        $config = $tenant->dependents();
+
+        if (!$config['enabled']) {
+            return response()->json(['items' => []]);
+        }
+
+        $items = $customer->dependents()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'species', 'breed', 'birth_date']);
+        $ids = $items->pluck('id');
+        $recalls = \Illuminate\Support\Facades\Schema::hasTable('recalls')
+            ? \App\Models\Recall::where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->whereIn('customer_dependent_id', $ids)
+                ->whereIn('status', [\App\Models\Recall::PENDING, \App\Models\Recall::NOTIFIED, \App\Models\Recall::BOOKED])->orderBy('due_date')->get()->groupBy('customer_dependent_id')
+            : collect();
+        $last = Appointment::where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->whereIn('customer_dependent_id', $ids)
+            ->where('status', AppointmentFlow::COMPLETED)->with('service:id,name')->orderByDesc('starts_at')->get()->groupBy('customer_dependent_id');
+
+        return response()->json(['items' => $items->map(fn (CustomerDependent $d) => [
+            'id'         => $d->id,
+            'name'       => $d->name,
+            'species'    => $d->species,
+            'breed'      => $d->breed,
+            'birth_date' => $d->birth_date?->format('Y-m-d'),
+            'last_visit' => ($row = ($last[$d->id] ?? collect())->first()) ? ['date' => $row->starts_at->toIso8601String(), 'service' => $row->service?->name] : null,
+            'controls'   => ($recalls[$d->id] ?? collect())->map(fn (\App\Models\Recall $r) => [
+                'id'           => $r->id,
+                'label'        => $r->label,
+                'due_date'     => $r->due_date instanceof \DateTimeInterface ? $r->due_date->format('Y-m-d') : substr((string) $r->due_date, 0, 10),
+                'status'       => $r->status,
+                'status_label' => \App\Models\Recall::STATUSES[$r->status] ?? $r->status,
+                'overdue'      => $r->status !== \App\Models\Recall::BOOKED && substr((string) ($r->due_date instanceof \DateTimeInterface ? $r->due_date->format('Y-m-d') : $r->due_date), 0, 10) < now($tenant->zone())->format('Y-m-d'),
+            ])->values(),
+        ])->values()]);
     }
 
     public function storeDependent(Request $request)
@@ -805,9 +935,42 @@ class PortalController extends AppointmentController
         $tenant = $this->tenant($request);
         $customer = $this->customer($request);
         abort_unless(\App\Support\Messaging::ready(), 503, \App\Support\Messaging::NOT_READY);
-        $validated = $request->validate(['email' => 'nullable|boolean', 'whatsapp' => 'nullable|boolean']);
+        $validated = $request->validate(['email' => 'nullable|boolean', 'whatsapp' => 'nullable|boolean', 'sms' => 'nullable|boolean']);
 
-        return response()->json(['consents' => MessageController::saveConsents($tenant->id, $customer->id, $validated, 'portal')]);
+        MessageController::saveConsents($tenant->id, $customer->id, array_intersect_key($validated, array_flip(['email', 'whatsapp'])), 'portal');
+
+        if (array_key_exists('sms', $validated) && $validated['sms'] !== null) {
+            $granted = (bool) $validated['sms'];
+            $current = DB::table('customer_consents')->where('customer_id', $customer->id)->where('channel', 'sms')->first();
+
+            if (!$current || (bool) $current->granted !== $granted) {
+                DB::table('customer_consents')->updateOrInsert(
+                    ['customer_id' => $customer->id, 'channel' => 'sms'],
+                    ['tenant_id' => $tenant->id, 'granted' => $granted, 'source' => 'portal', 'granted_at' => $granted ? now() : ($current->granted_at ?? null), 'revoked_at' => $granted ? null : now(), 'updated_at' => now()],
+                );
+                \App\Support\Audit::log($request, 'customer.updated', [
+                    'tenant'       => $tenant->id,
+                    'entity_type'  => 'customer',
+                    'entity_id'    => $customer->id,
+                    'entity_label' => \App\Support\Person::name($customer),
+                    'before'       => ['sms' => $current ? (bool) $current->granted : false],
+                    'after'        => ['sms' => $granted],
+                ]);
+            }
+        }
+
+        return response()->json(['consents' => self::portalConsents($customer->id)]);
+    }
+
+    public static function portalConsents(string $customerId): array
+    {
+        $sms = DB::table('customer_consents')->where('customer_id', $customerId)->where('channel', 'sms')->first();
+
+        return MessageController::consentsOf($customerId) + ['sms' => [
+            'granted' => (bool) ($sms->granted ?? false),
+            'source'  => $sms->source ?? null,
+            'at'      => $sms ? (($sms->granted ? $sms->granted_at : $sms->revoked_at) ? Carbon::parse($sms->granted ? $sms->granted_at : $sms->revoked_at)->toIso8601String() : null) : null,
+        ]];
     }
 
     public static function privacyAccepted(string $customerId): ?string
@@ -950,6 +1113,7 @@ class PortalController extends AppointmentController
             $giftCards = DB::table('gift_cards')
                 ->where('tenant_id', $tenant->id)
                 ->where(fn ($q) => $q->where('recipient_customer_id', $customer->id)->orWhere('purchaser_customer_id', $customer->id))
+                ->where('code', 'not like', \App\Support\CustomerCredit::PREFIX . '%')
                 ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
                 ->orderByDesc('created_at')
                 ->limit(50)
@@ -988,13 +1152,39 @@ class PortalController extends AppointmentController
                 'status_label'   => \App\Support\Sales::label($s),
                 'detail'         => ($items[$s->id] ?? collect())->map(fn ($i) => ((float) $i->quantity > 1 ? (int) $i->quantity . ' × ' : '') . $i->description)->implode(', '),
                 'total'          => round((float) $s->total, 2),
+                'paid'           => round((float) ($s->paid ?? 0), 2),
+                'balance'        => $s->status === 'partial' ? round(max(0, (float) ($s->balance ?? 0)), 2) : 0.0,
                 'currency'       => $s->currency ?? Currency::DEFAULT,
                 'invoice_number' => isset($invoices[$s->id]) ? sprintf('%s-%08d', $invoices[$s->id]->serie, $invoices[$s->id]->number) : null,
                 'invoice_label'  => isset($invoices[$s->id]) ? (\App\Support\Invoicing::LABELS[$invoices[$s->id]->doc_type] ?? null) : null,
             ])->values()->all();
         }
 
-        return response()->json(['currency' => Currency::of($tenant), 'points' => $points, 'gift_cards' => $giftCards, 'purchases' => $purchases]);
+        $memberships = \App\Support\Memberships::ready() && $tenant->hasModule('memberships')
+            ? DB::table('memberships')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->whereIn('status', ['active', 'grace'])->orderBy('ends_at')->get(['id', 'name', 'ends_at'])
+                ->map(fn ($m) => ['id' => $m->id, 'name' => $m->name ?? null, 'ends_at' => $iso($m->ends_at)])->values()
+            : collect();
+        $packagesLeft = \App\Support\Packages::ready()
+            ? collect(\App\Support\Packages::presentMany(DB::table('customer_packages')->where('tenant_id', $tenant->id)->where('customer_id', $customer->id)->where('status', 'active')->get(), false))
+                ->map(fn (array $p) => ['id' => $p['id'], 'name' => $p['name'], 'available' => $p['sessions_available'], 'expires_at' => $p['expires_at']])->values()
+            : collect();
+
+        return response()->json([
+            'currency'   => Currency::of($tenant),
+            'points'     => $points,
+            'gift_cards' => $giftCards,
+            'credit'     => \App\Support\CustomerCredit::summary($tenant->id, $customer->id),
+            'purchases'  => $purchases,
+            'summary'    => [
+                'points'          => $points['balance'] ?? null,
+                'points_value'    => $points['value'] ?? null,
+                'gift_balance'    => $giftCards ? round($giftCards->where('for_me', true)->where('status', 'active')->sum('balance'), 2) : null,
+                'balance_due'     => round(collect($purchases)->sum('balance'), 2),
+                'credit_balance'  => \App\Support\CustomerCredit::balance($tenant->id, $customer->id),
+                'memberships'     => $memberships,
+                'packages'        => $packagesLeft,
+            ],
+        ]);
     }
 
     public function purchase(Request $request, string $sale)

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Check, Minus } from 'lucide-react';
 import PricingPlans from '@/features/web/components/PricingPlans';
 import { Faq, SignupBand } from '@/features/web/components/Sections';
-import { clip, getSite, jsonLd, siteUrl, type WebPlan } from '@/features/web/web';
+import { clip, getSite, jsonLd, money, siteUrl, type WebPlan } from '@/features/web/web';
 import { MODULE_LABELS, OPTIONAL_MODULE_KEYS } from '@/lib/modules';
 
 export const revalidate = 60;
@@ -40,7 +40,7 @@ function cell(plan: WebPlan, key: string) {
 }
 
 export default async function PricingPage() {
-  const { site, plans } = await getSite();
+  const { site, plans, addons = [] } = await getSite();
   const url = await siteUrl(site);
   const included = (plan: WebPlan) => new Set(Object.values(plan.modules ?? {}).flat());
   const modules = OPTIONAL_MODULE_KEYS.filter((key) => plans.some((plan) => included(plan).has(key)));
@@ -98,6 +98,26 @@ export default async function PricingPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+      )}
+
+      {addons.length > 0 && (
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-14 space-y-4" id="complementos" data-addons>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-brand-ink tracking-tight">Complementos</h2>
+            <p className="text-sm text-slate-500">Súmalos a cualquier plan cuando los necesites, desde Mi empresa. Se cobran junto con tu plan.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {addons.map((addon) => (
+              <div key={addon.code} className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col gap-2">
+                <span className="flex items-start justify-between gap-3">
+                  <span className="font-bold text-brand-ink">{addon.name}</span>
+                  <span className="shrink-0 text-sm font-black text-brand-ink tabular-nums">{money(addon.monthly_price, addon.currency_symbol)}<span className="text-xs font-semibold text-slate-400"> /mes</span></span>
+                </span>
+                {addon.description && <span className="text-sm text-slate-500">{addon.description}</span>}
+              </div>
+            ))}
           </div>
         </section>
       )}

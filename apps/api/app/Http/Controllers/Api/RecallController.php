@@ -102,6 +102,31 @@ class RecallController extends Controller
         return response()->json($recalls->map(fn (Recall $recall) => $this->present($recall, $tenant, $today)));
     }
 
+    public function summary(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $own = $this->ownProfessionalId($request->user());
+        $today = $this->today($tenant)->toDateString();
+
+        $rows = Recall::where('tenant_id', $tenant->id)
+            ->whereHas('customer', fn ($q) => $q->whereNull('deleted_at'))
+            ->when($own, fn ($q, $id) => $q->where('professional_id', $id))
+            ->where('due_date', '>=', $this->today($tenant)->subMonths(12)->toDateString())
+            ->where(fn ($q) => $q->whereNotIn('status', Recall::OPEN)->orWhere('due_date', '<', $today))
+            ->selectRaw('status, count(*) AS total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $total = (int) $rows->sum();
+        $booked = (int) ($rows[Recall::BOOKED] ?? 0) + (int) ($rows['done'] ?? 0);
+
+        return response()->json([
+            'total'  => $total,
+            'booked' => $booked,
+            'rate'   => $total > 0 ? (int) round($booked * 100 / $total) : null,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -170,6 +195,12 @@ class RecallController extends Controller
             return response()->json($this->present($recall, $tenant, $this->today($tenant)));
         }
 
+        $notice = $to === Recall::NOTIFIED ? \App\Support\Messaging::recallNotice($tenant, $recall, $request->user()) : null;
+
+        if (!empty($notice['blocked'])) {
+            return response()->json(['message' => $notice['message'], 'code' => 'NOT_SENT'], 422);
+        }
+
         $recall->update([
             'status'        => $to,
             'notified_at'   => match ($to) {
@@ -191,7 +222,7 @@ class RecallController extends Controller
             ], fn ($value) => $value !== null));
         }
 
-        return response()->json($this->present($recall->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
+        return response()->json($this->present($recall->fresh(self::RELATIONS), $tenant, $this->today($tenant)) + ($notice ? ['notice' => $notice] : []));
     }
 
     private function find(Tenant $tenant, string $id, ?string $own): Recall

@@ -61,13 +61,14 @@ class Refunds
             throw ValidationException::withMessages(['method' => 'Esta venta no se pagó por la pasarela.']);
         }
 
+        $restock = self::restock($tenant, $sale, $data['restock'] ?? null);
         $id = (string) Str::uuid();
         DB::table('refund_requests')->insert([
             'id' => $id, 'tenant_id' => $tenant->id, 'sale_id' => $sale->id, 'branch_id' => $sale->branch_id,
             'amount' => $amount, 'currency' => $sale->currency ?? Currency::of($tenant), 'method' => $data['method'],
             'cash_session_id' => $data['cash_session_id'] ?? null, 'reason' => mb_substr($data['reason'], 0, 255),
             'status' => 'pending', 'requested_by' => $user->id, 'created_at' => now(), 'updated_at' => now(),
-        ]);
+        ] + ($restock && \Illuminate\Support\Facades\Schema::hasColumn('refund_requests', 'restock') ? ['restock' => json_encode($restock)] : []));
 
         return $id;
     }
@@ -163,11 +164,47 @@ class Refunds
             'status' => 'void', 'void_reason' => mb_substr($reason, 0, 255), 'balance' => 0, 'updated_at' => now(),
         ]);
         PaymentLinks::cancelForSale($sale->id, 'La venta se anuló.');
+        Packages::returnForVoidedSale($sale, request()->user() instanceof User ? request()->user() : null);
 
         foreach (DB::table('coupon_redemptions')->where('sale_id', $sale->id)->get() as $redemption) {
             DB::table('coupons')->where('id', $redemption->coupon_id)->where('used_count', '>', 0)->decrement('used_count');
             DB::table('coupon_redemptions')->where('id', $redemption->id)->delete();
         }
+    }
+
+    public static function restock(Tenant $tenant, object $sale, ?array $wanted): array
+    {
+        $wanted = collect($wanted ?? [])->filter(fn ($r) => is_array($r) && !empty($r['product_id']) && (float) ($r['quantity'] ?? 0) > 0)
+            ->groupBy('product_id')->map(fn ($rows) => round((float) $rows->sum('quantity'), 4));
+
+        if ($wanted->isEmpty()) {
+            return [];
+        }
+
+        $left = collect(Inventory::returnable($tenant->id, $sale->id))->groupBy('product_id')->map(fn ($rows) => ['name' => $rows->first()['name'], 'left' => round((float) $rows->sum('left'), 4)]);
+
+        foreach ($wanted as $productId => $qty) {
+            $row = $left->get($productId);
+
+            if (!$row) {
+                throw ValidationException::withMessages(['restock' => 'Ese producto no salió del stock con esta venta.']);
+            }
+
+            if ($qty > $row['left'] + 0.0001) {
+                throw ValidationException::withMessages(['restock' => "De {$row['name']} solo pueden volver " . Inventory::formatQty($row['left']) . ' al stock.']);
+            }
+        }
+
+        return $wanted->map(fn ($qty, $productId) => ['product_id' => (string) $productId, 'quantity' => $qty])->values()->all();
+    }
+
+    public static function loyaltyMethod(string $saleId): string
+    {
+        if (CustomerCredit::ready() && CustomerCredit::usedOn($saleId)) {
+            return 'credit';
+        }
+
+        return DB::table('gift_card_transactions')->where('sale_id', $saleId)->where('type', 'redeem')->exists() ? 'gift_card' : 'points';
     }
 
     public static function availability(Tenant $tenant, object $sale): array
@@ -221,14 +258,18 @@ class Refunds
             throw ValidationException::withMessages(['amount' => 'De esta venta, ' . Currency::format(min($usedCards, $state['available']), $sale->currency ?? null) . ' son gift cards que ya se usaron: eso no se devuelve. Aquí puedes devolver hasta ' . Currency::format($free, $sale->currency ?? null) . '.']);
         }
 
+        $last = $amount >= $state['available'] - 0.001;
+        $restock = $last ? null : self::restock($tenant, $sale, $data['restock'] ?? null);
+        $loyalty = Loyalty::giveBack($tenant, $sale, $last ? 1.0 : $amount / $state['available'], $user);
+        $money = round(max(0, $amount - $loyalty), 2);
         $session = null;
         $gateway = null;
 
-        if ($data['method'] === 'gateway') {
-            $gateway = PaymentLinks::refundThroughGateway($tenant, $sale, $amount);
+        if ($money > 0 && $data['method'] === 'gateway') {
+            $gateway = PaymentLinks::refundThroughGateway($tenant, $sale, $money);
         }
 
-        if ($data['method'] === 'cash') {
+        if ($money > 0 && $data['method'] === 'cash') {
             $open = Cash::openSessions($tenant->id, $sale->branch_id);
             $wanted = $data['cash_session_id'] ?? null;
             $session = $wanted ? $open->firstWhere('id', $wanted) : ($open->firstWhere('opened_by', $user->id) ?? $open->first());
@@ -240,26 +281,28 @@ class Refunds
             if ($session) {
                 $inCash = Cash::present(DB::table('cash_sessions')->where('id', $session->id)->first())['expected_amount'];
 
-                if ($amount > $inCash) {
+                if ($money > $inCash) {
                     throw ValidationException::withMessages(['amount' => 'En la caja solo hay ' . Currency::format($inCash, $sale->currency ?? Currency::of($tenant)) . ' en efectivo.']);
                 }
             }
         }
 
-        $paymentId = (string) Str::uuid();
+        $paymentId = $money > 0 ? (string) Str::uuid() : null;
 
-        DB::table('payments')->insert([
-            'id' => $paymentId, 'tenant_id' => $tenant->id, 'branch_id' => $sale->branch_id, 'sale_id' => $sale->id,
-            'appointment_id' => $sale->appointment_id, 'customer_id' => $sale->customer_id,
-            'method' => $data['method'], 'status' => 'refunded', 'amount' => -$amount,
-            'external_reference' => $gateway ? mb_substr((string) $gateway['external_id'], 0, 190) : 'Devolución', 'confirmed_at' => now(), 'cash_session_id' => $session?->id,
-            'created_by' => $user->id, 'created_at' => now(),
-        ] + Currency::column($sale->currency ?? Currency::of($tenant)));
+        if ($paymentId) {
+            DB::table('payments')->insert([
+                'id' => $paymentId, 'tenant_id' => $tenant->id, 'branch_id' => $sale->branch_id, 'sale_id' => $sale->id,
+                'appointment_id' => $sale->appointment_id, 'customer_id' => $sale->customer_id,
+                'method' => $data['method'], 'status' => 'refunded', 'amount' => -$money,
+                'external_reference' => $gateway ? mb_substr((string) $gateway['external_id'], 0, 190) : 'Devolución', 'confirmed_at' => now(), 'cash_session_id' => $session?->id,
+                'created_by' => $user->id, 'created_at' => now(),
+            ] + Currency::column($sale->currency ?? Currency::of($tenant)));
+        }
 
-        if ($session) {
+        if ($session && $paymentId) {
             DB::table('cash_movements')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'cash_session_id' => $session->id,
-                'type' => 'refund', 'amount' => $amount, 'reference_type' => 'payment', 'reference_id' => $paymentId,
+                'type' => 'refund', 'amount' => $money, 'reference_type' => 'payment', 'reference_id' => $paymentId,
                 'description' => $sale->code, 'created_by' => $user->id, 'created_at' => now(),
             ]);
         }
@@ -275,12 +318,13 @@ class Refunds
             DB::table('sales')->where('id', $sale->id)->update([
                 'paid' => $paid, 'status' => $paid <= 0.001 ? 'refunded' : 'partially_refunded', 'updated_at' => now(),
             ]);
-            $note = Invoicing::creditNote($tenant, $sale, $amount, $data['reason'], $user);
+            $billed = (float) $sale->total > 0 ? round($amount * ((float) $sale->total - (float) ($sale->tip ?? 0)) / (float) $sale->total, 2) : $amount;
+            $note = Invoicing::creditNote($tenant, $sale, $last ? INF : $billed, $data['reason'], $user);
         }
 
         $id = (string) Str::uuid();
         DB::table('sale_refunds')->insert([
-            'id' => $id, 'tenant_id' => $tenant->id, 'sale_id' => $sale->id, 'amount' => $amount, 'method' => $data['method'],
+            'id' => $id, 'tenant_id' => $tenant->id, 'sale_id' => $sale->id, 'amount' => $amount, 'method' => $money > 0 ? $data['method'] : self::loyaltyMethod($sale->id),
             'reason' => mb_substr($data['reason'], 0, 255), 'payment_id' => $paymentId, 'invoice_id' => $note?->id,
             'created_by' => $user->id, 'created_at' => now(),
         ]);
@@ -291,6 +335,15 @@ class Refunds
         Packages::afterSaleRefunded($tenant, $fresh, $user);
         Memberships::afterSaleRefunded($tenant, $fresh, $user);
         Loyalty::cancelUncoveredGiftCards($tenant, $fresh, $user);
+
+        if ($fresh && $fresh->status === 'partially_refunded') {
+            $refunded = self::total($sale->id);
+            Loyalty::reverseEarned($tenant, $fresh, $refunded / max(0.01, $refunded + (float) $fresh->paid), $user);
+
+            if ($restock) {
+                Inventory::returnForSale($tenant, $fresh, $user, $data['reason'] ?? null, $restock);
+            }
+        }
 
         if ($fresh && $fresh->status === 'refunded') {
             Inventory::returnForSale($tenant, $fresh, $user, $data['reason'] ?? null);

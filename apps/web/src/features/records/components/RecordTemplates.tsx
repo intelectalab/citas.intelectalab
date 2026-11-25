@@ -166,6 +166,13 @@ export default function RecordTemplates() {
                     ))}
                   </div>
 
+                  {(template.is_confidential || template.active === false) && (
+                    <div className="flex flex-wrap gap-1" data-template-flags>
+                      {template.active === false && <span className="px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 rounded-md">Inactiva</span>}
+                      {template.is_confidential && <span className="px-2 py-0.5 text-xs font-semibold bg-violet-50 text-violet-700 rounded-md">Confidencial</span>}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-1">
                     {names.length === 0 ? (
                       <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">Ningún servicio la usa todavía</span>

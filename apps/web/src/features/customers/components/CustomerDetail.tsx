@@ -5,6 +5,9 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import BackLink from '@/app/components/common/BackLink';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { CalendarPlus, ClipboardPlus, FileText, ShoppingCart } from 'lucide-react';
+import NewRecordDrawer from '@/features/records/components/NewRecordDrawer';
 import { AlertTriangle, Building2, CalendarCheck, CalendarClock, CalendarDays, CalendarX2, ClipboardList, EyeOff, Hash, IdCard, Loader2, Mail, MapPin, PawPrint, Pencil, Phone, Stethoscope, Timer, User, Users } from 'lucide-react';
 import { formatPhone } from '@/lib/phone';
 import CustomerProfilePanel from './CustomerProfilePanel';
@@ -25,6 +28,8 @@ import { PagedList } from '@/app/components/common/Pager';
 import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
 import { RELEASED, dateOf, formatDate, formatMinutes, statusStyle, timeOf, todayISO, type Appointment } from '@/features/appointments/appointments';
 import { RECORD_STATUS, type CareRecord } from '@/features/records/records';
+import DependentAlert from './DependentAlert';
+import type { CustomerDependent } from './CustomerDependents';
 
 interface CustomerData {
   id: string;
@@ -47,7 +52,7 @@ interface CustomerData {
   created_at?: string;
   portal_access?: PortalAccess;
   online_booking?: OnlineBookingState | null;
-  dependents?: { id: string; name: string; species?: string | null; breed?: string | null }[];
+  dependents?: { id: string; name: string; species?: string | null; breed?: string | null; alert?: string | null }[];
   alert?: string | null;
   home_branch_id?: string | null;
   preferred_professional_id?: string | null;
@@ -84,6 +89,10 @@ export default function CustomerDetail() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [recordFor, setRecordFor] = useState<string | null>(null);
+  const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [newSheet, setNewSheet] = useState(false);
+  const [recordDependent, setRecordDependent] = useState('');
+  const [dependentCards, setDependentCards] = useState<CustomerDependent[]>([]);
   const [focus, setFocus] = useState('');
   const [stageKey, setStageKey] = useState(0);
   const [consentKey, setConsentKey] = useState(0);
@@ -113,9 +122,16 @@ export default function CustomerDetail() {
   }, [params.id, vocab.client]);
 
   useEffect(() => { loadCustomer(); }, [loadCustomer]);
+
+  useEffect(() => {
+    if (!usesDependents) return;
+    api.get(`/customers/${params.id}/dependents`)
+      .then((res) => setDependentCards(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setDependentCards([]));
+  }, [params.id, usesDependents, customer?.dependents?.length]);
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  const { openDetail, panels } = useAppointmentPanels(loadHistory);
+  const { openNew, openDetail, panels } = useAppointmentPanels(loadHistory);
 
   const today = todayISO();
   const upcoming = useMemo(
@@ -166,6 +182,24 @@ export default function CustomerDetail() {
   }
 
   const fullName = `${customer.first_name} ${customer.last_name}`;
+  const picked = { id: customer.id, code: customer.code, first_name: customer.first_name, last_name: customer.last_name, phone: customer.phone ?? null, document_number: customer.document_number ?? null };
+  const canSchedule = usesAgenda && can('agenda.create');
+  const canQuote = hasModule('quotes') && can('quotes.create');
+  const canSell = hasModule('pos') && can('sales.create');
+  const sell = () => {
+    try {
+      const raw = sessionStorage.getItem('pos-cart');
+      const current = raw ? JSON.parse(raw) : null;
+      if (!current || ((current.items?.length ?? 0) === 0 && !current.saleId)) {
+        const owner = String(JSON.parse(localStorage.getItem('user') ?? 'null')?.id ?? '');
+        sessionStorage.setItem('pos-cart', JSON.stringify({ customer: picked, items: [], owner }));
+      }
+    } catch {}
+    window.location.href = '/pos';
+  };
+  const recordDependents = Array.from(new Map(records.filter((r) => r.dependent).map((r) => [r.dependent!.id, r.dependent!])).values());
+  const shownRecords = recordDependent ? records.filter((r) => r.dependent?.id === recordDependent) : records;
+  const openRecord = (record: CareRecord) => { if (record.appointment_id) setRecordFor(record.appointment_id); else setSheetFor(record.id); };
   const age = ageFrom(customer.birth_date);
   const sex = customer.biological_sex === 'M' ? 'Masculino' : customer.biological_sex === 'F' ? 'Femenino' : null;
 
@@ -235,6 +269,26 @@ export default function CustomerDetail() {
             </button>)}
           </div>
 
+          {(canSchedule || canQuote || canSell) && (
+            <div className="flex flex-wrap items-center gap-1.5" data-customer-actions>
+              {canSchedule && (
+                <button type="button" data-action="new-appointment" title="Nueva cita" onClick={() => openNew({ customer: picked })} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors">
+                  <CalendarPlus size={14} /> <span>Nueva cita</span>
+                </button>
+              )}
+              {canQuote && (
+                <Link href={`/quotes?nuevo=1&cliente=${customer.id}`} data-action="new-quote" title="Nuevo presupuesto" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                  <FileText size={14} /> <span>Presupuesto</span>
+                </Link>
+              )}
+              {canSell && (
+                <button type="button" data-action="sell" title="Vender" onClick={sell} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                  <ShoppingCart size={14} /> <span>Vender</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {customer.alert && (
             <div data-customer-alert className="flex items-start gap-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl">
               <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
@@ -272,14 +326,37 @@ export default function CustomerDetail() {
               {(customer.dependents?.length ?? 0) === 0 ? (
                 <p className="text-sm text-slate-400">Sin registrar.</p>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {customer.dependents!.map((dependent) => (
-                    <span key={dependent.id} className="px-2.5 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
-                      {dependent.name}{dependent.species ? ` · ${dependent.species}` : ''}
-                    </span>
-                  ))}
+                <div className="space-y-2" data-dependent-cards>
+                  {(dependentCards.length > 0 ? dependentCards : customer.dependents!).map((dependent) => {
+                    const card = dependent as CustomerDependent;
+                    const isPet = user?.tenant?.dependents?.kind === 'pet';
+                    const age = ageFrom(card.birth_date ?? null);
+                    const sexLabel = card.biological_sex === 'M' ? (isPet ? 'Macho' : 'Masculino') : card.biological_sex === 'F' ? (isPet ? 'Hembra' : 'Femenino') : null;
+                    const details = isPet
+                      ? [card.species, card.breed, sexLabel, age, card.weight_kg ? `${card.weight_kg} kg` : null, card.color, card.sterilized === true ? 'Esterilizado' : card.sterilized === false ? 'Sin esterilizar' : null]
+                      : [card.relationship, card.document_number, sexLabel, age];
+                    const stats = card.stats;
+                    return (
+                      <div key={card.id} data-dependent-card={card.id} className="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5 space-y-1">
+                        <span className="block text-sm font-bold text-amber-900">{card.name}</span>
+                        {details.filter(Boolean).length > 0 && <span className="block text-xs text-amber-800">{details.filter(Boolean).join(' · ')}</span>}
+                        {card.microchip && <span className="block text-[11px] text-amber-700">Microchip {card.microchip}</span>}
+                        {stats && (
+                          <span className="block text-[11px] text-slate-600" data-dependent-stats>
+                            {stats.appointments} {stats.appointments === 1 ? 'cita' : 'citas'}
+                            {stats.last_visit ? ` · Última atención: ${formatDate(dateOf(stats.last_visit), { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                            {stats.next_appointment ? ` · Próxima cita: ${formatDate(dateOf(stats.next_appointment), { day: 'numeric', month: 'short' })}` : ''}
+                            {stats.next_control ? ` · Próximo control: ${stats.next_control.label} (${formatDate(stats.next_control.due_date, { day: 'numeric', month: 'short', year: 'numeric' })})` : ''}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+              {customer.dependents?.filter((dependent) => dependent.alert?.trim()).map((dependent) => (
+                <DependentAlert key={`alert-${dependent.id}`} name={dependent.name} alert={dependent.alert} />
+              ))}
             </div>
           )}
 
@@ -344,7 +421,17 @@ export default function CustomerDetail() {
           ))}
         </div>
 
-        <CustomerProfilePanel customerId={customer.id} refreshKey={consentKey} />
+        <CustomerProfilePanel
+          customerId={customer.id}
+          customerName={fullName}
+          refreshKey={consentKey}
+          appointments={appointments}
+          records={records}
+          onOpenAppointment={openDetail}
+          onOpenRecord={openRecord}
+          onBookRecall={canSchedule ? (recall) => openNew({ customer: picked, service_id: recall.service_id ?? undefined, customer_dependent_id: recall.dependent_id ?? undefined, recall_id: recall.id, recall_label: recall.label }) : undefined}
+          onNewQuote={canQuote ? () => { window.location.href = `/quotes?nuevo=1&cliente=${customer.id}`; } : undefined}
+        />
 
         {hasModule('packages') && can('packages.view') && <CustomerPackages customerId={customer.id} />}
 
@@ -357,20 +444,35 @@ export default function CustomerDetail() {
             <div className="px-6 pt-5 pb-3">
               <SectionTitle><ClipboardList className="w-4 h-4 text-brand-accent" /> Historia de atenciones</SectionTitle>
               <p className="text-xs text-slate-500 font-medium mt-1">Las fichas llenadas en cada atención, de la más reciente a la más antigua.</p>
+              {(can('records.edit') || recordDependents.length > 0) && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  {recordDependents.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Filtrar por ${vocab.dependent.toLowerCase()}`} data-record-dependent-filter>
+                      {[{ id: '', name: 'Todas' }, ...recordDependents].map((d) => (
+                        <button key={d.id || 'all'} type="button" aria-pressed={recordDependent === d.id} onClick={() => setRecordDependent(d.id)} className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${recordDependent === d.id ? 'bg-brand text-white border-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{d.name}</button>
+                      ))}
+                    </div>
+                  )}
+                  {can('records.edit') && (
+                    <button type="button" data-action="new-record-sheet" onClick={() => setNewSheet(true)} className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                      <ClipboardPlus size={14} className="text-brand-accent" /> Nueva ficha sin cita
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             {records.length === 0 ? (
               <p className="px-6 pb-6 text-sm text-slate-400">Aún no tiene fichas de atención.</p>
             ) : (
               <div className="border-t border-slate-100 flex flex-col">
-                <PagedList items={records} empty="" renderRow={(record) => {
+                <PagedList items={shownRecords} empty="Ninguna ficha para este filtro." renderRow={(record) => {
                   const date = record.appointment?.starts_at ?? record.created_at;
                   return (
                     <li key={record.id}>
                       <button
                         type="button"
                         data-record={record.id}
-                        disabled={!record.appointment_id}
-                        onClick={() => setRecordFor(record.appointment_id)}
+                        onClick={() => openRecord(record)}
                         className="w-full flex items-center gap-3 px-6 py-3 text-left hover:bg-slate-50 transition-colors"
                       >
                         <div className="w-28 shrink-0">
@@ -443,6 +545,18 @@ export default function CustomerDetail() {
       />
 
       <RecordPanel appointmentId={recordFor} onClose={() => setRecordFor(null)} onChanged={loadHistory} />
+
+      <RecordPanel appointmentId={null} recordId={sheetFor} onClose={() => { setSheetFor(null); loadHistory(); }} onChanged={loadHistory} />
+
+      <NewRecordDrawer
+        isOpen={newSheet}
+        customerId={customer.id}
+        customerName={fullName}
+        dependents={usesDependents ? (customer.dependents ?? []).map((d) => ({ id: d.id, name: d.name })) : []}
+        dependentWord={vocab.dependent}
+        onClose={() => setNewSheet(false)}
+        onCreated={(id) => { setSheetFor(id); loadHistory(); }}
+      />
 
       {panels}
     </div>

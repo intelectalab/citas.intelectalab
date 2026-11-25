@@ -15,6 +15,9 @@ interface CardActions {
   onReschedule: (appointment: PortalAppointment) => void;
   onCancel: (appointment: PortalAppointment) => void;
   onMiss?: 'notify' | 'notify_release' | 'release';
+  arriveMinutes?: number;
+  windowHours?: number;
+  contactPhone?: string | null;
 }
 
 interface PortalAppointmentsProps {

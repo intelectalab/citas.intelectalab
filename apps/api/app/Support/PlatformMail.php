@@ -46,7 +46,7 @@ class PlatformMail
     {
         $config = self::config();
 
-        return $config && !empty($config['host']) && !empty($config['from_address']);
+        return \App\Support\Mail\ApiTransport::ready($config);
     }
 
     public static function ready(): bool
@@ -98,17 +98,9 @@ class PlatformMail
             return;
         }
 
-        abort_unless($config && !empty($config['host']), 503, 'El correo de la plataforma no está configurado.');
+        abort_unless(\App\Support\Mail\ApiTransport::ready($config), 503, 'El correo de la plataforma no está configurado.');
 
-        $mailer = Mail::build([
-            'transport' => 'smtp',
-            'scheme'    => ($config['security'] ?? 'ssl') === 'ssl' ? 'smtps' : 'smtp',
-            'host'      => $config['host'],
-            'port'      => (int) ($config['port'] ?? 465),
-            'username'  => $config['username'] ?? null,
-            'password'  => $config['password'] ?? null,
-            'timeout'   => 20,
-        ]);
+        $mailer = Mail::build(\App\Support\Mail\ApiTransport::mailer($config, 'ssl'));
 
         $mailer->html($html, function ($mail) use ($config, $to, $subject, $body) {
             $mail->to($to)->from($config['from_address'], $config['from_name'] ?: self::productName())->subject($subject);
@@ -139,15 +131,19 @@ class PlatformMail
         $row = self::row();
         $old = self::config() ?? [];
         $password = trim((string) ($values['password'] ?? '')) ?: ($old['password'] ?? null);
+        $api = ($values['transport'] ?? 'smtp') === 'api';
         $settings = [
-            'host'         => trim($values['host']),
-            'port'         => (int) $values['port'],
-            'security'     => $values['security'],
+            'transport'    => $api ? 'api' : 'smtp',
+            'service'      => $api ? $values['service'] : null,
+            'region'       => $api && ($values['service'] ?? null) === 'ses' ? ($values['region'] ?? 'us-east-1') : null,
+            'host'         => $api ? null : trim((string) $values['host']),
+            'port'         => $api ? null : (int) $values['port'],
+            'security'     => $api ? null : $values['security'],
             'username'     => trim((string) ($values['username'] ?? '')) ?: null,
             'from_address' => trim($values['from_address']),
             'from_name'    => trim((string) ($values['from_name'] ?? '')) ?: null,
         ];
-        $changed = collect(['host', 'port', 'security', 'username', 'from_address'])->contains(fn ($key) => ($old[$key] ?? null) != $settings[$key])
+        $changed = collect(['transport', 'service', 'region', 'host', 'port', 'security', 'username', 'from_address'])->contains(fn ($key) => ($old[$key] ?? null) != $settings[$key])
             || trim((string) ($values['password'] ?? '')) !== '';
 
         $settings += $changed
@@ -188,6 +184,7 @@ class PlatformMail
             $message = Messaging::explain($e);
         }
 
+        IntegrationLog::write(null, 'email', (string) (self::config()['service'] ?? 'smtp'), 'test', $ok, $message);
         $row = self::row();
 
         if ($row) {
@@ -226,6 +223,10 @@ class PlatformMail
         return [
             'configured'   => self::configured(),
             'ready'        => self::ready(),
+            'transport'    => $config['transport'] ?? 'smtp',
+            'service'      => $config['service'] ?? null,
+            'region'       => $config['region'] ?? null,
+            'services'     => collect(\App\Support\Mail\ApiTransport::SERVICES)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values()->all(),
             'host'         => $config['host'] ?? null,
             'port'         => $config['port'] ?? 465,
             'security'     => $config['security'] ?? 'ssl',

@@ -14,7 +14,7 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => ['Content-Disposition'],
+    'exposed_headers' => ['Content-Disposition', 'X-Rows-Cut'],
 
     'max_age' => 0,
 

@@ -56,7 +56,7 @@ class CareRecord extends Model
 
     public function currentStatus(): string
     {
-        if ($this->status === self::SIGNED && $this->locked_at && $this->locked_at->isPast()) {
+        if ($this->status === self::SIGNED) {
             return self::LOCKED;
         }
 

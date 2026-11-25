@@ -13,6 +13,9 @@ export interface Announcement {
   starts_at: string;
   ends_at: string | null;
   state: 'scheduled' | 'live' | 'ended';
+  published?: boolean;
+  link_url?: string | null;
+  link_label?: string | null;
   reach: number;
   dismissals: number;
 }
@@ -25,6 +28,9 @@ export interface FeedItem {
   kind_label: string;
   starts_at: string;
   ends_at: string | null;
+  link_url?: string | null;
+  link_label?: string | null;
+  dismissed?: boolean;
 }
 
 export const KIND_TONE: Record<AnnouncementKind, string> = {

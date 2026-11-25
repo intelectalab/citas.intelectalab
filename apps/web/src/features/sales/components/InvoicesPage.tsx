@@ -22,7 +22,7 @@ type Invoice = {
   currency: string;
   status: 'issued' | 'voided';
   simulated: boolean;
-  sunat_status: 'pending' | 'accepted' | 'rejected' | 'not_applicable';
+  sunat_status: 'pending' | 'accepted' | 'observed' | 'rejected' | 'not_applicable';
   sunat_message: string | null;
   reason: string | null;
   issued_at: string;
@@ -62,6 +62,7 @@ const TABS = [
 
 const SUNAT: Record<Invoice['sunat_status'], { label: string; tone: string }> = {
   accepted: { label: 'Aceptado', tone: 'bg-emerald-50 text-emerald-700' },
+  observed: { label: 'Aceptado con observaciones', tone: 'bg-amber-50 text-amber-800' },
   pending: { label: 'Por enviar', tone: 'bg-amber-50 text-amber-800' },
   rejected: { label: 'Rechazado', tone: 'bg-rose-50 text-rose-700' },
   not_applicable: { label: 'Interno', tone: 'bg-slate-100 text-slate-600' },
@@ -71,8 +72,16 @@ const VOID_REASONS = ['Datos del cliente mal escritos.', 'Se emitió el tipo equ
 
 const card = 'bg-white rounded-3xl border border-slate-200/80 shadow-xs';
 
+const isToday = (value: string | null | undefined) => {
+  if (!value) return false;
+  const d = new Date(value);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+};
+
 export default function InvoicesPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]['id']>('all');
+  const [sunatFilter, setSunatFilter] = useState<'' | 'today' | 'accepted' | 'rejected' | 'pending'>('');
   const [rows, setRows] = useState<Invoice[] | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [canIssue, setCanIssue] = useState(false);
@@ -109,11 +118,25 @@ export default function InvoicesPage() {
       if (tab === 'attention' && !(row.status === 'issued' && (row.sunat_status === 'pending' || row.sunat_status === 'rejected'))) return false;
       if (tab === 'credit' && row.doc_type !== 'nota_credito') return false;
       if (tab === 'voided' && row.status !== 'voided') return false;
+      if (sunatFilter === 'today' && !(row.status === 'issued' && isToday(row.issued_at))) return false;
+      if (sunatFilter === 'accepted' && !(row.status === 'issued' && (row.sunat_status === 'accepted' || row.sunat_status === 'observed'))) return false;
+      if (sunatFilter === 'rejected' && !(row.status === 'issued' && row.sunat_status === 'rejected')) return false;
+      if (sunatFilter === 'pending' && !(row.status === 'issued' && row.sunat_status === 'pending')) return false;
       if (!term) return true;
       const haystack = [row.number, row.customer_name, row.customer_doc_number, row.sale_code].filter(Boolean).join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       return haystack.includes(term);
     });
-  }, [rows, tab, search]);
+  }, [rows, tab, search, sunatFilter]);
+
+  const stats = useMemo(() => {
+    const issued = (rows ?? []).filter((row) => row.status === 'issued' && row.sunat_status !== 'not_applicable');
+    return {
+      today: (rows ?? []).filter((row) => row.status === 'issued' && isToday(row.issued_at)).length,
+      accepted: issued.filter((row) => row.sunat_status === 'accepted' || row.sunat_status === 'observed').length,
+      rejected: issued.filter((row) => row.sunat_status === 'rejected').length,
+      pending: issued.filter((row) => row.sunat_status === 'pending').length,
+    };
+  }, [rows]);
 
   const counts = useMemo(() => ({
     attention: (rows ?? []).filter((row) => row.status === 'issued' && (row.sunat_status === 'pending' || row.sunat_status === 'rejected')).length,
@@ -157,6 +180,29 @@ export default function InvoicesPage() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Número, cliente o venta" aria-label="Buscar comprobante" className="w-full text-sm border border-slate-200 rounded-xl pl-9 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand" />
         </label>
       </div>
+
+      {rows !== null && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-invoice-stats>
+          {([
+            ['today', 'Emitidos hoy', stats.today, 'text-brand-ink'],
+            ['accepted', 'Aceptados por SUNAT', stats.accepted, 'text-emerald-700'],
+            ['rejected', 'Con error', stats.rejected, 'text-rose-700'],
+            ['pending', 'En proceso', stats.pending, 'text-amber-700'],
+          ] as const).map(([id, label, value, tone]) => (
+            <button
+              key={id}
+              type="button"
+              data-invoice-stat={id}
+              aria-pressed={sunatFilter === id}
+              onClick={() => setSunatFilter(sunatFilter === id ? '' : id)}
+              className={`text-left bg-white px-4 py-3 rounded-2xl border transition-colors ${sunatFilter === id ? 'border-brand ring-2 ring-brand/20' : 'border-slate-100 hover:border-slate-300'}`}
+            >
+              <span className="block text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{label}</span>
+              <span className={`block mt-0.5 text-2xl font-extrabold tabular-nums ${tone}`}>{value}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <SuccessAlert message={notice} />
       <ErrorAlert message={error} />
@@ -230,6 +276,7 @@ export default function InvoicesPage() {
                 {([['PDF', open.pdf_url], ['XML', open.xml_url], ['Constancia de SUNAT (CDR)', open.cdr_url]] as [string, string | null | undefined][]).filter(([, url]) => url).map(([label, url]) => (
                   <a key={label} href={url ?? '#'} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-brand-accent hover:bg-slate-50">{label}</a>
                 ))}
+                <p className="w-full text-xs text-slate-500">Por seguridad, estos enlaces sirven media hora. Si alguno ya no abre, recarga la página.</p>
               </div>
             )}
 

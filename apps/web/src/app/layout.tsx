@@ -3,6 +3,7 @@ import './globals.css';
 import { PlatformProvider } from '@/hooks/usePlatform';
 import { PlatformStyle } from './components/layout/BrandStyle';
 import MaintenanceBanner from './components/layout/MaintenanceBanner';
+import ErrorReporter from './components/layout/ErrorReporter';
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <PlatformProvider>
           <PlatformStyle />
           <MaintenanceBanner />
+          <ErrorReporter />
           {children}
         </PlatformProvider>
       </body>

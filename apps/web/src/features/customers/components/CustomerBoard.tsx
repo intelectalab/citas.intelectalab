@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarCheck, CalendarClock, CalendarPlus, Columns3, Mail, Phone } from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarPlus, Columns3, Mail, PawPrint, Phone, Star } from 'lucide-react';
+import { formatMoney } from '@/lib/currency';
+import { SEGMENT_TONES, type CustomerInsights } from '../insights';
 import { formatPhone } from '@/lib/phone';
 import Select from '@/app/components/common/Select';
 import { CustomerLink } from '@/app/components/common/PersonLink';
@@ -21,6 +23,8 @@ export interface BoardCustomer {
   code?: string;
   email?: string | null;
   document_number?: string | null;
+  insights?: CustomerInsights | null;
+  dependents?: { id: string; name: string }[];
 }
 
 interface CustomerBoardProps {
@@ -31,11 +35,13 @@ interface CustomerBoardProps {
   onEditColumns?: () => void;
   onSchedule?: (row: BoardCustomer) => void;
   onWrite?: (row: BoardCustomer) => void;
+  currency?: string | null;
+  segmentName?: (key: string) => string;
 }
 
 const shortDate = (local: string) => formatDate(dateOf(local), { day: 'numeric', month: 'short', year: 'numeric' });
 
-export default function CustomerBoard({ rows, info, clientWord, onMove, onEditColumns, onSchedule, onWrite }: CustomerBoardProps) {
+export default function CustomerBoard({ rows, info, clientWord, onMove, onEditColumns, onSchedule, onWrite, currency, segmentName }: CustomerBoardProps) {
   const [shown, setShown] = useState<Record<string, number>>({});
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -78,6 +84,8 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
             const cards = rows.filter((row) => columnOf(row) === stage.id);
             const limit = shown[stage.id] ?? PAGE_SIZE;
             const isOver = over === stage.id && dragging !== null;
+            const spend = cards.reduce((sum, row) => sum + (row.insights?.spend_12m ?? 0), 0);
+            const showSpend = cards.some((row) => row.insights?.spend_12m != null);
 
             return (
               <section
@@ -98,6 +106,7 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                     <span className="px-2 py-0.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-full" data-column-count>{cards.length}</span>
                   </div>
                   {stage.description && <p className="text-xs text-slate-500">{stage.description}</p>}
+                  {showSpend && <p className="text-xs font-semibold text-slate-600" data-column-spend title="Gasto de los últimos 12 meses de las tarjetas de esta columna">{formatMoney(spend, currency)} en 12 meses</p>}
                 </header>
 
                 <div className="flex flex-col gap-2.5 flex-1">
@@ -124,7 +133,18 @@ export default function CustomerBoard({ rows, info, clientWord, onMove, onEditCo
                         <span className="flex items-center gap-1.5"><CalendarClock size={12} className="text-sky-600 shrink-0" />
                           {row.next_visit ? <span className="first-letter:uppercase">Próxima cita: {formatDate(dateOf(row.next_visit), { weekday: 'short', day: 'numeric', month: 'short' })}, {timeOf(row.next_visit)}</span> : 'Sin cita agendada'}
                         </span>
+                        {row.insights && (
+                          <span className="flex items-center gap-1.5" data-card-visits><Star size={12} className="text-amber-500 shrink-0" />{row.insights.visits} {row.insights.visits === 1 ? 'visita' : 'visitas'}{row.insights.spend_12m ? ` · ${formatMoney(row.insights.spend_12m, currency)}` : ''}</span>
+                        )}
+                        {(row.dependents?.length ?? 0) > 0 && (
+                          <span className="flex items-center gap-1.5 truncate"><PawPrint size={12} className="text-amber-600 shrink-0" />{row.dependents!.map((d) => d.name).join(', ')}</span>
+                        )}
                       </div>
+                      {segmentName && (row.insights?.segments?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {row.insights!.segments.slice(0, 2).map((k) => <span key={k} className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-md ${SEGMENT_TONES[k] ?? 'bg-slate-100 text-slate-600'}`}>{segmentName(k)}</span>)}
+                        </div>
+                      )}
                       {(onSchedule || onWrite) && (
                         <div className="flex gap-1.5 pt-2 border-t border-slate-100" data-card-actions>
                           {onSchedule && (

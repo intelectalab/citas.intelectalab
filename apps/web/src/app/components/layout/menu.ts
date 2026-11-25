@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary, type Vocabulary } from '@/hooks/useVocabulary';
 import {
   CircleHelp,
+  MessageSquareHeart,
   Home,
   ChartColumn,
   Users,
@@ -56,6 +57,8 @@ import {
   Filter,
   Globe,
   Newspaper,
+  Bug,
+  LibraryBig,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -116,7 +119,9 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
       { name: 'Blog', href: '/admin/blog', icon: Newspaper, saasAdminOnly: true },
       { name: 'Contactos', href: '/admin/contacts', icon: Users, saasAdminOnly: true },
       { name: 'Libro de Reclamaciones', href: '/admin/complaints', icon: BookOpenText, saasAdminOnly: true },
-      { name: 'Auditoría', href: '/admin/audit', icon: History, saasAdminOnly: true },
+      { name: 'Bitácora de la plataforma', href: '/admin/audit', icon: History, saasAdminOnly: true },
+      { name: 'Errores del sistema', href: '/admin/errors', icon: Bug, saasAdminOnly: true },
+      { name: 'Artículos de ayuda', href: '/admin/help', icon: LibraryBig, saasAdminOnly: true },
     ]
   },
   {
@@ -198,6 +203,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
     items: [
       { name: 'Campañas', href: '/campaigns', icon: Megaphone, module: 'marketing', perm: 'campaigns.view' },
       { name: 'Automatizaciones', href: '/automations', icon: Workflow, module: 'automations', perm: 'automations.view' },
+      { name: 'Encuestas y reseñas', href: '/surveys', icon: MessageSquareHeart, perm: 'surveys.view' },
       { name: 'Mensajes', href: '/messages', icon: Mail, perm: 'messages.view' },
       { name: 'Cupones', href: '/coupons', icon: TicketPercent, module: 'pos', perm: 'coupons.view' },
     ]
@@ -213,6 +219,7 @@ const buildMenuGroups = (vocab: Vocabulary, hasModule: (key: string) => boolean)
       { name: 'Usuarios y roles', href: '/users', icon: UserCog, perm: 'users.view' },
       { name: 'Auditoría', href: '/audit', icon: History, perm: 'audit.view' },
       { name: 'Soporte', href: '/support', icon: LifeBuoy, tenantOnly: true },
+      { name: 'Novedades', href: '/news', icon: Megaphone, tenantOnly: true },
     ]
   }
 ];

@@ -570,6 +570,48 @@ class Packages
         }
     }
 
+    public static function returnForVoidedSale(object $sale, ?User $user = null): int
+    {
+        if (!self::ready()) {
+            return 0;
+        }
+
+        $appointments = DB::table('sale_items')->where('sale_id', $sale->id)->whereNotNull('appointment_id')->pluck('appointment_id');
+
+        if ($appointments->isEmpty()) {
+            return 0;
+        }
+
+        $returned = 0;
+
+        foreach (DB::table('package_usages')->whereIn('appointment_id', $appointments)->lockForUpdate()->get() as $usage) {
+            $entries = Schema::hasTable('commission_entries') ? DB::table('commission_entries')->where('package_usage_id', $usage->id) : null;
+
+            if ($entries && (clone $entries)->whereIn('status', ['approved', 'paid'])->exists()) {
+                continue;
+            }
+
+            $entries?->delete();
+            DB::table('package_usages')->where('id', $usage->id)->delete();
+            DB::table('customer_package_items')->where('customer_package_id', $usage->customer_package_id)->where('service_id', $usage->service_id)->where('sessions_used', '>', 0)->decrement('sessions_used', (int) $usage->sessions);
+
+            $package = DB::table('customer_packages')->where('id', $usage->customer_package_id)->first();
+
+            if ($package && $package->status === 'consumed') {
+                DB::table('customer_packages')->where('id', $package->id)->update(['status' => 'active', 'updated_at' => now()]);
+            }
+
+            if ($package) {
+                $code = DB::table('appointments')->where('id', $usage->appointment_id)->value('code');
+                self::event($package, 'unscheduled', "Se anuló la venta {$sale->code}: la sesión de la cita {$code} vuelve al paquete.", $user);
+            }
+
+            $returned++;
+        }
+
+        return $returned;
+    }
+
     public static function manualUse(Tenant $tenant, string $packageId, string $serviceId, string $note, User $user): void
     {
         $package = self::lock($tenant->id, $packageId);

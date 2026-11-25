@@ -1,24 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, DollarSign, Tag, Pencil, Trash2 } from 'lucide-react';
+import { Clock, Pencil, Tag, Trash2 } from 'lucide-react';
+import { formatMoney } from '@/lib/currency';
 import { DataTable, type Column, type ExportColumn, type FilterConfig } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormService from './FormService';
+import ServiceCategoriesPanel from './ServiceCategoriesPanel';
+import ServiceView from './ServiceView';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
-import { api } from '@/lib/axios';
+import { api, readBranchFocus } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
-
-interface ServiceCategory {
-  id: string;
-  name: string;
-}
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { categoryColor, type ServiceCategoryRow } from '../services';
 
 interface Status {
   id: string;
   name: string;
   slug: string;
-  color?: string; 
+  color?: string;
   module?: {
     name: string;
   };
@@ -26,9 +26,12 @@ interface Status {
 
 interface Service {
   id: string;
+  code?: string | null;
+  description?: string | null;
   branch_ids?: string[];
+  branch_names?: string[];
   category_id: string | null;
-  category?: ServiceCategory;
+  category?: { id: string; name: string; color?: string | null };
   status_id: string | null;
   status?: Status;
   name: string;
@@ -36,6 +39,16 @@ interface Service {
   buffer_before_minutes: number;
   buffer_after_minutes: number;
   price: number;
+  kind?: 'individual' | 'group';
+  capacity?: number;
+  online_booking?: boolean;
+  requires_deposit?: boolean;
+  is_virtual?: boolean;
+  requires_record?: boolean;
+  room_names?: string[];
+  professional_ids?: string[];
+  professional_names?: string[];
+  branch_prices?: { branch_id: string; price: number }[];
   created_at?: string;
 }
 
@@ -45,23 +58,26 @@ const STATUS_TABS: { id: string; label: string; test: (s: Service) => boolean }[
   { id: 'inactive', label: 'Inactivos', test: (s) => s.status?.slug === 'inactive' },
 ];
 
+const pill = 'px-2 py-0.5 text-[11px] font-semibold rounded-full whitespace-nowrap';
+
 export default function ServicesTable() {
-  const { can } = useAuth();
+  const { can, hasModule } = useAuth();
+  const vocab = useVocabulary();
+  const [focus] = useState(() => readBranchFocus());
+  const priceOf = (s: Service) => Number(s.branch_prices?.find((p) => p.branch_id === focus)?.price ?? s.price);
   const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([]);
+  const [categories, setCategories] = useState<ServiceCategoryRow[]>([]);
   const [statusOptions, setStatusOptions] = useState<{ label: string; value: string; key: string }[]>([]);
-
-  const [filters, setFilters] = useState<Record<string, any>>({
-    category_id: '',
-    status_id: ''
-  });
+  const [filters, setFilters] = useState<Record<string, any>>({ category_id: '', status_id: '', channel: '' });
 
   const [showModal, setShowModal] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [viewing, setViewing] = useState<Service | null>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const canEdit = can('services.edit');
+  const usesRooms = hasModule('resources');
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -81,39 +97,21 @@ export default function ServicesTable() {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   const fetchCategories = async () => {
-      try {
-        console.log('SERVICES_TABLE: Fetching categories...');
-        const res = await api.get('/service-categories'); 
-        console.log('SERVICES_TABLE: Categories response:', res.data);
-        const options = res.data.map((cat: any) => ({
-          label: cat.name,
-          value: cat.id
-        }));
-        setCategoryOptions(options);
-      } catch (error) {
-        console.warn('SERVICES_TABLE: Error fetching categories:', error);
-        setCategoryOptions([]);
-      }
+    try {
+      const res = await api.get('/service-categories');
+      setCategories(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setCategories([]);
+    }
   };
 
   useEffect(() => {
     const fetchStatuses = async () => {
       try {
-        console.log('SERVICES_TABLE: Fetching statuses...');
         const res = await api.get('/statuses');
-        console.log('SERVICES_TABLE: All statuses received:', res.data);
-        
         const serviceStatuses = res.data.filter((st: any) => st.module?.name === 'services');
-        console.log('SERVICES_TABLE: Filtered statuses for module "services":', serviceStatuses);
-
-        const options = serviceStatuses.map((st: any) => ({
-          label: st.name,
-          value: st.id,
-          key: st.id
-        }));
-        setStatusOptions(options);
-      } catch (error) {
-        console.warn('SERVICES_TABLE: Error fetching statuses:', error);
+        setStatusOptions(serviceStatuses.map((st: any) => ({ label: st.name, value: st.id, key: st.id })));
+      } catch {
         setStatusOptions([]);
       }
     };
@@ -122,61 +120,46 @@ export default function ServicesTable() {
     fetchStatuses();
   }, []);
 
+  const categoryOptions = categories.map((cat) => ({ label: cat.name, value: cat.id }));
+
   const serviceFilterConfigs: FilterConfig[] = [
-    {
-      id: 'category_id',
-      label: 'Categoría',
-      type: 'select',
-      options: categoryOptions.map(cat => ({ ...cat, key: cat.value }))
-    },
-    {
-      id: 'status_id',
-      label: 'Estado',
-      type: 'select',
-      options: statusOptions
-    }
+    { id: 'category_id', label: 'Categoría', type: 'select', options: categoryOptions.map((cat) => ({ ...cat, key: cat.value })) },
+    { id: 'status_id', label: 'Estado', type: 'select', options: statusOptions },
+    { id: 'channel', label: 'Online', type: 'select', options: [{ label: 'Se reserva en línea', value: 'online' }, { label: 'Solo interno', value: 'internal' }] },
   ];
 
   const fetchServices = async (search = searchTerm, currentFilters = filters) => {
     try {
-      setLoading(true);
-      
-      const queryParams: Record<string, any> = {
-        search,
-        ...currentFilters,
-      };
-
-      console.log('SERVICES_TABLE: Fetching services with params:', queryParams);
-      const res = await api.get('/services', { params: queryParams });
-      console.log('SERVICES_TABLE: Services response data:', res.data);
-      
+      const res = await api.get('/services', { params: { search, status_id: currentFilters.status_id } });
       setServices(res.data);
     } catch (error) {
       console.error('SERVICES_TABLE: Error loading services:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get('buscar');
+    if (wanted) {
+      window.history.replaceState(null, '', '/services');
+      setSearchTerm(wanted);
+      fetchServices(wanted);
+      return;
+    }
     fetchServices();
   }, []);
 
   const handleSearchChange = (val: string) => {
-    console.log('SERVICES_TABLE: Search term changed:', val);
     setSearchTerm(val);
     fetchServices(val, filters);
   };
 
   const handleFilterChange = (filterId: string, value: any) => {
-    console.log('SERVICES_TABLE: Filter changed:', filterId, value);
     const updatedFilters = { ...filters, [filterId]: value };
     setFilters(updatedFilters);
-    fetchServices(searchTerm, updatedFilters);
+    if (filterId === 'status_id') fetchServices(searchTerm, updatedFilters);
   };
 
   const handleTabChange = (tabId: string) => {
-    console.log('SERVICES_TABLE: Tab changed:', tabId);
     setActiveTab(tabId);
     if (tabId !== 'all' && filters.status_id) {
       const updatedFilters = { ...filters, status_id: '' };
@@ -186,33 +169,51 @@ export default function ServicesTable() {
   };
 
   const openCreateModal = () => {
-    console.log('SERVICES_TABLE: Opening create modal');
     setEditingService(null);
     setShowModal(true);
   };
 
-  const openEditModal = (service: Service) => {
-    console.log('SERVICES_TABLE: Opening edit modal for service:', service);
-    setEditingService(service);
-    setShowModal(true);
+  const openService = (service: Service) => {
+    if (canEdit) {
+      setEditingService(service);
+      setShowModal(true);
+    } else {
+      setViewing(service);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    console.log('SERVICES_TABLE: Requesting delete for service id:', id);
+  const handleDelete = async (id: string) => {
+    let impact: { future_count: number; has_history: boolean; appointments: { code: string; starts_at: string; customer: string | null }[] } | null = null;
+    try {
+      impact = (await api.get(`/services/${id}/impact`)).data;
+    } catch {
+      impact = null;
+    }
+    const future = impact?.future_count ?? 0;
+    const keep = future > 0 || Boolean(impact?.has_history);
+    const list = (impact?.appointments ?? []).slice(0, 5).map((a) => `${a.code} · ${a.starts_at.replace('T', ' ').split(' ')[0].split('-').reverse().join('/')} ${a.starts_at.slice(11, 16)}${a.customer ? ` · ${a.customer}` : ''}`).join('; ');
     setModalConfig({
       isOpen: true,
       type: 'confirm',
-      title: '¿Eliminar servicio?',
-      message: '¿Estás seguro de que deseas eliminar este servicio? Esta acción no se puede deshacer.',
-      confirmText: 'Sí, eliminar',
+      title: keep ? 'Este servicio no se puede eliminar' : '¿Eliminar servicio?',
+      message: future > 0
+        ? `Tiene ${future} ${future === 1 ? 'cita por venir' : 'citas por venir'} (${list}${future > 5 ? '…' : ''}). Lo dejaremos inactivo para que ya no se pueda agendar; esas citas se mantienen y se atienden normal.`
+        : keep
+          ? 'Ya tiene citas o ventas en su historial. Lo dejaremos inactivo para que ya no se pueda agendar y su historial se mantiene.'
+          : '¿Estás seguro de que deseas eliminar este servicio? Esta acción no se puede deshacer.',
+      confirmText: keep ? 'Dejarlo inactivo' : 'Sí, eliminar',
       cancelText: 'Cancelar',
       onConfirm: async () => {
         try {
           setIsActionLoading(true);
-          console.log('SERVICES_TABLE: Deleting service ID:', id);
-          await api.delete(`/services/${id}`);
+          const res = await api.delete(`/services/${id}`);
           fetchServices(searchTerm, filters);
-          setModalConfig(prev => ({ ...prev, isOpen: false }));
+          fetchCategories();
+          if (res.data?.deactivated) {
+            setModalConfig({ isOpen: true, type: 'alert', title: 'Servicio inactivo', message: res.data.message, confirmText: 'Entendido', onConfirm: () => setModalConfig((prev) => ({ ...prev, isOpen: false })) });
+          } else {
+            setModalConfig(prev => ({ ...prev, isOpen: false }));
+          }
         } catch (error) {
           console.error('SERVICES_TABLE: Error deleting service:', error);
         } finally {
@@ -222,46 +223,64 @@ export default function ServicesTable() {
     });
   };
 
+  const prosLabel = (s: Service) => s.professional_names ?? [];
+  const branchesLabel = (s: Service) => (s.branch_names?.length ? s.branch_names.join(', ') : 'Todas');
+  const channelLabel = (s: Service) => [s.online_booking !== false ? 'Online' : 'Interno', s.requires_deposit ? 'Adelanto' : null].filter(Boolean).join(' + ');
+
   const exportColumns: ExportColumn<Service>[] = [
+    { header: 'Código', value: (s) => s.code ?? '' },
     { header: 'Servicio', value: (s) => s.name },
     { header: 'Categoría', value: (s) => s.category?.name ?? 'Sin categoría' },
+    { header: 'Tipo', value: (s) => (s.kind === 'group' ? `Clase · cupo ${s.capacity ?? 1}` : 'Individual') },
     { header: 'Duración (min)', type: 'number', value: (s) => s.duration_minutes },
     { header: 'Preparación antes (min)', type: 'number', value: (s) => s.buffer_before_minutes },
     { header: 'Preparación después (min)', type: 'number', value: (s) => s.buffer_after_minutes },
-    { header: 'Precio', type: 'money', value: (s) => s.price },
+    { header: 'Precio', type: 'money', value: (s) => priceOf(s) },
+    ...(usesRooms ? [{ header: 'Requiere', value: (s: Service) => (s.room_names ?? []).join(', ') }] : []),
+    { header: vocab.pros, value: (s) => prosLabel(s).join(', ') },
+    { header: 'Sedes', value: (s) => branchesLabel(s) },
+    { header: 'Canal', value: (s) => channelLabel(s) },
     { header: 'Estado', value: (s) => s.status?.name ?? 'Sin estado' },
+    { header: 'Descripción', value: (s) => s.description ?? '' },
     { header: 'Registrado', type: 'date', value: (s) => s.created_at },
   ];
 
   const columns: Column<Service>[] = [
     {
-      header: 'Nombre del Servicio',
+      header: 'Código',
+      cell: (service) => <span key={`code-${service.id}`} className="font-mono text-xs text-slate-600 whitespace-nowrap">{service.code || '—'}</span>,
+    },
+    {
+      header: 'Servicio',
       cell: (service) => (
         <div key={`name-${service.id}`} className={styles.customerCell}>
           <div className={styles.avatar}>
             {service.name[0]?.toUpperCase()}
           </div>
           <div>
-            <span className={styles.customerName}>{service.name}</span>
-            <span className="block text-xs text-slate-400">
+            <button type="button" data-open-service={service.id} onClick={() => openService(service)} className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}>
+              {service.name}
+            </button>
+            {service.kind === 'group' && <span className={`${pill} ml-1.5 bg-sky-50 text-sky-700`} data-class-badge>Clase · cupo {service.capacity ?? 1}</span>}
+            <span className="flex items-center gap-1.5 text-xs text-slate-400">
+              {service.category && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: categoryColor(service.category.color) }} />}
               {service.category?.name || 'Sin categoría'}
-              {service.branch_ids?.length ? ` · solo en ${service.branch_ids.length === 1 ? '1 sede' : `${service.branch_ids.length} sedes`}` : ''}
             </span>
           </div>
         </div>
       ),
     },
     {
-      header: 'Duración & Buffers',
+      header: 'Duración',
       cell: (service) => (
         <div key={`duration-${service.id}`} className="flex flex-col text-xs text-slate-600 gap-0.5">
           <div className="flex items-center gap-1 font-medium">
             <Clock size={13} className="text-slate-400" />
-            <span>{service.duration_minutes} mins</span>
+            <span>{service.duration_minutes} min</span>
           </div>
           {(service.buffer_before_minutes > 0 || service.buffer_after_minutes > 0) && (
             <span className="text-slate-400 text-[11px]">
-              Buffers: {service.buffer_before_minutes}m / {service.buffer_after_minutes}m
+              {[service.buffer_before_minutes > 0 && `Preparación ${service.buffer_before_minutes} min`, service.buffer_after_minutes > 0 && `limpieza ${service.buffer_after_minutes} min`].filter(Boolean).join(' · ')}
             </span>
           )}
         </div>
@@ -271,8 +290,40 @@ export default function ServicesTable() {
       header: 'Precio',
       cell: (service) => (
         <div key={`price-${service.id}`} className="inline-flex items-center gap-1 font-semibold text-slate-700">
-          <DollarSign size={14} className="text-slate-400" />
-          <span>{Number(service.price).toFixed(2)}</span>
+          <span>{formatMoney(priceOf(service))}</span>
+          {focus && service.branch_prices?.some((p) => p.branch_id === focus) && <span className="text-[11px] font-medium text-slate-400" title={`Precio general: ${Number(service.price).toFixed(2)}`}>de la sede</span>}
+          {!focus && (service.branch_prices?.length ?? 0) > 0 && <span className="text-[11px] font-medium text-slate-400">varía por sede</span>}
+        </div>
+      ),
+    },
+    ...(usesRooms ? [{
+      header: 'Requiere',
+      cell: (service: Service) => <span key={`rooms-${service.id}`} className="text-xs text-slate-600">{service.room_names?.length ? service.room_names.join(', ') : '—'}</span>,
+    }] : []),
+    {
+      header: vocab.pros,
+      cell: (service) => {
+        const names = prosLabel(service);
+        return (
+          <span key={`pros-${service.id}`} className="text-sm font-semibold text-slate-700" title={names.join(', ')} data-pros-count={names.length}>
+            {names.length}
+            {!service.professional_ids?.length && names.length > 0 && <span className="block text-[11px] font-medium text-slate-400">{vocab.pick('pro', 'todos', 'todas')}</span>}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Sedes',
+      cell: (service) => <span key={`branches-${service.id}`} className="text-xs text-slate-600">{branchesLabel(service)}</span>,
+    },
+    {
+      header: 'Canal',
+      cell: (service) => (
+        <div key={`channel-${service.id}`} className="flex flex-wrap gap-1">
+          {service.online_booking !== false
+            ? <span className={`${pill} bg-emerald-50 text-emerald-700`}>Online</span>
+            : <span className={`${pill} bg-slate-100 text-slate-600`}>Interno</span>}
+          {service.requires_deposit && <span className={`${pill} bg-amber-50 text-amber-700`}>Adelanto</span>}
         </div>
       ),
     },
@@ -283,16 +334,16 @@ export default function ServicesTable() {
         const statusColor = service.status?.color;
 
         return (
-          <span 
-            key={`status-${service.id}`} 
+          <span
+            key={`status-${service.id}`}
             className="px-2.5 py-1 text-xs rounded-full font-medium inline-flex items-center gap-1.5"
             style={{
               backgroundColor: statusColor ? `${statusColor}15` : '#F1F5F9',
               color: statusColor || '#64748B'
             }}
           >
-            <span 
-              className="w-1.5 h-1.5 rounded-full" 
+            <span
+              className="w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: statusColor || '#94A3B8' }}
             />
             {statusName}
@@ -304,14 +355,14 @@ export default function ServicesTable() {
       header: 'Acciones',
       cell: (service) => (
         <div key={`actions-${service.id}`} className="flex items-center gap-2">
-          {can('services.edit') && (<button 
-            onClick={() => openEditModal(service)}
+          {canEdit && (<button
+            onClick={() => openService(service)}
             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             title="Editar"
           >
             <Pencil size={16} />
           </button>)}
-          {can('services.delete') && (<button 
+          {can('services.delete') && (<button
             onClick={() => handleDelete(service.id)}
             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Eliminar"
@@ -323,12 +374,39 @@ export default function ServicesTable() {
     },
   ];
 
+  const byTab = services.filter((STATUS_TABS.find((t) => t.id === activeTab) ?? STATUS_TABS[0]).test);
+  const shown = byTab.filter((s) =>
+    (!filters.category_id || s.category_id === filters.category_id)
+    && (!filters.channel || (filters.channel === 'online') === (s.online_booking !== false)),
+  );
+  const countIn = (categoryId: string) => byTab.filter((s) => s.category_id === categoryId).length;
+  const chip = (active: boolean) => `inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap ${active ? 'border-brand bg-brand-soft/20 text-brand-ink' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`;
+
   return (
     <div>
+      {categories.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-3 -mx-1 px-1" role="group" aria-label="Categorías" data-category-chips>
+          <button type="button" className={chip(!filters.category_id)} aria-pressed={!filters.category_id} onClick={() => handleFilterChange('category_id', '')}>
+            Todas <span className="text-slate-400">{byTab.length}</span>
+          </button>
+          {categories.map((cat) => (
+            <button key={cat.id} type="button" data-category-chip={cat.id} className={chip(filters.category_id === cat.id)} aria-pressed={filters.category_id === cat.id} onClick={() => handleFilterChange('category_id', filters.category_id === cat.id ? '' : cat.id)}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: categoryColor(cat.color) }} />
+              {cat.name} <span className="text-slate-400">{countIn(cat.id)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <DataTable<Service>
         title="Catálogo de Servicios"
         primaryActionLabel="Nuevo Servicio"
         onPrimaryAction={can('services.create') ? openCreateModal : undefined}
+        headerActions={(can('services.create') || canEdit) ? (
+          <button type="button" data-open-categories onClick={() => setCategoriesOpen(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50">
+            <Tag size={15} /> Categorías
+          </button>
+        ) : undefined}
         tabs={STATUS_TABS.map((t) => ({ id: t.id, label: t.label, count: services.filter(t.test).length }))}
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -342,14 +420,16 @@ export default function ServicesTable() {
           { id: 'created_at', label: 'Fecha de creación', value: (s) => s.created_at },
         ]}
         sortOptions={[
+          { id: 'code', label: 'Código', value: (s) => s.code ?? '' },
           { id: 'name', label: 'Nombre', value: (s) => s.name },
           { id: 'category', label: 'Categoría', value: (s) => s.category?.name },
-          { id: 'price', label: 'Precio', type: 'number', value: (s) => Number(s.price) },
+          { id: 'price', label: 'Precio', type: 'number', value: (s) => priceOf(s) },
           { id: 'duration', label: 'Duración', type: 'number', value: (s) => s.duration_minutes },
+          { id: 'pros', label: vocab.pros, type: 'number', value: (s) => prosLabel(s).length },
           { id: 'status', label: 'Estado', value: (s) => s.status?.name },
           { id: 'created_at', label: 'Fecha de creación', type: 'date', value: (s) => s.created_at },
         ]}
-        data={services.filter((STATUS_TABS.find((t) => t.id === activeTab) ?? STATUS_TABS[0]).test)}
+        data={shown}
         exportTitle="Servicios"
         exportScreen="services"
         exportColumns={exportColumns}
@@ -362,10 +442,23 @@ export default function ServicesTable() {
         onClose={() => { setShowModal(false); fetchCategories(); }}
         initialData={editingService}
         categories={categoryOptions}
-        onSubmitSuccess={() => {
-          console.log('SERVICES_TABLE: Form submitted successfully, refreshing data...');
+        onSubmitSuccess={(saved?: { notice?: string | null }) => {
           fetchServices(searchTerm, filters);
+          fetchCategories();
+          if (saved?.notice) {
+            setModalConfig({ isOpen: true, type: 'alert', title: 'Servicio inactivo', message: saved.notice, confirmText: 'Entendido', onConfirm: () => setModalConfig((prev) => ({ ...prev, isOpen: false })) });
+          }
         }}
+      />
+
+      <ServiceView service={viewing} onClose={() => setViewing(null)} />
+
+      <ServiceCategoriesPanel
+        isOpen={categoriesOpen}
+        onClose={() => setCategoriesOpen(false)}
+        canCreate={can('services.create')}
+        canEdit={canEdit}
+        onChanged={() => { fetchCategories(); fetchServices(searchTerm, filters); }}
       />
 
       <AppModal

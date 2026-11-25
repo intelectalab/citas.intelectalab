@@ -81,9 +81,14 @@ class Walkin
     public static function workingToday(Tenant $tenant, Branch $branch): Collection
     {
         $now = self::now($tenant, $branch);
+        $working = ProfessionalSchedule::effective(ProfessionalSchedule::where('branch_id', $branch->id)->get(), $now->format('Y-m-d'))
+            ->pluck('professional_id')
+            ->unique()
+            ->values()
+            ->all();
 
         return Professional::where('tenant_id', $tenant->id)
-            ->whereIn('id', ProfessionalSchedule::where('branch_id', $branch->id)->where('weekday', $now->dayOfWeek)->select('professional_id'))
+            ->whereIn('id', $working)
             ->with('status')
             ->orderBy('display_name')
             ->get()

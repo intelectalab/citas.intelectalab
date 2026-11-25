@@ -19,6 +19,13 @@ class DataExportController extends Controller
         abort_unless($user->tenant_id, 403);
 
         $validated = $this->validated($request);
+        $customers = in_array($validated['screen'], self::CUSTOMER_SCREENS, true);
+
+        abort_if($customers && !$user->allows('customers.export'), 403, 'Tu cuenta no tiene permiso para descargar la lista de clientes. Pídelo a quien administra la empresa.');
+
+        if ($customers) {
+            $this->warnOwners($user, $validated);
+        }
 
         AuditEvent::create([
             'tenant_id'     => $user->tenant_id,
@@ -40,6 +47,23 @@ class DataExportController extends Controller
         ]);
 
         return response()->json(['ok' => true], 201);
+    }
+
+    public const CUSTOMER_SCREENS = ['customers'];
+
+    private function warnOwners($user, array $validated): void
+    {
+        if (!\App\Support\Notifier::available()) {
+            return;
+        }
+
+        $who = trim("{$user->first_name} {$user->last_name}") ?: $user->email;
+        $rows = (int) $validated['rows'];
+        $body = "{$who} descargó {$rows} " . ($rows === 1 ? 'cliente' : 'clientes') . ' en ' . strtoupper($validated['format']) . '.';
+
+        foreach (array_diff(\App\Support\Notifier::adminIds($user->tenant_id), [$user->id]) as $ownerId) {
+            \App\Support\Notifier::send($user->tenant_id, $ownerId, 'customers.exported', 'Descargaron la lista de clientes', $body, '/settings#descargas', 'customer_export', null);
+        }
     }
 
     public function platform(Request $request)

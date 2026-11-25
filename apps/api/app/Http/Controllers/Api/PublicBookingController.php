@@ -37,6 +37,7 @@ class PublicBookingController extends PortalController
         $policies = $this->policies($tenant);
 
         return response()->json([
+            'captcha_site_key' => \App\Support\Captcha::siteKey('booking'),
             'name'       => $tenant->name,
             'code'       => $tenant->code,
             'open'       => $open,
@@ -53,7 +54,22 @@ class PublicBookingController extends PortalController
             'policies'   => array_merge($policies, ['booking_enabled' => $open]),
             'dependents' => ['enabled' => $dependents['enabled'], 'required' => $dependents['required'], 'items' => []],
             'classes'    => $open && \App\Support\ClassSessions::enabled($tenant),
+            'reviews'    => \App\Support\Surveys::publicReviews($tenant),
+            'tracking'   => \App\Support\LinkPage::tracking($tenant),
+            'business_type' => $tenant->businessType?->name,
+            'initials'   => \App\Support\PublicHours::initials($tenant->name),
+            'branches'   => \App\Support\PublicHours::branches($tenant),
+            'services_online' => $open ? \App\Models\Service::where('tenant_id', $tenant->id)->where('online_booking', true)->where('kind', \App\Models\Service::KIND_INDIVIDUAL)
+                ->with('status')->get()->reject(fn ($s) => $s->status?->slug === 'inactive')->count() : 0,
         ]);
+    }
+
+    public function publicDays(Request $request)
+    {
+        $request->request->remove('ignore_id');
+        $request->query->remove('ignore_id');
+
+        return $this->portalDays($request);
     }
 
     public function cover(string $slug)
@@ -80,6 +96,7 @@ class PublicBookingController extends PortalController
     public function publicBook(Request $request)
     {
         $tenant = $this->tenant($request);
+        \App\Support\Captcha::assert($request, 'booking');
         $dependents = $tenant->dependents();
 
         $validated = $request->validate([
@@ -99,6 +116,7 @@ class PublicBookingController extends PortalController
             'accept_privacy'   => 'accepted',
             'marketing'        => 'nullable|boolean',
             'request_key'      => 'required|uuid',
+            'channel'          => 'nullable|string|max:30',
             'website'          => 'nullable|string|max:0',
         ], [
             'accept_privacy.accepted' => 'Para reservar, acepta la política de privacidad.',
@@ -108,6 +126,7 @@ class PublicBookingController extends PortalController
             'dependent_name.required' => 'Indica el nombre de tu ' . mb_strtolower($tenant->vocabulary()['dependent']) . '.',
         ]);
 
+        \App\Support\Channels::remember($validated['channel'] ?? null);
         $cacheKey = "public-booking:{$tenant->id}:{$validated['request_key']}";
 
         if ($previous = Cache::get($cacheKey)) {
@@ -194,12 +213,28 @@ class PublicBookingController extends PortalController
         }
 
         $data = $response->getData(true);
+        $sameEmail = $customer->email && mb_strtolower(trim((string) ($validated['email'] ?? ''))) === mb_strtolower((string) $customer->email);
 
         return response()->json($data + [
             'portal' => [
-                'email'     => $customer->email,
-                'first_use' => (bool) $customer->must_change_password,
+                'email'     => !$existing || $sameEmail ? $customer->email : self::maskEmail($customer->email),
+                'first_use' => !$existing && (bool) $customer->must_change_password,
+                'known'     => (bool) $existing,
             ],
         ], $response->getStatusCode());
+    }
+
+    public static function maskEmail(?string $email): ?string
+    {
+        if (!$email || !str_contains($email, '@')) {
+            return null;
+        }
+
+        [$user, $domain] = explode('@', mb_strtolower($email), 2);
+        $dot = mb_strrpos($domain, '.');
+        $host = $dot === false ? $domain : mb_substr($domain, 0, $dot);
+        $tld = $dot === false ? '' : mb_substr($domain, $dot);
+
+        return mb_substr($user, 0, 2) . '•••@' . mb_substr($host, 0, 2) . '•••' . $tld;
     }
 }

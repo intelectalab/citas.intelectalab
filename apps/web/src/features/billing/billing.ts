@@ -17,7 +17,37 @@ export interface CancellationInfo {
   discount: { percent: number; cycles: number } | null;
 }
 
+export interface BillingNotice {
+  kind: 'cancel' | 'change' | 'usage';
+  level?: 'warning' | 'full';
+  key?: string;
+  percent?: number;
+  text: string;
+  action: string | null;
+}
+
+export interface PlanAddonsInfo {
+  mine: { id: string; name: string; quantity: number; price: number; currency: string; ends_at: string | null; extra: { label: string; amount: number } | null }[];
+  available: { id: string; name: string; description: string | null; price: number; currency: string; max_quantity: number; owned: number }[];
+  billing_cycle: 'monthly' | 'yearly';
+  total: number;
+}
+
+export interface AddonPreview {
+  kind: 'trial' | 'charge' | 'blocked';
+  addon: { id: string; name: string; currency: string };
+  quantity: number;
+  owned: number;
+  today: number;
+  next_charge: number;
+  days_left: number | null;
+  blocked: boolean;
+  message: string;
+}
+
 export interface Billing {
+  addons?: PlanAddonsInfo | null;
+  notices?: BillingNotice[];
   state: BillingState;
   reason?: string | null;
   free: boolean;
@@ -25,7 +55,7 @@ export interface Billing {
   grace_ends_at: string | null;
   grace_days: number;
   trial_days_left?: number | null;
-  overdue?: { day: number | null; readonly_on: string | null; cancel_on: string | null; last_failure: string | null } | null;
+  overdue?: { day: number | null; readonly_on: string | null; cancel_on: string | null; last_failure: string | null; amount?: number | null; days_to_readonly?: number; since?: string | null } | null;
   provider?: 'culqi' | 'mercadopago' | 'simulated' | null;
   message: string | null;
   can_pay: boolean;
@@ -38,7 +68,7 @@ export interface Billing {
   plan: { id: string; name: string; currency: string } | null;
   billing_cycle: 'monthly' | 'yearly' | null;
   price: number;
-  pending_plan: { id: string; name: string; billing_cycle: 'monthly' | 'yearly' | null; price: number } | null;
+  pending_plan: { id: string; name: string; billing_cycle: 'monthly' | 'yearly' | null; price: number; list_price?: number } | null;
   methods?: { card: boolean; transfer: boolean; transfer_cycles?: string[] };
   next_period?: [string, string] | null;
   review?: TransferPayment | null;
@@ -51,6 +81,7 @@ export interface Billing {
     last4: string | null;
     authorized_at: string | null;
     failed_at: string | null;
+    expiry?: { month: number; year: number; label: string; state: 'ok' | 'soon' | 'expired'; text: string | null } | null;
   } | null;
 }
 
@@ -106,6 +137,60 @@ export interface PlanInvoice {
   period_start: string | null;
   period_end: string | null;
   notes: string | null;
+  list_amount?: number | null;
+  discount?: number;
+  status?: string;
+  status_label?: string;
+  document?: PlanDocument | null;
+}
+
+export interface PlanDocument {
+  label: string;
+  doc_type: 'boleta' | 'factura';
+  status: string | null;
+  state: string | null;
+  message: string | null;
+  simulated: boolean;
+  pdf_url: string | null;
+}
+
+export interface BillingDetails {
+  doc_type: 'boleta' | 'factura';
+  ruc: string | null;
+  business_name: string | null;
+  address: string | null;
+  dni: string | null;
+  email: string | null;
+  saved: boolean;
+}
+
+export interface DataExport {
+  id: string;
+  status: 'queued' | 'running' | 'ready' | 'failed';
+  label: string;
+  rows: number;
+  size: number | null;
+  created_at: string;
+  expires_at: string | null;
+  expired: boolean;
+  url: string | null;
+  error: string | null;
+}
+
+export interface PlanPreview {
+  kind: 'same' | 'trial' | 'pay' | 'free' | 'upgrade' | 'scheduled' | 'yearly_now';
+  plan: { id: string; name: string; currency: string };
+  billing_cycle: 'monthly' | 'yearly';
+  today: number;
+  prorated: { amount: number; days_left: number; days_period: number } | null;
+  credit?: { amount: number; days_left: number; days_period: number; total: number } | null;
+  warnings?: string[];
+  immediate: boolean;
+  next_charge: { amount: number; date: string | null } | null;
+  modules_off: { key: string; name: string }[];
+  exceeded: { key: string; label: string; used: number; limit: number; fix: string }[];
+  blocked: boolean;
+  message: string;
 }
 
 export interface PlanOption {
@@ -115,6 +200,9 @@ export interface PlanOption {
   currency: string;
   price_monthly: number;
   price_yearly: number;
+  free_months?: number;
+  limits?: { key: string; label: string; value: number | null }[];
+  modules?: string[];
 }
 
 export interface BillingPayload {
@@ -122,6 +210,9 @@ export interface BillingPayload {
   history: PlanPayment[];
   invoices: PlanInvoice[];
   plans: PlanOption[];
+  billing_details?: BillingDetails | null;
+  exports?: DataExport[];
+  exports_ready?: boolean;
 }
 
 export const BILLING_STATES: Record<BillingState, { label: string; badge: string }> = {
@@ -155,6 +246,9 @@ export const INVOICE_REASONS: Record<string, string> = {
   online: 'Pago en línea',
   manual: 'Registrado por la plataforma',
   transfer: 'Transferencia',
+  subscription_upgrade: 'Cambio a un plan mayor',
+  addon: 'Complemento',
+  cycle_change: 'Paso a pago anual',
 };
 
 export const cycleLabel = (cycle: string | null | undefined) => (cycle === 'yearly' ? 'al año' : 'al mes');
@@ -162,7 +256,8 @@ export const cycleLabel = (cycle: string | null | undefined) => (cycle === 'year
 export const cardLabel = (card: Billing['card']) => {
   if (!card || card.status !== 'authorized') return null;
   const brand = card.brand ? card.brand.charAt(0).toUpperCase() + card.brand.slice(1) : 'Tarjeta';
-  return card.last4 ? `${brand} terminada en ${card.last4}` : brand;
+  const base = card.last4 ? `${brand} terminada en ${card.last4}` : brand;
+  return card.expiry ? `${base} · vence ${card.expiry.label}` : base;
 };
 
 export const PROVIDER_LABELS: Record<string, string> = { culqi: 'Culqi', mercadopago: 'Mercado Pago', simulated: 'la simulación' };

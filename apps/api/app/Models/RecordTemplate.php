@@ -24,6 +24,7 @@ class RecordTemplate extends Model
         'is_default',
         'version',
         'status',
+        'is_confidential',
     ];
 
     protected $casts = [
@@ -32,7 +33,15 @@ class RecordTemplate extends Model
         'require_signature' => 'boolean',
         'is_default'        => 'boolean',
         'version'           => 'integer',
+        'is_confidential'   => 'boolean',
     ];
+
+    public static function confidentialReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= \Illuminate\Support\Facades\Schema::hasColumn('record_templates', 'is_confidential');
+    }
 
     public function services(): BelongsToMany
     {

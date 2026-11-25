@@ -16,7 +16,7 @@ class CustomerController extends Controller
 
     private function tenantQuery(Request $request)
     {
-        return Customer::where('tenant_id', $request->user()->tenant_id);
+        return Customer::visibleTo($request->user());
     }
 
     private function findForTenant(Request $request, string $id): Customer
@@ -150,6 +150,10 @@ class CustomerController extends Controller
             unset($validated['blood_type']);
         }
 
+        if (!Customer::clinicalAllowed($request->user())) {
+            $validated = array_diff_key($validated, array_flip(Customer::CLINICAL));
+        }
+
         return $validated;
     }
 
@@ -160,7 +164,8 @@ class CustomerController extends Controller
 
     public function index(Request $request)
     {
-        $query = $this->tenantQuery($request)->with($this->relations($request));
+        $pick = $request->boolean('pick') && mb_strlen(trim((string) $request->input('search'))) >= 2 && \App\Support\Access::ownProfessionalId($request->user()) !== null;
+        $query = ($pick ? Customer::where('tenant_id', $request->user()->tenant_id) : $this->tenantQuery($request))->with($this->relations($request));
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search, $request) {
@@ -173,7 +178,26 @@ class CustomerController extends Controller
                 foreach (\App\Support\Phones::searchVariants($search, \App\Support\Phones::prefixFor($request->user()->tenant)) as $digits) {
                     $q->orWhereRaw("regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') like ?", ['%' . $digits . '%']);
                 }
+
+                if ($this->usesDependents($request)) {
+                    $q->orWhereExists(function ($sub) use ($search) {
+                        $sub->select(DB::raw(1))->from('customer_dependents as cd')
+                            ->whereColumn('cd.customer_id', 'customers.id')
+                            ->whereNull('cd.deleted_at');
+                        Search::contains($sub, 'cd.name', $search);
+                    });
+                }
             });
+        }
+
+        $tenant = $request->user()->tenant;
+
+        if (!$pick && $tenant && ($segment = $request->input('segment')) && in_array($segment, \App\Support\CustomerInsights::segmentKeys($request->user()), true)) {
+            $query->whereIn('customers.id', \App\Support\CustomerInsights::segmentIds($tenant, $segment));
+        }
+
+        if (!$pick && ($branchId = $request->input('home_branch_id')) && \Illuminate\Support\Str::isUuid($branchId) && \App\Support\CustomerProfile::fieldsReady()) {
+            $query->where('customers.home_branch_id', $branchId);
         }
 
         if (($tagId = $request->input('tag_id')) && \Illuminate\Support\Str::isUuid($tagId) && \App\Support\CustomerProfile::tagsReady()) {
@@ -191,7 +215,15 @@ class CustomerController extends Controller
 
         $perPage = min(max((int) $request->input('per_page', 10), 1), 500);
 
-        $customers = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        if (!$pick && $request->input('sort') === 'last_visit') {
+            $query->orderByRaw("(SELECT max(lv.starts_at) FROM appointments lv WHERE lv.customer_id = customers.id AND lv.status = 'completed') DESC NULLS LAST");
+        }
+
+        $customers = $query->orderBy('created_at', 'desc')->paginate($pick ? min($perPage, 20) : $perPage);
+
+        if ($pick) {
+            return response()->json($customers->through(fn (Customer $c) => $c->only(['id', 'code', 'first_name', 'last_name', 'document_number', 'phone']) + ($c->relationLoaded('dependents') ? ['dependents' => $c->getRelation('dependents')] : [])));
+        }
 
         if ($tenant = $request->user()->tenant) {
             $ids = $customers->getCollection()->pluck('id')->all();
@@ -199,7 +231,9 @@ class CustomerController extends Controller
             $visits = $this->visits($tenant->id, $ids);
             $local = fn (?string $value) => $value ? \Illuminate\Support\Carbon::parse($value)->setTimezone($tenant->zone())->format('Y-m-d\TH:i:s') : null;
             $tags = \App\Support\CustomerProfile::tagsFor($ids);
-            $customers->getCollection()->each(function (Customer $c) use ($states, $visits, $local, $tags) {
+            $insights = \App\Support\CustomerInsights::forList($tenant, $request->user(), $ids);
+            $customers->getCollection()->each(function (Customer $c) use ($states, $visits, $local, $tags, $insights) {
+                $c->setAttribute('insights', $insights[$c->id] ?? null);
                 $c->setAttribute('tags', $tags[$c->id] ?? []);
                 $c->setAttribute('online_booking', $states[$c->id] ?? null);
                 $c->setAttribute('last_visit', $local($visits[$c->id]->last_visit ?? null));
@@ -208,6 +242,14 @@ class CustomerController extends Controller
         }
 
         return response()->json($customers);
+    }
+
+    public function segments(Request $request)
+    {
+        $tenant = $request->user()->tenant;
+        abort_unless($tenant, 403);
+
+        return response()->json(\App\Support\CustomerInsights::segmentCounts($tenant, $request->user()));
     }
 
     private function visits(string $tenantId, array $ids): array
@@ -264,7 +306,7 @@ class CustomerController extends Controller
             'postal_code' => 'nullable|string|max:20',
             'medical_notes' => 'nullable|string',
             'dependents' => 'sometimes|array|max:20',
-        ] + CustomerDependent::rules('dependents.*.') + $this->extraRules($request), self::EXTRA_MESSAGES);
+        ] + CustomerDependent::staffRules('dependents.*.') + $this->extraRules($request), self::EXTRA_MESSAGES);
 
         $this->assertUniqueDocument($request, $validated['document_number'] ?? null);
         $validated = $this->normalizePhones($request, $validated);
@@ -291,7 +333,7 @@ class CustomerController extends Controller
                 $kind = $request->user()->tenant->dependents()['kind'];
 
                 foreach ($dependents as $dependent) {
-                    $customer->dependents()->create($dependent + ['tenant_id' => $tenantId, 'kind' => $kind]);
+                    $customer->dependents()->create(CustomerDependent::cleanAlert($dependent) + ['tenant_id' => $tenantId, 'kind' => $kind]);
                 }
             }
 

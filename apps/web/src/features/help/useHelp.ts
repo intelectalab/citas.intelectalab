@@ -1,7 +1,9 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { Bell, CircleHelp, UserRound } from 'lucide-react';
+import { Bell, CircleHelp, FileText, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { matchesPath, useMenu } from '@/app/components/layout/menu';
@@ -13,6 +15,31 @@ export interface ShapedTopic {
   points: HelpPoint[];
   tasks: (Omit<HelpTask, 'steps'> & { steps: string[] })[];
   rules: HelpRule[];
+  article?: string;
+}
+
+export interface HelpArticle {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  summary: string | null;
+  body: string;
+  link: string | null;
+  replaces_topic: string | null;
+}
+
+const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+
+let cachedArticles: { items: HelpArticle[]; hidden: string[] } | null = null;
+
+function useHelpArticles(enabled: boolean) {
+  const [data, setData] = useState(cachedArticles);
+  useEffect(() => {
+    if (!enabled || cachedArticles) return;
+    api.get('/help/articles').then((res) => { cachedArticles = { items: res.data.items ?? [], hidden: res.data.hidden ?? [] }; setData(cachedArticles); }).catch(() => undefined);
+  }, [enabled]);
+  return data ?? { items: [], hidden: [] };
 }
 
 export interface HelpScreen {
@@ -36,6 +63,7 @@ export const screenText = (screen: HelpScreen) => plain([
   ...(screen.topic?.points ?? []).flatMap((p) => [p.title, p.text]),
   ...(screen.topic?.tasks ?? []).flatMap((t) => [t.title, ...t.steps]),
   ...(screen.topic?.rules ?? []).flatMap((r) => [r.title, r.text]),
+  screen.topic?.article ? textOf(screen.topic.article) : '',
 ].join(' '));
 
 export function useHelp() {
@@ -46,6 +74,9 @@ export function useHelp() {
   const enabled = !loading && Boolean(user?.help_enabled) && !user?.is_saas_admin && !user?.is_saas_support;
   const topics = helpTopics(vocab);
   const canConfigure = can('settings.view');
+  const articles = useHelpArticles(enabled);
+  const articleTopic = (article: HelpArticle): ShapedTopic => ({ summary: article.summary || textOf(article.body).slice(0, 220), points: [], tasks: [], rules: [], article: article.body });
+  const replacing = new Map(articles.items.filter((a) => a.replaces_topic).map((a) => [a.replaces_topic as string, a]));
 
   const allows = (needs: HelpNeeds) =>
     (!needs.perm || needs.perm.split('|').some((perm) => can(perm)))
@@ -66,14 +97,18 @@ export function useHelp() {
     name: item.name,
     href: item.href,
     icon: item.icon,
-    topic: shape(topics[item.href]),
+    topic: replacing.has(item.href) ? articleTopic(replacing.get(item.href) as HelpArticle) : articles.hidden.includes(item.href) ? null : shape(topics[item.href]),
   });
+
+  const articleSections: HelpSection[] = Object.entries(articles.items.filter((a) => !a.replaces_topic).reduce<Record<string, HelpArticle[]>>((acc, a) => { (acc[a.category] ??= []).push(a); return acc; }, {}))
+    .map(([category, list]) => ({ id: `articles-${category}`, title: category, screens: list.map((a) => ({ name: a.title, href: `${a.link ?? '/help'}#${a.slug}`, icon: FileText, topic: articleTopic(a) })) }));
 
   const sections: HelpSection[] = enabled ? [
     ...groups.map(({ group, items }) => ({ id: group.id, title: group.groupName ?? 'General', screens: items.map(toScreen) })),
     ...(footer.some((item) => item.href !== '/help')
       ? [{ id: 'footer', title: 'Ajustes de tu empresa', screens: footer.filter((item) => item.href !== '/help').map(toScreen) }]
       : []),
+    ...articleSections,
   ] : [];
 
   const extras: HelpScreen[] = [

@@ -3,9 +3,11 @@
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, CalendarX2, CheckCircle, ChevronLeft, ChevronRight, Clock, Hourglass, Plus, RefreshCw, Stethoscope, ThumbsUp } from 'lucide-react';
+import { Ban, CalendarDays, CalendarX2, CheckCircle, ChevronLeft, ChevronRight, Clock, Hourglass, Plus, RefreshCw, Stethoscope, ThumbsUp } from 'lucide-react';
+import FormBlock from '@/features/blocks/components/FormBlock';
+import type { BlockOptions } from '@/features/blocks/blocks';
 import { api } from '@/lib/axios';
-import { useVocabulary } from '@/hooks/useVocabulary';
+import { suggestPlural, useVocabulary } from '@/hooks/useVocabulary';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
@@ -26,6 +28,7 @@ interface DayProfessional {
   id: string;
   display_name: string;
   color_code: string | null;
+  occupancy?: { scheduled_minutes: number; booked_minutes: number; percent: number | null };
   schedules: { starts: string; ends: string }[];
   blocks: { starts: string; ends: string; reason: string | null; kind?: string; class_id?: string }[];
 }
@@ -37,11 +40,44 @@ interface PendingMove {
   time: string;
 }
 
+interface DayRoom {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  blocks: { starts: string; ends: string; reason: string | null; kind?: string }[];
+}
+
+interface DayColumn {
+  id: string;
+  kind: 'pro' | 'room';
+  name: string;
+  schedules: { starts: string; ends: string }[];
+  blocks: DayProfessional['blocks'];
+  occupancy?: DayProfessional['occupancy'];
+  sub: string;
+}
+
+type GroupBy = 'pro' | 'room';
+
+const GROUP_KEY = 'agenda.group-by';
+
+const HATCH = 'repeating-linear-gradient(135deg, rgba(148,163,184,0.28) 0 4px, transparent 4px 8px)';
+
+const MARKS: { test: (a: Appointment) => boolean; label: string }[] = [
+  { test: (a) => ['online', 'portal', 'payment_link'].includes(a.source), label: 'En línea' },
+  { test: (a) => Boolean(a.deposit_paid), label: 'Adelanto' },
+  { test: (a) => Boolean(a.is_virtual || a.video_url), label: 'Videollamada' },
+  { test: (a) => a.source === 'walkin' || a.source === 'kiosk', label: 'Sin cita' },
+];
+
 interface DayPayload {
   date: string;
   now: string;
   holidays?: { name: string; closed: boolean }[];
   professionals: DayProfessional[];
+  rooms?: DayRoom[];
+  respect_buffers?: boolean;
   my_professional_id?: string | null;
   appointments: Appointment[];
 }
@@ -114,7 +150,8 @@ function withLanes(appointments: Appointment[]) {
 }
 
 export default function AgendaDay() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const statusNames: Record<string, string> = Object.fromEntries((user?.tenant?.appointment_statuses ?? []).map((s) => [s.key, s.name]));
   const vocab = useVocabulary();
   const [date, setDate] = useState(todayISO());
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -132,7 +169,32 @@ export default function AgendaDay() {
   const isPhone = useMediaQuery('(max-width: 639px)', false);
   const [phoneView, setPhoneView] = useState<PhoneView>(() => (typeof window === 'undefined' ? 'pro' : readView()));
   const [focusPro, setFocusPro] = useState('');
+  const [groupBy, setGroupBy] = useState<GroupBy>('pro');
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blockOptions, setBlockOptions] = useState<BlockOptions | null>(null);
+  const [blockPreset, setBlockPreset] = useState<{ date?: string; time?: string; professional_id?: string; branch_id?: string; room_id?: string } | null>(null);
   const nowLine = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try { if (localStorage.getItem(GROUP_KEY) === 'room') setGroupBy('room'); } catch {}
+  }, []);
+
+  const chooseGroup = (next: GroupBy) => {
+    setGroupBy(next);
+    setFocusPro('');
+    try { localStorage.setItem(GROUP_KEY, next); } catch {}
+  };
+
+  const openBlock = (preset: { date?: string; time?: string; professional_id?: string; room_id?: string } = {}) => {
+    setBlockPreset({ date, branch_id: branchId, ...preset });
+    setBlockOpen(true);
+  };
+
+  const canBlock = can('blocks.create');
+  useEffect(() => {
+    if (!canBlock) return;
+    api.get('/availability-blocks/options').then((res) => setBlockOptions(res.data)).catch(() => setBlockOptions(null));
+  }, [canBlock]);
   const scrolledFor = useRef('');
 
   useEffect(() => { setMode(readMode()); }, []);
@@ -195,6 +257,17 @@ export default function AgendaDay() {
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     const customerId = query.get('cliente');
+    const wanted = query.get('cita');
+    if (wanted) {
+      window.history.replaceState(null, '', '/agenda');
+      openDetail(wanted);
+      return;
+    }
+    if (query.get('nueva') === '1' && !customerId) {
+      window.history.replaceState(null, '', '/agenda');
+      openNew();
+      return;
+    }
     if (query.get('nueva') !== '1' || !customerId) return;
     window.history.replaceState(null, '', '/agenda');
     const sede = query.get('sede');
@@ -210,7 +283,21 @@ export default function AgendaDay() {
         origin_label: 'Próxima cita: elige el día y la hora',
       }))
       .catch((err) => setError(apiError(err, 'No se pudo abrir la nueva cita.')));
-  }, [openNew]);
+  }, [openNew, openDetail]);
+
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (id) openDetail(id);
+    };
+    const onNew = () => openNew();
+    window.addEventListener('agenda:open', onOpen);
+    window.addEventListener('agenda:new', onNew);
+    return () => {
+      window.removeEventListener('agenda:open', onOpen);
+      window.removeEventListener('agenda:new', onNew);
+    };
+  }, [openNew, openDetail]);
 
   useEffect(() => {
     api.get('/appointments/context')
@@ -260,14 +347,42 @@ export default function AgendaDay() {
     };
   }, [day, appointments]);
 
-  const professionals = day?.professionals ?? [];
-  const countFor = (professionalId: string) => visible.filter((a) => a.professional?.id === professionalId).length;
+  const roomsAvailable = (day?.rooms?.length ?? 0) > 0;
+  const byRoom = groupBy === 'room' && roomsAvailable;
+  const professionals: DayColumn[] = useMemo(() => {
+    if (byRoom) {
+      const open = day?.professionals.flatMap((p) => p.schedules) ?? [];
+      return (day?.rooms ?? []).map((room) => ({
+        id: room.id,
+        kind: 'room' as const,
+        name: room.name,
+        sub: room.active ? room.description || 'Sala' : 'Fuera de uso',
+        schedules: open,
+        blocks: room.blocks,
+      }));
+    }
+    return (day?.professionals ?? []).map((p) => ({
+      id: p.id,
+      kind: 'pro' as const,
+      name: p.display_name,
+      sub: p.schedules.length ? p.schedules.map((s) => `${s.starts}–${s.ends}`).join(' · ') : 'Sin horario este día',
+      schedules: p.schedules,
+      blocks: p.blocks,
+      occupancy: p.occupancy,
+    }));
+  }, [day, byRoom]);
+  const inColumn = (appointment: Appointment, column: DayColumn) => (column.kind === 'room' ? appointment.room?.id === column.id : appointment.professional?.id === column.id);
+  const countFor = (columnId: string) => {
+    const column = professionals.find((c) => c.id === columnId);
+    return column ? visible.filter((a) => inColumn(a, column)).length : 0;
+  };
   const focused = professionals.find((p) => p.id === focusPro)
     ?? professionals.find((p) => p.id === day?.my_professional_id)
     ?? professionals.find((p) => countFor(p.id) > 0)
     ?? professionals[0];
   const phoneList = isPhone && phoneView === 'list';
   const columns = isPhone && focused ? [focused] : professionals;
+  const withoutRoom = byRoom ? visible.filter((a) => !a.room).length : 0;
   const listed = useMemo(() => [...visible].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), [visible]);
 
   const hours = Array.from({ length: (range.end - range.start) / 60 }, (_, i) => range.start + i * 60);
@@ -284,12 +399,12 @@ export default function AgendaDay() {
     nowLine.current?.scrollIntoView({ block: 'center' });
   }, [isPhone, phoneList, isToday, day, branchId]);
 
-  const newAt = (professionalId: string, event: React.MouseEvent<HTMLDivElement>) => {
+  const newAt = (column: DayColumn, event: React.MouseEvent<HTMLDivElement>) => {
     if (!can('agenda.create')) return;
 
     const offset = event.clientY - event.currentTarget.getBoundingClientRect().top;
     const minutes = range.start + Math.floor(offset / PX / slotInterval) * slotInterval;
-    openNew({ date, time: fromMinutes(minutes), professional_id: professionalId, branch_id: branchId });
+    openNew({ date, time: fromMinutes(minutes), ...(column.kind === 'pro' ? { professional_id: column.id } : {}), branch_id: branchId });
   };
 
   const dropMinutes = (event: React.DragEvent<HTMLDivElement>) => {
@@ -306,13 +421,15 @@ export default function AgendaDay() {
     setDropTarget(null);
   };
 
-  const handleDrop = (professional: DayProfessional, event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (column: DayColumn, event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const dragged = dragging.current?.appointment;
     const time = fromMinutes(dropMinutes(event));
     endDrag();
 
     if (!dragged) return;
+    const professional = column.kind === 'pro' ? { id: column.id, display_name: column.name } : dragged.professional;
+    if (!professional) return;
     if (dragged.professional?.id === professional.id && timeOf(dragged.starts_at) === time) return;
 
     setMoveError('');
@@ -395,7 +512,7 @@ export default function AgendaDay() {
             <div className="w-52" data-pro-filter>
               <Select
                 ariaLabel={vocab.pro}
-                placeholder={`Todos los ${vocab.pros.toLowerCase()}`}
+                placeholder={`${vocab.pick('pro', 'Todos los', 'Todas las')} ${suggestPlural(vocab.pro).toLowerCase()}`}
                 value={proFilter}
                 onChange={(e) => setProFilter(String(e.target.value))}
                 options={(rangeData?.professionals ?? []).map((p) => ({ value: p.id, label: p.display_name }))}
@@ -426,6 +543,35 @@ export default function AgendaDay() {
             value={date}
             onChange={(value) => value && setDate(value)}
           />
+
+          {mode === 'day' && roomsAvailable && (
+            <div className="flex items-center gap-0.5 p-0.5 bg-white border border-slate-200 rounded-lg" role="radiogroup" aria-label="Ver por" data-agenda-group>
+              {([['pro', vocab.pros], ['room', 'Salas']] as [GroupBy, string][]).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={groupBy === value}
+                  data-agenda-group-by={value}
+                  onClick={() => chooseGroup(value)}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${groupBy === value ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {can('blocks.create') && (
+            <button
+              type="button"
+              data-agenda-block
+              onClick={() => openBlock({ time: '13:00', ...(day?.my_professional_id ? { professional_id: day.my_professional_id } : {}) })}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <Ban size={16} /> Bloquear horario
+            </button>
+          )}
 
           {can('agenda.create') && (<button
             type="button"
@@ -561,7 +707,7 @@ export default function AgendaDay() {
                         onClick={() => setFocusPro(professional.id)}
                         className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap ${selected ? 'border-brand bg-brand-soft/20 text-brand-ink' : 'border-slate-200 bg-white text-slate-600'}`}
                       >
-                        {professional.display_name}
+                        {professional.name}
                         <span className={`px-1.5 rounded-full text-[11px] ${selected ? 'bg-brand text-white' : 'bg-slate-100 text-slate-500'}`}>{countFor(professional.id)}</span>
                       </button>
                     );
@@ -582,7 +728,7 @@ export default function AgendaDay() {
                       <span className="w-12 shrink-0 text-sm font-bold text-brand-ink tabular-nums">{timeOf(appointment.starts_at)}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold text-slate-800 truncate">{appointment.dependent?.name ?? appointment.customer?.name}</span>
-                        <span className="block text-xs text-slate-500 truncate">{appointment.service?.name}{appointment.professional ? ` · ${appointment.professional.display_name}` : ''}</span>
+                        <span className="block text-xs text-slate-500 truncate">{appointment.service?.name}{appointment.professional ? ` · ${appointment.professional.display_name}` : ''}{appointment.room ? ` · ${appointment.room.name}` : ''}</span>
                       </span>
                       <span className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${style.block}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />{appointment.status_name}
@@ -599,12 +745,20 @@ export default function AgendaDay() {
                 <div className="w-11 sm:w-16 shrink-0" />
                 {columns.map((professional) => (
                   <div key={professional.id} className="flex-1 min-w-[200px] px-3 py-3 border-l border-slate-200">
-                    <ProfessionalLink id={professional.id} className="block text-sm font-bold text-slate-800 truncate">{professional.display_name}</ProfessionalLink>
+                    {professional.kind === 'pro'
+                      ? <ProfessionalLink id={professional.id} className="block text-sm font-bold text-slate-800 truncate">{professional.name}</ProfessionalLink>
+                      : <span className="block text-sm font-bold text-slate-800 truncate" data-room-column={professional.id}>{professional.name}</span>}
                     <span className="block text-xs text-slate-500">
-                      {professional.schedules.length
-                        ? professional.schedules.map((s) => `${s.starts}–${s.ends}`).join(' · ')
-                        : 'Sin horario este día'}
+                      {professional.sub}{professional.kind === 'room' ? ` · ${countFor(professional.id)} ${countFor(professional.id) === 1 ? 'cita' : 'citas'}` : ''}
                     </span>
+                    {professional.occupancy?.percent !== null && professional.occupancy?.percent !== undefined && (
+                      <div className="mt-1.5 flex items-center gap-2" data-occupancy={professional.occupancy.percent} title={`${professional.occupancy.booked_minutes} de ${professional.occupancy.scheduled_minutes} minutos de su horario tienen citas`}>
+                        <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div className="h-full rounded-full bg-brand" style={{ width: `${professional.occupancy.percent}%` }} />
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-500 shrink-0">{professional.occupancy.percent} % ocupado</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -622,7 +776,7 @@ export default function AgendaDay() {
                   <div
                     key={professional.id}
                     data-column={professional.id}
-                    onClick={(event) => newAt(professional.id, event)}
+                    onClick={(event) => newAt(professional, event)}
                     onDragOver={(event) => {
                       if (!dragging.current) return;
                       event.preventDefault();
@@ -661,13 +815,13 @@ export default function AgendaDay() {
                           key={index}
                           data-block
                           onClick={(event) => event.stopPropagation()}
-                          title={block.kind === 'held' ? 'Horario apartado mientras revisan el comprobante del adelanto' : undefined}
+                          title={block.kind === 'held' ? 'Horario apartado mientras revisan el comprobante del adelanto' : block.reason ?? undefined}
                           className={`absolute inset-x-0 border-y px-2 py-1 overflow-hidden cursor-not-allowed ${block.kind === 'held' ? 'bg-amber-50 border-amber-300 border-dashed' : 'bg-slate-200 border-slate-300'}`}
-                          style={{ top: from, height: to - from }}
+                          style={{ top: from, height: to - from, ...(block.kind === 'held' ? {} : { backgroundImage: HATCH }) }}
                         >
                           {block.kind === 'held'
                             ? <span className="text-[11px] font-semibold text-amber-700">Reserva por confirmar{block.reason ? ` · ${block.reason}` : ''}</span>
-                            : <span className="text-[11px] font-semibold text-slate-500">No atiende{block.reason ? ` · ${block.reason}` : ''}</span>}
+                            : <span className="text-[11px] font-semibold text-slate-500">{professional.kind === 'room' ? 'Sala bloqueada' : 'No atiende'}{block.reason ? ` · ${block.reason}` : ''}</span>}
                         </div>
                       );
                     })}
@@ -682,7 +836,18 @@ export default function AgendaDay() {
                       </div>
                     )}
 
-                    {withLanes(visible.filter((a) => a.professional?.id === professional.id)).map(({ appointment, lane, lanes }) => {
+                    {day?.respect_buffers && visible.filter((a) => inColumn(a, professional) && !RELEASED.includes(a.status)).flatMap((appointment) => {
+                      const start = toMinutes(timeOf(appointment.starts_at));
+                      const end = toMinutes(timeOf(appointment.ends_at)) || 24 * 60;
+                      const parts: { key: string; from: number; to: number; label: string }[] = [];
+                      if ((appointment.buffers?.before ?? 0) > 0) parts.push({ key: `${appointment.id}-b`, from: start - appointment.buffers!.before, to: start, label: `Preparación ${appointment.buffers!.before} min` });
+                      if ((appointment.buffers?.after ?? 0) > 0) parts.push({ key: `${appointment.id}-a`, from: end, to: end + appointment.buffers!.after, label: `Limpieza ${appointment.buffers!.after} min` });
+                      return parts.map((part) => (
+                        <div key={part.key} data-buffer title={part.label} className="absolute inset-x-1 rounded border border-dashed border-slate-300 pointer-events-none" style={{ top: top(part.from), height: Math.max(4, top(part.to) - top(part.from)), backgroundImage: HATCH }} />
+                      ));
+                    })}
+
+                    {withLanes(visible.filter((a) => inColumn(a, professional))).map(({ appointment, lane, lanes }) => {
                       const from = top(toMinutes(timeOf(appointment.starts_at)));
                       const occupiedMinutes = Math.max(0, toMinutes(timeOf(appointment.occupied_until)) - toMinutes(timeOf(appointment.starts_at)))
                         || appointment.duration_minutes;
@@ -704,7 +869,7 @@ export default function AgendaDay() {
                           }}
                           onDragEnd={endDrag}
                           onClick={(event) => { event.stopPropagation(); openDetail(appointment.id); }}
-                          title={`${appointment.code} · ${appointment.customer?.name ?? ''} · ${appointment.service?.name ?? ''} · ${appointment.status_name}`}
+                          title={`${appointment.code} · ${appointment.customer?.name ?? ''} · ${appointment.service?.name ?? ''}${appointment.room ? ` · ${appointment.room.name}` : ''} · ${appointment.status_name}${MARKS.filter((mark) => mark.test(appointment)).map((mark) => ` · ${mark.label}`).join('')}`}
                           className={`absolute rounded-lg border px-2 py-1 text-left overflow-hidden shadow-xs hover:shadow-md transition-shadow ${
                             appointment.can_reschedule ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                           } ${style.block} ${RELEASED.includes(appointment.status) ? 'opacity-70' : ''} ${
@@ -731,11 +896,18 @@ export default function AgendaDay() {
                           </span>
                           {blockHeight >= 36 && (
                             <span className="block text-[11px] leading-tight truncate opacity-90">
-                              {appointment.service?.name}{appointment.dependent ? ` · ${appointment.customer?.name}` : ''}
+                              {appointment.service?.name}{appointment.dependent ? ` · ${appointment.customer?.name}` : ''}{professional.kind === 'room' ? (appointment.professional ? ` · ${appointment.professional.display_name}` : '') : appointment.room ? ` · ${appointment.room.name}` : ''}
                             </span>
                           )}
                           {blockHeight >= 56 && (
                             <span className="block text-[11px] leading-tight truncate opacity-75">{appointment.status_name}</span>
+                          )}
+                          {blockHeight >= 36 && MARKS.some((mark) => mark.test(appointment)) && (
+                            <span className="flex flex-wrap gap-1 mt-0.5" data-marks>
+                              {MARKS.filter((mark) => mark.test(appointment)).map((mark) => (
+                                <span key={mark.label} className="px-1 rounded bg-white/70 text-[10px] font-bold leading-tight">{mark.label}</span>
+                              ))}
+                            </span>
                           )}
                         </button>
                       );
@@ -753,6 +925,38 @@ export default function AgendaDay() {
           </>
         )}
       </div>
+
+      {mode === 'day' && withoutRoom > 0 && (
+        <p className="text-xs text-slate-500" data-without-room>
+          {withoutRoom === 1 ? '1 cita del día no tiene sala' : `${withoutRoom} citas del día no tienen sala`}: no aparecen en esta vista. Míralas en «{vocab.pros}».
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600" data-agenda-legend>
+        {['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'no_show'].map((status) => (
+          <span key={status} className="inline-flex items-center gap-1.5">
+            <span className={`w-2.5 h-2.5 rounded-full ${statusStyle(status).dot}`} />
+            {statusNames[status] ?? status}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-5 h-3 rounded border border-dashed border-slate-300" style={{ backgroundImage: HATCH }} />
+          Bloqueo, ausencia o preparación y limpieza
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-5 h-3 rounded border border-slate-200 bg-slate-100" />
+          Fuera de horario
+        </span>
+      </div>
+
+      <FormBlock
+        isOpen={blockOpen}
+        onClose={() => setBlockOpen(false)}
+        initialData={null}
+        options={blockOptions}
+        preset={blockPreset}
+        onSaved={load}
+      />
 
       {panels}
 

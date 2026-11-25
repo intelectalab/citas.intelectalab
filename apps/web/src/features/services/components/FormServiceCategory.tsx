@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/axios';
+import { ColorPicker } from '@/features/customers/components/TagChip';
+import { CATEGORY_COLORS } from '../services';
 
 interface FormServiceCategoryProps {
     isOpen: boolean;
@@ -18,6 +20,7 @@ export default function FormServiceCategory({
     existingCategories = [],
 }: FormServiceCategoryProps) {
     const [name, setName] = useState('');
+    const [color, setColor] = useState(CATEGORY_COLORS[0]);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -57,7 +60,7 @@ export default function FormServiceCategory({
             setErrorMessage(null);
             setSuccessMessage(null);
 
-            const res = await api.post('/service-categories', { name: trimmedName });
+            const res = await api.post('/service-categories', { name: trimmedName, color });
 
             setSuccessMessage('¡Categoría creada con éxito!');
 
@@ -124,6 +127,11 @@ export default function FormServiceCategory({
                             }`}
                             placeholder="Ej. Cortes, Barbería, Masajes"
                         />
+                    </div>
+
+                    <div>
+                        <span className="block text-xs font-semibold text-slate-600 mb-1.5">Color</span>
+                        <ColorPicker colors={CATEGORY_COLORS} value={color} onChange={setColor} />
                     </div>
 
                     {errorMessage && (

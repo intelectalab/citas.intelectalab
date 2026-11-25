@@ -10,5 +10,6 @@ class EssentialDataSeeder extends Seeder
     public function run(): void
     {
         DB::unprepared(file_get_contents(database_path('seeders/sql/essential.sql')));
+        \App\Support\BusinessTemplates::applyExtras();
     }
 }

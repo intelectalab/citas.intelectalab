@@ -72,7 +72,8 @@ class RecordTemplateController extends Controller
                 'consent_text'    => $data['consent_text'],
                 'require_consent' => $data['require_consent'],
                 'is_default'      => !RecordTemplate::where('tenant_id', $tenant->id)->exists(),
-            ]);
+                'status'          => $data['status'] ?? 'active',
+            ] + (RecordTemplate::confidentialReady() ? ['is_confidential' => $data['is_confidential']] : []));
 
             $this->syncServices($template, $data['service_ids']);
 
@@ -107,7 +108,8 @@ class RecordTemplateController extends Controller
                 'consent_text'    => $data['consent_text'],
                 'require_consent' => $data['require_consent'],
                 'version'         => $template->version + ($fieldsChanged ? 1 : 0),
-            ]);
+                'status'          => $data['status'] ?? $template->status,
+            ] + (RecordTemplate::confidentialReady() ? ['is_confidential' => $data['is_confidential']] : []));
 
             $this->syncServices($template, $data['service_ids']);
         });
@@ -155,6 +157,8 @@ class RecordTemplateController extends Controller
             'fields.*.type'    => ['required', Rule::in(RecordFields::TYPES)],
             'consent_text'     => 'nullable|string|max:5000',
             'require_consent'  => 'boolean',
+            'is_confidential'  => 'boolean',
+            'active'           => 'nullable|boolean',
             'service_ids'      => 'present|array',
             'service_ids.*'    => 'uuid',
         ], [
@@ -183,6 +187,8 @@ class RecordTemplateController extends Controller
             'consent_text'    => $consent ?: null,
             'require_consent' => !empty($validated['require_consent']),
             'service_ids'     => $serviceIds,
+            'is_confidential' => !empty($validated['is_confidential']),
+            'status'          => array_key_exists('active', $validated) && $validated['active'] !== null ? ($validated['active'] ? 'active' : 'inactive') : null,
         ];
     }
 
@@ -195,6 +201,8 @@ class RecordTemplateController extends Controller
             'version'         => $template->version,
             'require_consent' => (bool) $template->require_consent,
             'consent_text'    => $template->consent_text ? mb_strimwidth($template->consent_text, 0, 160, '…') : null,
+            'is_confidential' => (bool) ($template->is_confidential ?? false),
+            'status'          => $template->status === 'inactive' ? 'Inactiva' : 'Activa',
             'services'        => DB::table('record_template_services')
                 ->join('services', 'services.id', '=', 'record_template_services.service_id')
                 ->where('record_template_services.record_template_id', $template->id)
@@ -231,6 +239,8 @@ class RecordTemplateController extends Controller
             'version'         => $template->version,
             'service_ids'     => $template->services->pluck('id')->values(),
             'records_count'   => $template->records_count ?? 0,
+            'is_confidential' => (bool) ($template->is_confidential ?? false),
+            'active'          => $template->status !== 'inactive',
         ];
     }
 }

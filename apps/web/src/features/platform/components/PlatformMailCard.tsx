@@ -12,6 +12,10 @@ import { momentOf } from '@/features/sales/sales';
 import Switch from '@/app/components/common/Switch';
 
 interface PlatformMailData {
+  transport?: 'smtp' | 'api';
+  service?: string | null;
+  region?: string | null;
+  services?: { key: string; label: string }[];
   configured: boolean;
   ready: boolean;
   host: string | null;
@@ -34,7 +38,7 @@ const inputClass = 'w-full text-sm border border-slate-200 rounded-xl px-3.5 py-
 export default function PlatformMailCard() {
   const { user } = useAuth();
   const [data, setData] = useState<PlatformMailData | null>(null);
-  const [form, setForm] = useState({ host: '', port: 465, security: 'ssl' as 'ssl' | 'tls', username: '', password: '', from_address: '', from_name: '' });
+  const [form, setForm] = useState({ transport: 'smtp' as 'smtp' | 'api', service: '', region: '', host: '', port: 465, security: 'ssl' as 'ssl' | 'tls', username: '', password: '', from_address: '', from_name: '' });
   const [testTo, setTestTo] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -44,6 +48,9 @@ export default function PlatformMailCard() {
   const apply = (payload: PlatformMailData) => {
     setData(payload);
     setForm({
+      transport: payload.transport ?? 'smtp',
+      service: payload.service ?? '',
+      region: payload.region ?? '',
       host: payload.host ?? '',
       port: payload.port ?? 465,
       security: payload.security ?? 'ssl',
@@ -109,7 +116,7 @@ export default function PlatformMailCard() {
   };
 
   const save = async () => {
-    const payload = await run('save', () => api.put('/admin/platform-mail', { ...form, username: form.username || null, password: form.password || null, from_name: form.from_name || null }));
+    const payload = await run('save', () => api.put('/admin/platform-mail', { ...form, service: form.transport === 'api' ? form.service : null, region: form.service === 'ses' ? (form.region || 'us-east-1') : null, username: form.username || null, password: form.password || null, from_name: form.from_name || null }));
     if (payload) {
       apply(payload);
       setNotice(payload.ready ? 'Cambios guardados.' : 'Guardado. Ahora envía un correo de prueba: hasta que llegue, no se piden códigos al entrar.');
@@ -153,6 +160,49 @@ export default function PlatformMailCard() {
         </p>
       )}
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Cómo se envía">
+        {([['smtp', 'Servidor de correo (SMTP)', 'El buzón de tu hosting, Gmail u otro.'], ['api', 'Servicio de envíos por API', 'Resend, Brevo o Amazon SES: más rápido y con mejor entrega.']] as const).map(([key, label, hint]) => (
+          <OptionCard key={key} type="button" role="radio" aria-checked={form.transport === key} data-mail-transport={key} selected={form.transport === key} onClick={() => set('transport', key)} className="text-left rounded-xl border px-3.5 py-2.5">
+            <span className="block text-sm font-bold text-brand-ink">{label}</span>
+            <span className="block text-xs text-slate-500">{hint}</span>
+          </OptionCard>
+        ))}
+      </div>
+
+      {form.transport === 'api' && (
+        <div className="space-y-3" data-mail-api>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Servicio de envíos">
+            {(data.services ?? []).map((svc) => (
+              <OptionCard key={svc.key} type="button" role="radio" aria-checked={form.service === svc.key} data-mail-service={svc.key} selected={form.service === svc.key} onClick={() => set('service', svc.key)} className="text-left rounded-xl border px-3.5 py-2.5">
+                <span className="block text-sm font-bold text-brand-ink">{svc.label}</span>
+              </OptionCard>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            {form.service === 'ses' ? 'En AWS crea un usuario con permiso para enviar correos (ses:SendRawEmail) y copia su Access key ID y su Secret access key. El remitente debe estar verificado en SES.' : form.service === 'brevo' ? 'En Brevo entra a SMTP y API → Claves API y crea una. El remitente debe estar verificado en Brevo.' : 'En Resend entra a API Keys y crea una con permiso para enviar. El dominio del remitente debe estar verificado en Resend.'}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {form.service === 'ses' && (
+              <>
+                <div>
+                  <label className={labelClass} htmlFor="pm-key-id">Access key ID</label>
+                  <input id="pm-key-id" maxLength={190} value={form.username} onChange={(e) => set('username', e.target.value.trim())} className={inputClass + ' font-mono'} />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="pm-region">Región</label>
+                  <input id="pm-region" maxLength={30} value={form.region} onChange={(e) => set('region', e.target.value.trim())} placeholder="us-east-1" className={inputClass + ' font-mono'} />
+                </div>
+              </>
+            )}
+            <div>
+              <label className={labelClass} htmlFor="pm-api-key">{form.service === 'ses' ? 'Secret access key' : 'Clave (API key)'}</label>
+              <input id="pm-api-key" type="password" autoComplete="new-password" maxLength={255} value={form.password} onChange={(e) => set('password', e.target.value)} placeholder={data.has_password && data.transport === 'api' ? '•••••••• (guardada)' : ''} className={inputClass + ' font-mono'} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {form.transport === 'smtp' && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
           <label className={labelClass} htmlFor="pm-host">Servidor de salida (SMTP)</label>
@@ -163,7 +213,9 @@ export default function PlatformMailCard() {
           <input id="pm-port" type="number" min={1} max={65535} value={form.port} onChange={(e) => set('port', Number(e.target.value))} className={inputClass} />
         </div>
       </div>
+      )}
 
+      {form.transport === 'smtp' && (
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Seguridad">
         {([['ssl', 'SSL', 'Normalmente con el puerto 465'], ['tls', 'TLS', 'Normalmente con el puerto 587']] as const).map(([key, label, hint]) => (
           <OptionCard key={key} type="button" role="radio" aria-checked={form.security === key} data-security={key} selected={form.security === key} onClick={() => setForm((prev) => ({ ...prev, security: key, port: key === 'ssl' ? 465 : 587 }))} className="text-left rounded-xl border px-3.5 py-2.5">
@@ -172,8 +224,11 @@ export default function PlatformMailCard() {
           </OptionCard>
         ))}
       </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {form.transport === 'smtp' && (
+        <>
         <div>
           <label className={labelClass} htmlFor="pm-user">Usuario</label>
           <input id="pm-user" maxLength={190} value={form.username} onChange={(e) => set('username', e.target.value)} placeholder="Casi siempre, el mismo correo" className={inputClass} />
@@ -182,6 +237,8 @@ export default function PlatformMailCard() {
           <label className={labelClass} htmlFor="pm-pass">Contraseña</label>
           <input id="pm-pass" type="password" autoComplete="new-password" maxLength={255} value={form.password} onChange={(e) => set('password', e.target.value)} placeholder={data.has_password ? '•••••••• (guardada)' : 'La del buzón'} className={inputClass} />
         </div>
+        </>
+        )}
         <div>
           <label className={labelClass} htmlFor="pm-from">Correo remitente</label>
           <input id="pm-from" type="email" maxLength={190} value={form.from_address} onChange={(e) => set('from_address', e.target.value)} placeholder="no-responder@tudominio.com" className={inputClass} />
@@ -227,7 +284,7 @@ export default function PlatformMailCard() {
       <ErrorAlert message={error} />
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" data-mail-save disabled={busy !== '' || !form.host || !form.from_address} onClick={save} className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
+        <button type="button" data-mail-save disabled={busy !== '' || !form.from_address || (form.transport === 'smtp' ? !form.host : !form.service)} onClick={save} className="px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
           {busy === 'save' ? 'Guardando...' : 'Guardar correo'}
         </button>
         {data.configured && (

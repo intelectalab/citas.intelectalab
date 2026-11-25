@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import PlanCard, { type PublicPlan } from '@/features/subscriptions/components/PlanCard';
+import type { PublicPlan } from '@/features/subscriptions/components/PlanCard';
+import SitePlanCard from './SitePlanCard';
 import { RegisterModal } from '@/features/subscriptions/components/RegisterModal';
 import type { WebPlan } from '../web';
 
-export default function PricingPlans({ plans, allowSignup, showToggle = true }: { plans: WebPlan[]; allowSignup: boolean; showToggle?: boolean }) {
+export default function PricingPlans({ plans: list, allowSignup, showToggle = true, recommended, recommendedLabel }: { plans: WebPlan[]; allowSignup: boolean; showToggle?: boolean; recommended?: string | null; recommendedLabel?: string }) {
+  const hit = recommended ? list.some((plan) => plan.slug === recommended) : false;
+  const plans = hit ? list.map((plan) => ({ ...plan, is_popular: plan.slug === recommended })) : list;
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [selected, setSelected] = useState<PublicPlan | null>(null);
   const bestSaving = plans.reduce((best, plan) => {
@@ -13,6 +16,7 @@ export default function PricingPlans({ plans, allowSignup, showToggle = true }: 
     return full > 0 && plan.price_yearly > 0 ? Math.max(best, Math.round(((full - plan.price_yearly) / full) * 100)) : best;
   }, 0);
   const anyYearly = plans.some((plan) => plan.price_yearly > 0);
+  const ordered = [...plans].sort((a, b) => a.price_monthly - b.price_monthly);
 
   const pick = (plan: PublicPlan) => {
     if (!allowSignup) {
@@ -37,16 +41,16 @@ export default function PricingPlans({ plans, allowSignup, showToggle = true }: 
                 className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors cursor-pointer ${cycle === value ? 'bg-white text-brand-ink shadow-sm' : 'text-slate-500 hover:text-brand-ink'}`}
               >
                 {value === 'monthly' ? 'Mensual' : 'Anual'}
-                {value === 'yearly' && bestSaving > 0 && <span className="ml-1.5 text-[11px] font-bold text-emerald-700">-{bestSaving} %</span>}
+                {value === 'yearly' && bestSaving > 0 && <span className="ml-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5">ahorra {bestSaving} %</span>}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6 items-stretch pt-3`}>
-        {plans.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} cycle={cycle} onSelect={pick} actionLabel="Probar gratis con este plan" />
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-5 items-stretch pt-4`}>
+        {plans.map((plan, index) => (
+          <SitePlanCard key={plan.id} plan={plan} previous={ordered[ordered.indexOf(plan) - 1] ?? null} cycle={cycle} onSelect={pick} index={index} badge={hit && plan.is_popular ? (recommendedLabel ?? 'Recomendado para ti') : undefined} />
         ))}
       </div>
 

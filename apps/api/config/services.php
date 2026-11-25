@@ -27,10 +27,21 @@ return [
         'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com'),
         'graph_version' => env('WHATSAPP_GRAPH_VERSION', 'v21.0'),
         'simulate' => (bool) env('WHATSAPP_SIMULATE', env('APP_ENV') === 'local'),
+        'dialog_url' => env('WHATSAPP_360DIALOG_URL', 'https://waba-v2.360dialog.io'),
     ],
 
     'assistant' => [
         'provider' => env('ASSISTANT_PROVIDER', 'none'),
+        'anthropic_url' => env('ANTHROPIC_API_URL', 'https://api.anthropic.com'),
+        'anthropic_model' => env('ASSISTANT_ANTHROPIC_MODEL', 'claude-sonnet-5-5'),
+        'openai_url' => env('OPENAI_API_URL', 'https://api.openai.com'),
+        'openai_model' => env('ASSISTANT_OPENAI_MODEL', 'gpt-5-mini'),
+        'max_turns' => (int) env('ASSISTANT_MAX_TURNS', 6),
+    ],
+
+    'mail_api' => [
+        'resend_url' => env('RESEND_API_URL', 'https://api.resend.com'),
+        'brevo_url' => env('BREVO_API_URL', 'https://api.brevo.com'),
     ],
 
     'turnstile' => [

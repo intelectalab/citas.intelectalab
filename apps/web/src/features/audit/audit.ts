@@ -6,6 +6,7 @@ export interface AuditChange {
 
 export interface AuditRow {
   id: string;
+  code?: string | null;
   at: string;
   action: string;
   label: string;

@@ -4,8 +4,9 @@ export interface RuleDefinition {
   key: string;
   label: string;
   hint: string;
-  type: 'boolean' | 'number';
+  type: 'boolean' | 'number' | 'choice';
   unit?: string;
+  options?: { value: string; label: string }[];
 }
 
 export interface RuleGroup {
@@ -49,10 +50,17 @@ export const RULE_GROUPS: RuleGroup[] = [
     ],
   },
   {
+    title: 'Lista de espera',
+    rules: [
+      { key: 'waitlist.enabled', label: 'Usar la lista de espera', hint: 'Si un día está lleno, se anota a quien quiere un horario y se le avisa cuando se libera uno.', type: 'boolean' },
+      { key: 'waitlist.notify_mode', label: 'A quién se avisa cuando se libera un horario', hint: 'A todos los que encajan a la vez, o solo al primero de la lista y luego al siguiente.', type: 'choice', options: [{ value: 'all', label: 'A todos los que encajan' }, { value: 'first', label: 'Solo al primero, en orden' }] },
+      { key: 'waitlist.reply_hours', label: 'Tiempo para responder el aviso', hint: 'Si avisa solo al primero: cuántas horas tiene para reservar antes de avisar al siguiente.', type: 'number', unit: 'horas' },
+    ],
+  },
+  {
     title: 'Fichas y seguimiento',
     rules: [
       { key: 'records.require_on_complete', label: 'Ficha obligatoria para completar la cita', hint: 'En los servicios que se atienden con ficha.', type: 'boolean' },
-      { key: 'records.lock_hours', label: 'Bloquear la edición de la ficha', hint: 'Horas después de la atención. Luego solo se agregan notas.', type: 'number', unit: 'horas' },
       { key: 'records.private_to_author', label: 'Ficha visible solo para quien la escribió', hint: 'Para notas confidenciales, como en psicología.', type: 'boolean' },
       { key: 'recalls.notify_days', label: 'Avisar del próximo control', hint: 'Con cuántos días de anticipación.', type: 'number', unit: 'días' },
     ],
@@ -61,6 +69,17 @@ export const RULE_GROUPS: RuleGroup[] = [
     title: 'Ventas e inventario',
     rules: [
       { key: 'pos.tips_enabled', label: 'Aceptar propinas', hint: 'Muestra la propina al cobrar.', type: 'boolean' },
+      { key: 'pos.pay_before_service', label: 'Cobrar antes de atender', hint: 'La cita no se inicia ni se completa hasta que esté pagada. Apagado: se cobra al final.', type: 'boolean' },
+      { key: 'pos.arrive_minutes', label: 'Llegar antes para pagar', hint: 'Cuántos minutos antes de la cita se pide llegar cuando se cobra antes de atender.', type: 'number', unit: 'min' },
+      { key: 'pos.require_open_cash', label: 'Exigir caja abierta para cobrar en efectivo', hint: 'Sin un turno de caja abierto no se registra efectivo.', type: 'boolean' },
+      { key: 'cash.auto_register', label: 'Crear la caja de cada sede sola', hint: 'Al abrir el primer turno, si la sede no tiene caja, se crea una.', type: 'boolean' },
+      { key: 'cash.tolerance', label: 'Diferencia aceptada al cerrar caja', hint: 'Monto de sobrante o faltante que no se marca como descuadre.', type: 'number' },
+      { key: 'pos.partial_payments', label: 'Aceptar pagos a cuenta', hint: 'Se puede pagar una parte y dejar saldo pendiente.', type: 'boolean' },
+      { key: 'pos.prices_include_tax', label: 'Los precios ya incluyen el IGV', hint: 'Apagado: el impuesto se suma al precio al cobrar.', type: 'boolean' },
+      { key: 'pos.tax_rate', label: 'Impuesto (IGV)', hint: 'Porcentaje de impuesto de las ventas.', type: 'number', unit: '%' },
+      { key: 'invoice.default_type', label: 'Comprobante que sale por defecto', hint: 'El que se propone al cobrar. Se puede cambiar en cada venta.', type: 'choice', options: [{ value: 'boleta', label: 'Boleta' }, { value: 'factura', label: 'Factura' }] },
+      { key: 'pos.refund_days', label: 'Plazo para devolver', hint: 'Días después de la venta en que se acepta una devolución.', type: 'number', unit: 'días' },
+      { key: 'pos.refund_approval_over', label: 'Devoluciones que necesitan aprobación', hint: 'Desde este monto una devolución la aprueba un administrador. 0 = ninguna.', type: 'number' },
       { key: 'pos.max_discount', label: 'Descuento máximo en caja', hint: 'Sin autorización de un administrador.', type: 'number', unit: '%' },
       { key: 'loyalty.points_enabled', label: 'Acumular y canjear puntos', hint: 'Los clientes ganan puntos con sus compras y los canjean al pagar.', type: 'boolean' },
       { key: 'loyalty.amount_per_point', label: 'Monto por punto', hint: 'Cuánto debe pagar el cliente para ganar 1 punto.', type: 'number' },

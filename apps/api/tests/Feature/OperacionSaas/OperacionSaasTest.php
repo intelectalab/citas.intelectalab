@@ -290,7 +290,7 @@ describe('recomienda y gana', function () {
         $code = Referrals::codeFor($quien->tenant);
 
         $this->postJson('/api/register-tenant', [
-            'ruc' => '20123456789', 'company_name' => 'Spa Referido', 'department' => 'Lima',
+            'ruc' => '20123456786', 'company_name' => 'Spa Referido', 'department' => 'Lima',
             'first_name' => 'Ana', 'last_name' => 'Ruiz', 'email' => 'ana.ruiz.' . Str::lower(Str::random(4)) . '@correo.test',
             'password' => 'clave-segura-123', 'plan_id' => self::PLAN_ESENCIAL, 'ref' => $code,
             'form_token' => \App\Support\SignupGuard::token(now()->subMinute()),

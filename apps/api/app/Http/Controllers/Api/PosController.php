@@ -33,12 +33,17 @@ class PosController extends SaleController
             'branch_id'               => 'nullable|uuid',
             'customer_id'             => 'nullable|uuid',
             'coupon_code'             => 'nullable|string|max:40',
+            'manual_discount'         => 'nullable|numeric|min:0|max:9999999',
+            'discount_reason'         => 'nullable|string|max:255',
+            'tip'                     => 'nullable|numeric|min:0|max:999999',
             'items'                   => 'present|array|max:' . Cart::MAX_ITEMS,
             'items.*.type'            => ['required', Rule::in(Cart::TYPES)],
             'items.*.id'              => 'required|uuid',
             'items.*.quantity'        => 'nullable|integer|min:1|max:999',
             'items.*.professional_id' => 'nullable|uuid',
             'items.*.no_membership'   => 'nullable|boolean',
+            'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
+            'discount_approval'       => 'nullable|string|size:40',
             'items.*.details'         => 'nullable|array',
             'items.*.details.professional_id' => 'nullable|uuid',
             'items.*.details.branch_id'       => 'nullable|uuid',
@@ -91,6 +96,7 @@ class PosController extends SaleController
             'branch_id'      => $branch?->id,
             'currency'       => Currency::of($tenant),
             'tax'            => ['rate' => $rules['tax_rate'], 'included' => $rules['prices_include_tax']],
+            'discounts'      => Sales::discountRules($tenant) + ['can_exceed' => $user->allows('pos.discount'), 'ready' => Sales::discountReady()],
             'products_ready' => Cart::productsEnabled($tenant),
             'can'            => [
                 'create'   => $user->allows('pos.create'),
@@ -125,6 +131,7 @@ class PosController extends SaleController
             'sales'        => Cart::pendingSales($tenant, $branch->id),
         ];
 
+        $branchPrices = Service::pricesAt($branch->id);
         $payload['services'] = Service::where('tenant_id', $tenant->id)
             ->where('kind', Service::KIND_INDIVIDUAL)
             ->with('status')
@@ -134,7 +141,7 @@ class PosController extends SaleController
             ->map(fn (Service $s) => [
                 'id'               => $s->id,
                 'name'             => $s->name,
-                'price'            => round((float) $s->price, 2),
+                'price'            => round((float) ($branchPrices[$s->id] ?? $s->price), 2),
                 'duration_minutes' => $s->duration_minutes,
                 'category'         => $categories[$s->category_id] ?? null,
                 'professional_ids' => ($assigned[$s->id] ?? collect())->pluck('professional_id')->values(),
@@ -196,6 +203,70 @@ class PosController extends SaleController
         return response()->json(Cart::preview(Cart::resolve($tenant, $request->user(), $input, $sale)));
     }
 
+    public function approveDiscount(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        $validated = $request->validate([
+            'email'    => 'required|email|max:190',
+            'password' => 'required|string|max:200',
+        ], [
+            'email.required'    => 'Escribe el correo de quien autoriza.',
+            'password.required' => 'Escribe su contraseña.',
+        ]);
+
+        $approver = \App\Models\User::where('tenant_id', $tenant->id)->whereRaw('lower(email) = ?', [mb_strtolower(trim($validated['email']))])->first();
+
+        if (!$approver || !\Illuminate\Support\Facades\Hash::check($validated['password'], (string) $approver->getAuthPassword()) || ($approver->status ?? 'active') !== 'active') {
+            throw ValidationException::withMessages(['password' => 'El correo o la contraseña no son correctos.']);
+        }
+
+        if (!$approver->allows('pos.discount')) {
+            throw ValidationException::withMessages(['email' => 'Esa persona no tiene el permiso «Descuento alto». Pide a quien lo tenga.']);
+        }
+
+        $token = \Illuminate\Support\Str::random(40);
+        $name = \App\Support\Person::name($approver) ?: $approver->email;
+        \Illuminate\Support\Facades\Cache::put('pos-discount-approval:' . $token, ['tenant_id' => $tenant->id, 'user_id' => $approver->id, 'name' => $name, 'for' => $request->user()->id], now()->addMinutes(Cart::APPROVAL_MINUTES));
+
+        \App\Support\Audit::log($request, 'sale.discount_authorized', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'user',
+            'entity_id'    => $approver->id,
+            'entity_label' => $name,
+            'after'        => ['authorized_by' => $name, 'cashier' => \App\Support\Person::name($request->user())],
+        ]);
+
+        return response()->json(['token' => $token, 'name' => $name, 'minutes' => Cart::APPROVAL_MINUTES]);
+    }
+
+    public function customerSummary(Request $request, string $customer)
+    {
+        $tenant = $this->tenant($request);
+        $exists = DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $customer)->whereNull('deleted_at')->exists();
+        abort_unless($exists, 404);
+
+        $loyalty = null;
+
+        if (\App\Support\Loyalty::enabled($tenant) && ($rules = \App\Support\Loyalty::rules($tenant))['points_enabled']) {
+            $points = \App\Support\Loyalty::customerPoints($tenant->id, $customer);
+            $earned = (int) DB::table('loyalty_transactions')->where('tenant_id', $tenant->id)->where('customer_id', $customer)->where('points', '>', 0)->sum('points');
+            $loyalty = [
+                'points'     => $points,
+                'value'      => round($points * $rules['point_value'], 2),
+                'can_redeem' => $points >= $rules['min_redeem_points'],
+                'tier'       => \App\Support\Loyalty::tierOf($earned, $rules),
+            ];
+        }
+
+        return response()->json([
+            'segments' => array_map(fn ($s) => ['key' => $s['key'], 'label' => $s['label']], \App\Support\CustomerProfile::segments($tenant, $customer)),
+            'loyalty'  => $loyalty,
+            'balance'  => \App\Support\CustomerProfile::money($tenant, $customer)['balance'],
+            'currency' => Currency::of($tenant),
+        ]);
+    }
+
     public function createSale(Request $request)
     {
         $this->assertReady();
@@ -250,7 +321,13 @@ class PosController extends SaleController
             return null;
         }
 
+        $days = Schema::hasColumn('services', 'recall_days')
+            ? (int) DB::table('services')->where('tenant_id', $tenant->id)->where('id', $line->reference_id)->value('recall_days')
+            : 0;
+
         return [
+            'suggested_days'  => $days > 0 ? $days : null,
+            'suggested_date'  => $days > 0 ? now($tenant->zone())->addDays($days)->format('Y-m-d') : null,
             'customer_id'     => $sale->customer_id,
             'service_id'      => $line->reference_id,
             'service_name'    => $line->description,
@@ -296,7 +373,7 @@ class PosController extends SaleController
         ]);
 
         Access::assertBranch($user, $row->branch_id, true);
-        $doc = Invoicing::validated($tenant, $validated);
+        $doc = Invoicing::validated($tenant, $validated) + ['strict' => true];
         $result = DB::transaction(fn () => Sales::pay($tenant, $row->id, $validated, $doc, $user));
 
         return response()->json($this->saleContext($tenant, $result['sale']) + ['change' => $result['change'], 'duplicate' => $result['duplicate'], 'packages' => $result['packages'] ?? [], 'memberships' => $result['memberships'] ?? [], 'gift_cards' => $result['gift_cards'] ?? []]);
@@ -309,7 +386,7 @@ class PosController extends SaleController
         $row = $this->sale($request, $tenant, $sale);
         abort_unless($row->status === 'paid', 422, 'El comprobante se emite cuando la venta está pagada.');
 
-        $doc = Invoicing::validated($tenant, $request->only(['doc_type', 'ruc', 'business_name', 'address']));
+        $doc = Invoicing::validated($tenant, $request->only(['doc_type', 'ruc', 'business_name', 'address'])) + ['strict' => true];
         DB::transaction(fn () => Invoicing::issue($tenant, $row, $doc, $request->user()));
 
         return response()->json($this->saleContext($tenant, DB::table('sales')->where('id', $row->id)->first()));
@@ -367,7 +444,7 @@ class PosController extends SaleController
         return response()->json([
             'now'              => $now->format('H:i'),
             'duration_minutes' => (int) $service->duration_minutes,
-            'price'            => round((float) $service->price, 2),
+            'price'            => round((float) $service->priceAt($branch->id), 2),
             'currency'         => Currency::of($tenant),
             'professionals'    => $professionals,
         ]);

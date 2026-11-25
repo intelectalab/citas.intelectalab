@@ -4,6 +4,7 @@ import type { SitePayload } from '../web';
 import SiteMenu from './SiteMenu';
 
 export const NAV = [
+  { href: '/#funciones', label: 'Funciones' },
   { href: '/rubros', label: 'Rubros' },
   { href: '/precios', label: 'Precios' },
   { href: '/blog', label: 'Blog' },
@@ -11,6 +12,7 @@ export const NAV = [
 
 export default function SiteHeader({ site }: { site: SitePayload }) {
   const brand = site.brand;
+  const demo = site.contact_form && site.content?.demo !== false;
 
   return (
     <header className="w-full bg-white border-b border-slate-200/80 sticky top-0 z-40" data-site-header>
@@ -35,11 +37,12 @@ export default function SiteHeader({ site }: { site: SitePayload }) {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {demo && <Link href="/#demo" data-cta="demo" className="hidden lg:inline text-sm font-bold text-brand-accent hover:text-brand-ink whitespace-nowrap">Agendar demo</Link>}
           <Link href="/login" className="hidden sm:inline text-sm font-bold text-slate-600 hover:text-brand-ink whitespace-nowrap">Iniciar sesión</Link>
           {site.allow_signup && (
             <Link href="/register" data-cta="header" className="bg-brand hover:bg-brand-hover text-white font-bold text-xs sm:text-sm px-3.5 sm:px-4 py-2 rounded-xl shadow-sm whitespace-nowrap">Prueba gratis</Link>
           )}
-          <SiteMenu items={NAV} />
+          <SiteMenu items={demo ? [...NAV, { href: '/#demo', label: 'Agendar demo' }] : NAV} />
         </div>
       </div>
     </header>

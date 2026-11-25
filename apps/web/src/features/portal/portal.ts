@@ -17,7 +17,7 @@ export interface PortalAppointment {
   confirmation_overdue?: boolean;
   is_upcoming: boolean;
   pay_on_arrival?: boolean;
-  deposit?: { amount: number; currency: string; balance: number; outcome: 'refund_due' | 'retained' | 'refunded' | null; refund_hours: number } | null;
+  deposit?: { amount: number; currency: string; balance: number; outcome: 'refund_due' | 'retained' | 'refunded' | 'credited' | null; refund_hours: number; on_cancel?: 'credit' | 'refund' } | null;
   package?: { id: string; code: string; name: string; status: string; late_policy: string } | null;
   is_virtual?: boolean;
   video_url?: string | null;
@@ -44,7 +44,11 @@ export interface PortalPolicies {
   arrive_minutes?: number;
   deposit_minutes?: number;
   deposit_refund_hours?: number;
-  miss?: { action: 'none' | 'note' | 'block'; limit: number; block_days: number };
+  deposit_on_cancel?: 'credit' | 'refund';
+  miss?: { action: 'none' | 'note' | 'block' | 'deposit'; limit: number; block_days: number };
+  late_fee_percent?: number;
+  noshow_fee_percent?: number;
+  cancel_reason_required?: boolean;
 }
 
 export interface PortalDependent {
@@ -58,12 +62,15 @@ export interface PortalOverview {
   customer: {
     id: string; code: string; first_name: string; last_name: string; phone: string | null; email: string | null;
     must_change_password?: boolean;
+    birth_date?: string | null;
+    district?: string | null;
   };
   policies: PortalPolicies;
-  booking_block?: { misses: number; blocked: boolean; blocked_until: string | null; limit: number | null; message: string | null } | null;
+  modules?: string[];
+  booking_block?: { misses: number; blocked: boolean; deposit_required?: boolean; blocked_until: string | null; limit: number | null; message: string | null } | null;
   dependents: { enabled: boolean; required: boolean; items: PortalDependent[] };
   appointments: PortalAppointment[];
-  consents?: { email: { granted: boolean }; whatsapp: { granted: boolean } } | null;
+  consents?: { email: { granted: boolean }; whatsapp: { granted: boolean }; sms?: { granted: boolean } } | null;
   look?: {
     texts: { subtitle: string; welcome: string; book_title: string; book_text: string; no_booking_text: string; profile_note: string };
     contact: { phone: string | null; email: string | null; branches: { id: string; name: string; address: string | null; phone: string | null }[] } | null;
@@ -76,13 +83,17 @@ export interface PortalService {
   branch_ids?: string[];
   name: string;
   category: string | null;
+  description?: string | null;
   duration_minutes: number;
   price: string;
   is_virtual: boolean;
   needs_deposit: boolean;
   package?: { code: string; name: string; available: number } | null;
   deposit_amount?: number;
+  deposit_amounts?: Record<string, number>;
   deposit_label?: string | null;
+  deposit_for_misses?: boolean;
+  branch_prices?: Record<string, number>;
   professional_ids: string[];
 }
 
@@ -105,6 +116,12 @@ export interface PortalWaitlistEntry {
   created_at: string | null;
   offer_until?: string | null;
   days: { date: string; groups: { professional: { id: string; display_name: string }; slots: string[] }[] }[];
+}
+
+export interface PortalDay {
+  date: string;
+  free: number;
+  state: 'free' | 'full' | 'closed' | 'out';
 }
 
 export interface PortalAvailability {

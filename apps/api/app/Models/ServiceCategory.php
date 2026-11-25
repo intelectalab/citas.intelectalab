@@ -16,5 +16,6 @@ class ServiceCategory extends Model
         'id',
         'tenant_id',
         'name',
+        'color',
     ];
 }

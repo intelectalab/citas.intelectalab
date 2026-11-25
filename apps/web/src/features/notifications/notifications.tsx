@@ -56,6 +56,7 @@ const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   'subscription.charge_failed': { icon: CreditCard, tone: 'bg-rose-50 text-rose-600' },
   'subscription.grace': { icon: CreditCard, tone: 'bg-amber-50 text-amber-600' },
   'quote.sent': { icon: FileText, tone: 'bg-brand-soft/25 text-brand-ink' },
+  'customers.exported': { icon: ShieldAlert, tone: 'bg-amber-50 text-amber-600' },
 };
 
 export const notificationStyle = (type: string) => STYLES[type] ?? { icon: CalendarCheck, tone: 'bg-slate-100 text-slate-600' };

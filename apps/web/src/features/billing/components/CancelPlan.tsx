@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DoorOpen, Download, Gift, Loader2, RotateCcw } from 'lucide-react';
 import OptionCard from '@/app/components/common/OptionCard';
 import { ErrorAlert } from '@/app/components/common/Alert';
@@ -8,15 +8,71 @@ import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { money } from '@/features/sales/sales';
-import type { CancellationInfo } from '../billing';
+import type { CancellationInfo, DataExport } from '../billing';
 
 type Sheet = { sheet: string; columns: { header: string; money: boolean }[]; rows: (string | number | null)[][] };
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
 
+const timeLeft = (iso: string | null) => {
+  if (!iso) return '';
+  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+  return days <= 1 ? 'el enlace vence hoy' : `el enlace sirve ${days} días más`;
+};
+
 export function DownloadAllButton({ className = '' }: { className?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [queued, setQueued] = useState<boolean | null>(null);
+  const [exports, setExports] = useState<DataExport[]>([]);
+
+  const refresh = useCallback(() => api.get('/billing/exports')
+    .then((res) => { setQueued(Boolean(res.data.ready)); setExports(res.data.items ?? []); })
+    .catch(() => setQueued(false)), []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const working = exports.some((row) => row.status === 'queued' || row.status === 'running');
+
+  useEffect(() => {
+    if (!working) return;
+    const timer = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(timer);
+  }, [working, refresh]);
+
+  const request = async () => {
+    try {
+      setBusy(true);
+      setError('');
+      const res = await api.post('/billing/exports');
+      setExports(res.data.exports ?? []);
+      setNotice(res.data.message ?? '');
+    } catch (err) {
+      setError(apiError(err, 'No se pudo preparar el archivo.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (queued) {
+    const latest = exports[0];
+    return (
+      <span className="inline-flex flex-col gap-1" data-exports>
+        <button type="button" data-download-all disabled={busy || working} onClick={request} className={`inline-flex items-center gap-1.5 text-xs font-semibold text-brand-accent hover:text-brand-ink disabled:opacity-60 ${className}`}>
+          {busy || working ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} {working ? 'Preparando tus datos…' : 'Preparar archivo con todos mis datos (Excel)'}
+        </button>
+        {latest?.url && (
+          <a href={latest.url} data-export-link className="text-xs font-semibold text-brand-ink underline">
+            Descargar el archivo del {day(latest.created_at)} ({timeLeft(latest.expires_at)})
+          </a>
+        )}
+        {latest?.status === 'failed' && <span className="text-xs text-red-600">{latest.error}</span>}
+        {notice && !latest?.url && <span className="text-xs text-slate-500">{notice}</span>}
+        {error && <span className="text-xs text-red-600">{error}</span>}
+      </span>
+    );
+  }
 
   const download = async () => {
     try {

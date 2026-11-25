@@ -40,6 +40,15 @@ interface OverdueRow {
   attempts: Attempt[];
 }
 
+interface Summary {
+  to_collect: number;
+  to_collect_count: number;
+  readonly: number;
+  grace: number;
+  recovered: number;
+  recovered_count: number;
+}
+
 const card = 'bg-white rounded-3xl border border-slate-200/80 shadow-xs';
 const longDay = (date: string | null) => (date ? formatDate(date, { day: 'numeric', month: 'long' }) : '—');
 
@@ -56,6 +65,8 @@ const resultText = (attempt: Attempt) => (attempt.kind === 'retry' ? (attempt.re
 
 export default function PlatformOverdue({ onChanged }: { onChanged?: () => void }) {
   const [rows, setRows] = useState<OverdueRow[] | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [filter, setFilter] = useState<'' | 'grace' | 'locked'>('');
   const [ready, setReady] = useState(true);
   const [open, setOpen] = useState<OverdueRow | null>(null);
   const [busy, setBusy] = useState('');
@@ -64,7 +75,7 @@ export default function PlatformOverdue({ onChanged }: { onChanged?: () => void 
 
   const load = useCallback(() => {
     api.get('/admin/billing/overdue')
-      .then((res) => { setRows(res.data.overdue); setReady(res.data.ready); setError(''); })
+      .then((res) => { setRows(res.data.overdue); setSummary(res.data.summary ?? null); setReady(res.data.ready); setError(''); })
       .catch((err) => setError(apiError(err, 'No se pudieron cargar los pagos vencidos.')));
   }, []);
 
@@ -79,6 +90,7 @@ export default function PlatformOverdue({ onChanged }: { onChanged?: () => void 
       setNotice(`${row.tenant.name}: ${res.data.message}`);
       const list: OverdueRow[] = res.data.overdue ?? [];
       setRows(list);
+      if (res.data.summary) setSummary(res.data.summary);
       setOpen(list.find((item) => item.subscription_id === row.subscription_id) ?? null);
       onChanged?.();
     } catch (err) {
@@ -94,13 +106,33 @@ export default function PlatformOverdue({ onChanged }: { onChanged?: () => void 
       <ErrorAlert message={error} />
       {!ready && <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">Falta actualizar la base de datos para ver los pagos vencidos: ejecuta php artisan migrate.</p>}
 
+      {summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-overdue-summary>
+          <button type="button" onClick={() => setFilter(filter === 'grace' ? '' : 'grace')} className={`${card} text-left px-5 py-4 ${filter === 'grace' ? 'border-amber-500 ring-2 ring-amber-100' : 'hover:border-amber-300'}`} data-overdue-card="to-collect">
+            <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Por cobrar</span>
+            <span className="block text-2xl font-black text-brand-ink tabular-nums">{money(summary.to_collect)}</span>
+            <span className="block text-xs text-slate-500">{summary.to_collect_count} {summary.to_collect_count === 1 ? 'empresa' : 'empresas'} con el plan vencido · {summary.grace} en días de gracia</span>
+          </button>
+          <button type="button" onClick={() => setFilter(filter === 'locked' ? '' : 'locked')} className={`${card} text-left px-5 py-4 ${filter === 'locked' ? 'border-rose-500 ring-2 ring-rose-100' : 'hover:border-rose-300'}`} data-overdue-card="readonly">
+            <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">En solo lectura</span>
+            <span className="block text-2xl font-black text-rose-700 tabular-nums">{summary.readonly}</span>
+            <span className="block text-xs text-slate-500">Pueden ver y exportar, pero no trabajar</span>
+          </button>
+          <div className={`${card} px-5 py-4`} data-overdue-card="recovered">
+            <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Recuperado este mes</span>
+            <span className="block text-2xl font-black text-emerald-700 tabular-nums">{money(summary.recovered)}</span>
+            <span className="block text-xs text-slate-500">{summary.recovered_count} {summary.recovered_count === 1 ? 'pago' : 'pagos'} de empresas que estuvieron vencidas</span>
+          </div>
+        </div>
+      )}
+
       <section className={`${card} overflow-hidden flex flex-col`}>
         {rows === null ? (
           <p className="p-6 text-sm text-slate-500">Cargando...</p>
         ) : (
           <PagedList
-            items={rows}
-            empty="Ninguna empresa tiene el plan vencido."
+            items={filter ? rows.filter((row) => row.state === filter) : rows}
+            empty={filter ? 'Ninguna empresa en este grupo.' : 'Ninguna empresa tiene el plan vencido.'}
             renderRow={(row) => (
               <li key={row.subscription_id}>
                 <button type="button" data-overdue-row={row.tenant.id} onClick={() => { setOpen(row); setNotice(''); setError(''); }} className="w-full text-left flex flex-wrap sm:flex-nowrap items-center gap-3 px-5 py-3.5 hover:bg-slate-50">

@@ -7,6 +7,7 @@ import Badge from '@/app/components/common/Badge';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
 import OptionCard from '@/app/components/common/OptionCard';
+import Switch from '@/app/components/common/Switch';
 import RichTextEditor from '@/app/components/common/RichTextEditor';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -55,7 +56,7 @@ const lastDay = (iso: string | null) => {
   return date.toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 };
 
-const EMPTY = { title: '', body: '', kind: 'news', audience: 'all', plan_ids: [] as string[], business_type_ids: [] as string[], starts_on: '', ends_on: '' };
+const EMPTY = { title: '', body: '', kind: 'news', audience: 'all', plan_ids: [] as string[], business_type_ids: [] as string[], starts_on: '', ends_on: '', link_url: '', link_label: '', published: true };
 
 export default function PlatformAnnouncements() {
   const [data, setData] = useState<Payload | null>(null);
@@ -85,7 +86,7 @@ export default function PlatformAnnouncements() {
 
   const startEdit = (a: Announcement) => {
     setEditing(a);
-    setForm({ title: a.title, body: a.body, kind: a.kind, audience: a.audience, plan_ids: a.plan_ids, business_type_ids: a.business_type_ids, starts_on: toDay(a.starts_at), ends_on: lastDay(a.ends_at) });
+    setForm({ title: a.title, body: a.body, kind: a.kind, audience: a.audience, plan_ids: a.plan_ids, business_type_ids: a.business_type_ids, starts_on: toDay(a.starts_at), ends_on: lastDay(a.ends_at), link_url: a.link_url ?? '', link_label: a.link_label ?? '', published: a.published ?? true });
     setFormError('');
     setOpen(true);
   };
@@ -97,10 +98,10 @@ export default function PlatformAnnouncements() {
     try {
       setBusy(true);
       setFormError('');
-      const payload = { ...form, ends_on: form.ends_on || null };
+      const payload = { ...form, ends_on: form.ends_on || null, link_url: form.link_url.trim() || null, link_label: form.link_label.trim() || null };
       if (editing) await api.put(`/admin/announcements/${editing.id}`, payload);
       else await api.post('/admin/announcements', payload);
-      setNotice(editing ? 'Anuncio guardado.' : 'Anuncio publicado.');
+      setNotice(!form.published ? 'Anuncio guardado sin publicar: las empresas no lo ven.' : editing ? 'Anuncio guardado.' : 'Anuncio publicado.');
       setOpen(false);
       load();
     } catch (err) {
@@ -139,7 +140,7 @@ export default function PlatformAnnouncements() {
     { header: 'Para', cell: (a) => <span className="text-sm">{audienceText(a)} <span className="block text-xs text-slate-500">{a.reach} {a.reach === 1 ? 'empresa' : 'empresas'}</span></span> },
     { header: 'Se ve', cell: (a) => `Desde ${formatDate(toDay(a.starts_at), { day: 'numeric', month: 'short' })}${a.ends_at ? ` hasta ${formatDate(lastDay(a.ends_at), { day: 'numeric', month: 'short' })}` : ', sin fecha de fin'}` },
     { header: 'Lo cerraron', cell: (a) => `${a.dismissals} ${a.dismissals === 1 ? 'persona' : 'personas'}` },
-    { header: 'Estado', cell: (a) => <Badge tone={STATE[a.state].tone} bold>{STATE[a.state].label}</Badge> },
+    { header: 'Estado', cell: (a) => a.published === false ? <Badge tone="bg-slate-100 text-slate-600" bold>Sin publicar</Badge> : <Badge tone={STATE[a.state].tone} bold>{STATE[a.state].label}</Badge> },
     {
       header: 'Acciones',
       cell: (a) => (
@@ -221,9 +222,26 @@ export default function PlatformAnnouncements() {
             <label className={labelClass}>Texto</label>
             <RichTextEditor value={form.body} onChange={(html) => setForm((f) => ({ ...f, body: html }))} minHeight={160} />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-announcement-link-fields>
+            <div className="sm:col-span-2">
+              <label className={labelClass} htmlFor="announcement-link">Enlace del botón (opcional)</label>
+              <input id="announcement-link" maxLength={500} value={form.link_url} onChange={(e) => setForm({ ...form, link_url: e.target.value })} className={inputClass} placeholder="Ej. /reports o https://..." />
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="announcement-link-label">Texto del botón</label>
+              <input id="announcement-link-label" maxLength={60} value={form.link_label} disabled={!form.link_url.trim()} onChange={(e) => setForm({ ...form, link_label: e.target.value })} className={inputClass} placeholder="Ver más" />
+            </div>
+          </div>
+          <div className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 p-4">
+            <div>
+              <p className="text-sm font-bold text-brand-ink">Publicado</p>
+              <p className="text-xs text-slate-500">Apágalo para dejarlo como borrador: no lo ve ninguna empresa aunque esté en sus fechas.</p>
+            </div>
+            <Switch label="Publicado" checked={form.published} onChange={(value) => setForm({ ...form, published: value })} />
+          </div>
           <ErrorAlert message={formError} />
           <button type="button" data-announcement-save disabled={busy || form.title.trim().length < 3 || !form.starts_on} onClick={save} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover disabled:opacity-50 cursor-pointer">
-            {busy && <Loader2 size={16} className="animate-spin" />} {editing ? 'Guardar cambios' : 'Publicar anuncio'}
+            {busy && <Loader2 size={16} className="animate-spin" />} {editing ? 'Guardar cambios' : form.published ? 'Publicar anuncio' : 'Guardar sin publicar'}
           </button>
         </div>
       </FormDrawer>

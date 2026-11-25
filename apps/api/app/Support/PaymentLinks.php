@@ -23,13 +23,13 @@ class PaymentLinks
     public const PROVIDERS = [
         'simulated'   => ['label' => 'Simulación', 'class' => SimulatedPaymentProvider::class],
         'culqi'       => ['label' => 'Culqi', 'class' => \App\Support\Payments\CulqiPaymentProvider::class],
-        'niubiz'      => ['label' => 'Niubiz', 'class' => null],
-        'izipay'      => ['label' => 'Izipay', 'class' => null],
+        'niubiz'      => ['label' => 'Niubiz', 'class' => \App\Support\Payments\NiubizPaymentProvider::class],
+        'izipay'      => ['label' => 'Izipay', 'class' => \App\Support\Payments\IzipayPaymentProvider::class],
         'mercadopago' => ['label' => 'Mercado Pago', 'class' => MercadoPagoPaymentProvider::class],
         'transfer'    => ['label' => 'Transferencia', 'class' => null],
     ];
 
-    public const NOT_CONNECTED = 'Tu empresa todavía no recibe pagos en línea: conecta Culqi o Mercado Pago en Configuración → Integraciones.';
+    public const NOT_CONNECTED = 'Tu empresa todavía no recibe pagos en línea: conecta Culqi, Niubiz, Izipay o Mercado Pago en Configuración → Integraciones.';
 
     public const STATUS_LABELS = [
         'pending'   => 'Esperando pago',
@@ -46,6 +46,23 @@ class PaymentLinks
 
     public const NOT_READY = 'Falta actualizar la base de datos para usar los links de pago: ejecuta php artisan migrate.';
 
+    public const HOLD_MINUTES = 10;
+
+    public static function holdReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= self::ready() && Schema::hasColumn('payment_links', 'held_until');
+    }
+
+    public static function holdUntil(mixed $expiresAt): Carbon
+    {
+        $hold = now()->addMinutes(self::HOLD_MINUTES);
+        $expires = Carbon::parse($expiresAt);
+
+        return $expires->lt($hold) ? $expires : $hold;
+    }
+
     public static function ready(): bool
     {
         static $ready = null;
@@ -54,7 +71,7 @@ class PaymentLinks
             && Schema::hasColumn('sales', 'deposit_outcome') && Schema::hasColumn('services', 'deposit_type');
     }
 
-    public const PREFERENCE = ['culqi', 'mercadopago'];
+    public const PREFERENCE = ['culqi', 'niubiz', 'izipay', 'mercadopago'];
 
     public static function integrations(string $tenantId)
     {
@@ -149,13 +166,25 @@ class PaymentLinks
         return rtrim((string) config('app.frontend_url'), '/') . '/pay/' . $token;
     }
 
-    public static function depositAmount(object $service): float
+    public static function priceAt(object $service, ?string $branchId): float
+    {
+        if ($branchId && !empty($service->id) && \App\Models\Service::branchPricesReady()) {
+            $price = DB::table('service_branch_prices')->where('service_id', $service->id)->where('branch_id', $branchId)->value('price');
+            if ($price !== null) {
+                return (float) $price;
+            }
+        }
+
+        return (float) $service->price;
+    }
+
+    public static function depositAmount(object $service, ?string $branchId = null): float
     {
         if (!$service->requires_deposit) {
             return 0.0;
         }
 
-        $price = (float) $service->price;
+        $price = self::priceAt($service, $branchId);
         $value = (float) ($service->deposit_value ?? 30);
 
         $amount = ($service->deposit_type ?? 'percent') === 'amount'
@@ -259,7 +288,7 @@ class PaymentLinks
         ]);
     }
 
-    public static function forDeposit(Tenant $tenant, Customer $customer, Service $service, Branch $branch, Professional $professional, Carbon $start, Carbon $end, ?string $dependentId, ?string $notes): object
+    public static function forDeposit(Tenant $tenant, Customer $customer, Service $service, Branch $branch, Professional $professional, Carbon $start, Carbon $end, ?string $dependentId, ?string $notes, ?float $amount = null): object
     {
         $minutes = max(5, (int) AppointmentFlow::rule($tenant, 'booking.deposit_minutes'));
         $when = $start->copy()->locale('es')->isoFormat('ddd D [de] MMM, HH:mm');
@@ -274,7 +303,7 @@ class PaymentLinks
         return self::create($tenant, [
             'branch_id'             => $branch->id,
             'purpose'               => 'deposit',
-            'amount'                => self::depositAmount($service),
+            'amount'                => $amount ?? self::depositAmount($service, $branch->id),
             'currency'              => Currency::of($tenant),
             'description'           => mb_substr("Adelanto: {$service->name} · {$when}", 0, 255),
             'customer_id'           => $customer->id,
@@ -285,7 +314,7 @@ class PaymentLinks
             'ends_at'               => $end->copy()->utc(),
             'notes'                 => $notes,
             'expires_at'            => now()->addMinutes($minutes),
-        ]);
+        ] + (self::holdReady() ? ['held_until' => self::holdUntil(now()->addMinutes($minutes))] : []) + Channels::linkColumn());
     }
 
     private static function create(Tenant $tenant, array $values): object
@@ -326,6 +355,7 @@ class PaymentLinks
             'currency'      => $link->currency,
             'description'   => $link->description,
             'expires_at'    => $iso($link->expires_at),
+            'held_until'    => $link->purpose === 'deposit' && $link->status === 'pending' ? $iso($link->held_until ?? null) : null,
             'paid_at'       => $iso($link->paid_at),
             'cancel_reason' => $link->cancel_reason,
             'provider'      => self::PROVIDERS[$link->provider]['label'] ?? $link->provider,
@@ -362,7 +392,14 @@ class PaymentLinks
         $timezone = AppointmentScheduler::timezone($branch, $tenant);
         $start = Carbon::parse($link->starts_at)->setTimezone($timezone);
         $duration = (int) Carbon::parse($link->starts_at)->diffInMinutes(Carbon::parse($link->ends_at));
-        $check = (new AppointmentScheduler($tenant))->check($service, $professional, $branch, $start, $duration);
+        $previous = AppointmentScheduler::$ignoreLink;
+        AppointmentScheduler::$ignoreLink = $link->id;
+
+        try {
+            $check = (new AppointmentScheduler($tenant))->check($service, $professional, $branch, $start, $duration);
+        } finally {
+            AppointmentScheduler::$ignoreLink = $previous;
+        }
 
         return $check['ok'] ? null : self::SLOT_TAKEN;
     }
@@ -408,7 +445,7 @@ class PaymentLinks
                 'professional' => Professional::find($link->professional_id)?->display_name,
                 'branch'       => $branch?->name,
                 'starts_at'    => $link->starts_at ? Carbon::parse($link->starts_at)->setTimezone($timezone)->format('Y-m-d\TH:i') : null,
-                'price'        => $service ? round((float) $service->price, 2) : null,
+                'price'        => $service ? round((float) $service->priceAt($link->branch_id), 2) : null,
             ];
         }
 
@@ -422,6 +459,7 @@ class PaymentLinks
             'currency_info' => Currency::present($link->currency),
             'description'  => $link->description,
             'expires_at'   => Carbon::parse($link->expires_at)->toIso8601String(),
+            'held_until'   => $link->status === 'pending' && $link->purpose === 'deposit' && !empty($link->held_until) && Carbon::parse($link->held_until)->isFuture() ? Carbon::parse($link->held_until)->toIso8601String() : null,
             'paid_at'      => $link->paid_at ? Carbon::parse($link->paid_at)->toIso8601String() : null,
             'reason'       => $link->cancel_reason,
             'rejected'     => $link->status === 'pending' && $lastEvent?->event === 'payment.rejected',
@@ -439,6 +477,7 @@ class PaymentLinks
             'culqi'        => $link->status === 'pending' && $link->provider === 'culqi' ? self::culqiCheckout($link, $company->trade_name ?? $tenant->name) : null,
             'transfer'     => CustomerTransfers::ready() ? CustomerTransfers::publicOptions($link) : null,
             'voucher'      => CustomerTransfers::ready() ? CustomerTransfers::voucherView($link) : null,
+            'conversion'   => BookingConversion::view($tenant, $link, $booking),
         ];
     }
 
@@ -461,7 +500,49 @@ class PaymentLinks
         ];
     }
 
-    public static function payWithCulqi(string $token, string $culqiToken, ?string $email): array
+    public static function niubizForm(string $token, string $ip): string
+    {
+        $link = DB::table('payment_links')->where('token', $token)->first();
+        abort_unless($link && $link->provider === 'niubiz', 404, 'Este link de pago no existe.');
+
+        if ($link->status !== 'pending' || Carbon::parse($link->expires_at)->isPast() || !$link->external_id) {
+            throw ValidationException::withMessages(['link' => 'Este link ya no está esperando pago.']);
+        }
+
+        $provider = self::providerFor($link->tenant_id, 'niubiz');
+        abort_unless($provider instanceof \App\Support\Payments\NiubizPaymentProvider, 422, self::NOT_CONNECTED);
+        $tenant = Tenant::with('settings')->find($link->tenant_id);
+        $company = DB::table('companies')->where('tenant_id', $link->tenant_id)->orderBy('created_at')->first();
+        $email = $link->customer_id ? DB::table('customers')->where('id', $link->customer_id)->value('email') : null;
+
+        return $provider->form($link, $ip, $email, (string) ($company->trade_name ?? $tenant?->name ?? 'Pago'), $tenant?->settings?->logo_url ?? null);
+    }
+
+    public static function payWithNiubiz(string $token, string $transactionToken): array
+    {
+        $link = DB::table('payment_links')->where('token', $token)->first();
+        abort_unless($link && $link->provider === 'niubiz', 404, 'Este link de pago no existe.');
+
+        if ($link->status !== 'pending' || Carbon::parse($link->expires_at)->isPast()) {
+            return ['status' => 'ignored', 'message' => 'Este link ya no está esperando pago.'];
+        }
+
+        if ($link->purpose === 'deposit' && ($taken = self::slotTaken(Tenant::find($link->tenant_id), $link))) {
+            self::cancel($link, $taken);
+
+            return ['status' => 'ignored', 'message' => $taken];
+        }
+
+        $provider = self::providerFor($link->tenant_id, 'niubiz');
+        abort_unless($provider instanceof \App\Support\Payments\NiubizPaymentProvider, 422, self::NOT_CONNECTED);
+
+        $event = $provider->authorize($link, $transactionToken);
+        $result = self::handle('niubiz', $event, $link->tenant_id);
+
+        return $event['type'] === 'payment.approved' ? $result : ['status' => 'rejected', 'message' => $event['message'] ?? $result['message']];
+    }
+
+    public static function payWithCulqi(string $token, string $culqiToken, ?string $email, ?array $authentication = null, ?string $device = null): array
     {
         $link = DB::table('payment_links')->where('token', $token)->first();
         abort_unless($link, 404, 'Este link de pago no existe.');
@@ -483,12 +564,30 @@ class PaymentLinks
         abort_unless($provider instanceof \App\Support\Payments\CulqiPaymentProvider, 422, self::NOT_CONNECTED);
 
         $email = $email ?: ($link->customer_id ? DB::table('customers')->where('id', $link->customer_id)->value('email') : null);
-        $result = $provider->charge($link, $culqiToken, $email);
+        $result = $provider->charge($link, $culqiToken, $email, $authentication, $device);
 
-        if (\App\Support\Payments\CulqiClient::unavailable($result) && self::backupFor($link->tenant_id, 'culqi')) {
-            DB::table('payment_links')->where('id', $link->id)->update(['provider' => 'mercadopago', 'external_id' => null, 'checkout_url' => null, 'updated_at' => now()]);
+        if (\App\Support\Payments\CulqiClient::needsAuthentication($result) && !$authentication) {
+            IntegrationLog::write($link->tenant_id, 'payments', 'culqi', 'charge', true, 'El banco pidió la verificación 3DS: se le mostró al cliente.');
 
-            return self::start($token) + ['message' => 'Culqi no respondió. Te llevamos a Mercado Pago para que pagues ahí.'];
+            return [
+                'status'    => 'needs_3ds',
+                'message'   => 'Tu banco pide confirmar que eres tú. Sigue los pasos que aparecen en pantalla.',
+                'three_ds'  => [
+                    'script'     => (string) config('payments.culqi.three_ds'),
+                    'public_key' => $provider->publicKey(),
+                    'amount'     => \App\Support\Payments\CulqiClient::cents((float) $link->amount),
+                    'currency'   => $link->currency ?? 'PEN',
+                    'email'      => $email,
+                    'return_url' => self::url($link->token),
+                    'token'      => $culqiToken,
+                ],
+            ];
+        }
+
+        if (\App\Support\Payments\CulqiClient::unavailable($result) && ($backup = self::backupFor($link->tenant_id, 'culqi'))) {
+            DB::table('payment_links')->where('id', $link->id)->update(['provider' => $backup->key(), 'external_id' => null, 'checkout_url' => null, 'updated_at' => now()]);
+
+            return self::start($token) + ['message' => 'Culqi no respondió. Te llevamos a ' . (self::PROVIDERS[$backup->key()]['label'] ?? 'otra pasarela') . ' para que pagues ahí.'];
         }
 
         $event = \App\Support\Payments\CulqiPaymentProvider::event($result, $link->token);
@@ -520,6 +619,10 @@ class PaymentLinks
             throw ValidationException::withMessages(['link' => Subscriptions::PORTAL_LOCKED]);
         }
 
+        if ($link->purpose === 'deposit') {
+            self::rehold($link);
+        }
+
         $provider = self::providerFor($link->tenant_id, $link->provider);
         abort_unless($provider && !$provider->simulated(), 422, self::NOT_CONNECTED);
 
@@ -541,6 +644,31 @@ class PaymentLinks
         ]);
 
         return ['checkout_url' => $order['checkout_url']];
+    }
+
+    public static function rehold(object $link): void
+    {
+        if (!self::holdReady() || $link->status !== 'pending' || $link->purpose !== 'deposit') {
+            return;
+        }
+
+        $taken = DB::transaction(function () use ($link) {
+            DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['appointments:' . $link->tenant_id]);
+
+            if ($taken = self::slotTaken(Tenant::find($link->tenant_id), $link)) {
+                self::cancel($link, $taken);
+
+                return $taken;
+            }
+
+            DB::table('payment_links')->where('id', $link->id)->update(['held_until' => self::holdUntil($link->expires_at), 'updated_at' => now()]);
+
+            return null;
+        });
+
+        if ($taken) {
+            throw ValidationException::withMessages(['link' => $taken]);
+        }
     }
 
     public static function check(object $link, bool $force = false): ?array
@@ -851,8 +979,8 @@ class PaymentLinks
             'ends_at'               => Carbon::parse($link->ends_at),
             'status'                => AppointmentFlow::CONFIRMED,
             'source'                => 'online',
-            'price'                 => $service->price,
-        ] + Currency::column($tenant) + [
+            'price'                 => $service->priceAt($link->branch_id),
+        ] + Currency::column($tenant) + (!empty($link->channel) && Channels::ready() ? ['channel' => $link->channel] : []) + [
             'notes'                 => $link->notes,
             'confirmed_at'          => now(),
             'created_by'            => null,
@@ -930,6 +1058,12 @@ class PaymentLinks
             $hours = max(0, (int) AppointmentFlow::rule($tenant, 'booking.deposit_refund_hours'));
             $onTime = $to === AppointmentFlow::CANCELLED && now()->lte($appointment->starts_at->copy()->subHours($hours));
 
+            if ($onTime && $sale->customer_id && self::onCancel($tenant) === 'credit') {
+                CustomerCredit::fromDeposit($tenant, $sale, $appointment, $deposit);
+
+                return;
+            }
+
             if ($onTime) {
                 DB::table('sales')->where('id', $sale->id)->update(['deposit_outcome' => 'refund_due', 'updated_at' => now()]);
                 $appointment->loadMissing('customer');
@@ -956,6 +1090,11 @@ class PaymentLinks
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    public static function onCancel(Tenant $tenant): string
+    {
+        return AppointmentFlow::rule($tenant, 'booking.deposit_on_cancel') === 'refund' || !CustomerCredit::ready() ? 'refund' : 'credit';
     }
 
     private static function retain(Tenant $tenant, object $sale, Appointment $appointment, float $deposit, string $to): void

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarCheck, Mail, MailCheck, Pencil, Power } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, History, Mail, MailCheck, Pencil, Power } from 'lucide-react';
+import { CustomerLink } from '@/app/components/common/PersonLink';
 import Badge from '@/app/components/common/Badge';
 import Switch from '@/app/components/common/Switch';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
@@ -13,7 +14,7 @@ import { apiError } from '@/features/appointments/appointments';
 import { momentOf } from '@/features/sales/sales';
 import { EMAIL_NOTICE } from '@/features/campaigns/campaigns';
 import AutomationForm from './AutomationForm';
-import { repeatLabel, timingLabel, type Automation, type AutomationsPayload } from '../automations';
+import { RUN_BADGES, repeatLabel, timingLabel, type Automation, type AutomationRun, type AutomationsPayload } from '../automations';
 
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors disabled:opacity-50';
 
@@ -23,6 +24,9 @@ export default function AutomationsBoard() {
   const [editing, setEditing] = useState<Automation | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [onlyActive, setOnlyActive] = useState(false);
+  const [tab, setTab] = useState<'list' | 'history'>('list');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyFilters, setHistoryFilters] = useState<Record<string, string>>({ result: '', automation: '' });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -66,6 +70,31 @@ export default function AutomationsBoard() {
     },
     { title: 'Correos este mes', value: sentMonth, icon: <MailCheck size={18} />, iconColorClass: 'text-sky-600', borderColorClass: '' },
     { title: 'Agendaron después', value: bookedMonth, icon: <CalendarCheck size={18} />, iconColorClass: 'text-brand-accent', borderColorClass: '' },
+    { title: 'Con error este mes', value: data?.month?.failed ?? 0, icon: <AlertTriangle size={18} />, iconColorClass: 'text-rose-600', borderColorClass: '', onClick: () => { setTab('history'); setHistoryFilters({ result: 'failed', automation: '' }); } },
+    { title: 'Ejecuciones este mes', value: data?.month?.runs ?? 0, icon: <History size={18} />, iconColorClass: 'text-violet-600', borderColorClass: tab === 'history' ? 'border-violet-500 ring-2 ring-violet-500/20' : '', onClick: () => setTab(tab === 'history' ? 'list' : 'history') },
+  ];
+
+  const history = data?.history ?? [];
+  const historyTerm = historySearch.trim().toLowerCase();
+  const historyRows = history.filter((h) =>
+    (!historyFilters.result || h.result === historyFilters.result) &&
+    (!historyFilters.automation || h.automation === historyFilters.automation) &&
+    (!historyTerm || `${h.automation} ${h.customer?.name ?? ''} ${h.reason ?? ''}`.toLowerCase().includes(historyTerm)));
+
+  const historyColumns: Column<AutomationRun>[] = [
+    { header: 'Fecha', cell: (h) => <span key={`at-${h.id}`} className="text-xs text-slate-600">{momentOf(h.at)}</span> },
+    { header: 'Automatización', cell: (h) => <span key={`a-${h.id}`} className="text-sm font-semibold text-slate-800">{h.automation}</span> },
+    { header: 'Cliente', cell: (h) => <span key={`c-${h.id}`} className="text-sm">{h.customer ? <CustomerLink id={h.customer.id}>{h.customer.name}</CustomerLink> : '—'}</span> },
+    { header: 'Canal', cell: (h) => <span key={`ch-${h.id}`} className="text-sm text-slate-700">{h.channel}</span> },
+    {
+      header: 'Resultado',
+      cell: (h) => (
+        <div key={`r-${h.id}`}>
+          <Badge tone={RUN_BADGES[h.result]} nowrap>{h.result_label}</Badge>
+          {h.reason && <span className="block text-xs text-slate-500 mt-0.5 max-w-xs">{h.reason}</span>}
+        </div>
+      ),
+    },
   ];
 
   const columns: Column<Automation>[] = [
@@ -153,17 +182,53 @@ export default function AutomationsBoard() {
       <ErrorAlert message={error} />
       <SuccessAlert message={notice} />
 
-      <DataTable<Automation>
-        title="Automatizaciones"
-        columns={columns}
-        data={rows}
-        getItemKey={(a) => a.id}
-        entityLabel="automatizaciones"
-        metricCards={metricCards}
-        exportTitle="Automatizaciones"
-        exportScreen="automations"
-        exportColumns={exportColumns}
-      />
+      {tab === 'history' ? (
+        <DataTable<AutomationRun>
+          title="Historial de ejecuciones"
+          tabs={[{ id: 'list', label: 'Automatizaciones', count: automations.length }, { id: 'history', label: 'Historial', count: history.length }]}
+          activeTab={tab}
+          onTabChange={(id) => setTab(id as 'list' | 'history')}
+          searchTerm={historySearch}
+          onSearchChange={setHistorySearch}
+          filterConfigs={[
+            { id: 'result', label: 'Resultado', type: 'select', options: [{ value: 'sent', label: 'Enviado' }, { value: 'failed', label: 'Con error' }, { value: 'skipped', label: 'No se envió' }] },
+            { id: 'automation', label: 'Automatización', type: 'select', options: [...new Set(history.map((h) => h.automation))].map((name) => ({ value: name, label: name })) },
+          ]}
+          filterValues={historyFilters}
+          onFilterChange={(id, value) => setHistoryFilters((current) => ({ ...current, [id]: String(value ?? '') }))}
+          dateFilters={[{ id: 'at', label: 'Fecha', value: (h) => h.at }]}
+          columns={historyColumns}
+          data={historyRows}
+          getItemKey={(h) => h.id}
+          entityLabel={historyRows.length === 1 ? 'ejecución' : 'ejecuciones'}
+          metricCards={metricCards}
+          exportTitle="Historial_Automatizaciones"
+          exportScreen="automation_runs"
+          exportColumns={[
+            { header: 'Fecha', type: 'datetime', value: (h) => h.at },
+            { header: 'Automatización', value: (h) => h.automation },
+            { header: 'Cliente', value: (h) => h.customer?.name ?? '' },
+            { header: 'Canal', value: (h) => h.channel },
+            { header: 'Resultado', value: (h) => h.result_label },
+            { header: 'Motivo', value: (h) => h.reason ?? '' },
+          ]}
+        />
+      ) : (
+        <DataTable<Automation>
+          title="Automatizaciones"
+          tabs={[{ id: 'list', label: 'Automatizaciones', count: automations.length }, { id: 'history', label: 'Historial', count: history.length }]}
+          activeTab={tab}
+          onTabChange={(id) => setTab(id as 'list' | 'history')}
+          columns={columns}
+          data={rows}
+          getItemKey={(a) => a.id}
+          entityLabel="automatizaciones"
+          metricCards={metricCards}
+          exportTitle="Automatizaciones"
+          exportScreen="automations"
+          exportColumns={exportColumns}
+        />
+      )}
 
       <p className="text-sm text-slate-500 px-1">
         Son correos que salen solos. Vienen apagadas con un texto de ejemplo: revísalo con el lápiz y enciéndelas. Les llegan solo a quienes aceptaron recibir promociones, y cada cliente recibe como máximo una por día. &quot;Agendaron después&quot; cuenta a quienes reservaron una cita en los {data?.booked_days ?? 7} días siguientes al correo.

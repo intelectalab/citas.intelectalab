@@ -53,7 +53,7 @@ it('vence sola al pasar la fecha y ampliarla la reactiva si le queda saldo', fun
     $this->as($this->co->owner)->getJson('/api/loyalty')->assertOk();
     expect(($this->tarjeta)()->status)->toBe('expired');
 
-    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/extend", ['days' => 30])->assertOk();
+    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/extend", ['days' => 30, 'reason' => 'Motivo de prueba'])->assertOk();
     expect(($this->tarjeta)()->status)->toBe('active');
 });
 
@@ -61,12 +61,12 @@ it('anular deja el saldo en cero, no se anula dos veces ni se amplía después',
     ($this->emitir)()->assertOk();
     $gc = ($this->tarjeta)();
 
-    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/cancel")->assertOk();
+    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/cancel", ['reason' => 'Motivo de prueba'])->assertOk();
     $fila = ($this->tarjeta)();
 
     expect($fila->status)->toBe('cancelled')->and(money($fila->balance))->toBe(0.0);
-    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/cancel")->assertStatus(422);
-    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/extend", ['days' => 5])->assertStatus(422);
+    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/cancel", ['reason' => 'Motivo de prueba'])->assertStatus(422);
+    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$gc->id}/extend", ['days' => 5, 'reason' => 'Motivo de prueba'])->assertStatus(422);
 });
 
 it('se puede pagar una venta con la gift card y devolver la venta repone el saldo', function () {
@@ -94,7 +94,7 @@ it('permisos: recepción emite y descuenta pero no anula; el profesional no entr
     $gc = ($this->tarjeta)();
 
     $this->as($recep)->postJson("/api/loyalty/gift-cards/{$gc->id}/redeem", ['amount' => 10])->assertOk();
-    $this->as($recep)->postJson("/api/loyalty/gift-cards/{$gc->id}/cancel")->assertForbidden();
+    $this->as($recep)->postJson("/api/loyalty/gift-cards/{$gc->id}/cancel", ['reason' => 'Motivo de prueba'])->assertForbidden();
 
     $pro = $this->professional($this->co);
     ($this->emitir)([], $pro->user)->assertForbidden();
@@ -107,8 +107,8 @@ it('una empresa no puede usar, ampliar ni anular gift cards de otra', function (
     $ajena = DB::table('gift_cards')->where('tenant_id', $otra->tenant->id)->first();
 
     $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$ajena->id}/redeem", ['amount' => 10])->assertNotFound();
-    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$ajena->id}/extend", ['days' => 10])->assertNotFound();
-    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$ajena->id}/cancel")->assertNotFound();
+    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$ajena->id}/extend", ['days' => 10, 'reason' => 'Motivo de prueba'])->assertNotFound();
+    $this->as($this->co->owner)->postJson("/api/loyalty/gift-cards/{$ajena->id}/cancel", ['reason' => 'Motivo de prueba'])->assertNotFound();
 
     $this->openCash($this->co);
     $servicio = $this->servicePriced($this->co->tenant, 100);

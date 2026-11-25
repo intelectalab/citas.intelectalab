@@ -2,7 +2,7 @@
 
 import Badge from '@/app/components/common/Badge';
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Building2, CalendarClock, CalendarOff, ChevronRight, Edit2, PlayCircle, Trash2, UserRound } from 'lucide-react';
+import { AlertTriangle, Building2, CalendarClock, CalendarOff, ChevronRight, DoorOpen, Edit2, PlayCircle, Trash2, UserRound } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
@@ -28,6 +28,7 @@ const CARDS: { id: string; title: string; match: (b: Block) => boolean; icon: Re
   { id: 'current', title: 'En curso ahora', match: (b) => b.state === 'current', icon: <PlayCircle size={18} />, color: 'text-emerald-600', active: 'border-emerald-500 ring-2 ring-emerald-500/20', hover: 'hover:border-emerald-300' },
   { id: 'upcoming', title: 'Próximos', match: (b) => b.state === 'upcoming', icon: <CalendarClock size={18} />, color: 'text-sky-600', active: 'border-sky-500 ring-2 ring-sky-500/20', hover: 'hover:border-sky-300' },
   { id: 'branch', title: 'Cierres de sede', match: (b) => b.scope === 'branch', icon: <Building2 size={18} />, color: 'text-violet-600', active: 'border-violet-500 ring-2 ring-violet-500/20', hover: 'hover:border-violet-300' },
+  { id: 'room', title: 'Salas y equipos', match: (b) => b.scope === 'room', icon: <DoorOpen size={18} />, color: 'text-teal-600', active: 'border-teal-500 ring-2 ring-teal-500/20', hover: 'hover:border-teal-300' },
   { id: 'affected', title: 'Con citas dentro', match: (b) => b.affected_count > 0, icon: <AlertTriangle size={18} />, color: 'text-amber-600', active: 'border-amber-500 ring-2 ring-amber-500/20', hover: 'hover:border-amber-300' },
 ];
 
@@ -119,7 +120,7 @@ export default function BlocksTable() {
     && (!filters.kind || b.kind === filters.kind)
     && (!filters.professional_id || b.professional_id === filters.professional_id)
     && (!filters.branch_id || b.branch_id === filters.branch_id || (b.scope === 'professional' && !b.branch_id))
-    && (!term || normalize(`${b.reason ?? ''} ${b.professional?.display_name ?? ''} ${b.branch?.name ?? ''} ${b.kind_label}`).includes(term)),
+    && (!term || normalize(`${b.reason ?? ''} ${b.professional?.display_name ?? ''} ${b.room?.name ?? ''} ${b.branch?.name ?? ''} ${b.kind_label} ${b.created_by_name ?? ''}`).includes(term)),
   );
 
   const metricCards: MetricCardItem[] = [
@@ -131,7 +132,7 @@ export default function BlocksTable() {
       borderColorClass: !activeCard ? 'border-slate-400 ring-2 ring-slate-400/20' : 'hover:border-slate-300',
       onClick: () => setActiveCard(''),
     },
-    ...CARDS.filter((item) => period === 'current' || item.id === 'branch').map((item) => ({
+    ...CARDS.filter((item) => (period === 'current' || item.id === 'branch' || item.id === 'room') && (item.id !== 'room' || (options?.rooms?.length ?? 0) > 0)).map((item) => ({
       title: item.title,
       value: blocks.filter(item.match).length,
       icon: item.icon,
@@ -154,8 +155,8 @@ export default function BlocksTable() {
   ];
 
   const exportColumns: ExportColumn<Block>[] = [
-    { header: 'Aplica a', value: (b) => b.professional?.display_name ?? b.branch?.name ?? '' },
-    { header: 'Alcance', value: (b) => (b.scope === 'branch' || !b.professional ? 'Toda la sede' : vocab.pro) },
+    { header: 'Aplica a', value: (b) => b.professional?.display_name ?? b.room?.name ?? b.branch?.name ?? '' },
+    { header: 'Alcance', value: (b) => (b.scope === 'room' ? (b.room?.kind === 'equipment' ? 'Equipo' : 'Sala') : b.scope === 'branch' || !b.professional ? 'Toda la sede' : vocab.pro) },
     { header: 'Sede', value: (b) => b.branch?.name ?? '' },
     { header: 'Tipo', value: (b) => b.kind_label },
     { header: 'Motivo', value: (b) => b.reason ?? '' },
@@ -165,6 +166,7 @@ export default function BlocksTable() {
     { header: 'Duración', value: (b) => durationLabel(b) },
     { header: 'Estado', value: (b) => STATE_LABELS[b.state].label },
     { header: 'Citas dentro', type: 'number', value: (b) => b.affected_count },
+    { header: 'Registrado por', value: (b) => b.created_by_name ?? '' },
   ];
 
   const columns: Column<Block>[] = [
@@ -172,8 +174,8 @@ export default function BlocksTable() {
       header: 'Aplica a',
       cell: (b) => (
         <div key={`who-${b.id}`} className="flex items-center gap-3">
-          <span className={`p-2 rounded-lg shrink-0 ${b.scope === 'branch' ? 'bg-violet-50 text-violet-600' : 'bg-slate-100 text-slate-500'}`}>
-            {b.scope === 'branch' ? <Building2 size={16} /> : <UserRound size={16} />}
+          <span className={`p-2 rounded-lg shrink-0 ${b.scope === 'branch' ? 'bg-violet-50 text-violet-600' : b.scope === 'room' ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+            {b.scope === 'branch' ? <Building2 size={16} /> : b.scope === 'room' ? <DoorOpen size={16} /> : <UserRound size={16} />}
           </span>
           <div>
             {b.can_manage ? (
@@ -183,13 +185,15 @@ export default function BlocksTable() {
                 onClick={() => { setEditing(b); setFormOpen(true); }}
                 className={`${styles.customerName} hover:text-brand-accent transition-colors text-left`}
               >
-                {b.professional?.display_name ?? b.branch?.name ?? '—'}
+                {b.professional?.display_name ?? b.room?.name ?? b.branch?.name ?? '—'}
               </button>
             ) : (
-              <span className={styles.customerName}>{b.professional?.display_name ?? b.branch?.name ?? '—'}</span>
+              <span className={styles.customerName}>{b.professional?.display_name ?? b.room?.name ?? b.branch?.name ?? '—'}</span>
             )}
             <span className="block text-xs text-slate-400">
-              {b.scope === 'branch' || !b.professional
+              {b.scope === 'room'
+                ? `${b.room?.kind === 'equipment' ? 'Equipo' : 'Sala'}${b.branch ? ` · ${b.branch.name}` : ''}`
+                : b.scope === 'branch' || !b.professional
                 ? 'Toda la sede'
                 : <ProfessionalLink id={b.professional.id}>Ver la página de {b.professional.display_name}</ProfessionalLink>}
             </span>
@@ -203,6 +207,7 @@ export default function BlocksTable() {
         <div key={`reason-${b.id}`}>
           <span className="block text-sm text-slate-700">{b.reason || '—'}</span>
           <span className={`inline-block mt-1 px-2 py-0.5 text-[11px] rounded-full font-medium ${KIND_STYLES[b.kind] ?? KIND_STYLES.other}`}>{b.kind_label}</span>
+          {b.created_by_name && <span className="block mt-1 text-[11px] text-slate-400" data-created-by>Registrado por {b.created_by_name}</span>}
         </div>
       ),
     },
@@ -266,7 +271,7 @@ export default function BlocksTable() {
     },
   ];
 
-  const deletingWho = deleting?.professional?.display_name ?? deleting?.branch?.name ?? '';
+  const deletingWho = deleting?.professional?.display_name ?? deleting?.room?.name ?? deleting?.branch?.name ?? '';
 
   if (period === HOLIDAYS_TAB) {
     return (
@@ -305,7 +310,7 @@ export default function BlocksTable() {
           ]}
           data={rows}
           getItemKey={(b) => b.id}
-          entityLabel="bloqueos"
+          entityLabel={rows.length === 1 ? 'bloqueo' : 'bloqueos'}
           metricCards={metricCards}
         />
       </div>
@@ -321,8 +326,8 @@ export default function BlocksTable() {
       <FormDrawer
         isOpen={Boolean(reviewing) && !appointmentOpen}
         onClose={() => setReviewing(null)}
-        title={`Citas dentro del bloqueo: ${reviewing?.professional?.display_name ?? reviewing?.branch?.name ?? ''}`}
-        subtitle={reviewing ? `${reviewing.reason ?? reviewing.kind_label} · ${rangeLabel(reviewing)}` : ''}
+        title={`Citas dentro del bloqueo: ${reviewing?.professional?.display_name ?? reviewing?.room?.name ?? reviewing?.branch?.name ?? ''}`}
+        subtitle={reviewing ? `${reviewing.reason ?? reviewing.kind_label} · ${rangeLabel(reviewing)}${reviewing.created_by_name ? ` · Registrado por ${reviewing.created_by_name}` : ''}` : ''}
         icon={<AlertTriangle size={20} />}
       >
         {reviewing && (

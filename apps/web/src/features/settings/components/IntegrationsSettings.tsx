@@ -13,12 +13,14 @@ import { api } from '@/lib/axios';
 import { PagedList } from '@/app/components/common/Pager';
 import { apiError } from '@/features/appointments/appointments';
 import { money, momentOf, type PaymentQr } from '@/features/sales/sales';
+import IntegrationLogList, { type IntegrationLogEntry } from './IntegrationLogList';
+import GatewayWebhookList from './GatewayWebhookList';
 
 interface ProviderOption {
   key: string;
   label: string;
   connectable: boolean;
-  saved: { public_key: string | null; secret_key: string | null; webhook_secret?: string | null; saved_at: string; mode?: string | null } | null;
+  saved: { public_key: string | null; secret_key: string | null; webhook_secret?: string | null; username?: string | null; saved_at: string; mode?: string | null } | null;
 }
 
 interface PaymentEvent {
@@ -34,7 +36,7 @@ interface PaymentEvent {
 }
 
 interface IntegrationsPayload {
-  payments: { active: string; chosen: string; status: string; mode: string | null; account: string | null; currency: string | null; simulation: boolean; webhook_url: string; culqi_webhook_url?: string; connected?: string[]; providers: ProviderOption[]; link_hours: number };
+  payments: { active: string; chosen: string; status: string; mode: string | null; account: string | null; currency: string | null; simulation: boolean; webhook_url: string; culqi_webhook_url?: string; izipay_webhook_url?: string; log?: IntegrationLogEntry[]; connected?: string[]; providers: ProviderOption[]; link_hours: number };
   events: PaymentEvent[];
   qr: Partial<Record<'yape' | 'plin', PaymentQr>>;
 }
@@ -147,7 +149,7 @@ function QrCard({ method, label, qr, canSave, onSaved }: { method: 'yape' | 'pli
 export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSave: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const [data, setData] = useState<IntegrationsPayload | null>(null);
   const [chosen, setChosen] = useState('none');
-  const [keys, setKeys] = useState({ public_key: '', secret_key: '', webhook_secret: '' });
+  const [keys, setKeys] = useState({ public_key: '', secret_key: '', webhook_secret: '', username: '' });
   const [mode, setMode] = useState<'sandbox' | 'production'>('sandbox');
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -158,7 +160,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
     setData(payload);
     setChosen(payload.payments.chosen);
     setMode(payload.payments.mode === 'production' ? 'production' : 'sandbox');
-    setKeys({ public_key: '', secret_key: '', webhook_secret: '' });
+    setKeys({ public_key: '', secret_key: '', webhook_secret: '', username: '' });
   };
 
   useEffect(() => {
@@ -168,7 +170,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
   }, []);
 
   const savedMode = data?.payments.mode === 'production' ? 'production' : 'sandbox';
-  const dirty = Boolean(data) && (chosen !== data?.payments.chosen || Boolean(keys.public_key || keys.secret_key || keys.webhook_secret) || (chosen === 'mercadopago' && data?.payments.chosen === 'mercadopago' && mode !== savedMode));
+  const dirty = Boolean(data) && (chosen !== data?.payments.chosen || Boolean(keys.public_key || keys.secret_key || keys.webhook_secret || keys.username) || ((chosen === 'mercadopago' || chosen === 'niubiz') && data?.payments.chosen === chosen && mode !== savedMode));
 
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
@@ -182,9 +184,12 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
   const isReal = chosen !== 'simulated' && chosen !== 'none';
   const isMercadoPago = chosen === 'mercadopago';
   const isCulqi = chosen === 'culqi';
+  const isNiubiz = chosen === 'niubiz';
+  const isIzipay = chosen === 'izipay';
+  const connectable = isMercadoPago || isCulqi || isNiubiz || isIzipay;
   const connected = data.payments.connected ?? [];
   const both = connected.includes('culqi') && connected.includes('mercadopago');
-  const webhookUrl = isCulqi ? (data.payments.culqi_webhook_url ?? '') : data.payments.webhook_url;
+  const webhookUrl = isCulqi ? (data.payments.culqi_webhook_url ?? '') : isIzipay ? (data.payments.izipay_webhook_url ?? '') : data.payments.webhook_url;
   const options: ProviderOption[] = [{ key: 'none', label: 'Sin pagos en línea', connectable: true, saved: null }, ...data.payments.providers];
 
   const copyWebhook = async () => {
@@ -212,8 +217,10 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
         ? mode === 'production'
           ? 'Mercado Pago quedó conectado. Los links de pago, los adelantos y los paquetes en línea se pagan con la cuenta de Mercado Pago de tu empresa.'
           : 'Mercado Pago quedó conectado en modo de pruebas. Usa las tarjetas de prueba de Mercado Pago: lo que se pague no llega a tu cuenta.'
+        : isNiubiz || isIzipay
+          ? `${provider?.label} quedó conectado${(res.data as IntegrationsPayload).payments.providers.find((p) => p.key === chosen)?.saved?.mode === 'production' ? '' : ' en modo de pruebas: usa las tarjetas de prueba, lo que se pague no llega a tu cuenta'}. Los links de pago, los adelantos y los paquetes en línea se pagan con ${provider?.label}.`
         : isReal
-          ? `Guardamos las llaves de ${provider?.label}. Todavía no se cobra con ${provider?.label}: aún no está conectado al sistema.`
+          ? `Guardamos las llaves de ${provider?.label}.`
           : chosen === 'none'
             ? 'Listo: tu empresa no recibe pagos en línea. No se ofrecen links de pago ni adelantos en línea.'
             : 'Listo: los links de pago usan la simulación.');
@@ -243,7 +250,7 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
     try {
       setBusy(true);
       setError('');
-      const res = await api.post('/integrations/payments/test', isCulqi || isMercadoPago ? { provider: chosen } : {});
+      const res = await api.post('/integrations/payments/test', connectable ? { provider: chosen } : {});
       if (res.data.ok) setNotice(res.data.message);
       else setError(res.data.message);
     } catch (err) {
@@ -364,6 +371,73 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
             </div>
             {provider?.saved && <p className="text-xs text-slate-500">Guardadas el {momentOf(provider.saved.saved_at)}. Deja los campos vacíos para no cambiarlos.</p>}
           </div>
+        ) : isNiubiz ? (
+          <div className="rounded-xl border border-slate-200 p-4 space-y-4" data-provider-keys="niubiz">
+            <p className="text-sm text-slate-600">
+              Usa los datos que te envió Niubiz al afiliar tu comercio al botón de pago web: el código de comercio, el usuario y la contraseña de la integración. Tus clientes escriben su tarjeta en el formulario seguro de Niubiz y el pago se confirma en ese mismo momento.
+            </p>
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">Modo</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Modo de Niubiz">
+                {([
+                  ['sandbox', 'Pruebas', 'Con el comercio de pruebas de Niubiz y sus tarjetas de prueba.'],
+                  ['production', 'Producción', 'Con tu comercio real: lo que paguen tus clientes llega a tu cuenta.'],
+                ] as const).map(([key, label, hint]) => (
+                  <OptionCard key={key} type="button" role="radio" aria-checked={mode === key} data-niubiz-mode={key} disabled={!canSave} selected={mode === key} onClick={() => { setMode(key); setNotice(''); }} className="text-left rounded-xl border px-3.5 py-3 transition-colors">
+                    <span className="block text-sm font-bold text-brand-ink">{label}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>
+                  </OptionCard>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Código de comercio</span>
+                <input aria-label="Código de comercio de Niubiz" inputMode="numeric" maxLength={12} placeholder={provider?.saved?.public_key ?? '456879852'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.public_key} onChange={(e) => setKeys({ ...keys, public_key: e.target.value.replace(/\D/g, '') })} />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Usuario de la integración</span>
+                <input aria-label="Usuario de Niubiz" maxLength={255} placeholder={provider?.saved?.username ?? 'integraciones@niubiz.com.pe'} disabled={!canSave} className={inputClass} value={keys.username} onChange={(e) => setKeys({ ...keys, username: e.target.value.trim() })} />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Contraseña de la integración</span>
+                <input aria-label="Contraseña de Niubiz" type="password" autoComplete="off" maxLength={255} placeholder={provider?.saved?.secret_key ?? ''} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.secret_key} onChange={(e) => setKeys({ ...keys, secret_key: e.target.value })} />
+              </label>
+            </div>
+            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Para devolver dinero por Niubiz se usa el RUC de tu empresa (Configuración → Empresa).</p>
+            {provider?.saved && <p className="text-xs text-slate-500">Guardadas el {momentOf(provider.saved.saved_at)}{provider.saved.mode === 'production' ? ' · producción' : ' · pruebas'}. Deja los campos vacíos para no cambiarlos.</p>}
+          </div>
+        ) : isIzipay ? (
+          <div className="rounded-xl border border-slate-200 p-4 space-y-4" data-provider-keys="izipay">
+            <p className="text-sm text-slate-600">
+              Copia las claves del Back Office de Izipay (Configuración → Tienda → Claves de API REST). Con la contraseña de prueba (testpassword_) no se mueve dinero; con la de producción (prodpassword_) el dinero llega a tu cuenta. Tus clientes pagan en la página segura de Izipay y vuelven aquí.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Usuario (identificador de la tienda)</span>
+                <input aria-label="Usuario de Izipay" maxLength={255} placeholder={provider?.saved?.public_key ?? '69876357'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.public_key} onChange={(e) => setKeys({ ...keys, public_key: e.target.value.trim() })} />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-xs font-semibold text-slate-600">Contraseña</span>
+                <input aria-label="Contraseña de Izipay" type="password" autoComplete="off" maxLength={255} placeholder={provider?.saved?.secret_key ?? 'testpassword_...'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.secret_key} onChange={(e) => setKeys({ ...keys, secret_key: e.target.value.trim() })} />
+              </label>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-2" data-webhook>
+              <span className="block text-xs font-bold text-slate-700">Avisos de pago (recomendado)</span>
+              <p className="text-xs text-slate-600">En el Back Office de Izipay entra a Configuración → Reglas de notificación → URL de notificación al final del pago, pega esta dirección y guarda. Cada aviso se comprueba con su firma y volviendo a preguntar a Izipay. Sin esto, el sistema igual revisa los pagos cada pocos minutos.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input readOnly aria-label="Dirección de avisos de Izipay" value={webhookUrl} onFocus={(e) => e.target.select()} className={`${inputClass} font-mono text-xs flex-1`} />
+                <button type="button" data-webhook-copy onClick={copyWebhook} className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                  <Copy size={14} /> {copied ? '¡Copiada!' : 'Copiar'}
+                </button>
+              </div>
+              <label className="space-y-1 block">
+                <span className="block text-xs font-semibold text-slate-600">Clave HMAC-SHA-256 (opcional)</span>
+                <input aria-label="Clave HMAC de Izipay" type="password" autoComplete="off" maxLength={255} placeholder={provider?.saved?.webhook_secret ?? 'testsha256_...'} disabled={!canSave} className={`${inputClass} font-mono`} value={keys.webhook_secret} onChange={(e) => setKeys({ ...keys, webhook_secret: e.target.value.trim() })} />
+              </label>
+            </div>
+            {provider?.saved && <p className="text-xs text-slate-500">Guardadas el {momentOf(provider.saved.saved_at)}{provider.saved.mode === 'production' ? ' · producción' : ' · pruebas'}. Deja los campos vacíos para no cambiarlos.</p>}
+          </div>
         ) : isReal ? (
           <div className="rounded-xl border border-slate-200 p-4 space-y-3" data-provider-keys>
             <p className="text-sm text-slate-600">
@@ -389,10 +463,10 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
         <div className="flex flex-wrap gap-2">
           {canSave && (
             <button type="button" data-save-provider disabled={busy || !dirty} onClick={save} className="px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
-              {busy ? 'Guardando...' : isMercadoPago || isCulqi ? 'Guardar y conectar' : 'Guardar pasarela'}
+              {busy ? 'Guardando...' : connectable ? 'Guardar y conectar' : 'Guardar pasarela'}
             </button>
           )}
-          {canSave && (isMercadoPago || isCulqi) && provider?.saved && (
+          {canSave && connectable && provider?.saved && (
             <button type="button" data-disconnect-provider disabled={busy} onClick={disconnect} className="px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 rounded-xl transition-colors">
               Desconectar {provider.label}
             </button>
@@ -428,6 +502,8 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
         </div>
       </div>
 
+      <IntegrationLogList entries={data.payments.log} />
+
       <TransferSettings canSave={canSave} hasQr={{ yape: Boolean(data.qr.yape), plin: Boolean(data.qr.plin) }} />
 
       <div className="pt-4 border-t border-slate-100 space-y-2" data-payment-events>
@@ -448,6 +524,10 @@ export default function IntegrationsSettings({ canSave, onDirtyChange }: { canSa
             )}
           />
         </div>
+      </div>
+
+      <div className="pt-4 border-t border-slate-100">
+        <GatewayWebhookList endpoint="/integrations/payment-webhooks" canRetry={canSave} hint="Cada aviso que llega de la pasarela queda guardado con su estado. Un aviso repetido no registra el pago dos veces. Si uno falla, se reintenta solo cada pocos minutos (hasta 5 veces) y también lo puedes reintentar aquí." />
       </div>
     </section>
   );

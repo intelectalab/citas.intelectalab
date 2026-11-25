@@ -30,6 +30,7 @@ export interface BusinessType {
   template?: any;
   tenants_count?: number;
   outdated_tenants_count?: number;
+  has_factory?: boolean;
 }
 
 interface FormBusinessTypeProps {

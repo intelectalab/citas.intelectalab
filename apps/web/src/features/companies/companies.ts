@@ -6,6 +6,8 @@ export interface CompanyProfileData {
     timezone: string;
     business_type: string | null;
     member_since: string | null;
+    contact_email?: string | null;
+    currency?: { code: string; name: string; symbol: string } | null;
   };
   company: {
     legal_name: string | null;

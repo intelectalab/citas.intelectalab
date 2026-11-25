@@ -4,12 +4,13 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CalendarDays, Check, ChevronRight, Clock, Copy, CreditCard, FileText, KeyRound, Mail, MapPin, MessageCircle, Pencil, Phone, Settings, Store, Users } from 'lucide-react';
+import { Building2, CalendarDays, Check, ChevronRight, Clock, Coins, Copy, CreditCard, FileText, KeyRound, Mail, MapPin, MessageCircle, Pencil, Phone, Settings, Store, Users } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import FormCompany from './FormCompany';
+import CatalogImport from './CatalogImport';
 import PlanCard from '@/features/billing/components/PlanCard';
 import { type CompanyProfileData } from '../companies';
 
@@ -45,7 +46,9 @@ export default function CompanyProfile() {
     [<FileText size={16} key="legal" />, 'Razón social', company.legal_name],
     [<CreditCard size={16} key="tax" />, 'RUC', company.tax_id],
     [<Phone size={16} key="phone" />, 'Teléfono', company.phone],
+    [<Mail size={16} key="email" />, 'Correo de contacto', tenant.contact_email ?? null],
     [<MapPin size={16} key="address" />, 'Dirección fiscal', place || null],
+    [<Coins size={16} key="currency" />, 'Moneda', tenant.currency ? `${tenant.currency.name} (${tenant.currency.symbol})` : null],
     [<Clock size={16} key="zone" />, 'Zona horaria', tenant.timezone.replace(/_/g, ' ')],
     [<CalendarDays size={16} key="since" />, 'En la plataforma desde', tenant.member_since ? shortDate(tenant.member_since) : null],
   ];
@@ -163,6 +166,8 @@ export default function CompanyProfile() {
             Tus {vocab.clients.toLowerCase()} lo usan para crear su cuenta y reservar en línea. Tienes {data.totals.customers.toLocaleString('es-PE')} {vocab.clients.toLowerCase()} y {data.totals.services} servicios.
           </p>
         </section>
+
+        {data.can_edit && <CatalogImport />}
 
         <section className={`${card} p-6 space-y-3 xl:col-span-3`} data-card="links">
           <SectionTitle><Settings size={16} className="text-brand-accent" /> Lo demás de tu empresa</SectionTitle>

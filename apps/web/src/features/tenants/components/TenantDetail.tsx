@@ -20,6 +20,7 @@ import { CORE_MODULE_LABELS, MODULE_GROUPS, MODULE_LABELS } from '@/lib/modules'
 import { SUBSCRIPTION_STATUS, TENANT_STATUS } from '../tenantStatus';
 import MemberAccessDrawer, { type TenantMember } from './MemberAccessDrawer';
 import ImpersonateDrawer from '@/features/support/components/ImpersonateDrawer';
+import { CancelDeletionDrawer, CancelSubscriptionDrawer, DeleteTenantDrawer, MarkPastDueDrawer, ReactivatePlanDrawer } from './TenantDeletionDrawers';
 import ReceiptButton from '@/features/billing/components/ReceiptButton';
 import { BILLING_STATES, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, type Billing, type PlanPayment } from '@/features/billing/billing';
 
@@ -53,7 +54,11 @@ interface TenantDetailData {
     starts_at: string | null;
     ends_at: string | null;
     plan: { id: string; name: string; price_monthly: number; price_yearly: number; currency: string; is_public_catalog: boolean } | null;
+    list_price?: number;
+    charge?: number;
+    mrr?: number;
   } | null;
+  deletion?: { requested_at: string | null; delete_on: string | null; days_left: number; reason: string | null; deleted: boolean } | null;
   invoices: Array<{
     id: string; amount: number; currency: string; status: string | null; status_slug: string | null;
     invoice_date: string | null; period_start: string | null; period_end: string | null; reference: string | null;
@@ -92,7 +97,7 @@ const USAGE: Record<string, { label: string; icon: React.ReactNode; tint: string
   campaign_emails_month: { label: 'Correos de campañas este mes', icon: <MessageCircle size={18} />, tint: 'bg-sky-50 border-sky-100', iconColor: 'text-sky-600 bg-sky-100' },
 };
 
-const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString() : 'Sin fecha');
+const formatDate = (value?: string | null) => (value ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value).toLocaleDateString('es-PE') : 'Sin fecha');
 
 const card = 'bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6';
 const labelClass = 'block text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1';
@@ -166,6 +171,7 @@ export default function TenantDetail() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
   const [entering, setEntering] = useState(false);
+  const [drawer, setDrawer] = useState<'' | 'delete' | 'undelete' | 'reactivate' | 'cancel-plan' | 'past-due'>('');
   const canManage = Boolean(user?.is_saas_admin);
 
   const [detail, setDetail] = useState<TenantDetailData | null>(null);
@@ -178,6 +184,7 @@ export default function TenantDetail() {
   const [businessTypes, setBusinessTypes] = useState<any[]>([]);
 
   const [suspendReason, setSuspendReason] = useState('');
+  const [reactivateReason, setReactivateReason] = useState('');
   const [businessTypeId, setBusinessTypeId] = useState('');
   const [installTemplate, setInstallTemplate] = useState(false);
   const [planId, setPlanId] = useState('');
@@ -245,7 +252,9 @@ export default function TenantDetail() {
   const color = detail.settings?.brand_color || detail.business_type?.color || '#3F768C';
   const subscription = detail.subscription;
   const selectedPlan = plans.find((plan) => plan.id === planId);
-  const defaultAmount = subscription?.plan
+  const defaultAmount = subscription?.plan && subscription.charge !== undefined && payment.billing_cycle === subscription.billing_cycle
+    ? subscription.charge
+    : subscription?.plan
     ? (payment.billing_cycle === 'yearly' ? subscription.plan.price_yearly : subscription.plan.price_monthly)
     : 0;
   const daysLeft = subscription?.ends_at ? Math.ceil((new Date(subscription.ends_at).getTime() - Date.now()) / 86400000) : null;
@@ -295,6 +304,20 @@ export default function TenantDetail() {
         <span className="text-slate-300">/</span>
         <span className="font-semibold text-slate-500 truncate">{detail.name}</span>
       </nav>
+
+      {detail.deletion && (
+        <div className="p-3.5 rounded-2xl border border-rose-200 bg-rose-50 text-sm text-rose-700 flex flex-wrap items-center justify-between gap-3" data-tenant-deletion>
+          <span>
+            <span className="font-bold">Borrado programado.</span> Sus datos se borran el {formatDate(detail.deletion.delete_on)} ({detail.deletion.days_left === 1 ? 'falta 1 día' : `faltan ${detail.deletion.days_left} días`}).
+            {detail.deletion.reason ? ` Motivo: ${detail.deletion.reason}` : ''}
+          </span>
+          {canManage && !detail.deletion.deleted && (
+            <button type="button" data-tenant-undelete disabled={busy} onClick={() => setDrawer('undelete')} className="px-4 py-2 bg-white border border-rose-200 text-rose-700 text-xs font-bold rounded-xl hover:bg-rose-100 transition-colors disabled:opacity-50 shrink-0 cursor-pointer">
+              Anular el borrado
+            </button>
+          )}
+        </div>
+      )}
 
       {notice && (
         <div className={`p-3.5 rounded-2xl border text-sm font-medium ${notice.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
@@ -378,8 +401,14 @@ export default function TenantDetail() {
           {subscription?.plan ? (
             <>
               <div>
-                <span className="text-4xl font-black">{subscription.plan.currency || 'PEN'} {subscription.billing_cycle === 'yearly' ? subscription.plan.price_yearly : subscription.plan.price_monthly}</span>
+                <span className="text-4xl font-black" data-tenant-charge>{subscription.plan.currency || 'PEN'} {subscription.charge ?? (subscription.billing_cycle === 'yearly' ? subscription.plan.price_yearly : subscription.plan.price_monthly)}</span>
                 <span className="text-sm font-medium text-white/70"> / {subscription.billing_cycle === 'yearly' ? 'año' : 'mes'}</span>
+                {subscription.charge !== undefined && subscription.list_price !== undefined && Number(subscription.charge) !== Number(subscription.list_price) && (
+                  <span className="block text-xs text-white/70 mt-1">Lo que se cobra, con descuentos y complementos. Precio del plan: {subscription.plan.currency || 'PEN'} {subscription.list_price}.</span>
+                )}
+                {subscription.mrr !== undefined && subscription.billing_cycle === 'yearly' && Number(subscription.mrr) > 0 && (
+                  <span className="block text-xs text-white/70">Ingreso mensual: {subscription.plan.currency || 'PEN'} {subscription.mrr}.</span>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="rounded-2xl bg-white/10 px-3.5 py-2.5">
@@ -469,13 +498,19 @@ export default function TenantDetail() {
                   <button
                     type="button"
                     disabled={busy || !planId || planId === subscription?.plan?.id}
-                    onClick={() => run(() => api.put(`/tenants/${detail.id}/plan`, { plan_id: planId }), `Plan cambiado a ${selectedPlan?.name ?? 'el seleccionado'}.`)}
+                    onClick={() => (subscription && !subscription.is_current
+                      ? setDrawer('reactivate')
+                      : run(() => api.put(`/tenants/${detail.id}/plan`, { plan_id: planId }), `Plan cambiado a ${selectedPlan?.name ?? 'el seleccionado'}.`))}
                     className={`${primaryButton} shrink-0`}
                   >
                     Cambiar
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400">Incluye planes a medida. Si su suscripción está vigente conserva sus fechas.</p>
+                <p className="text-[11px] text-slate-400">
+                  {subscription && !subscription.is_current
+                    ? 'Su suscripción no está vigente: cambiar el plan no la reactiva sola. Te pediremos confirmar y el motivo.'
+                    : 'Incluye planes a medida. Si su suscripción está vigente conserva sus fechas. Si lo que usa no cabe en el plan nuevo, no se cambia.'}
+                </p>
               </div>
 
               {subscription && (
@@ -529,16 +564,33 @@ export default function TenantDetail() {
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => run(() => api.post(`/tenants/${detail.id}/subscription/cancel`), 'Suscripción cancelada.')}
+                          onClick={() => setDrawer('cancel-plan')}
                           className="px-4 py-2 border border-rose-200 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-50 transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
                         >
                           Cancelar suscripción
                         </button>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400">Mover no registra cobro. Al cancelar, la empresa queda sin módulos de inmediato.</p>
+                    {detail.billing?.state === 'active' && subscription.status === 'active' && (
+                      <button type="button" data-tenant-past-due disabled={busy} onClick={() => setDrawer('past-due')} className={`${ghostButton} shrink-0`}>
+                        Marcar pago vencido
+                      </button>
+                    )}
+                    <p className="text-[11px] text-slate-400">Mover no registra cobro. Al cancelar, la empresa queda sin módulos de inmediato. Ambos piden el motivo.</p>
                   </div>
                 </>
+              )}
+
+              {!detail.deletion && (
+                <div className="space-y-2 pt-4 border-t border-slate-100">
+                  <span className={labelClass}>Borrar empresa</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] text-slate-400 flex-1 min-w-[12rem]">Queda desactivada desde ahora y sus datos se borran a los 90 días. Se puede anular dentro del plazo.</p>
+                    <button type="button" data-tenant-delete disabled={busy} onClick={() => setDrawer('delete')} className="px-4 py-2 border border-rose-200 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-50 transition-colors disabled:opacity-50 shrink-0 cursor-pointer">
+                      Borrar empresa
+                    </button>
+                  </div>
+                </div>
               )}
             </>
           ) : (
@@ -736,14 +788,17 @@ export default function TenantDetail() {
               <p className="text-sm font-bold text-rose-700 mb-1">La empresa no puede iniciar sesión.</p>
               {detail.suspension_reason && <p className="text-xs text-rose-700 mb-3">Motivo: {detail.suspension_reason}</p>}
               {canManage && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => run(() => api.post(`/tenants/${detail.id}/reactivate`), 'Empresa reactivada.')}
-                  className={`${primaryButton} w-full flex items-center justify-center gap-1.5 py-2.5`}
-                >
-                  <RotateCcw size={14} /> Reactivar empresa
-                </button>
+                <div className="space-y-2">
+                  <input type="text" maxLength={255} value={reactivateReason} onChange={(e) => setReactivateReason(e.target.value)} className={inputClass} placeholder="Motivo. Ej. Ya regularizó su pago" aria-label="Motivo de la reactivación" data-reactivate-reason />
+                  <button
+                    type="button"
+                    disabled={busy || reactivateReason.trim().length < 5}
+                    onClick={() => run(() => api.post(`/tenants/${detail.id}/reactivate`, { reason: reactivateReason.trim() }), 'Empresa reactivada.')}
+                    className={`${primaryButton} w-full flex items-center justify-center gap-1.5 py-2.5`}
+                  >
+                    <RotateCcw size={14} /> Reactivar empresa
+                  </button>
+                </div>
               )}
             </>
           )}
@@ -802,6 +857,57 @@ export default function TenantDetail() {
         )}
 
         <ImpersonateDrawer isOpen={entering} onClose={() => setEntering(false)} tenant={{ id: detail.id, name: detail.name }} />
+        <DeleteTenantDrawer
+          isOpen={drawer === 'delete'}
+          onClose={() => setDrawer('')}
+          tenant={{ id: detail.id, name: detail.name }}
+          onSubmit={async (values) => {
+            const res = await api.delete(`/tenants/${detail.id}`, { data: values });
+            apply(res.data);
+            setNotice({ type: 'ok', text: res.data?.message ?? 'Borrado programado.' });
+          }}
+        />
+        <CancelDeletionDrawer
+          isOpen={drawer === 'undelete'}
+          onClose={() => setDrawer('')}
+          tenant={{ id: detail.id, name: detail.name }}
+          onSubmit={async (values) => {
+            const res = await api.post(`/tenants/${detail.id}/deletion/cancel`, values);
+            apply(res.data);
+            setNotice({ type: 'ok', text: res.data?.message ?? 'Se anuló el borrado.' });
+          }}
+        />
+        <CancelSubscriptionDrawer
+          isOpen={drawer === 'cancel-plan'}
+          onClose={() => setDrawer('')}
+          tenant={{ id: detail.id, name: detail.name }}
+          onSubmit={async (values) => {
+            const res = await api.post(`/tenants/${detail.id}/subscription/cancel`, values);
+            apply(res.data);
+            setNotice({ type: 'ok', text: 'Suscripción cancelada. El motivo quedó en la bitácora.' });
+          }}
+        />
+        <MarkPastDueDrawer
+          isOpen={drawer === 'past-due'}
+          onClose={() => setDrawer('')}
+          tenant={{ id: detail.id, name: detail.name }}
+          onSubmit={async (values) => {
+            const res = await api.post(`/tenants/${detail.id}/subscription/past-due`, values);
+            apply(res.data);
+            setNotice({ type: 'ok', text: 'Pago marcado como vencido. La empresa ya ve el aviso para pagar.' });
+          }}
+        />
+        <ReactivatePlanDrawer
+          isOpen={drawer === 'reactivate'}
+          onClose={() => setDrawer('')}
+          tenant={{ id: detail.id, name: detail.name }}
+          planName={selectedPlan?.name ?? 'elegido'}
+          onSubmit={async (values) => {
+            const res = await api.put(`/tenants/${detail.id}/plan`, { plan_id: planId, reactivate: true, reason: values.reason });
+            apply(res.data);
+            setNotice({ type: 'ok', text: `Reactivada sin cobrar con el plan ${selectedPlan?.name ?? 'elegido'}. Quedó en la bitácora.` });
+          }}
+        />
       </div>
     </div>
   );

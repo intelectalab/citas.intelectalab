@@ -106,7 +106,7 @@ class CustomerRecords
         $customer->tokens()->delete();
 
         DB::table('customer_consents')->where('customer_id', $customer->id)->update(['granted' => false, 'revoked_at' => now(), 'source' => 'anonymized', 'updated_at' => now()]);
-        DB::table('customer_dependents')->where('customer_id', $customer->id)->update(['name' => 'Anónimo', 'notes' => null, 'breed' => null, 'birth_date' => null]);
+        DB::table('customer_dependents')->where('customer_id', $customer->id)->update(['name' => 'Anónimo', 'notes' => null, 'breed' => null, 'birth_date' => null] + (\App\Models\CustomerDependent::alertReady() ? ['alert' => null] : []));
 
         foreach (['waitlist_entries' => 'notes', 'walkin_entries' => 'notes', 'messages' => 'to_address'] as $table => $column) {
             if (Schema::hasColumn($table, $column)) {

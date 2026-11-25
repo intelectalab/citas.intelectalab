@@ -28,6 +28,7 @@ class ComplaintController extends Controller
             'currency'   => $tenant ? \App\Support\Currency::of($tenant) : 'PEN',
             'days'       => Complaints::DAYS,
             'documents'  => Complaints::DOCUMENTS,
+            'captcha_site_key' => \App\Support\Captcha::siteKey('complaints'),
         ];
     }
 
@@ -44,6 +45,7 @@ class ComplaintController extends Controller
     private function store(Request $request, ?Tenant $tenant)
     {
         abort_unless(Complaints::ready(), 503, 'El Libro de Reclamaciones no está disponible en este momento.');
+        \App\Support\Captcha::assert($request, 'complaints');
         $data = $request->validate(Complaints::rules(), Complaints::messages());
         $row = Complaints::submit($data, $tenant);
 

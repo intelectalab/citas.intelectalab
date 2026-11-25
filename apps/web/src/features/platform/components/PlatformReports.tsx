@@ -28,8 +28,35 @@ interface MetricMonth {
   churn: number | null;
 }
 
+interface MovementRow {
+  id: string;
+  type: string;
+  label: string;
+  tenant_id: string;
+  tenant: string;
+  plan: string | null;
+  previous_plan: string | null;
+  mrr_delta: number;
+  mrr_after: number;
+  amount: number | null;
+  at: string;
+}
+
+interface Movements {
+  by_type: Record<'new' | 'expansion' | 'contraction' | 'churn' | 'reactivation', number>;
+  counts: Record<string, number>;
+  net: number;
+  start: number;
+  end: number;
+  balanced: boolean;
+  nrr: number | null;
+  trials: { trials: number; converted: number; rate: number | null };
+  rows: MovementRow[];
+}
+
 interface MetricsData {
-  ready: { cancellations: boolean };
+  ready: { cancellations: boolean; events?: boolean };
+  movements?: Movements;
   summary: {
     mrr: Money;
     arr: Money;
@@ -408,6 +435,42 @@ export default function PlatformReports({ initialTab }: { initialTab?: string })
             <ListBars items={d.mrr_by_business_type} format={(v) => money(v)} empty="Ninguna empresa paga un plan todavía." />
           </Section>
         </div>
+        {d.movements && d.ready.events !== false ? (
+          <Section dataKey="saas-events" title="Movimientos del ingreso mensual en el periodo" hint="Cada alta, subida, bajada, baja y regreso queda anotado con cuánto cambió el ingreso mensual. El ingreso al empezar más los movimientos tiene que dar el ingreso al terminar.">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" data-movements>
+              {([['new', 'Nuevas'], ['expansion', 'Subieron de plan'], ['reactivation', 'Volvieron'], ['contraction', 'Bajaron de plan'], ['churn', 'Se fueron']] as const).map(([key, label]) => (
+                <div key={key} className="rounded-xl border border-slate-200 px-3 py-2" data-movement={key}>
+                  <span className="block text-xs text-slate-500">{label} ({d.movements?.counts[key] ?? 0})</span>
+                  <span className={`block text-base font-black tabular-nums ${(d.movements?.by_type[key] ?? 0) < 0 ? 'text-rose-700' : 'text-brand-ink'}`}>{money(d.movements?.by_type[key] ?? 0)}</span>
+                </div>
+              ))}
+              <div className="rounded-xl border border-slate-200 px-3 py-2">
+                <span className="block text-xs text-slate-500">Retención neta del ingreso (NRR)</span>
+                <span className="block text-base font-black tabular-nums text-brand-ink">{percent(d.movements.nrr)}</span>
+              </div>
+              <div className="rounded-xl border border-slate-200 px-3 py-2">
+                <span className="block text-xs text-slate-500">Pruebas que pasaron a pagar (90 días)</span>
+                <span className="block text-base font-black tabular-nums text-brand-ink">{percent(d.movements.trials.rate)} <span className="text-xs font-semibold text-slate-500">({d.movements.trials.converted} de {d.movements.trials.trials})</span></span>
+              </div>
+            </div>
+            <p className={`text-xs mb-3 ${d.movements.balanced ? 'text-emerald-700' : 'text-rose-700'}`} data-movements-balance>
+              Al empezar {money(d.movements.start)} {d.movements.net >= 0 ? '+' : '−'} movimientos {money(Math.abs(d.movements.net))} = al terminar {money(d.movements.end)}. {d.movements.balanced ? 'Cuadra.' : 'No cuadra: revisa los movimientos.'}
+            </p>
+            <Table<MovementRow>
+              rowKey={(r) => r.id}
+              rows={d.movements.rows.filter((r) => r.mrr_delta !== 0)}
+              empty="No hubo movimientos en este periodo."
+              columns={[
+                { header: 'Fecha', cell: (r) => new Date(r.at).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }) },
+                { header: 'Empresa', cell: (r) => <Link href={`/admin/tenants/${r.tenant_id}`} className="font-semibold text-brand-ink hover:text-brand-accent hover:underline">{r.tenant}</Link> },
+                { header: 'Qué pasó', cell: (r) => `${r.label}${r.previous_plan && r.plan && r.previous_plan !== r.plan ? ` (${r.previous_plan} → ${r.plan})` : r.plan ? ` (${r.plan})` : ''}` },
+                { header: 'Cambio', align: 'right', cell: (r) => <span className={r.mrr_delta < 0 ? 'text-rose-700 font-bold' : 'font-bold'}>{money(r.mrr_delta)}</span> },
+              ]}
+            />
+          </Section>
+        ) : (
+          <p className="text-sm text-slate-500">Falta actualizar la base de datos para ver los movimientos del ingreso mensual.</p>
+        )}
         <Section dataKey="reasons" title="Por qué se van" hint="Lo que eligieron las empresas al pedir la baja en el periodo elegido arriba, con lo que escribieron.">
           {d.ready.cancellations ? (
             <div className="grid gap-4 lg:grid-cols-2">

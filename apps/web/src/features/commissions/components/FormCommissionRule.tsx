@@ -11,6 +11,8 @@ import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { api } from '@/lib/axios';
 import { currencySymbol } from '@/lib/currency';
 import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
+import FormServiceCategory from '@/features/services/components/FormServiceCategory';
 import { apiError } from '@/features/appointments/appointments';
 import { cleanAmount } from '@/features/sales/sales';
 import type { CommissionRule, RulesPayload, RuleType } from '../commissions';
@@ -26,7 +28,7 @@ interface Props {
   onExisting: (id: string) => void;
 }
 
-const empty = { professionalId: '', serviceId: '', productId: '', percent: '', fixed: '', active: true };
+const empty = { professionalId: '', serviceId: '', productId: '', categoryId: '', percent: '', fixed: '', active: true };
 
 export default function FormCommissionRule({ isOpen, type, rule, options, onClose, onSaved, onDelete, onExisting }: Props) {
   const vocab = useVocabulary();
@@ -35,6 +37,9 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [existing, setExisting] = useState<string | null>(null);
+  const [newCategory, setNewCategory] = useState(false);
+  const [added, setAdded] = useState<{ id: string; name: string }[]>([]);
+  const { can } = useAuth();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -44,6 +49,7 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
       professionalId: rule.professional_id ?? '',
       serviceId: rule.service_id ?? '',
       productId: rule.product_id ?? '',
+      categoryId: rule.category_id ?? '',
       percent: rule.percent ? String(rule.percent) : '',
       fixed: rule.fixed ? String(rule.fixed) : '',
       active: rule.active,
@@ -60,6 +66,12 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
     .filter((s) => type === 'service' ? !taken(s.id, '') || s.id === form.serviceId : !form.professionalId || !taken(s.id, form.professionalId) || s.id === form.serviceId)
     .map((s) => ({ value: s.id, label: s.name }));
 
+  const categories = [...(options?.categories ?? []), ...added.filter((a) => !(options?.categories ?? []).some((c) => c.id === a.id))];
+  const categoryOptions = categories
+    .filter((c) => !rules.some((r) => r.id !== rule?.id && r.type === 'category' && r.category_id === c.id) || c.id === form.categoryId)
+    .map((c) => ({ value: c.id, label: c.name }));
+  const servicesIn = (id: string) => (options?.services ?? []).filter((s) => s.category_id === id).length;
+
   const productOptions = [
     ...(!takenProduct('') || form.productId === '' ? [{ value: '', label: 'Todos los productos' }] : []),
     ...(options?.product_list ?? []).filter((p) => !takenProduct(p.id) || p.id === form.productId).map((p) => ({ value: p.id, label: p.name })),
@@ -67,6 +79,7 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
 
   const titles: Record<RuleType, { title: string; subtitle: string }> = {
     service: { title: rule ? `Comisión de ${rule.service}` : 'Servicio con otra comisión', subtitle: `Vale para todos en este servicio y reemplaza el porcentaje de cada ${pro}.` },
+    category: { title: rule ? `Comisión de la categoría ${rule.category}` : 'Categoría con otra comisión', subtitle: `Vale para todos los servicios de la categoría que no tengan su propia comisión.` },
     exception: { title: rule ? `Excepción de ${rule.professional}` : 'Excepción de una persona', subtitle: `Solo para esa persona en ese servicio. Reemplaza todo lo demás.` },
     product: { title: rule ? `Comisión de ${rule.product ?? 'todos los productos'}` : 'Comisión de productos', subtitle: 'Lo que gana quien vende el producto.' },
   };
@@ -79,7 +92,8 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
       const payload = {
         type,
         professional_id: type === 'exception' ? form.professionalId || null : null,
-        service_id: type === 'product' ? null : form.serviceId || null,
+        service_id: type === 'product' || type === 'category' ? null : form.serviceId || null,
+        category_id: type === 'category' ? form.categoryId || null : null,
         product_id: type === 'product' ? form.productId || null : null,
         percent: Number(form.percent || 0),
         fixed: Number(form.fixed || 0),
@@ -124,7 +138,27 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
             </div>
           )}
 
-          {type !== 'product' ? (
+          {type === 'category' ? (
+            <div>
+              <span className={labelClass}>Categoría *</span>
+              <Select
+                ariaLabel="Categoría"
+                placeholder="Elige la categoría"
+                clearable={false}
+                disabled={Boolean(rule)}
+                value={form.categoryId}
+                onChange={(e) => set({ categoryId: String(e.target.value) })}
+                options={categoryOptions}
+                onAdd={!rule && can('services.create') ? () => setNewCategory(true) : undefined}
+                addLabel="Nueva categoría"
+              />
+              <p className="text-xs text-slate-500 mt-1.5">
+                {form.categoryId ? `Tiene ${servicesIn(form.categoryId)} servicio${servicesIn(form.categoryId) === 1 ? '' : 's'}. ` : ''}
+                {!rule ? 'Solo aparecen las categorías que todavía no tienen su comisión. ' : ''}
+                Si un servicio de la categoría tiene su propia comisión, manda la del servicio.
+              </p>
+            </div>
+          ) : type !== 'product' ? (
             <div>
               <span className={labelClass}>Servicio *</span>
               <Select
@@ -184,6 +218,12 @@ export default function FormCommissionRule({ isOpen, type, rule, options, onClos
           </div>
         </div>
       </div>
+      <FormServiceCategory
+        isOpen={newCategory}
+        onClose={() => setNewCategory(false)}
+        existingCategories={categories}
+        onCategoryCreated={(created) => { setAdded((all) => [...all, created]); set({ categoryId: created.id }); setNewCategory(false); }}
+      />
     </FormDrawer>
   );
 }

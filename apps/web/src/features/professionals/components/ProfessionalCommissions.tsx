@@ -8,7 +8,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { money } from '@/features/sales/sales';
 import { apiError } from '@/features/appointments/appointments';
 
-type Rule = { id: string; type: 'service' | 'exception' | 'product'; service: string | null; product: string | null; percent: number; fixed: number };
+type Rule = { id: string; type: 'service' | 'exception' | 'category' | 'product'; service: string | null; category?: string | null; product: string | null; percent: number; fixed: number };
 
 type Data = {
   month: string;
@@ -31,6 +31,7 @@ const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const ruleTitle = (rule: Rule) =>
   rule.type === 'exception' ? `Excepción: ${rule.service}`
     : rule.type === 'service' ? `${rule.service} (para todos)`
+    : rule.type === 'category' ? `Categoría ${rule.category} (para todos)`
       : rule.product ? `Producto: ${rule.product}` : 'Todos los productos';
 
 export default function ProfessionalCommissions({ professionalId, reload, onEdit }: { professionalId: string; reload: number; onEdit?: () => void }) {

@@ -159,6 +159,7 @@ class WalkinController extends Controller
                     'branch_ids'       => $s->branch_ids,
                     'duration_minutes' => (int) $s->duration_minutes,
                     'price'            => (float) $s->price,
+                    'branch_prices'    => (object) $s->branchPrices(),
                 ])->values(),
                 'professionals' => Professional::where('tenant_id', $tenant->id)
                     ->when($branchLimit, fn ($q, $id) => $q->whereIn('id', Access::professionalsAt($id)))
@@ -260,6 +261,7 @@ class WalkinController extends Controller
         $estimate = Walkin::estimates($tenant, $branch)[$entry->id] ?? null;
 
         Notifier::walkinAdded($tenant, $entry, $estimate['wait_minutes'] ?? null);
+        \App\Support\Messaging::walkinTicket($tenant, $entry, $estimate);
         $this->audit($request, 'walkin.created', $entry, ['professional' => $professional?->display_name ?? 'El primero libre']);
 
         return response()->json([
@@ -493,11 +495,17 @@ class WalkinController extends Controller
                     'id'               => $s->id,
                     'name'             => $s->name,
                     'duration_minutes' => (int) $s->duration_minutes,
-                    'price_label'      => Currency::format((float) $s->price, $currency),
+                    'price_label'      => Currency::format((float) $s->priceAt($branch->id), $currency),
                 ])->values(),
             'waiting_count' => Walkin::waitingToday($tenant, $branch)->count(),
             'max_wait'      => Walkin::rules($tenant)['max_wait'],
+            'booking_url'   => $this->bookingUrl($tenant),
         ]);
+    }
+
+    private function bookingUrl(Tenant $tenant): ?string
+    {
+        return $tenant->slug && \App\Support\PublicBooking::open($tenant) ? '/reservar/' . $tenant->slug : null;
     }
 
     public function kioskChoices(string $code, Request $request)
@@ -532,7 +540,7 @@ class WalkinController extends Controller
     public function kioskRegister(string $code, Request $request)
     {
         $tenant = $this->publicTenant($code);
-        abort_if(\App\Support\Subscriptions::lockedFor($tenant), 402, 'El registro en la fila no está disponible por ahora. Acércate a recepción.');
+        abort_if(\App\Support\Subscriptions::lockedFor($tenant), 423, 'El registro en la fila no está disponible por ahora. Acércate a recepción.');
         $rules = Walkin::rules($tenant);
 
         $validated = $request->validate([
@@ -576,6 +584,7 @@ class WalkinController extends Controller
                         ? 'Hoy ya no queda espacio para atenderte sin cita. Te recomendamos reservar una cita para otro día.'
                         : "La espera sería de unos {$wait} minutos. Te recomendamos reservar una cita.",
                     'wait_minutes' => $wait,
+                    'booking_url'  => $this->bookingUrl($tenant),
                 ], 409);
             }
 
@@ -605,6 +614,7 @@ class WalkinController extends Controller
 
         $estimate = Walkin::estimates($tenant, $branch)[$result->id] ?? null;
         Notifier::walkinAdded($tenant, $result, $estimate['wait_minutes'] ?? null);
+        $sent = \App\Support\Messaging::walkinTicket($tenant, $result, $estimate);
 
         return response()->json([
             'ticket'       => $result->ticket,
@@ -613,6 +623,7 @@ class WalkinController extends Controller
             'estimated_at' => $estimate['estimated_at'] ?? null,
             'service_name' => $service->name,
             'branch_name'  => $branch->name,
+            'message_sent' => $sent !== null && !in_array($sent->status ?? '', ['not_sent', 'failed'], true),
         ], 201);
     }
 
@@ -750,7 +761,7 @@ class WalkinController extends Controller
                 'id'               => $e->service->id,
                 'name'             => $e->service->name,
                 'duration_minutes' => (int) $e->service->duration_minutes,
-                'price'            => (float) $e->service->price,
+                'price'            => (float) $e->service->priceAt($e->branch_id),
             ] : null,
             'professional_id'        => $e->professional_id,
             'professional'           => $e->professional ? ['id' => $e->professional->id, 'display_name' => $e->professional->display_name] : null,

@@ -94,7 +94,7 @@ class WhatsApp
 
         $config = self::config($tenantId);
 
-        return $config && ($config['provider'] === 'simulated' || (!empty($config['token']) && !empty($config['phone_number_id'])));
+        return $config && ($config['provider'] === 'simulated' || (!empty($config['token']) && ($config['provider'] === '360dialog' || !empty($config['phone_number_id']))));
     }
 
     public static function simulated(array $config): bool
@@ -104,7 +104,11 @@ class WhatsApp
 
     public static function provider(array $config): Provider
     {
-        return self::simulated($config) ? new SimulatedProvider() : new CloudApiProvider();
+        return match (true) {
+            self::simulated($config)              => new SimulatedProvider(),
+            $config['provider'] === '360dialog' => new \App\Support\WhatsApp\DialogProvider(),
+            default                               => new CloudApiProvider(),
+        };
     }
 
     public static function channel(Tenant $tenant): string
@@ -233,8 +237,16 @@ class WhatsApp
 
         $config = self::config($tenant->id);
 
-        if (!self::windowOpen(self::conversationByPhone($tenant->id, $phone)) && !self::template($config, $kind)) {
-            return 'Pasaron más de 24 horas desde que el cliente escribió y este aviso no tiene una plantilla aprobada de WhatsApp.';
+        if (!self::windowOpen(self::conversationByPhone($tenant->id, $phone))) {
+            $template = self::template($config, $kind);
+
+            if (!$template) {
+                return 'Pasaron más de 24 horas desde que el cliente escribió y este aviso no tiene una plantilla aprobada de WhatsApp.';
+            }
+
+            if ($why = WhatsAppTemplates::check($tenant, $config, $template['name'], $template['language'])) {
+                return 'Pasaron más de 24 horas desde que el cliente escribió. ' . $why;
+            }
         }
 
         return null;
@@ -328,6 +340,14 @@ class WhatsApp
 
                 return 'not_sent';
             }
+        }
+
+        if ($template && ($why = WhatsAppTemplates::check($tenant, $config, (string) $template['name'], (string) ($template['language'] ?? 'es')))) {
+            $error = 'No enviado: ' . $why;
+            DB::table('messages')->where('id', $message->id)->update(['status' => 'not_sent', 'error' => mb_substr($error, 0, 500), 'updated_at' => now()]);
+            self::fallback($message, $error);
+
+            return 'not_sent';
         }
 
         $text = RichText::toText($message->body);
@@ -468,7 +488,7 @@ class WhatsApp
         }
 
         if (!$assistant) {
-            DB::table('whatsapp_conversations')->where('id', $conversation->id)->update(['unread' => 0]);
+            DB::table('whatsapp_conversations')->where('id', $conversation->id)->update(['unread' => 0] + (Assistant::episodesReady() ? ['assistant_started_at' => null] : []));
         }
 
         return self::record($conversation, [
@@ -484,8 +504,14 @@ class WhatsApp
         ]);
     }
 
-    public static function signatureValid(array $config, string $raw, ?string $header): bool
+    public static function signatureValid(array $config, string $raw, ?string $header, ?string $token = null): bool
     {
+        if (($config['provider'] ?? null) === '360dialog') {
+            $expected = (string) ($config['verify_token'] ?? '');
+
+            return $expected !== '' && is_string($token) && hash_equals($expected, $token);
+        }
+
         $secret = (string) ($config['app_secret'] ?? '');
 
         if ($secret === '') {
@@ -502,6 +528,14 @@ class WhatsApp
         foreach ((array) ($payload['entry'] ?? []) as $entry) {
             foreach ((array) ($entry['changes'] ?? []) as $change) {
                 $value = (array) ($change['value'] ?? []);
+
+                if (($change['field'] ?? null) === 'message_template_status_update') {
+                    if (WhatsAppTemplates::statusUpdate($tenant, $value)) {
+                        $done['templates'] = ($done['templates'] ?? 0) + 1;
+                    }
+
+                    continue;
+                }
                 $names = collect((array) ($value['contacts'] ?? []))->mapWithKeys(fn ($c) => [(string) ($c['wa_id'] ?? '') => $c['profile']['name'] ?? null])->all();
 
                 foreach ((array) ($value['messages'] ?? []) as $message) {
@@ -558,6 +592,10 @@ class WhatsApp
             'sent_at'             => $at,
         ]);
 
+        if (in_array($type, self::MEDIA_TYPES, true) && !empty($message[$type]['id'])) {
+            self::storeInboundMedia($tenant, $row, (string) $message[$type]['id'], $message[$type]['filename'] ?? null);
+        }
+
         DB::table('whatsapp_conversations')->where('id', $conversation->id)->update([
             'last_inbound_at' => $at,
             'unread'          => DB::raw('unread + 1'),
@@ -568,6 +606,112 @@ class WhatsApp
             Assistant::handle($tenant, DB::table('whatsapp_conversations')->where('id', $conversation->id)->first(), $row);
         } catch (\Throwable $e) {
             report($e);
+        }
+
+        return $row;
+    }
+
+    public const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'];
+
+    public const MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+
+    public const SEND_MIMES = ['image/jpeg' => 'image', 'image/png' => 'image', 'application/pdf' => 'document'];
+
+    private static ?bool $mediaReady = null;
+
+    public static function mediaReady(): bool
+    {
+        return self::$mediaReady ??= Schema::hasColumn('whatsapp_messages', 'media_path');
+    }
+
+    public static function storeInboundMedia(Tenant $tenant, object $row, string $mediaId, ?string $filename): void
+    {
+        if (!self::mediaReady() || !($config = self::config($tenant->id))) {
+            return;
+        }
+
+        try {
+            $file = self::provider($config)->download($config, $mediaId);
+        } catch (\Throwable $e) {
+            report($e);
+            $file = null;
+        }
+
+        if (!$file || strlen($file['body']) > self::MEDIA_MAX_BYTES) {
+            IntegrationLog::write($tenant->id, 'whatsapp', (string) $config['provider'], 'media', false, $file ? 'El archivo del cliente pesa más de 16 MB: no se guardó.' : 'No se pudo descargar el archivo que mandó el cliente.');
+
+            return;
+        }
+
+        $extension = match (true) {
+            str_contains($file['mime'], 'jpeg') => 'jpg',
+            str_contains($file['mime'], 'png')  => 'png',
+            str_contains($file['mime'], 'webp') => 'webp',
+            str_contains($file['mime'], 'pdf')  => 'pdf',
+            str_contains($file['mime'], 'ogg')  => 'ogg',
+            str_contains($file['mime'], 'mp4')  => 'mp4',
+            default                             => 'bin',
+        };
+        $path = "whatsapp/{$tenant->id}/{$row->id}.{$extension}";
+        \Illuminate\Support\Facades\Storage::disk('local')->put($path, $file['body']);
+
+        DB::table('whatsapp_messages')->where('id', $row->id)->update([
+            'media_path' => $path,
+            'media_mime' => mb_substr($file['mime'], 0, 120),
+            'media_name' => $filename ? mb_substr($filename, 0, 190) : null,
+        ]);
+    }
+
+    public static function sendFile(Tenant $tenant, object $conversation, string $path, string $mime, string $name, ?string $caption, ?User $user): object
+    {
+        $config = self::config($tenant->id);
+
+        if (!$config || !self::connected($tenant->id)) {
+            throw ValidationException::withMessages(['file' => 'Tu empresa aún no conecta WhatsApp.']);
+        }
+
+        if (!self::windowOpen($conversation)) {
+            throw ValidationException::withMessages(['file' => 'Pasaron más de 24 horas desde el último mensaje del cliente: WhatsApp no deja enviar archivos hasta que vuelva a escribir.']);
+        }
+
+        if (self::revoked($conversation->customer_id)) {
+            throw ValidationException::withMessages(['file' => 'Este cliente pidió no recibir mensajes por WhatsApp.']);
+        }
+
+        $type = self::SEND_MIMES[$mime] ?? null;
+
+        if (!$type) {
+            throw ValidationException::withMessages(['file' => 'Por WhatsApp se pueden mandar fotos (JPG o PNG) y documentos PDF.']);
+        }
+
+        $provider = self::provider($config);
+        $status = 'sent';
+        $error = null;
+        $id = null;
+
+        try {
+            $result = $provider->sendMedia($config, $conversation->phone, $type, \Illuminate\Support\Facades\Storage::disk('local')->path($path), $mime, $caption, $name);
+            $id = $result['id'];
+            $status = !empty($result['simulated']) ? 'simulated' : 'sent';
+        } catch (\Throwable $e) {
+            $status = 'failed';
+            $error = mb_substr($e instanceof SendFailed ? $e->getMessage() : 'WhatsApp no aceptó el archivo.', 0, 500);
+            IntegrationLog::write($tenant->id, 'whatsapp', $provider->key(), 'media', false, $error);
+        }
+
+        $row = self::record($conversation, [
+            'direction'           => 'out',
+            'type'                => 'other',
+            'body'                => trim(($type === 'image' ? '[Imagen] ' : '[Documento] ') . ($caption ?: $name)),
+            'status'              => $status,
+            'provider_message_id' => $id,
+            'sent_by'             => $user?->id,
+            'error'               => $error,
+            'sent_at'             => $status === 'failed' ? null : now(),
+        ] + (self::mediaReady() ? ['media_path' => $path, 'media_mime' => $mime, 'media_name' => mb_substr($name, 0, 190)] : []));
+
+        if ($status === 'failed') {
+            throw ValidationException::withMessages(['file' => $error]);
         }
 
         return $row;
@@ -627,6 +771,7 @@ class WhatsApp
             'status'          => $row->status,
             'status_label'    => self::CONVERSATION_LABELS[$row->status] ?? $row->status,
             'handoff_reason'  => $row->handoff_reason,
+            'handoff_summary' => $row->handoff_summary ?? null,
             'unread'          => (int) $row->unread,
             'window_open'     => self::windowOpen($row),
             'window_ends_at'  => $row->last_inbound_at ? Carbon::parse($row->last_inbound_at)->addHours(self::WINDOW_HOURS)->toIso8601String() : null,
@@ -654,6 +799,7 @@ class WhatsApp
             'at'           => $iso($row->sent_at ?? $row->created_at),
             'delivered_at' => $iso($row->delivered_at),
             'read_at'      => $iso($row->read_at),
+            'media'        => !empty($row->media_path) ? ['mime' => $row->media_mime, 'name' => $row->media_name, 'image' => str_starts_with((string) $row->media_mime, 'image/')] : null,
         ];
     }
 }

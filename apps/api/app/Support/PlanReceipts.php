@@ -16,6 +16,7 @@ class PlanReceipts
         'online'              => 'Pago en línea',
         'manual'              => 'Registrado por la plataforma',
         'transfer'            => 'Transferencia',
+        'subscription_upgrade' => 'Cambio a un plan mayor',
     ];
 
     public static function number(SubscriptionInvoice $invoice): string
@@ -63,6 +64,7 @@ class PlanReceipts
             'Fecha de pago'    => $date($invoice->paid_at ?? $invoice->invoice_date),
             'Medio'            => trim(($method = self::REASONS[$invoice->billing_reason] ?? 'Pago') . ($invoice->notes && trim($invoice->notes) !== $method ? " · {$invoice->notes}" : '')),
             'Referencia'       => $invoice->external_invoice_id,
+            'Comprobante'      => PlanInvoices::ready() && $invoice->doc_type ? PlanInvoices::label($invoice) . ' · ' . PlanInvoices::stateLabel($invoice) : null,
         ];
 
         $list = collect($rows)->filter()->map(fn ($value, $label) => '<tr><th>' . e($label) . '</th><td>' . e($value) . '</td></tr>')->implode('');
@@ -86,7 +88,7 @@ class PlanReceipts
             <div class="muted">N.º ' . e(self::number($invoice)) . ' · emitida el ' . $date(now()) . '</div>
             <div class="amount">' . $amount . '</div>
             <table>' . $list . '</table>
-            <p class="note">Esta constancia confirma que ' . e($product) . ' recibió el pago de tu plan. No es una boleta ni una factura electrónica.</p>
+            <p class="note">Esta constancia confirma que ' . e($product) . ' recibió el pago de tu plan. ' . (PlanInvoices::ready() && $invoice->doc_type ? 'El comprobante electrónico de este pago es la ' . e(lcfirst((string) PlanInvoices::label($invoice))) . '.' : 'No es una boleta ni una factura electrónica.') . '</p>
         </body></html>';
 
         return Documents::pdf($html);

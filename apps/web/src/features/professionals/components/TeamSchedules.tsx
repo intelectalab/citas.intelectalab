@@ -12,7 +12,7 @@ import ProfessionalSchedule from './ProfessionalSchedule';
 import { ProfessionalLink } from '@/app/components/common/PersonLink';
 
 interface Range { weekday: number; starts: string; ends: string }
-interface Member { id: string; display_name: string; weekly_minutes: number; ranges: Range[] }
+interface Member { id: string; display_name: string; weekly_minutes: number; ranges: Range[]; next_change?: string | null }
 interface BranchSchedule {
   id: string;
   name: string;
@@ -188,6 +188,7 @@ export default function TeamSchedules() {
                         <div className="min-w-0 flex-1">
                           <ProfessionalLink id={person.id} className="block text-sm font-bold text-slate-800 truncate">{person.display_name}</ProfessionalLink>
                           <span className="block text-[11px] text-slate-500">{hoursLabel(person.weekly_minutes)} a la semana</span>
+                          {person.next_change && <span className="block text-[11px] text-amber-700" data-next-change>Cambia desde el {person.next_change.split('-').reverse().join('/')}</span>}
                         </div>
                         {data.can_edit && (
                           <button type="button" data-action="edit-schedule" title={`Cambiar el horario de ${person.display_name}`} onClick={() => setEditing(person)} className="p-1.5 text-slate-300 group-hover:text-slate-500 hover:!text-brand-ink hover:bg-slate-100 rounded-lg transition-colors shrink-0">

@@ -89,10 +89,17 @@ Route::get('/branding/{tenant}/{name}', [BrandingController::class, 'file'])->wh
 Route::post('/pay/{token}/simulate', [PaymentController::class, 'simulate'])->middleware('throttle:20,1');
 Route::get('/plan-payments/{id}', [\App\Http\Controllers\Api\BillingController::class, 'simulatedView'])->whereUuid('id')->middleware('throttle:30,1');
 Route::post('/plan-payments/{id}/simulate', [\App\Http\Controllers\Api\BillingController::class, 'simulate'])->whereUuid('id')->middleware('throttle:20,1');
+Route::get('/data-exports/{export}/download', [\App\Http\Controllers\Api\PlanOperationsController::class, 'download'])->whereUuid('export')->name('data-exports.download')->middleware(['signed:relative', 'throttle:20,1']);
+Route::get('/invoice-files/{invoice}/{kind}', [\App\Http\Controllers\Api\InvoiceController::class, 'file'])->whereUuid('invoice')->whereIn('kind', ['pdf', 'xml', 'cdr'])->name('invoices.file')->middleware(['signed:relative', 'throttle:30,1']);
+Route::get('/care-record-files/{recordFile}/download', [CareRecordController::class, 'downloadFile'])->whereUuid('recordFile')->name('care-record-files.download')->middleware(['signed:relative', 'throttle:30,1']);
+Route::post('/client-errors', [\App\Http\Controllers\Api\PlanOperationsController::class, 'clientError'])->middleware('throttle:30,1,client-errors');
 Route::post('/pay/{token}/start', [PaymentController::class, 'start'])->middleware('throttle:20,1');
 Route::post('/pay/{token}/culqi', [PaymentController::class, 'culqi'])->middleware('throttle:10,1');
+Route::get('/pay/{token}/niubiz', [PaymentController::class, 'niubizForm'])->middleware('throttle:20,1');
+Route::post('/pay/{token}/niubiz', [PaymentController::class, 'niubiz'])->middleware('throttle:10,1');
 Route::post('/pay/{token}/voucher', [\App\Http\Controllers\Api\PaymentVoucherController::class, 'submit'])->middleware('throttle:6,1');
 Route::post('/pay/{token}/check', [PaymentController::class, 'check'])->middleware('throttle:30,1');
+Route::post('/pay/{token}/conversion', [\App\Http\Controllers\Api\BookingConversionController::class, 'mark'])->middleware('throttle:20,1');
 Route::post('/webhooks/payments/{provider}/{owner?}', [PaymentController::class, 'webhook'])->middleware('throttle:240,1');
 Route::get('/webhooks/whatsapp/{tenant}', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'verify'])->whereUuid('tenant')->middleware('throttle:60,1');
 Route::post('/webhooks/whatsapp/{tenant}', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'receive'])->whereUuid('tenant')->middleware('throttle:600,1');
@@ -111,6 +118,14 @@ Route::prefix('/public/booking/{slug}')->where(['slug' => '[a-z0-9-]+'])->group(
     Route::post('/appointments', [\App\Http\Controllers\Api\PublicBookingController::class, 'publicBook'])->middleware('throttle:public-booking-write');
     Route::get('/classes', [\App\Http\Controllers\Api\PublicClassController::class, 'index'])->middleware('throttle:public-booking-read');
     Route::post('/classes/{class}/enroll', [\App\Http\Controllers\Api\PublicClassController::class, 'enroll'])->middleware('throttle:public-booking-write');
+});
+Route::get('/public/booking/{slug}/days', [\App\Http\Controllers\Api\PublicBookingController::class, 'publicDays'])->where(['slug' => '[a-z0-9-]+'])->middleware('throttle:public-booking-read');
+Route::get('/public/link/{slug}', [\App\Http\Controllers\Api\PublicLinkController::class, 'show'])->where(['slug' => '[a-z0-9-]+'])->middleware('throttle:public-booking-read');
+Route::post('/public/link/{slug}/visit', [\App\Http\Controllers\Api\PublicLinkController::class, 'visit'])->where(['slug' => '[a-z0-9-]+'])->middleware('throttle:60,1,link-visit');
+Route::prefix('/public/surveys/{token}')->where(['token' => '[A-Za-z0-9]+'])->group(function () {
+    Route::get('/', [\App\Http\Controllers\Api\PublicSurveyController::class, 'show'])->middleware('throttle:public-booking-read');
+    Route::post('/', [\App\Http\Controllers\Api\PublicSurveyController::class, 'answer'])->middleware('throttle:public-booking-write');
+    Route::post('/google', [\App\Http\Controllers\Api\PublicSurveyController::class, 'google'])->middleware('throttle:public-booking-read');
 });
 
 Route::get('/calendar/{token}.ics', [\App\Http\Controllers\Api\ApiIntegrationController::class, 'calendar'])->middleware('throttle:60,1');
@@ -158,6 +173,7 @@ Route::prefix('web')->group(function () {
     Route::post('/visit', [\App\Http\Controllers\Api\WebController::class, 'visit'])->middleware('throttle:60,1,web-visit');
     Route::post('/leads', [\App\Http\Controllers\Api\WebController::class, 'lead'])->middleware(['throttle:5,1,web-lead', 'idempotent']);
     Route::post('/coupon', [\App\Http\Controllers\Api\WebController::class, 'coupon'])->middleware('throttle:20,1,web-coupon');
+    Route::post('/chat', [\App\Http\Controllers\Api\PlanOperationsController::class, 'chatLead'])->middleware(['throttle:5,1,web-chat', 'idempotent']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -184,6 +200,7 @@ Route::middleware(['auth:sanctum', 'saas', 'idempotent'])->group(function () {
         Route::post('/tenants', [TenantController::class, 'store']);
         Route::put('/tenants/{tenant}', [TenantController::class, 'update']);
         Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy']);
+        Route::post('/tenants/{tenant}/deletion/cancel', [TenantController::class, 'cancelDeletion']);
         Route::post('/tenants/{tenant}/suspend', [TenantController::class, 'suspend']);
         Route::post('/tenants/{tenant}/reactivate', [TenantController::class, 'reactivate']);
         Route::put('/tenants/{tenant}/plan', [TenantController::class, 'changePlan']);
@@ -193,6 +210,7 @@ Route::middleware(['auth:sanctum', 'saas', 'idempotent'])->group(function () {
         Route::post('/tenants/{tenant}/subscription/payments', [TenantSubscriptionController::class, 'registerPayment']);
         Route::put('/tenants/{tenant}/subscription/extend', [TenantSubscriptionController::class, 'extend']);
         Route::post('/tenants/{tenant}/subscription/cancel', [TenantSubscriptionController::class, 'cancel']);
+        Route::post('/tenants/{tenant}/subscription/past-due', [TenantSubscriptionController::class, 'markPastDue']);
 
         Route::apiResource('saas-plans', SaaSPlanController::class);
         Route::get('/admin/platform-settings', [PlatformSettingController::class, 'show']);
@@ -203,6 +221,16 @@ Route::middleware(['auth:sanctum', 'saas', 'idempotent'])->group(function () {
         Route::put('/admin/platform-mail', [\App\Http\Controllers\Api\PlatformMailController::class, 'update']);
         Route::delete('/admin/platform-mail', [\App\Http\Controllers\Api\PlatformMailController::class, 'destroy']);
         Route::post('/admin/platform-mail/test', [\App\Http\Controllers\Api\PlatformMailController::class, 'test'])->middleware('throttle:10,1');
+        Route::get('/admin/integrations', [\App\Http\Controllers\Api\PlatformIntegrationController::class, 'show']);
+        Route::put('/admin/integrations/ai', [\App\Http\Controllers\Api\PlatformIntegrationController::class, 'saveAi']);
+        Route::post('/admin/integrations/ai/test', [\App\Http\Controllers\Api\PlatformIntegrationController::class, 'testAi'])->middleware('throttle:10,1');
+        Route::put('/admin/integrations/captcha', [\App\Http\Controllers\Api\PlatformIntegrationController::class, 'saveCaptcha']);
+        Route::delete('/admin/integrations/ai', [\App\Http\Controllers\Api\PlatformIntegrationController::class, 'destroyAi']);
+        Route::delete('/admin/integrations/captcha', [\App\Http\Controllers\Api\PlatformIntegrationController::class, 'destroyCaptcha']);
+
+        Route::get('/admin/payment-webhooks', [\App\Http\Controllers\Api\GatewayWebhookController::class, 'platformIndex']);
+        Route::post('/admin/payment-webhooks/{webhook}/retry', [\App\Http\Controllers\Api\GatewayWebhookController::class, 'platformRetry'])->whereUuid('webhook')->middleware('throttle:30,1');
+
         Route::post('/tenants/{tenant}/users/{user}/security', [TenantController::class, 'userSecurity']);
         Route::post('/tenants/{tenant}/users/{user}/password', [TenantController::class, 'userPassword']);
         Route::post('/tenants/{tenant}/users/{user}/invite', [TenantController::class, 'userInvite'])->middleware('throttle:10,1');
@@ -219,6 +247,7 @@ Route::middleware(['auth:sanctum', 'saas', 'idempotent'])->group(function () {
         Route::put('/admin/web/coupons/{coupon}', [\App\Http\Controllers\Api\PlatformWebController::class, 'updateCoupon'])->whereUuid('coupon');
         Route::delete('/admin/web/coupons/{coupon}', [\App\Http\Controllers\Api\PlatformWebController::class, 'destroyCoupon'])->whereUuid('coupon');
         Route::get('/admin/web/funnel', [\App\Http\Controllers\Api\PlatformWebController::class, 'funnel']);
+        Route::get('/admin/funnel/extras', [\App\Http\Controllers\Api\PlatformFunnelController::class, 'extras']);
         Route::get('/admin/web/leads', [\App\Http\Controllers\Api\PlatformWebController::class, 'leads']);
         Route::post('/admin/web/leads', [\App\Http\Controllers\Api\PlatformWebController::class, 'storeLead']);
         Route::get('/admin/web/leads/{lead}', [\App\Http\Controllers\Api\PlatformWebController::class, 'lead'])->whereUuid('lead');
@@ -244,6 +273,27 @@ Route::middleware(['auth:sanctum', 'saas', 'idempotent'])->group(function () {
         Route::post('/admin/billing/overdue/{subscription}/{action}', [\App\Http\Controllers\Api\PlatformBillingController::class, 'overdueAction'])->whereUuid('subscription')->whereIn('action', ['retry', 'remind', 'extend']);
         Route::put('/admin/billing/cancel-offer', [\App\Http\Controllers\Api\PlatformBillingController::class, 'cancelOffer']);
         Route::get('/admin/billing/cancellations', [\App\Http\Controllers\Api\PlatformBillingController::class, 'cancellations']);
+        Route::get('/admin/addons', [\App\Http\Controllers\Api\PlatformAddonController::class, 'index']);
+        Route::post('/admin/addons', [\App\Http\Controllers\Api\PlatformAddonController::class, 'store']);
+        Route::put('/admin/addons/{addon}', [\App\Http\Controllers\Api\PlatformAddonController::class, 'update'])->whereUuid('addon');
+        Route::delete('/admin/addons/{addon}', [\App\Http\Controllers\Api\PlatformAddonController::class, 'destroy'])->whereUuid('addon');
+        Route::get('/admin/billing/retention', [\App\Http\Controllers\Api\PlatformAddonController::class, 'retention']);
+        Route::put('/admin/billing/retention', [\App\Http\Controllers\Api\PlatformAddonController::class, 'saveRetention']);
+        Route::get('/admin/billing/whatsapp', [\App\Http\Controllers\Api\PlatformAddonController::class, 'whatsapp']);
+        Route::put('/admin/billing/whatsapp', [\App\Http\Controllers\Api\PlatformAddonController::class, 'saveWhatsapp']);
+        Route::post('/admin/billing/whatsapp/test', [\App\Http\Controllers\Api\PlatformAddonController::class, 'testWhatsapp'])->middleware('throttle:10,1');
+        Route::delete('/admin/billing/whatsapp', [\App\Http\Controllers\Api\PlatformAddonController::class, 'destroyWhatsapp']);
+        Route::get('/admin/billing/invoicing', [\App\Http\Controllers\Api\PlanOperationsController::class, 'invoicing']);
+        Route::put('/admin/billing/invoicing', [\App\Http\Controllers\Api\PlanOperationsController::class, 'saveInvoicing']);
+        Route::post('/admin/billing/invoices/{invoice}/document', [\App\Http\Controllers\Api\PlanOperationsController::class, 'resendDocument'])->whereUuid('invoice');
+        Route::get('/admin/errors', [\App\Http\Controllers\Api\PlanOperationsController::class, 'errors']);
+        Route::get('/admin/errors/{error}', [\App\Http\Controllers\Api\PlanOperationsController::class, 'error'])->whereUuid('error');
+        Route::put('/admin/errors/{error}', [\App\Http\Controllers\Api\PlanOperationsController::class, 'resolveError'])->whereUuid('error');
+        Route::get('/admin/errors-settings', [\App\Http\Controllers\Api\PlanOperationsController::class, 'errorSettings']);
+        Route::put('/admin/errors-settings', [\App\Http\Controllers\Api\PlanOperationsController::class, 'saveErrorSettings']);
+        Route::get('/admin/help-articles', [\App\Http\Controllers\Api\PlanOperationsController::class, 'helpArticles']);
+        Route::post('/admin/help-articles', [\App\Http\Controllers\Api\PlanOperationsController::class, 'storeHelpArticle']);
+        Route::put('/admin/help-articles/{article}', [\App\Http\Controllers\Api\PlanOperationsController::class, 'updateHelpArticle'])->whereUuid('article');
         Route::put('/admin/billing/dunning',[\App\Http\Controllers\Api\PlatformBillingController::class, 'dunning']);
         Route::post('/admin/billing/transfers/{id}/approve', [\App\Http\Controllers\Api\PlatformBillingController::class, 'approveTransfer'])->whereUuid('id');
         Route::post('/admin/billing/transfers/{id}/reject', [\App\Http\Controllers\Api\PlatformBillingController::class, 'rejectTransfer'])->whereUuid('id');
@@ -259,12 +309,14 @@ Route::middleware(['auth:sanctum', 'saas', 'idempotent'])->group(function () {
         Route::apiResource('admin/business-types', BusinessTypeController::class);
         Route::get('/admin/business-types/{business_type}/tenants', [BusinessTypeController::class, 'tenants']);
         Route::post('/admin/business-types/{business_type}/apply', [BusinessTypeController::class, 'apply']);
+        Route::post('/admin/business-types/{business_type}/reset', [BusinessTypeController::class, 'reset']);
         Route::apiResource('tenant-contacts', TenantContactController::class);
     });
 });
 
 Route::middleware(['auth:sanctum', 'customer', 'idempotent'])->prefix('portal')->group(function () {
     Route::get('/overview', [PortalController::class, 'overview']);
+    Route::get('/surveys', [\App\Http\Controllers\Api\PortalSurveyController::class, 'index']);
     Route::get('/privacy', [PortalController::class, 'privacy']);
     Route::post('/privacy/accept', [PortalController::class, 'acceptPrivacyNow']);
     Route::put('/profile', [PortalController::class, 'updateProfile']);
@@ -309,6 +361,9 @@ Route::middleware(['auth:sanctum', 'customer', 'idempotent'])->prefix('portal')-
         Route::post('/waitlist', [PortalController::class, 'joinWaitlist'])->middleware('plan:portal');
         Route::delete('/waitlist/{entry}', [PortalController::class, 'leaveWaitlist']);
     });
+
+    Route::get('/availability/days', [PortalController::class, 'portalDays'])->middleware('module:booking');
+    Route::get('/dependents', [PortalController::class, 'dependentsWithControls']);
 });
 
 Route::prefix('kiosk')->middleware('throttle:60,1')->group(function () {
@@ -322,6 +377,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
     Route::post('/subscriptions/subscribe', [SubscriptionController::class, 'subscribe']);
     Route::put('/account/password', [\App\Http\Controllers\Api\AccountPasswordController::class, 'update'])->middleware('throttle:10,1');
     Route::get('/account/devices', [\App\Http\Controllers\Api\AccountDeviceController::class, 'index']);
+    Route::get('/account/profile', [\App\Http\Controllers\Api\AccountDeviceController::class, 'profile']);
     Route::delete('/account/devices/{device}', [\App\Http\Controllers\Api\AccountDeviceController::class, 'destroy'])->whereUuid('device');
     Route::get('/billing', [\App\Http\Controllers\Api\BillingController::class, 'show']);
     Route::post('/billing/card', [\App\Http\Controllers\Api\BillingController::class, 'card'])->middleware('throttle:20,1');
@@ -329,6 +385,16 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
     Route::post('/billing/activate', [\App\Http\Controllers\Api\BillingController::class, 'activate'])->middleware('throttle:20,1');
     Route::post('/billing/culqi', [\App\Http\Controllers\Api\BillingController::class, 'confirm'])->middleware('throttle:20,1');
     Route::post('/billing/plan', [\App\Http\Controllers\Api\BillingController::class, 'change'])->middleware('throttle:20,1');
+    Route::post('/billing/plan/preview', [\App\Http\Controllers\Api\BillingController::class, 'preview'])->middleware('throttle:60,1');
+    Route::post('/billing/plan/cancel', [\App\Http\Controllers\Api\BillingController::class, 'cancelPending'])->middleware('throttle:20,1');
+    Route::post('/billing/addons/preview', [\App\Http\Controllers\Api\BillingController::class, 'addonPreview'])->middleware('throttle:60,1');
+    Route::post('/billing/addons', [\App\Http\Controllers\Api\BillingController::class, 'addAddon'])->middleware('throttle:20,1');
+    Route::delete('/billing/addons/{addon}', [\App\Http\Controllers\Api\BillingController::class, 'removeAddon'])->whereUuid('addon')->middleware('throttle:20,1');
+    Route::post('/billing/addons/{addon}/keep', [\App\Http\Controllers\Api\BillingController::class, 'keepAddon'])->whereUuid('addon')->middleware('throttle:20,1');
+    Route::put('/billing/details', [\App\Http\Controllers\Api\BillingController::class, 'details'])->middleware('throttle:20,1');
+    Route::get('/billing/exports', [\App\Http\Controllers\Api\BillingController::class, 'exports']);
+    Route::post('/billing/exports', [\App\Http\Controllers\Api\BillingController::class, 'requestExport'])->middleware('throttle:5,1');
+    Route::get('/help/articles', [\App\Http\Controllers\Api\PlanOperationsController::class, 'publishedHelp']);
     Route::post('/billing/cancel-card', [\App\Http\Controllers\Api\BillingController::class, 'cancelCard']);
     Route::post('/billing/coupon', [\App\Http\Controllers\Api\BillingController::class, 'coupon'])->middleware('throttle:10,1');
     Route::post('/billing/cancel', [\App\Http\Controllers\Api\BillingController::class, 'requestCancel'])->middleware('throttle:10,1');
@@ -375,6 +441,12 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         }
     };
 
+    Route::get('/search', [\App\Http\Controllers\Api\GlobalSearchController::class, 'search']);
+    Route::get('/tenant/onboarding', [\App\Http\Controllers\Api\OnboardingController::class, 'show']);
+    Route::post('/tenant/onboarding/hide', [\App\Http\Controllers\Api\OnboardingController::class, 'hide']);
+    Route::get('/tenant/sample-data', [\App\Http\Controllers\Api\OnboardingController::class, 'sampleStatus'])->middleware('perm:settings.edit');
+    Route::post('/tenant/sample-data', [\App\Http\Controllers\Api\OnboardingController::class, 'createSample'])->middleware('perm:settings.edit');
+    Route::delete('/tenant/sample-data', [\App\Http\Controllers\Api\OnboardingController::class, 'removeSample'])->middleware('perm:settings.edit');
     Route::get('/branches', [BranchController::class, 'index']);
     Route::post('/branches', [BranchController::class, 'store'])->middleware('perm:branches.create');
     Route::get('/branches/{branch}', [BranchController::class, 'show']);
@@ -389,12 +461,32 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy'])->middleware('perm:rooms.delete');
     });
 
+    Route::middleware('module:resources')->group(function () {
+        Route::post('/rooms/{room}/maintenance', [RoomController::class, 'maintenance'])->middleware('perm:rooms.edit')->whereUuid('room');
+    });
+
+    Route::middleware('module:agenda')->group(function () {
+        Route::put('/service-categories/{service_category}', [ServiceCategoryController::class, 'update'])->middleware('perm:services.edit')->whereUuid('service_category');
+        Route::get('/team-overview', [\App\Http\Controllers\Api\TeamOverviewController::class, 'overview']);
+        Route::get('/professionals/{professional}/performance', [\App\Http\Controllers\Api\TeamOverviewController::class, 'performance'])->whereUuid('professional');
+    });
+
     Route::get('/reports', [ReportController::class, 'show'])->middleware('perm:reports.view|reports.own');
+    Route::post('/reports/export', [ReportController::class, 'export'])->middleware(['perm:reports.view|reports.own', 'perm:data.export', 'throttle:10,1']);
+    Route::get('/reports/exports', [ReportController::class, 'exports'])->middleware('perm:reports.view|reports.own');
 
     Route::middleware('module:automations')->group(function () {
         Route::get('/automations', [AutomationController::class, 'index'])->middleware('perm:automations.view');
         Route::put('/automations/{automation}', [AutomationController::class, 'update'])->middleware('perm:automations.edit');
     });
+
+    Route::get('/surveys', [\App\Http\Controllers\Api\SurveyController::class, 'index'])->middleware('perm:surveys.view');
+    Route::get('/surveys/settings', [\App\Http\Controllers\Api\SurveyController::class, 'settings'])->middleware('perm:surveys.view');
+    Route::put('/surveys/settings', [\App\Http\Controllers\Api\SurveyController::class, 'saveSettings'])->middleware('perm:surveys.edit');
+    Route::get('/surveys/{survey}', [\App\Http\Controllers\Api\SurveyController::class, 'show'])->middleware('perm:surveys.view')->whereUuid('survey');
+    Route::put('/surveys/{survey}/recovery', [\App\Http\Controllers\Api\SurveyController::class, 'followUp'])->middleware('perm:surveys.edit')->whereUuid('survey');
+    Route::put('/surveys/{survey}/publish', [\App\Http\Controllers\Api\SurveyController::class, 'publish'])->middleware('perm:surveys.edit')->whereUuid('survey');
+    Route::put('/surveys/{survey}/reply', [\App\Http\Controllers\Api\SurveyController::class, 'reply'])->middleware('perm:surveys.edit')->whereUuid('survey');
 
     Route::middleware('module:walkin')->group(function () {
         Route::get('/walkins', [WalkinController::class, 'index'])->middleware('perm:walkin.view');
@@ -423,7 +515,9 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
 
     Route::middleware('module:agenda')->group(function () use ($guarded) {
         $guarded('specialties', SpecialtyController::class, 'professionals');
+        Route::get('/services/next-code', [ServiceController::class, 'nextCode'])->middleware('perm:services.create');
         $guarded('services', ServiceController::class, 'services', false, ['show']);
+        Route::get('/services/{service}/impact', [ServiceController::class, 'impact'])->middleware('perm:services.edit|services.delete');
         $guarded('service-categories', ServiceCategoryController::class, 'services', false, ['show', 'update', 'destroy']);
         $guarded('professionals', ProfessionalController::class, 'professionals');
         Route::get('/schedules', [ProfessionalScheduleController::class, 'index'])->middleware('perm:schedules.view');
@@ -447,11 +541,20 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         });
         Route::get('/appointments/metrics', [AppointmentController::class, 'metrics'])->middleware('perm:attention.view');
         Route::get('/appointments/customer-notes', [AppointmentController::class, 'customerNotes'])->middleware('perm:agenda.create');
+
+        Route::get('/appointments/customer-duplicates', [AppointmentController::class, 'customerDuplicates'])->middleware('perm:customers.create');
+        Route::post('/appointments/customer-consent', [AppointmentController::class, 'customerConsent'])->middleware('perm:customers.create');
+        Route::post('/appointments/{appointment}/waive-penalty', [AppointmentController::class, 'waivePenalty'])->middleware('perm:sales.delete')->whereUuid('appointment');
+
         Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'show']);
         $guarded('appointments', AppointmentController::class, 'agenda', true, ['destroy']);
+        Route::post('/appointments/bulk-status', [AppointmentController::class, 'bulkStatus'])->middleware('perm:agenda.confirm|agenda.cancel');
         Route::post('/appointments/{appointment}/status', [AppointmentController::class, 'changeStatus'])->middleware('perm:agenda.confirm|agenda.checkin|agenda.start|agenda.complete|agenda.noshow|agenda.cancel');
         Route::post('/appointments/{appointment}/remind', [AppointmentController::class, 'remind'])->middleware('perm:agenda.confirm');
+        Route::post('/appointments/{appointment}/undo-no-show', [AppointmentController::class, 'undoNoShow'])->middleware('perm:agenda.noshow');
         Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])->middleware('perm:agenda.edit');
+        Route::post('/appointments/{appointment}/room', [AppointmentController::class, 'changeRoom'])->middleware('perm:agenda.edit');
+        Route::post('/appointments/series', [AppointmentController::class, 'series'])->middleware('perm:agenda.create');
 
         Route::get('/waitlist', [WaitlistController::class, 'index'])->middleware('perm:waitlist.view');
         Route::post('/waitlist', [WaitlistController::class, 'store'])->middleware('perm:waitlist.create');
@@ -460,6 +563,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         Route::get('/waitlist/{entry}/slots', [WaitlistController::class, 'slots'])->middleware('perm:waitlist.view');
 
         Route::get('/recalls', [RecallController::class, 'index'])->middleware('perm:recalls.view');
+        Route::get('/recalls/summary', [RecallController::class, 'summary'])->middleware('perm:recalls.view');
         Route::post('/recalls', [RecallController::class, 'store'])->middleware('perm:recalls.create');
         Route::put('/recalls/{recall}', [RecallController::class, 'update'])->middleware('perm:recalls.edit');
         Route::post('/recalls/{recall}/status', [RecallController::class, 'changeStatus'])->middleware('perm:recalls.edit');
@@ -475,6 +579,13 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         Route::post('/care-records/{careRecord}/addenda', [CareRecordController::class, 'addAddendum'])->middleware('perm:records.edit');
         Route::post('/care-records/{careRecord}/emergency-access', [CareRecordController::class, 'emergencyAccess'])->middleware('perm:records.emergency');
         Route::get('/care-records/{careRecord}/pdf', [CareRecordController::class, 'pdf'])->middleware('perm:records.view');
+        Route::post('/care-records/{careRecord}/files', [CareRecordController::class, 'uploadFile'])->middleware(['perm:records.edit', 'throttle:30,1']);
+        Route::get('/care-records/{careRecord}/files/{recordFile}/link', [CareRecordController::class, 'fileLink'])->middleware('perm:records.view');
+        Route::delete('/care-records/{careRecord}/files/{recordFile}', [CareRecordController::class, 'deleteFile'])->middleware('perm:records.edit');
+        Route::get('/record-sheet-templates', [CareRecordController::class, 'sheetTemplates'])->middleware('perm:records.edit');
+        Route::post('/record-sheets', [CareRecordController::class, 'storeLoose'])->middleware('perm:records.edit');
+        Route::get('/record-sheets/{careRecord}', [CareRecordController::class, 'sheet'])->middleware('perm:records.view')->whereUuid('careRecord');
+        Route::put('/record-sheets/{careRecord}', [CareRecordController::class, 'saveSheet'])->middleware('perm:records.edit')->whereUuid('careRecord');
     });
 
     Route::middleware('module:commissions')->group(function () {
@@ -491,6 +602,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
 
     Route::middleware('module:pos')->group(function () use ($guarded) {
         Route::get('/cash', [CashController::class, 'index'])->middleware('perm:cash.view');
+        Route::get('/cash/online', [CashController::class, 'online'])->middleware('perm:cash.view');
         Route::post('/cash/registers', [CashController::class, 'storeRegister'])->middleware('perm:cash.create');
         Route::put('/cash/registers/{register}', [CashController::class, 'updateRegister'])->middleware('perm:cash.create');
         Route::post('/cash/registers/{register}/open', [CashController::class, 'open'])->middleware('perm:cash.edit');
@@ -517,6 +629,8 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         $guarded('coupons', CouponController::class, 'coupons', true, ['show']);
         Route::get('/pos', [PosController::class, 'board'])->middleware('perm:pos.view');
         Route::post('/pos/preview', [PosController::class, 'preview'])->middleware('perm:pos.view');
+        Route::get('/pos/customers/{customer}/summary', [PosController::class, 'customerSummary'])->whereUuid('customer')->middleware('perm:pos.view');
+        Route::post('/pos/discount-approval', [PosController::class, 'approveDiscount'])->middleware(['perm:pos.create|pos.edit', 'throttle:6,1']);
         Route::post('/pos/sales', [PosController::class, 'createSale'])->middleware('perm:pos.create');
         Route::get('/pos/sales/{sale}', [PosController::class, 'showSale'])->middleware('perm:pos.view');
         Route::put('/pos/sales/{sale}', [PosController::class, 'updateSale'])->middleware('perm:pos.edit');
@@ -573,10 +687,29 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
     Route::get('/whatsapp/conversations/{conversation}', [\App\Http\Controllers\Api\WhatsAppController::class, 'conversation'])->middleware('perm:messages.view')->whereUuid('conversation');
     Route::post('/whatsapp/conversations/{conversation}/reply', [\App\Http\Controllers\Api\WhatsAppController::class, 'reply'])->middleware(['perm:messages.reply', 'throttle:60,1'])->whereUuid('conversation');
     Route::post('/whatsapp/conversations/{conversation}/resolve', [\App\Http\Controllers\Api\WhatsAppController::class, 'resolve'])->middleware('perm:messages.reply')->whereUuid('conversation');
+    Route::post('/whatsapp/conversations/{conversation}/file', [\App\Http\Controllers\Api\WhatsAppController::class, 'sendFile'])->middleware(['perm:messages.reply', 'throttle:30,1'])->whereUuid('conversation');
+    Route::get('/whatsapp/messages/{message}/media', [\App\Http\Controllers\Api\WhatsAppController::class, 'media'])->middleware('perm:messages.view')->whereUuid('message');
+    Route::get('/messaging/whatsapp/templates', [\App\Http\Controllers\Api\WhatsAppController::class, 'templates'])->middleware('throttle:20,1');
+    Route::put('/messaging/assistant', [\App\Http\Controllers\Api\AssistantController::class, 'save']);
+    Route::delete('/messaging/assistant', [\App\Http\Controllers\Api\AssistantController::class, 'remove']);
+    Route::post('/messaging/assistant/test', [\App\Http\Controllers\Api\AssistantController::class, 'test'])->middleware('throttle:10,1');
+
+    Route::post('/messaging/whatsapp/templates', [\App\Http\Controllers\Api\WhatsAppController::class, 'submitTemplate'])->middleware('throttle:20,1');
+    Route::get('/assistant/board', [\App\Http\Controllers\Api\AssistantDeskController::class, 'board'])->middleware('perm:messages.view');
+    Route::post('/assistant/simulate', [\App\Http\Controllers\Api\AssistantDeskController::class, 'simulate'])->middleware('throttle:30,1');
+    Route::get('/integrations/payment-webhooks', [\App\Http\Controllers\Api\GatewayWebhookController::class, 'index']);
+    Route::post('/integrations/payment-webhooks/{webhook}/retry', [\App\Http\Controllers\Api\GatewayWebhookController::class, 'retry'])->whereUuid('webhook')->middleware('throttle:30,1');
+
     Route::get('/booking-page', [\App\Http\Controllers\Api\BookingPageController::class, 'show']);
     Route::put('/booking-page', [\App\Http\Controllers\Api\BookingPageController::class, 'save']);
     Route::post('/booking-page/cover', [\App\Http\Controllers\Api\BookingPageController::class, 'uploadCover']);
     Route::delete('/booking-page/cover', [\App\Http\Controllers\Api\BookingPageController::class, 'removeCover']);
+    Route::put('/booking-page/publish', [\App\Http\Controllers\Api\BookingPageController::class, 'publish'])->middleware('throttle:20,1');
+    Route::put('/booking-page/slug', [\App\Http\Controllers\Api\BookingPageController::class, 'slug'])->middleware('throttle:10,1');
+    Route::get('/link-page', [\App\Http\Controllers\Api\LinkPageController::class, 'show']);
+    Route::put('/link-page', [\App\Http\Controllers\Api\LinkPageController::class, 'save']);
+    Route::put('/link-page/channels', [\App\Http\Controllers\Api\LinkPageController::class, 'saveChannels']);
+    Route::get('/link-page/google-feed', [\App\Http\Controllers\Api\LinkPageController::class, 'googleFeed']);
     Route::get('/branding', [BrandingController::class, 'show']);
     Route::put('/branding', [BrandingController::class, 'save']);
     Route::put('/branding/portal', [BrandingController::class, 'savePortal']);
@@ -596,6 +729,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         Route::get('/campaigns', [CampaignController::class, 'index'])->middleware('perm:campaigns.view');
         Route::get('/campaigns/options', [CampaignController::class, 'options'])->middleware('perm:campaigns.view');
         Route::post('/campaigns/audience', [CampaignController::class, 'audience'])->middleware('perm:campaigns.view');
+        Route::get('/campaigns/segments', [CampaignController::class, 'segments'])->middleware('perm:campaigns.view');
         Route::post('/campaigns', [CampaignController::class, 'store'])->middleware('perm:campaigns.create');
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show'])->middleware('perm:campaigns.view');
         Route::put('/campaigns/{campaign}', [CampaignController::class, 'update'])->middleware('perm:campaigns.edit');
@@ -635,6 +769,8 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
     Route::middleware('module:inventory')->group(function () use ($guarded) {
         $guarded('products', ProductController::class, 'products', true, ['show']);
         Route::post('/product-categories', [ProductController::class, 'storeCategory'])->middleware('perm:products.create');
+        Route::get('/products/{product}', [ProductController::class, 'show'])->whereUuid('product')->middleware('perm:products.view');
+        Route::post('/product-brands', [ProductController::class, 'storeBrand'])->middleware('perm:products.create');
     });
 
     Route::middleware('module:inventory')->group(function () {
@@ -660,6 +796,7 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         Route::post('/loyalty/gift-cards/{giftCard}/redeem', [LoyaltyController::class, 'redeemGiftCard'])->middleware('perm:loyalty.edit|loyalty.create');
         Route::post('/loyalty/gift-cards/{giftCard}/extend', [LoyaltyController::class, 'extendGiftCard'])->middleware('perm:loyalty.edit');
         Route::post('/loyalty/gift-cards/{giftCard}/cancel', [LoyaltyController::class, 'cancelGiftCard'])->middleware('perm:loyalty.delete');
+        Route::post('/loyalty/referrals', [LoyaltyController::class, 'storeReferral'])->middleware('perm:loyalty.create');
     });
 
     Route::middleware('module:quotes')->group(function () {
@@ -691,6 +828,9 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
         Route::get('/customers/{customer}/notes', [\App\Http\Controllers\Api\CustomerProfileController::class, 'notes'])->middleware('perm:customers.view');
         Route::post('/customers/{customer}/notes', [\App\Http\Controllers\Api\CustomerProfileController::class, 'storeNote'])->middleware('perm:customers.edit|customers.notes');
         Route::delete('/customers/{customer}/notes/{note}', [\App\Http\Controllers\Api\CustomerProfileController::class, 'destroyNote'])->middleware('perm:customers.edit|customers.notes');
+        Route::get('/customers/segments', [CustomerController::class, 'segments'])->middleware('perm:customers.view');
+        Route::get('/customers/{customer}/channels', [MessageController::class, 'channels'])->middleware('perm:messages.create')->whereUuid('customer');
+        Route::post('/customers/{customer}/calls', [MessageController::class, 'logCall'])->middleware('perm:messages.create|customers.edit')->whereUuid('customer');
         $guarded('customers', CustomerController::class, 'customers', true);
         Route::put('/customers/{customer}/portal-access', [CustomerController::class, 'portalAccess'])->middleware('perm:customers.edit');
         Route::post('/customers/{customer}/merge-preview', [CustomerController::class, 'mergePreview'])->middleware('perm:customers.delete');
@@ -704,6 +844,8 @@ Route::middleware(['auth:sanctum', 'staff', 'plan', 'idempotent'])->group(functi
 
     Route::get('/company', [\App\Http\Controllers\Api\CompanyController::class, 'show']);
     Route::put('/company', [\App\Http\Controllers\Api\CompanyController::class, 'update'])->middleware('perm:company.edit');
+    Route::get('/company/catalog-import', [\App\Http\Controllers\Api\CompanyController::class, 'catalogPreview'])->middleware('perm:company.edit');
+    Route::post('/company/catalog-import', [\App\Http\Controllers\Api\CompanyController::class, 'importCatalog'])->middleware(['perm:company.edit', 'throttle:10,1']);
 
     Route::get('/tenant-settings', [TenantSettingController::class, 'show'])->middleware('perm:settings.view');
     Route::get('/audit', [\App\Http\Controllers\Api\AuditController::class, 'tenant'])->middleware('perm:audit.view');

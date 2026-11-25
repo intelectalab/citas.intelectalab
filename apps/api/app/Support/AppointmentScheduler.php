@@ -38,8 +38,17 @@ class AppointmentScheduler
 
     public static ?string $ignoreLink = null;
 
+    private ?string $holdsOwner = null;
+
     public function __construct(private Tenant $tenant, private bool $online = false)
     {
+    }
+
+    public function ignoringHoldsOf(?string $customerId): static
+    {
+        $this->holdsOwner = $customerId;
+
+        return $this;
     }
 
     public static function timezone(Branch $branch, Tenant $tenant): string
@@ -61,7 +70,23 @@ class AppointmentScheduler
         return $result;
     }
 
-    public function slots(Service $service, Branch $branch, Carbon $date, ?Professional $professional = null, ?string $ignoreId = null, ?int $interval = null): array
+    public function nextDays(Service $service, Branch $branch, Carbon $from, ?Professional $professional = null, ?string $ignoreId = null, int $days = 21, int $limit = 4): array
+    {
+        $found = [];
+
+        for ($i = 1; $i <= $days && count($found) < $limit; $i++) {
+            $day = $from->copy()->startOfDay()->addDays($i);
+            $count = collect($this->slots($service, $branch, $day, $professional, $ignoreId))->sum(fn (array $group) => count($group['slots']));
+
+            if ($count > 0) {
+                $found[] = ['date' => $day->format('Y-m-d'), 'count' => $count];
+            }
+        }
+
+        return $found;
+    }
+
+    public function slots(Service $service, Branch $branch, Carbon $date, ?Professional $professional = null, ?string $ignoreId = null, ?int $interval = null, bool $withBusy = false): array
     {
         if (!$service->offeredAt($branch->id)) {
             return [];
@@ -84,24 +109,30 @@ class AppointmentScheduler
         foreach ($professionals as $candidate) {
             $day = $this->dayContext($candidate, $branch, $date, $ignoreId);
             $slots = [];
+            $busy = [];
 
             foreach ($day['schedules'] as $range) {
                 $cursor = $date->copy()->setTimeFromTimeString($range['starts']);
                 $limit = $date->copy()->setTimeFromTimeString($range['ends']);
 
                 while ($cursor->copy()->addMinutes($duration)->lte($limit)) {
-                    if ($this->evaluate($day, $service, $candidate, $cursor, $duration)['ok']) {
+                    $check = $this->evaluate($day, $service, $candidate, $cursor, $duration);
+
+                    if ($check['ok']) {
                         $slots[] = $cursor->format('H:i');
+                    } elseif ($withBusy && !collect($check['reasons'])->contains(fn (array $r) => in_array($r['code'], ['PAST', 'SERVICE_INACTIVE', 'PRO_INACTIVE', 'PRO_NO_SERVICE'], true))) {
+                        $first = $check['reasons'][0];
+                        $busy[] = ['time' => $cursor->format('H:i'), 'reason' => $first['message'] . ($first['detail'] !== '' ? " ({$first['detail']})" : '')];
                     }
                     $cursor->addMinutes($interval);
                 }
             }
 
-            if ($slots || $professional) {
+            if ($slots || $professional || ($withBusy && $busy)) {
                 $result[] = [
                     'professional' => ['id' => $candidate->id, 'display_name' => $candidate->display_name],
                     'slots'        => $slots,
-                ];
+                ] + ($withBusy ? ['busy' => $busy] : []);
             }
         }
 
@@ -113,11 +144,10 @@ class AppointmentScheduler
         $timezone = $dayStart->getTimezone();
         $dayEnd = $dayStart->copy()->addDay();
 
-        $schedules = ProfessionalSchedule::where('professional_id', $professional->id)
+        $schedules = ProfessionalSchedule::effective(ProfessionalSchedule::where('professional_id', $professional->id)
             ->where('branch_id', $branch->id)
-            ->where('weekday', $dayStart->dayOfWeek)
             ->orderBy('starts_local')
-            ->get()
+            ->get(), $dayStart->format('Y-m-d'))
             ->map(fn (ProfessionalSchedule $s) => ['starts' => substr($s->starts_local, 0, 5), 'ends' => substr($s->ends_local, 0, 5)])
             ->all();
 
@@ -152,14 +182,16 @@ class AppointmentScheduler
             ])
             ->all();
 
-        if (CustomerTransfers::ready()) {
+        if (PaymentLinks::holdReady()) {
             $held = \Illuminate\Support\Facades\DB::table('payment_links')
                 ->where('tenant_id', $this->tenant->id)
                 ->where('professional_id', $professional->id)
                 ->where('purpose', 'deposit')
-                ->where('status', 'review')
+                ->where(fn ($q) => $q->where('status', 'review')
+                    ->orWhere(fn ($q) => $q->where('status', 'pending')->where('expires_at', '>', now())))
                 ->where('held_until', '>', now())
                 ->when(self::$ignoreLink, fn ($q, $id) => $q->where('id', '!=', $id))
+                ->when($this->holdsOwner, fn ($q, $id) => $q->where(fn ($q) => $q->where('status', 'review')->orWhereNull('customer_id')->orWhere('customer_id', '!=', $id)))
                 ->where('starts_at', '<', $dayEnd->toIso8601String())
                 ->where('ends_at', '>', $dayStart->toIso8601String())
                 ->get(['starts_at', 'ends_at']);
@@ -190,7 +222,27 @@ class AppointmentScheduler
 
         $branchHours = BranchHours::of($branch->id);
 
-        return compact('schedules', 'blocks', 'appointments', 'holiday', 'branchHours');
+        $branchId = $branch->id;
+        $ignore = $ignoreId;
+
+        return compact('schedules', 'blocks', 'appointments', 'holiday', 'branchHours', 'branchId', 'dayStart', 'ignore');
+    }
+
+    private array $roomContexts = [];
+
+    private function roomContext(array $day, Service $service): ?array
+    {
+        if (!isset($day['branchId'], $day['dayStart'])) {
+            return null;
+        }
+
+        $key = implode(':', [$service->id, $day['branchId'], $day['dayStart']->format('Y-m-d'), $day['ignore'] ?? '']);
+
+        if (!array_key_exists($key, $this->roomContexts)) {
+            $this->roomContexts[$key] = RoomBooking::context($this->tenant, $service, $day['branchId'], $day['dayStart'], $day['dayStart']->copy()->addDay(), $day['ignore'] ?? null);
+        }
+
+        return $this->roomContexts[$key];
     }
 
     private function evaluate(array $day, Service $service, Professional $professional, Carbon $start, int $duration): array
@@ -273,7 +325,7 @@ class AppointmentScheduler
 
         foreach ($day['appointments'] as $other) {
             if ($other['starts']->lt($end) && $start->lt($other['ends'])) {
-                $add(empty($other['class']) ? 'DOUBLE_BOOKING' : 'CLASS_BUSY', "{$other['code']}{$other['starts']->format('H:i')}–{$other['ends']->format('H:i')}");
+                $add(empty($other['class']) ? 'DOUBLE_BOOKING' : 'CLASS_BUSY', trim(($other['code'] ?? '') . " {$other['starts']->format('H:i')}–{$other['ends']->format('H:i')}"));
                 continue;
             }
 
@@ -282,6 +334,10 @@ class AppointmentScheduler
                 && $from->lt($other['ends']->copy()->addMinutes($other['after']))) {
                 $add('BUFFER', $other['code']);
             }
+        }
+
+        if (($rooms = $this->roomContext($day, $service)) !== null && RoomBooking::freeIn($rooms, $service, $start, $end) === []) {
+            $reasons[] = RoomBooking::reason($rooms);
         }
 
         return [

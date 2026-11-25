@@ -8,6 +8,7 @@ use App\Models\Professional;
 use App\Models\Service;
 use App\Models\Tenant;
 use App\Support\Access;
+use App\Support\AppointmentFlow;
 use App\Support\Audit;
 use App\Support\Cart;
 use App\Support\Cash;
@@ -87,6 +88,7 @@ class QuoteController extends Controller
                 'name'             => $s->name,
                 'price'            => round((float) $s->price, 2),
                 'duration_minutes' => (int) $s->duration_minutes,
+                'branch_prices'    => (object) $s->branchPrices(),
             ])
             ->values();
 
@@ -136,6 +138,7 @@ class QuoteController extends Controller
             ->leftJoin('branches as b', 'b.id', '=', 'q.branch_id')
             ->leftJoin('professionals as p', 'p.id', '=', 'q.professional_id')
             ->leftJoin('sales as s', 's.id', '=', 'q.sale_id')
+            ->leftJoin('customer_dependents as cd', 'cd.id', '=', 'q.customer_dependent_id')
             ->where('q.tenant_id', $tenant->id)
             ->when($branchLimit, fn ($query, $id) => $query->where(fn ($sub) => $sub->where('q.branch_id', $id)->orWhereNull('q.branch_id')))
             ->orderByDesc('q.created_at')
@@ -149,6 +152,7 @@ class QuoteController extends Controller
                 'c.email as customer_email',
                 'b.name as branch_name',
                 'p.display_name as professional_name',
+                'cd.name as dependent_name',
                 's.code as sale_code',
                 's.status as sale_status',
                 's.paid as sale_paid',
@@ -275,6 +279,8 @@ class QuoteController extends Controller
                 'customer_email'     => $q->customer_email,
                 'professional_id'    => $q->professional_id,
                 'professional_name'  => $q->professional_name,
+                'customer_dependent_id' => $q->customer_dependent_id,
+                'dependent_name'     => $q->dependent_name,
                 'subtotal'           => round((float) $q->subtotal, 2),
                 'discount'           => round((float) $q->discount, 2),
                 'tax'                => round((float) $q->tax, 2),
@@ -322,6 +328,7 @@ class QuoteController extends Controller
                 'delete' => $user->allows('quotes.delete'),
                 'charge' => $user->allows('sales.create'),
             ],
+            'discount_limit'   => ['max_percent' => Sales::discountRules($tenant)['max_discount'], 'can_exceed' => $user->allows('pos.discount')],
             'branches'         => $branches,
             'customers'        => $customers,
             'professionals'    => $professionals,
@@ -373,6 +380,7 @@ class QuoteController extends Controller
             'customer_id'                 => ['required', 'uuid', Rule::exists('customers', 'id')->where('tenant_id', $request->user()->tenant_id)->whereNull('deleted_at')],
             'branch_id'                   => ['nullable', 'uuid', Rule::exists('branches', 'id')->where('tenant_id', $request->user()->tenant_id)],
             'professional_id'             => ['nullable', 'uuid', Rule::exists('professionals', 'id')->where('tenant_id', $request->user()->tenant_id)],
+            'customer_dependent_id'       => ['nullable', 'uuid', Rule::exists('customer_dependents', 'id')->where('tenant_id', $request->user()->tenant_id)->where('customer_id', $request->input('customer_id'))->whereNull('deleted_at')],
             'title'                       => 'required|string|max:200',
             'valid_until'                 => 'nullable|date_format:Y-m-d',
             'notes'                       => 'nullable|string|max:2000',
@@ -397,6 +405,7 @@ class QuoteController extends Controller
             'customer_id.exists'           => 'Ese cliente no existe en tu empresa.',
             'branch_id.exists'             => 'Esa sede no existe en tu empresa.',
             'professional_id.exists'       => 'Ese profesional no existe en tu empresa.',
+            'customer_dependent_id.exists' => 'Ese dependiente no es de esta persona.',
             'title.required'               => 'Escribe un título para el presupuesto o plan de tratamiento.',
             'items.required'               => 'Agrega al menos una línea al presupuesto.',
             'items.min'                    => 'Agrega al menos una línea al presupuesto.',
@@ -459,6 +468,10 @@ class QuoteController extends Controller
 
         $totals = Sales::totals($salesRules, $gross, $totalDiscount);
 
+        if (!empty($validated['installments']) && !AppointmentFlow::rule($tenant, 'quotes.allow_installments')) {
+            throw ValidationException::withMessages(['installments' => 'Tu empresa no usa cuotas en los presupuestos: actívalas en Configuración o deja el presupuesto en un solo pago.']);
+        }
+
         $installmentsSum = round(array_sum(array_map(fn ($i) => (float) $i['amount'], $validated['installments'] ?? [])), 2);
 
         if (!empty($validated['installments']) && abs($installmentsSum - (float) $totals['total']) > 0.01) {
@@ -516,7 +529,7 @@ class QuoteController extends Controller
                 'tenant_id'             => $tenant->id,
                 'branch_id'             => $validated['branch_id'] ?? $user->branch_id,
                 'customer_id'           => $validated['customer_id'],
-                'customer_dependent_id' => null,
+                'customer_dependent_id' => $validated['customer_dependent_id'] ?? null,
                 'professional_id'       => $validated['professional_id'] ?? null,
                 'code'                  => $code,
                 'title'                 => trim($validated['title']),
@@ -590,6 +603,7 @@ class QuoteController extends Controller
             DB::table('quotes')->where('id', $row->id)->update([
                 'branch_id'       => $validated['branch_id'] ?? $row->branch_id,
                 'customer_id'     => $validated['customer_id'],
+                'customer_dependent_id' => $validated['customer_dependent_id'] ?? null,
                 'professional_id' => $validated['professional_id'] ?? null,
                 'title'           => trim($validated['title']),
                 'valid_until'     => $validated['valid_until'] ?? null,
@@ -637,6 +651,10 @@ class QuoteController extends Controller
             'note'        => 'nullable|string|max:255',
             'create_sale' => 'nullable|boolean',
         ]);
+
+        if ($validated['status'] === 'rejected' && trim((string) ($validated['note'] ?? '')) === '') {
+            throw ValidationException::withMessages(['note' => 'Escribe por qué se rechaza, por ejemplo: «le pareció caro» o «lo hará en otra clínica».']);
+        }
 
         $needed = match ($validated['status']) {
             'cancelled' => 'quotes.delete',

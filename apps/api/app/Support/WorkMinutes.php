@@ -21,8 +21,9 @@ class WorkMinutes
             ->where('b.status', 'active')
             ->when($branchId, fn ($q, $id) => $q->where('ps.branch_id', $id))
             ->when($professionalId, fn ($q, $id) => $q->where('ps.professional_id', $id))
-            ->get(['ps.professional_id', 'ps.branch_id', 'ps.weekday', 'ps.starts_local', 'ps.ends_local'])
-            ->groupBy('weekday');
+            ->get(['ps.professional_id', 'ps.branch_id', 'ps.weekday', 'ps.starts_local', 'ps.ends_local', ...(\App\Models\ProfessionalSchedule::periodsReady() ? ['ps.valid_from', 'ps.valid_until'] : [])]);
+        $dated = $schedules->contains(fn ($row) => \App\Models\ProfessionalSchedule::periodKey($row) !== '|');
+        $byWeekday = $schedules->groupBy('weekday');
 
         $holidays = Schema::hasTable('holidays')
             ? DB::table('holidays')->where('tenant_id', $tenant->id)->where('closed', true)
@@ -49,7 +50,7 @@ class WorkMinutes
             $date = $day->toDateString();
             $closed = $holidays->get($date, collect());
 
-            foreach ($schedules->get($day->dayOfWeek, collect()) as $row) {
+            foreach ($dated ? \App\Models\ProfessionalSchedule::effective($schedules, $date) : $byWeekday->get($day->dayOfWeek, collect()) as $row) {
                 if ($closed->contains(fn ($h) => $h->branch_id === null || $h->branch_id === $row->branch_id)) {
                     continue;
                 }

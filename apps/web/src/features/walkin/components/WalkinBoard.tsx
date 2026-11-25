@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Edit2, Eye, Hourglass, MonitorSmartphone, Play, RotateCcw, Timer, UserRound, XCircle } from 'lucide-react';
+import { Clock3, Edit2, ExternalLink, Eye, Hourglass, MonitorSmartphone, Play, RotateCcw, Timer, UserRound, XCircle } from 'lucide-react';
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
@@ -63,7 +63,7 @@ export default function WalkinBoard() {
         setSummary(res.data.summary ?? EMPTY_SUMMARY);
         setContext(res.data.context ?? null);
       })
-      .catch((err) => { console.error('Error al cargar la cola sin cita:', err); setEntries([]); });
+      .catch((err) => { setEntries([]); setError(apiError(err, 'No se pudo cargar la cola sin cita.')); });
   }, [history]);
 
   const { openDetail, panels, isOpen: appointmentOpen } = useAppointmentPanels(load);
@@ -125,6 +125,13 @@ export default function WalkinBoard() {
       borderColorClass: activeCard === item.id ? item.active : item.hover,
       onClick: () => setActiveCard((current) => (current === item.id ? '' : item.id)),
     })),
+    {
+      title: 'Espera promedio de hoy',
+      value: summary.avg_wait_minutes === null ? 'Sin datos' : summary.avg_wait_minutes <= 0 ? '0 min' : formatWaitLabel(summary.avg_wait_minutes).replace('~', ''),
+      icon: <Clock3 size={18} />,
+      iconColorClass: 'text-teal-600',
+      borderColorClass: '',
+    },
   ];
 
   const filterConfigs: FilterConfig[] = [
@@ -290,6 +297,11 @@ export default function WalkinBoard() {
       <div className="mb-6">
         <DataTable<WalkinEntry>
           title="Cola sin cita"
+          headerActions={context?.kiosk_url && context.rules.self_checkin ? (
+            <a href={context.kiosk_url} target="_blank" rel="noopener noreferrer" data-open-kiosk className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50">
+              <MonitorSmartphone size={15} /> Abrir kiosko <ExternalLink size={13} className="text-slate-400" />
+            </a>
+          ) : undefined}
           primaryActionLabel="Anotar en la cola"
           onPrimaryAction={can('walkin.create') ? () => { setEditing(null); setFormOpen(true); } : undefined}
           tabs={tabs}
@@ -311,7 +323,7 @@ export default function WalkinBoard() {
           columns={columns}
           data={rows}
           getItemKey={(e) => e.id}
-          entityLabel="turnos"
+          entityLabel={rows.length === 1 ? 'turno' : 'turnos'}
           metricCards={metricCards}
           exportTitle={history ? 'Cola sin cita - días anteriores' : 'Cola sin cita - hoy'}
           exportScreen="walkin"

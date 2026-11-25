@@ -9,6 +9,8 @@ use App\Support\Billing\NubefactInvoiceProvider;
 use App\Support\Billing\SimulatedInvoiceProvider;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -17,6 +19,8 @@ class Invoicing
 {
     public const TICKET = 'ticket';
     public const BOLETA = 'boleta';
+
+    public const BOLETA_DOCUMENT_FROM = 700;
     public const FACTURA = 'factura';
     public const CREDIT_NOTE = 'nota_credito';
 
@@ -47,6 +51,13 @@ class Invoicing
     private static ?bool $electronic = null;
 
     private static ?bool $branchSeries = null;
+
+    private static ?bool $observed = null;
+
+    public static function observedReady(): bool
+    {
+        return self::$observed ??= (bool) DB::selectOne("select 1 as ok from pg_constraint where conname = 'invoices_sunat_status_check' and pg_get_constraintdef(oid) like '%observed%'");
+    }
 
     public static function electronicReady(): bool
     {
@@ -178,12 +189,43 @@ class Invoicing
         ];
     }
 
+    public static function boletaDocumentFrom(Tenant $tenant): float
+    {
+        return max(0, (float) (AppointmentFlow::rule($tenant, 'invoice.boleta_dni_from') ?? self::BOLETA_DOCUMENT_FROM));
+    }
+
+    public static function assertBoletaDocument(Tenant $tenant, object $sale, array $doc): void
+    {
+        if (($doc['doc_type'] ?? null) !== self::BOLETA) {
+            return;
+        }
+
+        $from = self::boletaDocumentFrom($tenant);
+        $billed = round((float) $sale->total - (float) ($sale->tip ?? 0), 2);
+
+        if ($from <= 0 || $billed + 0.001 < $from) {
+            return;
+        }
+
+        $document = $sale->customer_id ? trim((string) DB::table('customers')->where('id', $sale->customer_id)->value('document_number')) : '';
+
+        if ($document === '') {
+            throw ValidationException::withMessages([
+                'doc_type' => 'Una boleta desde ' . Currency::format($from, $sale->currency ?? Currency::of($tenant)) . ' necesita el DNI del cliente. ' . ($sale->customer_id ? 'Agrega su documento en la ficha del cliente y vuelve a intentar.' : 'Elige al cliente en la venta y agrega su documento.'),
+            ]);
+        }
+    }
+
     public static function issue(Tenant $tenant, object $sale, array $doc, ?User $user): object
     {
         $existing = self::ofSale($sale->id);
 
         if ($existing) {
             return $existing;
+        }
+
+        if (!empty($doc['strict'])) {
+            self::assertBoletaDocument($tenant, $sale, $doc);
         }
 
         $type = $doc['doc_type'];
@@ -194,7 +236,8 @@ class Invoicing
             : null;
 
         $number = self::nextNumber($tenant->id, $type, $serie);
-        $taxable = round((float) $sale->total - (float) $sale->tax, 2);
+        $billed = round((float) $sale->total - (float) ($sale->tip ?? 0), 2);
+        $taxable = round($billed - (float) $sale->tax, 2);
 
         $id = (string) Str::uuid();
         $row = [
@@ -212,7 +255,7 @@ class Invoicing
             'customer_address'    => $doc['address'] ?? null,
             'taxable'             => $taxable,
             'tax'                 => $sale->tax,
-            'total'               => $sale->total,
+            'total'               => $billed,
             'status'              => 'issued',
         ] + Currency::column($sale->currency ?? Currency::of($tenant)) + [
             'issued_by'           => $user?->id,
@@ -239,11 +282,24 @@ class Invoicing
         return DB::table('invoices')->where('sale_id', $saleId)->where('status', 'issued')->where('doc_type', '!=', self::CREDIT_NOTE)->first();
     }
 
+    public static function creditLeft(object $origin): float
+    {
+        $noted = (float) DB::table('invoices')->where('reference_invoice_id', $origin->id)->where('doc_type', self::CREDIT_NOTE)->where('status', 'issued')->sum('total');
+
+        return round(max(0, (float) $origin->total - $noted), 2);
+    }
+
     public static function creditNote(Tenant $tenant, object $sale, float $amount, string $reason, ?User $user, ?string $noteType = null, ?object $origin = null): ?object
     {
         $origin ??= self::ofSale($sale->id);
 
         if (!$origin) {
+            return null;
+        }
+
+        $amount = round(min($amount, self::creditLeft($origin)), 2);
+
+        if ($amount <= 0.001) {
             return null;
         }
 
@@ -256,6 +312,11 @@ class Invoicing
 
         $number = self::nextNumber($tenant->id, self::CREDIT_NOTE, $serie);
         $tax = (float) $origin->total > 0 ? round((float) $origin->tax * $amount / (float) $origin->total, 2) : 0;
+
+        if (abs($amount - self::creditLeft($origin)) < 0.005) {
+            $taxNoted = (float) DB::table('invoices')->where('reference_invoice_id', $origin->id)->where('doc_type', self::CREDIT_NOTE)->where('status', 'issued')->sum('tax');
+            $tax = round(max(0, (float) $origin->tax - $taxNoted), 2);
+        }
 
         $id = (string) Str::uuid();
         $row = [
@@ -383,7 +444,7 @@ class Invoicing
     {
         $invoice = DB::table('invoices')->where('tenant_id', $tenant->id)->where('id', $invoiceId)->first();
 
-        if (!$invoice || $invoice->doc_type === self::TICKET || $invoice->status !== 'issued' || $invoice->sunat_status === 'accepted') {
+        if (!$invoice || $invoice->doc_type === self::TICKET || $invoice->status !== 'issued' || in_array($invoice->sunat_status, ['accepted', 'observed'], true)) {
             return $invoice;
         }
 
@@ -413,7 +474,11 @@ class Invoicing
             $answer = ['status' => 'pending', 'received' => false, 'message' => 'No se pudo conectar con ' . (self::PROVIDERS[$provider->key()]['label'] ?? 'el proveedor') . '. Se volverá a intentar solo.'];
         }
 
-        $status = in_array($answer['status'] ?? '', ['accepted', 'rejected', 'pending'], true) ? $answer['status'] : 'pending';
+        $status = in_array($answer['status'] ?? '', ['accepted', 'observed', 'rejected', 'pending'], true) ? $answer['status'] : 'pending';
+
+        if ($status === 'observed' && !self::observedReady()) {
+            $status = 'accepted';
+        }
         $values = [
             'provider'      => $provider->key(),
             'simulated'     => (bool) ($answer['simulated'] ?? !$provider->real()),
@@ -582,6 +647,42 @@ class Invoicing
         return ['sent' => $pending->count(), 'voids' => $voids->count()];
     }
 
+    public const FILE_KINDS = ['pdf' => 'application/pdf', 'xml' => 'application/xml', 'cdr' => 'application/zip'];
+
+    public const LINK_MINUTES = 30;
+
+    public static function fileLink(object $invoice, string $kind): ?string
+    {
+        if (empty($invoice->{$kind . '_url'} ?? null) || !isset(self::FILE_KINDS[$kind])) {
+            return null;
+        }
+
+        return url(URL::temporarySignedRoute('invoices.file', now()->addMinutes(self::LINK_MINUTES), ['invoice' => $invoice->id, 'kind' => $kind], false));
+    }
+
+    public static function serveFile(string $id, string $kind)
+    {
+        $invoice = Rls::bypass(fn () => DB::table('invoices')->where('id', $id)->first());
+        $source = $invoice && isset(self::FILE_KINDS[$kind]) ? ($invoice->{$kind . '_url'} ?? null) : null;
+        abort_unless($source, 404, 'Este archivo ya no está disponible.');
+
+        try {
+            $response = Http::timeout(20)->get($source);
+        } catch (\Throwable) {
+            abort(502, 'No pudimos traer el archivo de tu proveedor de facturación. Intenta de nuevo en unos minutos.');
+        }
+
+        abort_unless($response->successful(), 502, 'No pudimos traer el archivo de tu proveedor de facturación. Intenta de nuevo en unos minutos.');
+
+        $name = sprintf('%s-%08d.%s', $invoice->serie, $invoice->number, $kind === 'cdr' ? 'zip' : $kind);
+
+        return response($response->body(), 200, [
+            'Content-Type'        => $response->header('Content-Type') ?: self::FILE_KINDS[$kind],
+            'Content-Disposition' => ($kind === 'pdf' ? 'inline' : 'attachment') . '; filename="' . $name . '"',
+            'Cache-Control'       => 'private, no-store',
+        ]);
+    }
+
     public static function stateLabel(object $invoice): string
     {
         if ($invoice->status === 'voided') {
@@ -595,6 +696,7 @@ class Invoicing
         return match ($invoice->sunat_status) {
             'not_applicable' => 'Interno: no va a SUNAT',
             'accepted'       => $invoice->simulated ? 'Simulado: no se envió a SUNAT' : 'Aceptado por SUNAT',
+            'observed'       => 'Aceptado por SUNAT con observaciones',
             'rejected'       => 'Rechazado por SUNAT',
             default          => $invoice->external_id ? 'Esperando respuesta de SUNAT' : 'Pendiente de envío',
         };
@@ -630,9 +732,10 @@ class Invoicing
             'received'       => $invoice->external_id !== null,
             'next_attempt_at' => $next ? Carbon::parse($next)->toIso8601String() : null,
             'gave_up'        => $invoice->status === 'issued' && $invoice->sunat_status === 'pending' && self::electronicReady() && !$next && (int) ($invoice->send_attempts ?? 0) > 0,
-            'pdf_url'        => $invoice->pdf_url ?? null,
-            'xml_url'        => $invoice->xml_url ?? null,
-            'cdr_url'        => $invoice->cdr_url ?? null,
+            'pdf_url'        => self::fileLink($invoice, 'pdf'),
+            'xml_url'        => self::fileLink($invoice, 'xml'),
+            'cdr_url'        => self::fileLink($invoice, 'cdr'),
+            'links_expire_minutes' => self::LINK_MINUTES,
             'void_method'    => $invoice->void_method ?? null,
             'void_status'    => $invoice->void_status ?? null,
             'reason'         => $invoice->reason ?? null,

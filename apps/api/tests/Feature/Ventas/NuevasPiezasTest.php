@@ -29,13 +29,13 @@ describe('mi cuenta', function () {
         $otro = $co->owner->createToken('otro equipo');
         AccountSecurity::trust(Request::create('/'), $co->owner);
 
-        $this->as($co->owner)->putJson('/api/account/password', ['current_password' => 'mal', 'password' => 'nueva-clave-123', 'password_confirmation' => 'nueva-clave-123'])
+        $this->as($co->owner)->putJson('/api/account/password', ['current_password' => 'mal', 'password' => 'Nueva-clave-123', 'password_confirmation' => 'Nueva-clave-123'])
             ->assertStatus(422)->assertJsonValidationErrors('current_password');
 
-        $this->as($co->owner)->putJson('/api/account/password', ['current_password' => 'clave-de-prueba-123', 'password' => 'nueva-clave-123', 'password_confirmation' => 'nueva-clave-123'])
+        $this->as($co->owner)->putJson('/api/account/password', ['current_password' => 'clave-de-prueba-123', 'password' => 'Nueva-clave-123', 'password_confirmation' => 'Nueva-clave-123'])
             ->assertOk();
 
-        expect(Hash::check('nueva-clave-123', $co->owner->fresh()->password_hash))->toBeTrue()
+        expect(Hash::check('Nueva-clave-123', $co->owner->fresh()->password_hash))->toBeTrue()
             ->and(DB::table('personal_access_tokens')->where('id', $otro->accessToken->id)->exists())->toBeFalse()
             ->and(DB::table('account_tokens')->where('kind', 'trusted_device')->where('account_id', $co->owner->id)->exists())->toBeFalse();
     });
@@ -131,6 +131,9 @@ describe('transferencia con comprobante', function () {
         $token = ($this->reservar)($inicio)->assertStatus(202)->json('deposit.token');
         $buscar = fn ($bloques) => collect($bloques)->firstWhere('kind', 'held');
 
+        expect($buscar(collect($this->as($this->co->owner)->getJson("/api/appointments/day?date={$dia}&branch_id={$this->co->branch->id}")->json('professionals'))->firstWhere('id', $this->ana->id)['blocks'] ?? []))->toMatchArray(['starts' => '10:00']);
+
+        $this->travelTo(now()->addMinutes(\App\Support\PaymentLinks::HOLD_MINUTES + 1));
         expect($buscar(collect($this->as($this->co->owner)->getJson("/api/appointments/day?date={$dia}&branch_id={$this->co->branch->id}")->json('professionals'))->firstWhere('id', $this->ana->id)['blocks'] ?? []))->toBeNull();
 
         ($this->enviar)($token)->assertOk();

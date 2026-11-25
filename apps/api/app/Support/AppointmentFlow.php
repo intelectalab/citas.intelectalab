@@ -52,8 +52,9 @@ class AppointmentFlow
         'noshow.fee_percent'          => 0,
         'cancel.late_fee_percent'     => 0,
         'records.require_on_complete' => false,
-        'records.lock_hours'          => 24,
+        'records.lock_hours'          => 0,
         'records.private_to_author'   => false,
+        'recalls.notify_days'         => 3,
         'booking.enabled'             => true,
         'booking.min_lead_minutes'    => 60,
         'booking.max_days_ahead'      => 45,
@@ -78,12 +79,16 @@ class AppointmentFlow
         'invoice.default_type'        => 'boleta',
         'pos.pay_before_service'      => true,
         'pos.arrive_minutes'          => 15,
+        'pos.tips_enabled'            => false,
+        'pos.max_discount'            => 0,
+        'booking.miss_deposit_percent' => 50,
         'booking.miss_action'         => 'note',
         'booking.miss_limit'          => 2,
         'booking.block_days'          => 30,
         'payments.link_hours'         => 24,
         'booking.deposit_minutes'     => 30,
         'booking.deposit_refund_hours' => 24,
+        'booking.deposit_on_cancel'   => 'credit',
         'session.idle_minutes'        => 30,
         'session.portal_idle_minutes' => 0,
         'session.idle_by_role'        => [],
@@ -125,9 +130,16 @@ class AppointmentFlow
         'waitlist.notify_mode'        => 'all',
         'waitlist.reply_hours'        => 2,
         'membership.grace_days'       => 5,
+        'surveys.enabled'             => false,
+        'surveys.delay_hours'         => 2,
+        'surveys.google_min'          => 9,
+        'surveys.publish_reviews'     => true,
+        'surveys.valid_days'          => 7,
         'whatsapp.channel'            => 'email',
         'whatsapp.consent'            => 'required',
         'assistant.enabled'           => false,
+        'assistant.can_book'          => true,
+        'assistant.handoff_minutes'   => 10,
         'assistant.blocked_words'     => 'diagnóstico, diagnostico, receta, medicamento, medicina, pastilla, dosis, síntoma, sintoma, dolor, sangrado, infección, infeccion, fiebre, alergia, embarazo, resultado de examen',
     ];
 
@@ -139,6 +151,12 @@ class AppointmentFlow
     public static function rule(Tenant $tenant, string $key): mixed
     {
         return $tenant->rules()[$key] ?? self::RULE_DEFAULTS[$key] ?? null;
+    }
+
+    public static function recordRequired(Tenant $tenant, ?object $appointment): bool
+    {
+        return (bool) self::rule($tenant, 'records.require_on_complete')
+            || (CatalogExtras::serviceFields() && (bool) ($appointment?->service?->requires_record ?? false));
     }
 
     public static function next(Tenant $tenant, string $status): array

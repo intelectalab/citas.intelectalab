@@ -50,11 +50,24 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
     author: { '@type': post.author ? 'Person' : 'Organization', name: post.author || site.product_name },
     publisher: { '@type': 'Organization', name: site.legal_name || site.product_name },
     mainEntityOfPage: `${url}/blog/${post.slug}`,
+    inLanguage: 'es-PE',
+    ...(post.keyword ? { keywords: post.keyword } : {}),
+    ...(post.business_type_name ? { articleSection: post.business_type_name } : {}),
+    ...((post.views ?? 0) > 0 ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/ReadAction', userInteractionCount: post.views } } : {}),
+  };
+  const breadcrumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Inicio', item: url },
+      { '@type': 'ListItem', position: 2, name: 'Blog', item: `${url}/blog` },
+      { '@type': 'ListItem', position: 3, name: post.title, item: `${url}/blog/${post.slug}` },
+    ],
   };
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(schema)} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd([schema, breadcrumb])} />
       <article className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-6" data-blog-post={post.slug}>
         <Link href="/blog" className="inline-flex items-center gap-1.5 text-sm font-bold text-brand-accent hover:text-brand-ink"><ArrowLeft size={16} /> Blog</Link>
         <header className="space-y-3">

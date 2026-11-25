@@ -31,6 +31,7 @@ abstract class TestCase extends BaseTestCase
         \App\Models\PlatformSetting::class,
         \App\Models\Service::class,
         \App\Support\ApiKeys::class,
+        \App\Support\PlatformWhatsApp::class,
         \App\Support\VideoLinks::class,
         \App\Support\Access::class,
         \App\Support\Audit::class,
@@ -139,6 +140,7 @@ abstract class TestCase extends BaseTestCase
             'last_name'        => 'Prueba',
             'email'            => $email,
             'password'         => 'clave-de-prueba-123',
+            'install_extras'   => $options['extras'] ?? false,
         ]);
 
         $tenant = $result['tenant'];

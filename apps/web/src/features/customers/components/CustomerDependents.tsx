@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
+import DependentAlert from './DependentAlert';
 
 export interface CustomerDependent {
   id?: string;
@@ -16,14 +17,31 @@ export interface CustomerDependent {
   birth_date?: string | null;
   biological_sex?: string | null;
   notes?: string | null;
+  alert?: string | null;
+  weight_kg?: number | string | null;
+  color?: string | null;
+  sterilized?: boolean | null;
+  microchip?: string | null;
+  relationship?: string | null;
+  document_number?: string | null;
+  stats?: DependentStats | null;
 }
+
+export interface DependentStats {
+  appointments: number;
+  last_visit: string | null;
+  next_appointment: string | null;
+  next_control: { label: string; due_date: string } | null;
+}
+
+export const RELATIONSHIPS = ['Hijo', 'Hija', 'Pareja', 'Madre', 'Padre', 'Hermano', 'Hermana', 'Nieto', 'Nieta', 'Otro'];
 
 interface CustomerDependentsProps {
   customerId: string | null;
   onPendingChange: (dependents: CustomerDependent[]) => void;
 }
 
-const EMPTY: CustomerDependent = { name: '', species: '', breed: '', birth_date: '', biological_sex: '', notes: '' };
+const EMPTY: CustomerDependent = { name: '', species: '', breed: '', birth_date: '', biological_sex: '', notes: '', alert: '', weight_kg: '', color: '', sterilized: null, microchip: '', relationship: '', document_number: '' };
 
 const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white';
@@ -84,6 +102,10 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
       birth_date: draft.birth_date || null,
       biological_sex: draft.biological_sex || null,
       notes: draft.notes || null,
+      alert: draft.alert?.trim() || null,
+      ...(isPet
+        ? { weight_kg: draft.weight_kg === '' || draft.weight_kg === null || draft.weight_kg === undefined ? null : Number(draft.weight_kg), color: draft.color?.trim() || null, sterilized: draft.sterilized ?? null, microchip: draft.microchip?.trim() || null }
+        : { relationship: draft.relationship || null, document_number: draft.document_number?.trim() || null }),
     };
 
     try {
@@ -142,8 +164,9 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
             <div className="min-w-0">
               <span className="block text-sm font-semibold text-slate-800 truncate">{item.name}</span>
               <span className="block text-xs text-slate-400 truncate">
-                {[item.species, item.breed].filter(Boolean).join(' · ') || 'Sin más datos'}
+                {[item.species, item.breed, isPet && item.weight_kg ? `${item.weight_kg} kg` : null, isPet ? item.color : item.relationship].filter(Boolean).join(' · ') || 'Sin más datos'}
               </span>
+              <DependentAlert alert={item.alert} compact />
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -206,6 +229,50 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
             </div>
           )}
 
+          {isPet ? (
+            <div className="grid grid-cols-2 gap-3" data-pet-details>
+              <div>
+                <label className={labelClass}>Peso (kg)</label>
+                <input type="text" inputMode="decimal" value={draft.weight_kg ?? ''} onChange={(e) => setDraft({ ...draft, weight_kg: e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').slice(0, 7) })} className={inputClass} placeholder="Ej. 12.5" />
+              </div>
+              <div>
+                <label className={labelClass}>Color</label>
+                <input type="text" maxLength={60} value={draft.color ?? ''} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className={inputClass} placeholder="Ej. Marrón con blanco" />
+              </div>
+              <div>
+                <label className={labelClass}>Esterilizado</label>
+                <Select
+                  ariaLabel="Esterilizado"
+                  placeholder="Sin indicar"
+                  value={draft.sterilized === true ? 'yes' : draft.sterilized === false ? 'no' : ''}
+                  onChange={(e) => setDraft({ ...draft, sterilized: e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null })}
+                  options={[{ value: 'yes', label: 'Sí' }, { value: 'no', label: 'No' }]}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Microchip</label>
+                <input type="text" maxLength={40} value={draft.microchip ?? ''} onChange={(e) => setDraft({ ...draft, microchip: e.target.value })} className={inputClass} placeholder="Número del chip" />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3" data-person-details>
+              <div>
+                <label className={labelClass}>Parentesco</label>
+                <Select
+                  ariaLabel="Parentesco"
+                  placeholder="Sin indicar"
+                  value={draft.relationship ?? ''}
+                  onChange={(e) => setDraft({ ...draft, relationship: String(e.target.value) })}
+                  options={RELATIONSHIPS.map((value) => ({ value, label: value }))}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Documento</label>
+                <input type="text" maxLength={30} value={draft.document_number ?? ''} onChange={(e) => setDraft({ ...draft, document_number: e.target.value })} className={inputClass} placeholder="DNI u otro" />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>F. Nacimiento</label>
@@ -226,6 +293,19 @@ export default function CustomerDependents({ customerId, onPendingChange }: Cust
                 options={[{ value: 'M', label: isPet ? 'Macho' : 'Masculino' }, { value: 'F', label: isPet ? 'Hembra' : 'Femenino' }]}
               />
             </div>
+          </div>
+
+          <div data-field="dependent-alert">
+            <label className={labelClass}>Alerta</label>
+            <input
+              type="text"
+              maxLength={160}
+              value={draft.alert ?? ''}
+              onChange={(e) => setDraft({ ...draft, alert: e.target.value })}
+              className={inputClass}
+              placeholder={isPet ? 'Ej. Muerde al cortarle las uñas' : 'Ej. Alérgico al maní'}
+            />
+            <p className="text-xs text-slate-500 mt-1">Un aviso corto que el equipo ve al agendarle, en la cita y en la ficha.</p>
           </div>
 
           <div>

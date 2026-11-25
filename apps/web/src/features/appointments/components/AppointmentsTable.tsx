@@ -10,15 +10,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAppointmentPanels } from './useAppointmentPanels';
 import { useAutoRefresh } from './useAutoRefresh';
+import DayBoard from './DayBoard';
 import { RELEASED, addDays, dateOf, formatDate, statusStyle, timeOf, todayISO, type Appointment } from '../appointments';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 import { formatMoney } from '@/lib/currency';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
+import { AppModal } from '@/app/components/ui/modals/AppModal';
+import { apiError } from '../appointments';
 
 const PERIODS: { id: string; label: string; range: () => { from: string; to: string } }[] = [
   { id: 'today', label: 'Hoy', range: () => ({ from: todayISO(), to: todayISO() }) },
   { id: 'week', label: 'Próximos 7 días', range: () => ({ from: todayISO(), to: addDays(todayISO(), 7) }) },
   { id: 'month', label: 'Próximos 30 días', range: () => ({ from: todayISO(), to: addDays(todayISO(), 30) }) },
   { id: 'past', label: 'Últimos 30 días', range: () => ({ from: addDays(todayISO(), -30), to: addDays(todayISO(), -1) }) },
+  { id: 'all', label: 'Todas', range: () => ({ from: '', to: '' }) },
 ];
 
 const CARDS: { id: string; title: string; statuses: string[]; icon: React.ReactNode; color: string; active: string; hover: string }[] = [
@@ -37,37 +42,52 @@ export default function AppointmentsTable() {
   const [period, setPeriod] = useState('week');
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, any>>({ status: '', professional_id: '' });
+  const [filters, setFilters] = useState<Record<string, any>>({ status: '', professional_id: '', source: '', branch_id: '' });
+  const [origins, setOrigins] = useState<{ value: string; label: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [view, setView] = useState<'table' | 'board'>('table');
+  const [boardVersion, setBoardVersion] = useState(0);
   const [activeCard, setActiveCard] = useState('');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [query, setQuery] = useState('');
+  const [bulk, setBulk] = useState<{ ids: string[]; clear: () => void } | null>(null);
+  const [bulkReason, setBulkReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [cut, setCut] = useState(0);
 
   const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
   const statusOptions = (user?.tenant?.appointment_statuses ?? []).map((s) => ({ label: s.name, value: s.key }));
 
   const load = useCallback(() => {
     const range = dateRange ?? PERIODS.find((p) => p.id === period)!.range();
+    const everything = !dateRange && period === 'all';
 
     api.get('/appointments', {
       params: {
-        ...range,
+        ...(everything ? { all: 1 } : range),
         ...(query ? { search: query } : {}),
         ...(filters.professional_id ? { professional_id: filters.professional_id } : {}),
+        ...(filters.source ? { source: filters.source } : {}),
+        ...(filters.branch_id ? { branch_id: filters.branch_id } : {}),
       },
     })
-      .then((res) => setAppointments(Array.isArray(res.data) ? res.data : []))
-      .catch((error) => { console.error('Error al cargar citas:', error); setAppointments([]); });
-  }, [period, dateRange, query, filters.professional_id]);
+      .then((res) => { setAppointments(Array.isArray(res.data) ? res.data : []); setCut(Number(res.headers?.['x-rows-cut'] ?? 0)); })
+      .catch((error) => { console.error('Error al cargar citas:', error); setAppointments([]); setCut(0); });
+  }, [period, dateRange, query, filters.professional_id, filters.source, filters.branch_id]);
 
-  const { openNew, openDetail, panels, isOpen } = useAppointmentPanels(load);
+  const reloadAll = useCallback(() => { load(); setBoardVersion((v) => v + 1); }, [load]);
+
+  const { openNew, openDetail, panels, isOpen } = useAppointmentPanels(reloadAll);
 
   useEffect(() => { load(); }, [load]);
 
-  useAutoRefresh(load, isOpen, 30000);
+  useAutoRefresh(load, isOpen || view !== 'table', 30000);
 
   useEffect(() => {
     api.get('/appointments/context')
-      .then((res) => setProfessionals(res.data.professionals ?? []))
+      .then((res) => { setProfessionals(res.data.professionals ?? []); setOrigins(res.data.origins ?? []); setBranches(res.data.branches ?? []); })
       .catch(() => setProfessionals([]));
   }, []);
 
@@ -114,6 +134,8 @@ export default function AppointmentsTable() {
   const filterConfigs: FilterConfig[] = [
     { id: 'status', label: 'Fase', type: 'select', options: statusOptions },
     { id: 'professional_id', label: vocab.pro, type: 'select', options: professionals.map((p) => ({ label: p.display_name, value: p.id })) },
+    ...(origins.length ? [{ id: 'source', label: 'Origen', type: 'select' as const, options: origins.map((o) => ({ label: o.label, value: o.value })) }] : []),
+    ...(branches.length > 1 ? [{ id: 'branch_id', label: 'Sede', type: 'select' as const, options: branches.map((b) => ({ label: b.name, value: b.id })) }] : []),
   ];
 
   const exportColumns: ExportColumn<Appointment>[] = [
@@ -127,6 +149,8 @@ export default function AppointmentsTable() {
     { header: 'Duración (min)', type: 'number', value: (a) => a.duration_minutes },
     { header: 'Precio', type: 'money', total: true, value: (a) => a.price },
     { header: vocab.pro, value: (a) => a.professional?.display_name },
+    { header: 'Sede', value: (a) => a.branch?.name },
+    { header: 'Origen', value: (a) => a.source_label },
     { header: 'Fase', value: (a) => a.status_name },
     { header: 'Sin confirmar a tiempo', value: (a) => (a.confirmation_overdue ? 'Sí' : '') },
   ];
@@ -181,6 +205,14 @@ export default function AppointmentsTable() {
       header: vocab.pro,
       cell: (a) => <ProfessionalLink key={`pro-${a.id}`} id={a.professional?.id} className="text-sm text-slate-700">{a.professional?.display_name ?? '—'}</ProfessionalLink>,
     },
+    ...(branches.length > 1 ? [{
+      header: 'Sede',
+      cell: (a: Appointment) => <span key={`branch-${a.id}`} className="text-sm text-slate-700">{a.branch?.name ?? '—'}</span>,
+    }] : []),
+    {
+      header: 'Origen',
+      cell: (a) => <span key={`source-${a.id}`} data-source={a.source} className="text-sm text-slate-700">{a.source_label ?? '—'}</span>,
+    },
     {
       header: 'Fase',
       cell: (a) => (
@@ -211,8 +243,93 @@ export default function AppointmentsTable() {
     },
   ];
 
+  const requireReason = user?.tenant?.rules?.['cancel.require_reason'] !== false;
+  const canConfirm = can('agenda.confirm');
+  const canCancel = can('agenda.cancel');
+
+  const runBulk = async (ids: string[], status: 'confirmed' | 'cancelled', clear: () => void, reason = '') => {
+    setBusy(true);
+    setNotice('');
+    setError('');
+    try {
+      const res = await api.post<{ done: number; failed: { id: string; message: string }[] }>('/appointments/bulk-status', { ids, status, ...(reason.trim() ? { reason: reason.trim() } : {}) });
+      const { done, failed } = res.data;
+      const verb = status === 'confirmed' ? (done === 1 ? 'confirmada' : 'confirmadas') : (done === 1 ? 'cancelada' : 'canceladas');
+      if (done > 0) setNotice(`${done} ${done === 1 ? 'cita' : 'citas'} ${verb}.`);
+      if (failed.length > 0) {
+        const codes = Object.fromEntries(appointments.map((a) => [a.id, a.code]));
+        const head = failed.length === 1 ? 'Una cita no se pudo cambiar' : `${failed.length} citas no se pudieron cambiar`;
+        setError(`${head}: ${failed.map((f) => `${codes[f.id] ?? 'cita'} (${f.message})`).join('; ')}`);
+      }
+      clear();
+      setBulk(null);
+      setBulkReason('');
+      load();
+    } catch (err) {
+      setError(apiError(err, 'No se pudieron cambiar las citas.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selectionActions = (selected: Appointment[], clear: () => void) => {
+    const toConfirm = selected.filter((a) => a.status === 'pending').map((a) => a.id);
+    const toCancel = selected.filter((a) => a.status === 'pending' || a.status === 'confirmed').map((a) => a.id);
+    return (
+      <>
+        {canConfirm && toConfirm.length > 0 && (
+          <button type="button" data-bulk-confirm disabled={busy} onClick={() => runBulk(toConfirm, 'confirmed', clear)} className="px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-bold hover:bg-brand-hover disabled:opacity-50">
+            Confirmar {toConfirm.length}
+          </button>
+        )}
+        {canCancel && toCancel.length > 0 && (
+          <button type="button" data-bulk-cancel disabled={busy} onClick={() => { setBulkReason(''); setBulk({ ids: toCancel, clear }); }} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+            Cancelar {toCancel.length}
+          </button>
+        )}
+        {(!canConfirm || toConfirm.length === 0) && (!canCancel || toCancel.length === 0) && (
+          <span className="text-xs text-slate-500">Las elegidas ya no se pueden confirmar ni cancelar.</span>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="space-y-6 mb-8">
+      <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
+      {cut > 0 && (
+        <p data-rows-cut className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Se muestran las primeras {cut} citas del periodo. Para ver las demás, elige un periodo más corto, un profesional o busca por cliente o código.
+        </p>
+      )}
+      <div className="flex items-center gap-0.5 p-0.5 w-fit bg-white border border-slate-200 rounded-lg" role="radiogroup" aria-label="Cómo ver las citas" data-appointments-view>
+        {([['table', 'Tabla'], ['board', 'Tablero del día']] as ['table' | 'board', string][]).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={view === value}
+            data-view={value}
+            onClick={() => setView(value)}
+            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${view === value ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'board' ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-2xl font-black text-brand-ink tracking-tight">Tablero del día</h1>
+            {can('agenda.create') && (
+              <button type="button" onClick={() => openNew()} className="px-4 py-2 text-sm font-bold bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors">Nueva cita</button>
+            )}
+          </div>
+          <DayBoard onOpen={openDetail} paused={isOpen} version={boardVersion} />
+        </div>
+      ) : (
       <div className="mb-6">
         <DataTable<Appointment>
           title="Citas"
@@ -246,12 +363,33 @@ export default function AppointmentsTable() {
           exportColumns={exportColumns}
           exportFilters={card ? [`Tarjeta: ${card.title}`] : []}
           getItemKey={(a) => a.id}
-          entityLabel="citas"
+          entityLabel={rows.length === 1 ? 'cita' : 'citas'}
           metricCards={metricCards}
+          selectionActions={canConfirm || canCancel ? selectionActions : undefined}
         />
       </div>
+      )}
 
       {panels}
+
+      <AppModal
+        isOpen={Boolean(bulk)}
+        variant="danger"
+        title={bulk && bulk.ids.length === 1 ? 'Cancelar 1 cita' : `Cancelar ${bulk?.ids.length ?? 0} citas`}
+        confirmText="Cancelar citas"
+        cancelText="Volver"
+        isLoading={busy}
+        onClose={() => { if (!busy) setBulk(null); }}
+        onConfirm={() => { if (bulk && (!requireReason || bulkReason.trim())) runBulk(bulk.ids, 'cancelled', bulk.clear, bulkReason); }}
+        message={(
+          <div className="space-y-3 text-left" data-bulk-cancel-form>
+            <p className="text-sm text-slate-600">Se cancelan solo las citas elegidas, igual que si las cancelaras una por una. No cuenta como cancelación tardía {vocab.pick('client', 'del', 'de la')} {vocab.client.toLowerCase()}.</p>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-rose-700">Motivo de la cancelación{requireReason ? '' : ' (opcional)'}</label>
+            <input type="text" maxLength={255} aria-label="Motivo de la cancelación" placeholder="Ej. Cierre del local por feriado" value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-rose-200 focus:border-rose-400 outline-none" />
+            {requireReason && !bulkReason.trim() && <p className="text-xs text-slate-500">Escribe el motivo para poder cancelar.</p>}
+          </div>
+        )}
+      />
     </div>
   );
 }

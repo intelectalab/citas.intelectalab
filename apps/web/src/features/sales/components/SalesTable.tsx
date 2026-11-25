@@ -42,6 +42,7 @@ export default function SalesTable({ initial }: { initial?: SalesFilter } = {}) 
   const router = useRouter();
   const { can, hasModule } = useAuth();
   const [sales, setSales] = useState<SaleRow[] | null>(null);
+  const [refunded30, setRefunded30] = useState<{ total: number; count: number } | null>(null);
   const [view, setView] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({ branch_id: initial?.branch_id ?? '', status: '', item_type: initial?.item_type ?? '' });
@@ -55,6 +56,7 @@ export default function SalesTable({ initial }: { initial?: SalesFilter } = {}) 
     api.get('/sales')
       .then((res) => {
         setSales(res.data.sales);
+        setRefunded30(res.data.refunded_30d ?? null);
         setUnbilled(res.data.unbilled ? (res.data.unbilled as UnbilledAppointment[]).map((a) => ({
           id: `unbilled-${a.appointment_id}`, code: 'Sin venta', status: 'pending' as const, status_label: 'Atendida sin cobrar', created_at: a.at,
           branch_id: a.branch_id, branch_name: a.branch_name, customer: a.customer, appointment_code: a.appointment_code, detail: a.detail ?? '',
@@ -132,8 +134,8 @@ export default function SalesTable({ initial }: { initial?: SalesFilter } = {}) 
       onClick: () => setView(view === 'open' ? 'all' : 'open'),
     },
     {
-      title: others ? `Devuelto · no suma ${others} en otra moneda` : 'Devuelto',
-      value: money(live.reduce((sum, s) => sum + s.refunded, 0)),
+      title: refunded30 ? `Devoluciones (30 días) · ${refunded30.count}` : others ? `Devuelto · no suma ${others} en otra moneda` : 'Devuelto',
+      value: money(refunded30 ? refunded30.total : live.reduce((sum, s) => sum + s.refunded, 0)),
       icon: <RotateCcw size={18} />,
       iconColorClass: 'text-rose-600',
       borderColorClass: card('refunded', 'border-rose-500 ring-2 ring-rose-500/20'),

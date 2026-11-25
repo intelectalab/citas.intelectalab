@@ -1,10 +1,14 @@
 import Link from 'next/link';
-import { BookOpenText, Mail, MessageCircle, Phone } from 'lucide-react';
+import { BadgeCheck, BookOpenText, Mail, MessageCircle, Phone, ShieldCheck } from 'lucide-react';
 import type { SitePayload, WebBusinessType } from '../web';
 import CookieSettingsLink from './CookieSettingsLink';
 
-export default function SiteFooter({ site, businessTypes }: { site: SitePayload; businessTypes: WebBusinessType[] }) {
+export default function SiteFooter({ site, businessTypes, groups = [] }: { site: SitePayload; businessTypes: WebBusinessType[]; groups?: { name: string }[] }) {
   const year = new Date().getFullYear();
+  const grouped = groups
+    .map((g) => ({ name: g.name, types: businessTypes.filter((t) => t.group === g.name) }))
+    .filter((g) => g.types.length > 0);
+  const badges = site.content?.trust_badges ?? [];
 
   return (
     <footer className="bg-white border-t border-slate-200/80" data-site-footer>
@@ -16,12 +20,28 @@ export default function SiteFooter({ site, businessTypes }: { site: SitePayload;
         </div>
         <div className="space-y-2">
           <span className="block font-bold text-brand-ink">Rubros</span>
-          <ul className="space-y-1.5">
-            {businessTypes.slice(0, 6).map((type) => (
-              <li key={type.slug}><Link href={`/rubros/${type.slug}`} className="text-slate-500 hover:text-brand-ink">{type.short_name}</Link></li>
-            ))}
-            <li><Link href="/rubros" className="font-semibold text-brand-accent hover:text-brand-ink">Ver todos</Link></li>
-          </ul>
+          {grouped.length > 0 ? (
+            <div className="space-y-3" data-footer-groups>
+              {grouped.map((group) => (
+                <div key={group.name}>
+                  <span className="block text-[11px] font-bold text-slate-400 mb-1">{group.name}</span>
+                  <ul className="space-y-1">
+                    {group.types.map((type) => (
+                      <li key={type.slug}><Link href={`/rubros/${type.slug}`} className="text-slate-500 hover:text-brand-ink">{type.short_name}</Link></li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              <Link href="/rubros" className="block font-semibold text-brand-accent hover:text-brand-ink">Ver todos</Link>
+            </div>
+          ) : (
+            <ul className="space-y-1.5">
+              {businessTypes.slice(0, 6).map((type) => (
+                <li key={type.slug}><Link href={`/rubros/${type.slug}`} className="text-slate-500 hover:text-brand-ink">{type.short_name}</Link></li>
+              ))}
+              <li><Link href="/rubros" className="font-semibold text-brand-accent hover:text-brand-ink">Ver todos</Link></li>
+            </ul>
+          )}
         </div>
         <div className="space-y-2">
           <span className="block font-bold text-brand-ink">Producto</span>
@@ -43,6 +63,14 @@ export default function SiteFooter({ site, businessTypes }: { site: SitePayload;
             <li><Link href="/legal/cookies" className="text-slate-500 hover:text-brand-ink">Cookies</Link> <CookieSettingsLink /></li>
             <li><Link href="/reclamaciones" data-landing-complaints className="inline-flex items-center gap-1.5 font-semibold text-slate-600 hover:text-brand-ink"><BookOpenText size={14} /> Libro de Reclamaciones</Link></li>
           </ul>
+        </div>
+      </div>
+      <div className="border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500" data-footer-trust>
+          <Link href="/legal/privacidad" className="inline-flex items-center gap-1.5 hover:text-brand-ink"><ShieldCheck size={14} className="text-brand-accent" /> Tus datos se protegen según la Ley N.° 29733</Link>
+          {badges.map((badge) => (
+            <span key={badge.label} className="inline-flex items-center gap-1.5" title={badge.detail ?? undefined}><BadgeCheck size={14} className="text-brand-accent" /> {badge.label}</span>
+          ))}
         </div>
       </div>
       <div className="border-t border-slate-100">

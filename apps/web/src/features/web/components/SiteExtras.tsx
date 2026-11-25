@@ -19,12 +19,14 @@ function readConsent(): Consent {
   }
 }
 
-function pageOf(path: string): { page: string; business_type?: string } {
+function pageOf(path: string): { page: string; business_type?: string; post?: string } {
   if (path === '/') return { page: 'home' };
   if (path.startsWith('/precios')) return { page: 'pricing' };
   const rubro = path.match(/^\/rubros\/([a-z0-9_-]+)/);
   if (rubro) return { page: 'business', business_type: rubro[1] };
   if (path.startsWith('/rubros')) return { page: 'business' };
+  const post = path.match(/^\/blog\/([a-z0-9-]+)\/?$/);
+  if (post && post[1] !== 'rss') return { page: 'post', post: post[1] };
   if (/^\/blog\/[^/]+/.test(path)) return { page: 'post' };
   if (path.startsWith('/blog')) return { page: 'blog' };
   return { page: 'legal' };
@@ -93,8 +95,13 @@ export default function SiteExtras({ site }: { site: SitePayload }) {
       const value = params.get(`utm_${key}`);
       if (value) utm[key] = value.slice(0, 80);
     });
+    const postSlug = pathname.match(/^\/blog\/([a-z0-9-]+)\/?$/)?.[1];
     try {
       if (Object.keys(utm).length && !localStorage.getItem('site_utm')) localStorage.setItem('site_utm', JSON.stringify(utm));
+      if (postSlug) {
+        const stored = JSON.parse(localStorage.getItem('site_utm') ?? '{}') ?? {};
+        if (!stored.post) localStorage.setItem('site_utm', JSON.stringify({ ...stored, post: postSlug }));
+      }
     } catch {}
     const referrer = document.referrer && !document.referrer.startsWith(window.location.origin) ? document.referrer : '';
     fetch(`${API_URL}/web/visit`, {
@@ -126,16 +133,16 @@ export default function SiteExtras({ site }: { site: SitePayload }) {
           rel="noopener noreferrer"
           aria-label="Escríbenos por WhatsApp"
           data-site-whatsapp
-          className="fixed right-4 bottom-4 z-40 w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg flex items-center justify-center"
-          style={showBanner ? { bottom: '9rem' } : undefined}
+          className="fixed right-4 bottom-4 z-40 w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg hidden md:flex items-center justify-center"
+          style={{ bottom: showBanner ? '9rem' : 'calc(1rem + var(--site-bar, 0px))' }}
         >
           <MessageCircle size={22} />
         </a>
       )}
 
       {showBanner && (
-        <div role="dialog" aria-label="Aviso de cookies" data-cookie-banner className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4">
-          <div className="max-w-3xl mx-auto bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div role="dialog" aria-label="Aviso de cookies" data-cookie-banner className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4 pointer-events-none">
+          <div className="pointer-events-auto max-w-3xl mx-auto bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3">
             <Cookie size={22} className="text-brand-accent shrink-0 hidden sm:block" />
             <p className="text-xs sm:text-sm text-slate-600 flex-1">
               {site.cookie_text} <Link href="/legal/cookies" className="font-semibold text-brand-accent hover:text-brand-ink">Más información</Link>

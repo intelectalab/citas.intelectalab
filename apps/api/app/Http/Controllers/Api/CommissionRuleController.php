@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionRuleController extends Controller
 {
-    private const COLUMNS = ['r.*', 'p.display_name as professional_name', 's.name as service_name', 'pr.name as product_name'];
+    private const COLUMNS = ['r.*', 'p.display_name as professional_name', 's.name as service_name', 'pr.name as product_name', 'c.name as category_name'];
 
     private function tenant(Request $request): Tenant
     {
@@ -32,7 +32,8 @@ class CommissionRuleController extends Controller
             ->where('r.tenant_id', $tenantId)
             ->leftJoin('professionals as p', 'p.id', '=', 'r.professional_id')
             ->leftJoin('services as s', 's.id', '=', 'r.service_id')
-            ->leftJoin('products as pr', 'pr.id', '=', 'r.product_id');
+            ->leftJoin('products as pr', 'pr.id', '=', 'r.product_id')
+            ->leftJoin('service_categories as c', 'c.id', '=', 'r.category_id');
     }
 
     private static function typeOf(object $row): string
@@ -40,6 +41,7 @@ class CommissionRuleController extends Controller
         return match (true) {
             $row->kind === 'product'     => 'product',
             (bool) $row->professional_id => 'exception',
+            (bool) ($row->category_id ?? null) => 'category',
             default                      => 'service',
         };
     }
@@ -55,6 +57,8 @@ class CommissionRuleController extends Controller
             'service'         => $row->service_name,
             'product_id'      => $row->product_id,
             'product'         => $row->product_name,
+            'category_id'     => $row->category_id ?? null,
+            'category'        => $row->category_name,
             'percent'         => round((float) $row->percent, 2),
             'fixed'           => round((float) $row->fixed, 2),
             'active'          => (bool) $row->active,
@@ -65,7 +69,10 @@ class CommissionRuleController extends Controller
     {
         $tenant = $this->tenant($request);
         $products = Cart::productsEnabled($tenant);
-        $rules = $this->rows($tenant->id)->orderBy('s.name')->orderBy('p.display_name')->orderBy('pr.name')->get(self::COLUMNS)->map(fn ($row) => $this->present($row));
+        $own = \App\Support\Access::ownProfessionalId($request->user());
+        $rules = $this->rows($tenant->id)
+            ->when($own !== null, fn ($q) => $q->where(fn ($w) => $own === 'none' ? $w->whereNull('r.professional_id') : $w->whereNull('r.professional_id')->orWhere('r.professional_id', $own)))
+            ->orderBy('c.name')->orderBy('s.name')->orderBy('p.display_name')->orderBy('pr.name')->get(self::COLUMNS)->map(fn ($row) => $this->present($row));
 
         return response()->json([
             'rules'         => $rules->values(),
@@ -75,8 +82,10 @@ class CommissionRuleController extends Controller
             'on_products'   => Commissions::rules($tenant)['on_products'],
             'professionals' => DB::table('professionals')->where('tenant_id', $tenant->id)
                 ->where(fn ($q) => $q->whereNull('status_id')->orWhereNotIn('status_id', DB::table('statuses')->where('slug', 'inactive')->select('id')))
+                ->when($own !== null, fn ($q) => $own === 'none' ? $q->whereRaw('false') : $q->where('id', $own))
                 ->orderBy('display_name')->get(['id', 'display_name as name', 'commission_percent']),
-            'services'      => DB::table('services')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name', 'price']),
+            'services'      => DB::table('services')->where('tenant_id', $tenant->id)->orderBy('name')->get(['id', 'name', 'price', 'category_id']),
+            'categories'    => DB::table('service_categories')->where('tenant_id', $tenant->id)->orderBy('name')->get(\App\Support\CatalogExtras::categoryColor() ? ['id', 'name', 'color'] : ['id', 'name']),
             'product_list'  => $products ? DB::table('products')->where('tenant_id', $tenant->id)->whereNull('deleted_at')->where('status', 'active')->whereIn('kind', Cart::SELLABLE)->orderBy('name')->get(['id', 'name', 'price']) : [],
         ]);
     }
@@ -100,7 +109,7 @@ class CommissionRuleController extends Controller
         $rules = $this->rows($tenant->id)
             ->where('r.active', true)
             ->where(fn ($q) => $q->whereNull('r.professional_id')->orWhere('r.professional_id', $pro->id))
-            ->orderBy('r.kind')->orderBy('s.name')->orderBy('pr.name')
+            ->orderBy('r.kind')->orderBy('c.name')->orderBy('s.name')->orderBy('pr.name')
             ->get(self::COLUMNS)
             ->map(fn ($row) => $this->present($row))
             ->filter(fn ($rule) => $rule['type'] !== 'product' || Cart::productsEnabled($tenant))
@@ -128,16 +137,18 @@ class CommissionRuleController extends Controller
         $exists = fn (string $table) => Rule::exists($table, 'id')->where('tenant_id', $tenant->id);
 
         $data = $request->validate([
-            'type'            => ['required', Rule::in(['service', 'exception', 'product'])],
+            'type'            => ['required', Rule::in(['service', 'exception', 'category', 'product'])],
             'professional_id' => ['nullable', 'uuid', $exists('professionals'), 'required_if:type,exception'],
             'service_id'      => ['nullable', 'uuid', $exists('services'), 'required_if:type,service', 'required_if:type,exception'],
             'product_id'      => ['nullable', 'uuid', $exists('products')],
+            'category_id'     => ['nullable', 'uuid', $exists('service_categories'), 'required_if:type,category'],
             'percent'         => 'nullable|numeric|min:0|max:100',
             'fixed'           => 'nullable|numeric|min:0|max:999999',
             'active'          => 'boolean',
         ], [
             'professional_id.required_if' => 'Elige a quién es la excepción.',
             'service_id.required_if'      => 'Elige el servicio.',
+            'category_id.required_if'     => 'Elige la categoría.',
             'percent.max'                 => 'El porcentaje no puede pasar de 100.',
         ]);
 
@@ -153,9 +164,10 @@ class CommissionRuleController extends Controller
         }
 
         $values = match ($data['type']) {
-            'service'   => ['kind' => 'service', 'professional_id' => null, 'service_id' => $data['service_id'], 'product_id' => null],
-            'exception' => ['kind' => 'service', 'professional_id' => $data['professional_id'], 'service_id' => $data['service_id'], 'product_id' => null],
-            default     => ['kind' => 'product', 'professional_id' => null, 'service_id' => null, 'product_id' => $data['product_id'] ?? null],
+            'service'   => ['kind' => 'service', 'professional_id' => null, 'service_id' => $data['service_id'], 'product_id' => null, 'category_id' => null],
+            'exception' => ['kind' => 'service', 'professional_id' => $data['professional_id'], 'service_id' => $data['service_id'], 'product_id' => null, 'category_id' => null],
+            'category'  => ['kind' => 'service', 'professional_id' => null, 'service_id' => null, 'product_id' => null, 'category_id' => $data['category_id']],
+            default     => ['kind' => 'product', 'professional_id' => null, 'service_id' => null, 'product_id' => $data['product_id'] ?? null, 'category_id' => null],
         };
 
         $same = DB::table('commission_rules')->where('tenant_id', $tenant->id)->where('kind', $values['kind'])
@@ -163,6 +175,7 @@ class CommissionRuleController extends Controller
             ->where(fn ($q) => $values['professional_id'] ? $q->where('professional_id', $values['professional_id']) : $q->whereNull('professional_id'))
             ->where(fn ($q) => $values['service_id'] ? $q->where('service_id', $values['service_id']) : $q->whereNull('service_id'))
             ->where(fn ($q) => $values['product_id'] ? $q->where('product_id', $values['product_id']) : $q->whereNull('product_id'))
+            ->where(fn ($q) => $values['category_id'] ? $q->where('category_id', $values['category_id']) : $q->whereNull('category_id'))
             ->value('id');
 
         if ($same) {
@@ -183,10 +196,12 @@ class CommissionRuleController extends Controller
         $service = $name('services', 'name', $values['service_id']);
         $professional = $name('professionals', 'display_name', $values['professional_id']);
         $product = $name('products', 'name', $values['product_id']);
+        $category = $name('service_categories', 'name', $values['category_id'] ?? null);
 
         return mb_substr(match (true) {
             $values['kind'] === 'product' => $product ? "el producto {$product}" : 'todos los productos',
             (bool) $professional          => "{$professional} en {$service}",
+            (bool) $category              => "la categoría {$category}, para todos",
             default                       => "{$service}, para todos",
         }, 0, 120);
     }
@@ -261,6 +276,9 @@ class CommissionRuleController extends Controller
             'kind'            => ['required', Rule::in(['service', 'product'])],
             'reference_id'    => 'required|uuid',
         ]);
+
+        $own = \App\Support\Access::ownProfessionalId($request->user());
+        abort_if($own !== null && $own !== $data['professional_id'], 403, 'Con tu rol solo puedes ver tus propias comisiones.');
 
         Commissions::flush();
 

@@ -7,7 +7,7 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { PagedList } from '@/app/components/common/Pager';
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CreditCard, History, Loader2, Repeat, Rocket, TicketPercent } from 'lucide-react';
+import { AlertTriangle, CreditCard, FileText, History, Loader2, Repeat, Rocket, TicketPercent, Undo2 } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError, formatDate } from '@/features/appointments/appointments';
@@ -15,8 +15,11 @@ import { money, momentOf } from '@/features/sales/sales';
 import PayPlanDrawer from './PayPlanDrawer';
 import CancelPlan, { DownloadAllButton } from './CancelPlan';
 import ReceiptButton from './ReceiptButton';
+import PlanChangePreview from './PlanChangePreview';
+import BillingDetailsDrawer from './BillingDetailsDrawer';
+import PlanAddons from './PlanAddons';
 import { CulqiClosed, openCulqi } from '../culqi';
-import { BILLING_STATES, INVOICE_REASONS, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, cycleLabel, providerLabel, asClause, transferAllowed, type BillingPayload, type CulqiAction } from '../billing';
+import { BILLING_STATES, INVOICE_REASONS, PAYMENT_KINDS, PAYMENT_STATUS, cardLabel, cycleLabel, providerLabel, asClause, transferAllowed, type BillingPayload, type CulqiAction, type PlanPreview } from '../billing';
 
 const card = 'bg-white rounded-2xl border border-slate-200/80 shadow-xs';
 const shortDate = (date: string | null | undefined) => (date ? formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
@@ -27,7 +30,8 @@ export default function PlanCard() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  const [panel, setPanel] = useState<'' | 'plans' | 'history' | 'pay' | 'coupon'>('');
+  const [panel, setPanel] = useState<'' | 'plans' | 'history' | 'pay' | 'coupon' | 'details'>('');
+  const [preview, setPreview] = useState<PlanPreview | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [couponError, setCouponError] = useState('');
   const [choice, setChoice] = useState<{ plan: string; cycle: 'monthly' | 'yearly' }>({ plan: '', cycle: 'monthly' });
@@ -158,12 +162,20 @@ export default function PlanCard() {
 
   const openPlans = () => {
     setChoice({ plan: billing.pending_plan?.id ?? billing.plan?.id ?? data.plans[0]?.id ?? '', cycle: billing.pending_plan?.billing_cycle ?? billing.billing_cycle ?? 'monthly' });
+    setPreview(null);
     setPanel('plans');
   };
 
   const summary = (() => {
-    const price = `${money(billing.price, billing.plan?.currency)} ${cycleLabel(billing.billing_cycle)}`;
+    const real = billing.charge ?? billing.price;
+    const price = `${money(real, billing.plan?.currency)} ${cycleLabel(billing.billing_cycle)}${Number(real) !== Number(billing.price) ? ` (precio del plan ${money(billing.price, billing.plan?.currency)}, con tus descuentos y complementos)` : ''}`;
     const leaving = billing.cancellation?.scheduled;
+    if (!billing.can_pay) {
+      if (billing.state === 'trial') return `Prueba gratis hasta el ${shortDate(billing.ends_at)}.`;
+      if (billing.state === 'active') return billing.ends_at ? `Vigente hasta el ${shortDate(billing.ends_at)}.` : 'Plan activo.';
+      if (billing.state === 'grace') return `Venció el ${shortDate(billing.ends_at)}. Avísale a quien administra el plan para que lo pague.`;
+      return billing.message ?? '';
+    }
     if (leaving && (billing.state === 'trial' || billing.state === 'active')) {
       return `${price}. Pediste la baja: todo sigue funcionando hasta el ${new Date(leaving.effective_at).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })} y no se cobra otro periodo.`;
     }
@@ -179,11 +191,14 @@ export default function PlanCard() {
         if (!billing.ends_at) return `${price}. Sin fecha de vencimiento por ahora.`;
         return `${price}. Vigente hasta el ${shortDate(billing.ends_at)}. ${authorized ? 'Se renueva solo con tu tarjeta.' : 'Paga antes de esa fecha para que no se interrumpa.'}`;
       case 'grace':
-        return `Venció el ${shortDate(billing.ends_at)}. Págalo antes del ${shortDate(overdue?.readonly_on ?? billing.grace_ends_at)} para que tu empresa no quede en solo lectura.`;
+        return `Venció el ${shortDate(billing.ends_at)}${overdue?.amount ? `: debes ${money(overdue.amount, billing.plan?.currency)}` : ''}. Págalo antes del ${shortDate(overdue?.readonly_on ?? billing.grace_ends_at)} para que tu empresa no quede en solo lectura.`;
       default:
         return billing.message ?? '';
     }
   })();
+
+  const chosenPlan = data.plans.find((plan) => plan.id === choice.plan);
+  const freeMonths = chosenPlan?.free_months ?? Math.max(0, ...data.plans.map((plan) => plan.free_months ?? 0));
 
   const plansHint = billing.state === 'trial'
     ? 'Sigues en tu prueba gratis con el plan que elijas. Se cobra recién cuando lo actives.'
@@ -203,14 +218,26 @@ export default function PlanCard() {
       {billing.pending_plan && (
         <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" data-pending-plan>
           Desde el próximo periodo: plan {billing.pending_plan.name}, {money(billing.pending_plan.price, billing.plan?.currency)} {cycleLabel(billing.pending_plan.billing_cycle)}.
+          {billing.can_pay && (
+            <button type="button" data-pending-cancel disabled={busy !== ''} onClick={() => go('pending', '/billing/plan/cancel')} className="ml-2 inline-flex items-center gap-1 font-semibold text-brand-accent hover:text-brand-ink">
+              {busy === 'pending' ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />} Anular el cambio
+            </button>
+          )}
         </p>
       )}
 
-      {paid && (
+      {paid && billing.can_pay && (
         <div className="flex items-center gap-2 text-sm" data-card-status>
           <CreditCard size={15} className="text-slate-400 shrink-0" />
           {cardText ? <span className="font-semibold text-slate-800">{cardText}</span> : <span className="text-slate-500">Sin tarjeta guardada para el cobro automático</span>}
         </div>
+      )}
+
+      {paid && billing.can_pay && billing.card?.expiry?.text && (
+        <p className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 border ${billing.card.expiry.state === 'expired' ? 'text-rose-700 bg-rose-50 border-rose-100' : 'text-amber-800 bg-amber-50 border-amber-200'}`} data-card-expiry={billing.card.expiry.state}>
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+          <span>{billing.card.expiry.text}</span>
+        </p>
       )}
 
       {overdue?.last_failure && (
@@ -219,6 +246,21 @@ export default function PlanCard() {
           <span>El último intento de cobro no pasó: {asClause(overdue.last_failure)}. {billing.can_pay ? 'Cambia la tarjeta o paga ahora.' : 'El administrador puede cambiar la tarjeta o pagar ahora.'}</span>
         </p>
       )}
+
+      {billing.can_pay && overdue?.amount ? (
+        <div className="grid grid-cols-2 gap-2" data-overdue-total>
+          <div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2">
+            <span className="block text-[11px] font-bold text-rose-700 uppercase tracking-wider">Total vencido</span>
+            <span className="block text-lg font-black text-rose-800 tabular-nums">{money(overdue.amount, billing.plan?.currency)}</span>
+            {overdue.since && <span className="block text-xs text-rose-700">Desde el {shortDate(overdue.since)}</span>}
+          </div>
+          <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+            <span className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">{billing.state === 'locked' ? 'En solo lectura' : 'Solo lectura en'}</span>
+            <span className="block text-lg font-black text-brand-ink">{billing.state === 'locked' ? 'Ya' : overdue.days_to_readonly ? `${overdue.days_to_readonly} ${overdue.days_to_readonly === 1 ? 'día' : 'días'}` : 'Hoy'}</span>
+            {overdue.readonly_on && billing.state !== 'locked' && <span className="block text-xs text-slate-500">El {shortDate(overdue.readonly_on)}</span>}
+          </div>
+        </div>
+      ) : null}
 
       {billing.state === 'locked' && overdue?.cancel_on && (
         <p className="text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2" data-cancel-warning>
@@ -269,12 +311,17 @@ export default function PlanCard() {
             <button type="button" data-billing-history onClick={() => setPanel('history')} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
               <History size={15} /> Ver pagos
             </button>
+            {data.billing_details && (
+              <button type="button" data-billing-details onClick={() => setPanel('details')} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                <FileText size={15} /> Boleta o factura
+              </button>
+            )}
           </div>
         ) : (
           <p className="text-xs text-slate-500">Para pagar o cambiar de plan, escribe a soporte de la plataforma.</p>
         )
       ) : (
-        <p className="text-xs text-slate-500">El administrador de la empresa paga y cambia el plan.</p>
+        <p className="text-xs text-slate-500">Quien administra el plan de tu empresa lo paga y lo cambia.</p>
       )}
 
       {showCard && authorized && ['grace', 'locked'].includes(billing.state) && (
@@ -319,6 +366,10 @@ export default function PlanCard() {
         </div>
       </FormDrawer>
 
+      {billing.can_pay && billing.online && billing.addons && billing.reason !== 'canceled' && (
+        <PlanAddons info={billing.addons} onDone={async (res) => { if (typeof res.message === 'string') setNotice(res.message); if (res.billing) setData(res as unknown as BillingPayload); else await load(); await refetchUser(); }} />
+      )}
+
       {billing.can_pay && billing.cancellation && (
         <div className="pt-3 border-t border-slate-100">
           {billing.reason === 'canceled'
@@ -342,6 +393,7 @@ export default function PlanCard() {
             {(['monthly', 'yearly'] as const).map((cycle) => (
               <OptionCard key={cycle} type="button" role="radio" aria-checked={choice.cycle === cycle} data-cycle={cycle} selected={choice.cycle === cycle} onClick={() => setChoice({ ...choice, cycle })} className="rounded-xl border px-3.5 py-2.5 text-sm font-bold text-brand-ink">
                 {cycle === 'monthly' ? 'Cada mes' : 'Cada año'}
+                {cycle === 'yearly' && freeMonths > 0 && <span className="block text-[11px] font-semibold text-emerald-700" data-free-months>{freeMonths === 1 ? '1 mes gratis' : `${freeMonths} meses gratis`}</span>}
               </OptionCard>
             ))}
           </div>
@@ -356,17 +408,27 @@ export default function PlanCard() {
                     <span className="text-sm font-black text-brand-ink tabular-nums">{price > 0 ? `${money(price, plan.currency)} ${cycleLabel(choice.cycle)}` : 'Sin costo'}</span>
                   </span>
                   {plan.description && <span className="block text-xs text-slate-500 mt-1">{plan.description}</span>}
+                  {(plan.limits ?? []).length > 0 && (
+                    <span className="block text-[11px] text-slate-600 mt-1.5" data-plan-limits>
+                      {(plan.limits ?? []).map((limit) => (limit.value === null || limit.value < 0 ? `${limit.label} sin límite` : `${limit.value.toLocaleString('es-PE')} ${limit.label}`)).join(' · ')}
+                    </span>
+                  )}
                 </OptionCard>
               );
             })}
           </div>
-          <p className="text-xs text-slate-500">{plansHint}</p>
+          {panel === 'plans' && choice.plan ? <PlanChangePreview planId={choice.plan} cycle={choice.cycle} onPreview={setPreview} /> : null}
+          {!preview && <p className="text-xs text-slate-500">{plansHint}</p>}
           <ErrorAlert message={error} />
-          <button type="button" data-plan-confirm disabled={busy !== '' || !choice.plan} onClick={() => go('plan', '/billing/plan', { plan_id: choice.plan, billing_cycle: choice.cycle })} className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
-            {busy === 'plan' ? <Loader2 size={15} className="animate-spin" /> : null} Confirmar plan
+          <button type="button" data-plan-confirm disabled={busy !== '' || !choice.plan || Boolean(preview?.blocked) || preview?.kind === 'same'} onClick={() => go('plan', '/billing/plan', { plan_id: choice.plan, billing_cycle: choice.cycle })} className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-colors disabled:opacity-50">
+            {busy === 'plan' ? <Loader2 size={15} className="animate-spin" /> : null} {(preview?.kind === 'upgrade' || preview?.kind === 'yearly_now') && preview.immediate && preview.today > 0 ? `Pagar ${money(preview.today, preview.plan.currency)} y cambiar hoy` : 'Confirmar plan'}
           </button>
         </div>
       </FormDrawer>
+
+      {data.billing_details && (
+        <BillingDetailsDrawer open={panel === 'details'} details={data.billing_details} onClose={() => setPanel('')} onSaved={async (message) => { setPanel(''); setNotice(message); await load(); }} />
+      )}
 
       <FormDrawer isOpen={panel === 'history'} onClose={() => setPanel('')} title="Pagos del plan" subtitle="Lo pagado y los intentos de cobro" icon={<History size={18} />}>
         <div className="space-y-5" data-history-panel>
@@ -381,8 +443,17 @@ export default function PlanCard() {
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-semibold text-slate-800">{INVOICE_REASONS[invoice.reason ?? ''] ?? 'Pago'}</span>
                       <span className="block text-xs text-slate-500">{invoice.period_start && invoice.period_end ? `Del ${shortDate(invoice.period_start)} al ${shortDate(invoice.period_end)}` : shortDate(invoice.paid_at)}</span>
+                      {invoice.document && (
+                        <span className="block text-xs text-slate-600" data-plan-document>
+                          {invoice.document.pdf_url ? <a href={invoice.document.pdf_url} target="_blank" rel="noopener" className="font-semibold text-brand-ink underline">{invoice.document.label}</a> : <span className="font-semibold">{invoice.document.label}</span>} · {invoice.document.state}
+                        </span>
+                      )}
                     </span>
-                    <span className="text-sm font-bold text-slate-800 tabular-nums">{money(invoice.amount, invoice.currency)}</span>
+                    <span className="text-right shrink-0">
+                      <span className="block text-sm font-bold text-slate-800 tabular-nums">{money(invoice.amount, invoice.currency)}</span>
+                      {Number(invoice.discount ?? 0) > 0 && <span className="block text-[11px] text-emerald-700 tabular-nums" data-invoice-discount>Descuento {money(invoice.discount, invoice.currency)}</span>}
+                      <span className="block mt-0.5"><Badge tone={invoice.status && invoice.status !== 'paid' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'} bold nowrap>{invoice.status_label ?? 'Pagado'}</Badge></span>
+                    </span>
                     {billing.can_pay && <ReceiptButton path={`/billing/invoices/${invoice.id}/receipt`} />}
                   </li>
                 )}

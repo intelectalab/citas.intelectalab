@@ -33,9 +33,22 @@ class RichText
         return self::isHtml($body) ? self::clean((string) $body) : self::fromText((string) $body);
     }
 
+    private static bool $sitePaths = false;
+
     public static function clean(string $html): string
     {
         return self::walk(self::root($html), null);
+    }
+
+    public static function cleanForSite(?string $html): string
+    {
+        self::$sitePaths = true;
+
+        try {
+            return self::normalize($html);
+        } finally {
+            self::$sitePaths = false;
+        }
     }
 
     public static function normalize(?string $body): string
@@ -112,6 +125,10 @@ class RichText
     private static function href(string $href): ?string
     {
         $href = trim($href);
+
+        if (self::$sitePaths && preg_match('#^/(?!/)[^\s"<>]*$#', $href)) {
+            return $href;
+        }
 
         return preg_match('#^(https?://|mailto:)\S+$#i', $href) || preg_match('#^\[[^\]\s]+\]$#u', $href) ? $href : null;
     }

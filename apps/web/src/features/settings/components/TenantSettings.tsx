@@ -6,6 +6,7 @@ import SectionTitle from '@/app/components/common/SectionTitle';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
+import Link from 'next/link';
 import { BellRing, Coins, Boxes, Building2, Calculator, CalendarCheck, CalendarX2, Check, CircleHelp, ClipboardCheck, DoorOpen, Eye, FileText, Gift, Link2, ListOrdered, NotebookPen, ShieldBan, Hourglass, Loader2, Lock, Minus, Percent, PowerOff, Puzzle, Timer, TrendingUp, Unlock, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth, type AppointmentStatus } from '@/hooks/useAuth';
@@ -14,6 +15,7 @@ import Switch from '@/app/components/common/Switch';
 import Select from '@/app/components/common/Select';
 import CurrencySettings from './CurrencySettings';
 import BookingPageSettings from './BookingPageSettings';
+import ChannelSettings from './ChannelSettings';
 import IntegrationsSettings from './IntegrationsSettings';
 import ApiSettings from '@/features/integrations/components/ApiSettings';
 import MessagingSettings from './MessagingSettings';
@@ -40,18 +42,18 @@ interface SettingsPayload {
   appointment_statuses?: AppointmentStatus[];
   booking_rules?: BookingRules & { uses_confirmation: boolean };
   resources?: { equipment_down: EquipmentDown } | null;
-  sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number; cash_review_over?: number; refund_approval_over?: number } | null;
+  sales_rules?: { prices_include_tax: boolean; tax_rate: number; require_open_cash: boolean; partial_payments: boolean; cash_tolerance: number; auto_register?: boolean; refund_days?: number; pay_before_service?: boolean; arrive_minutes?: number; cash_review_over?: number; refund_approval_over?: number; tips_enabled?: boolean; max_discount?: number } | null;
   commission_rules?: { base: 'net' | 'gross'; on_products: boolean; on_package_use: boolean; auto_approve: boolean } | null;
   inventory_rules?: { allow_negative: boolean; consume_on_service: boolean; transfer_two_step: boolean; cost_method: CostMethod; alert_min_stock: boolean } | null;
-  loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number } | null;
+  loyalty_rules?: { points_enabled: boolean; amount_per_point: number; point_value: number; min_redeem_points: number; points_validity_days: number; gift_cards_enabled: boolean; gift_card_validity_days: number; vip_multiplier?: number } | null;
   quote_rules?: { validity_days: number; allow_installments: boolean; auto_create_sale: boolean; track_clinical_zones: boolean; plan_validity_days?: number; cancel_policy?: QuoteCancelPolicy; portal_accept?: boolean } | null;
   walkin_rules?: { self_checkin: boolean; max_wait: number } | null;
   classes_rules?: { waitlist: boolean; auto_promote: boolean; portal_leave_hours: number } | null;
   waitlist_rules?: { enabled: boolean; notify_mode: 'all' | 'first'; reply_hours: number; offers_ready?: boolean } | null;
   membership_rules?: { grace_days: number } | null;
   penalty_rules?: { enabled: boolean; no_show_percent: number; late_cancel_percent: number; window_hours: number } | null;
-  booking_misses?: { action: MissAction; limit: number; block_days: number; count_late_cancel?: boolean; window_hours?: number } | null;
-  payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; link_hours: number; booking: boolean } | null;
+  booking_misses?: { action: MissAction; limit: number; block_days: number; count_late_cancel?: boolean; window_hours?: number; deposit_percent?: number } | null;
+  payment_rules?: { require_deposit: boolean; deposit_minutes: number; deposit_refund_hours: number; deposit_on_cancel?: 'credit' | 'refund'; link_hours: number; booking: boolean } | null;
   session_idle_minutes?: number;
   session_idle_roles?: { id: string; name: string; minutes: number | null }[];
   help_enabled?: boolean;
@@ -59,6 +61,7 @@ interface SettingsPayload {
   mfa_ready?: boolean;
   session_portal_idle_minutes?: number;
   customer_groups?: { inactive_days: number; frequent_visits: number; vip_spend: number; manager_scope?: 'branch' | 'choose' } | null;
+  factory?: Partial<SettingsPayload>;
 }
 
 type EquipmentDown = 'none' | 'observe' | 'disable';
@@ -78,12 +81,13 @@ const EQUIPMENT_DOWN_OPTIONS: { id: EquipmentDown; title: string; hint: string; 
 
 type OnMiss = 'notify' | 'notify_release' | 'release';
 
-type MissAction = 'none' | 'note' | 'block';
+type MissAction = 'none' | 'note' | 'block' | 'deposit';
 
 const MISS_OPTIONS: { id: MissAction; title: string; hint: string; icon: React.ReactNode }[] = [
   { id: 'none', title: 'No pasa nada', hint: 'La cita queda como "No asistió" y nada más.', icon: <Minus size={18} /> },
   { id: 'note', title: 'Dejar una nota', hint: 'Su ficha y la lista de clientes muestran cuántas veces faltó a una cita reservada en línea.', icon: <NotebookPen size={18} /> },
   { id: 'block', title: 'Nota y dejar de reservar en línea', hint: 'Además, al llegar a cierto número de faltas ya no puede reservar por el portal. El personal sí puede agendarle.', icon: <ShieldBan size={18} /> },
+  { id: 'deposit', title: 'Nota y pedir adelanto para reservar en línea', hint: 'Al llegar a cierto número de faltas sigue pudiendo reservar por el portal, pero paga un adelanto antes de que se aparte la hora. Necesita el pago en línea conectado.', icon: <Wallet size={18} /> },
 ];
 
 interface BookingRules {
@@ -147,6 +151,127 @@ const SECTION_GROUPS: { title: string; sections: { id: SectionId; label: string 
   { title: 'Seguridad y registros', sections: [{ id: 'seguridad', label: 'Cierre de sesión' }, { id: 'descargas', label: 'Descargas de datos' }] },
 ];
 
+type FieldKind = 'bool' | 'hours' | 'days' | 'minutes' | 'percent' | 'money' | 'number' | Record<string, string>;
+
+const FACTORY_FIELDS: Partial<Record<SectionId, { path: string; label: string; kind: FieldKind }[]>> = {
+  reservas: [
+    { path: 'booking_rules.confirm_deadline_hours', label: 'Plazo para confirmar', kind: 'hours' },
+    { path: 'booking_rules.confirm_on_miss', label: 'Si nadie confirma', kind: Object.fromEntries(ON_MISS_OPTIONS.map((o) => [o.id, o.title])) },
+    { path: 'booking_rules.confirm_release_hours', label: 'Cuándo se libera el horario', kind: 'hours' },
+    { path: 'booking_rules.cancel_window_hours', label: 'Plazo para cancelar', kind: 'hours' },
+  ],
+  inasistencias: [
+    { path: 'booking_misses.action', label: 'Qué pasa si no asiste', kind: Object.fromEntries(MISS_OPTIONS.map((o) => [o.id, o.title])) },
+    { path: 'booking_misses.limit', label: 'Número de faltas', kind: 'number' },
+    { path: 'booking_misses.block_days', label: 'Días sin reservar en línea', kind: 'days' },
+    { path: 'booking_misses.count_late_cancel', label: 'Contar cancelaciones tardías', kind: 'bool' },
+    { path: 'booking_misses.deposit_percent', label: 'Adelanto pedido', kind: 'percent' },
+  ],
+  penalidades: [
+    { path: 'penalty_rules.enabled', label: 'Penalidades activas', kind: 'bool' },
+    { path: 'penalty_rules.no_show_percent', label: 'Por no asistir', kind: 'percent' },
+    { path: 'penalty_rules.late_cancel_percent', label: 'Por cancelar tarde', kind: 'percent' },
+  ],
+  salas: [
+    { path: 'resources.equipment_down', label: 'Si un equipo queda fuera de uso', kind: Object.fromEntries(EQUIPMENT_DOWN_OPTIONS.map((o) => [o.id, o.title])) },
+  ],
+  walkin: [
+    { path: 'walkin_rules.self_checkin', label: 'Anotarse solo en la pantalla', kind: 'bool' },
+    { path: 'walkin_rules.max_wait', label: 'Espera máxima', kind: 'minutes' },
+  ],
+  clases: [
+    { path: 'classes_rules.waitlist', label: 'Lista de espera en clases', kind: 'bool' },
+    { path: 'classes_rules.auto_promote', label: 'Pasar al siguiente solo', kind: 'bool' },
+    { path: 'classes_rules.portal_leave_hours', label: 'Plazo para salir de una clase', kind: 'hours' },
+  ],
+  espera: [
+    { path: 'waitlist_rules.enabled', label: 'Lista de espera encendida', kind: 'bool' },
+    { path: 'waitlist_rules.notify_mode', label: 'A quién avisar', kind: { all: 'A todos los que encajan', first: 'Solo al primero, en orden' } },
+    { path: 'waitlist_rules.reply_hours', label: 'Plazo para responder', kind: 'hours' },
+  ],
+  ventas: [
+    { path: 'sales_rules.prices_include_tax', label: 'Precios con impuesto incluido', kind: 'bool' },
+    { path: 'sales_rules.tax_rate', label: 'Impuesto', kind: 'percent' },
+    { path: 'sales_rules.require_open_cash', label: 'Pedir caja abierta para cobrar', kind: 'bool' },
+    { path: 'sales_rules.partial_payments', label: 'Pagos parciales', kind: 'bool' },
+    { path: 'sales_rules.cash_tolerance', label: 'Diferencia aceptada al cerrar caja', kind: 'money' },
+    { path: 'sales_rules.auto_register', label: 'Registrar en caja solo', kind: 'bool' },
+    { path: 'sales_rules.refund_days', label: 'Días para devolver', kind: 'days' },
+    { path: 'sales_rules.pay_before_service', label: 'Cobrar antes de atender', kind: 'bool' },
+    { path: 'sales_rules.arrive_minutes', label: 'Minutos antes para llegar', kind: 'minutes' },
+    { path: 'sales_rules.cash_review_over', label: 'Revisar cierres con diferencia mayor a', kind: 'money' },
+    { path: 'sales_rules.refund_approval_over', label: 'Aprobar devoluciones mayores a', kind: 'money' },
+    { path: 'sales_rules.tips_enabled', label: 'Propina', kind: 'bool' },
+    { path: 'sales_rules.max_discount', label: 'Descuento sin autorización', kind: 'percent' },
+  ],
+  presupuestos: [
+    { path: 'quote_rules.validity_days', label: 'Vigencia del presupuesto', kind: 'days' },
+    { path: 'quote_rules.allow_installments', label: 'Pago en cuotas', kind: 'bool' },
+    { path: 'quote_rules.auto_create_sale', label: 'Crear la venta al aceptar', kind: 'bool' },
+    { path: 'quote_rules.track_clinical_zones', label: 'Zonas o piezas', kind: 'bool' },
+    { path: 'quote_rules.plan_validity_days', label: 'Vigencia del plan', kind: 'days' },
+    { path: 'quote_rules.cancel_policy', label: 'Si se cancela un plan', kind: Object.fromEntries(QUOTE_CANCEL_OPTIONS.map((o) => [o.id, o.title])) },
+    { path: 'quote_rules.portal_accept', label: 'Aceptar desde el portal', kind: 'bool' },
+  ],
+  inventario: [
+    { path: 'inventory_rules.allow_negative', label: 'Vender sin stock', kind: 'bool' },
+    { path: 'inventory_rules.consume_on_service', label: 'Descontar insumos al atender', kind: 'bool' },
+    { path: 'inventory_rules.transfer_two_step', label: 'Traslados en dos pasos', kind: 'bool' },
+    { path: 'inventory_rules.cost_method', label: 'Costo del producto', kind: Object.fromEntries(COST_METHOD_OPTIONS.map((o) => [o.id, o.title])) },
+    { path: 'inventory_rules.alert_min_stock', label: 'Avisar stock mínimo', kind: 'bool' },
+  ],
+  comisiones: [
+    { path: 'commission_rules.base', label: 'Base de la comisión', kind: { net: 'Neto', gross: 'Precio de lista' } },
+    { path: 'commission_rules.on_products', label: 'Comisión por productos', kind: 'bool' },
+    { path: 'commission_rules.on_package_use', label: 'Comisión al usar paquetes', kind: 'bool' },
+    { path: 'commission_rules.auto_approve', label: 'Aprobar solas', kind: 'bool' },
+  ],
+  fidelizacion: [
+    { path: 'loyalty_rules.points_enabled', label: 'Puntos', kind: 'bool' },
+    { path: 'loyalty_rules.amount_per_point', label: 'Monto por punto', kind: 'money' },
+    { path: 'loyalty_rules.point_value', label: 'Valor del punto', kind: 'money' },
+    { path: 'loyalty_rules.min_redeem_points', label: 'Mínimo para canjear', kind: 'number' },
+    { path: 'loyalty_rules.points_validity_days', label: 'Vigencia de los puntos', kind: 'days' },
+    { path: 'loyalty_rules.gift_cards_enabled', label: 'Gift cards', kind: 'bool' },
+    { path: 'loyalty_rules.gift_card_validity_days', label: 'Vigencia de las gift cards', kind: 'days' },
+    { path: 'loyalty_rules.vip_multiplier', label: 'Puntos de los clientes VIP', kind: 'number' },
+  ],
+  membresias: [
+    { path: 'membership_rules.grace_days', label: 'Días de gracia', kind: 'days' },
+  ],
+  adelantos: [
+    { path: 'payment_rules.require_deposit', label: 'Pedir adelanto', kind: 'bool' },
+    { path: 'payment_rules.deposit_minutes', label: 'Tiempo para pagar el adelanto', kind: 'minutes' },
+    { path: 'payment_rules.deposit_refund_hours', label: 'Cancelar a tiempo es hasta', kind: 'hours' },
+    { path: 'payment_rules.deposit_on_cancel', label: 'Adelanto al cancelar a tiempo', kind: { credit: 'Queda como saldo a favor', refund: 'Se le devuelve el dinero' } },
+    { path: 'payment_rules.link_hours', label: 'Vigencia del link de pago', kind: 'hours' },
+  ],
+  grupos: [
+    { path: 'customer_groups.inactive_days', label: 'Inactivo después de', kind: 'days' },
+    { path: 'customer_groups.frequent_visits', label: 'Visitas para ser frecuente', kind: 'number' },
+    { path: 'customer_groups.vip_spend', label: 'Gasto para ser VIP', kind: 'money' },
+    { path: 'customer_groups.manager_scope', label: 'Campañas de los encargados', kind: { branch: 'Solo su sede', choose: 'Pueden elegir' } },
+  ],
+  seguridad: [
+    { path: 'session_idle_minutes', label: 'Cierre de sesión del equipo', kind: 'minutes' },
+    { path: 'session_portal_idle_minutes', label: 'Cierre de sesión del portal', kind: 'minutes' },
+    { path: 'mfa_admin', label: 'Código al entrar del administrador', kind: 'bool' },
+  ],
+  ayuda: [
+    { path: 'help_enabled', label: 'Autoayuda', kind: 'bool' },
+  ],
+};
+
+const readPath = (source: unknown, path: string): unknown => path.split('.').reduce<unknown>((value, key) => (value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined), source);
+
+const writePath = <T,>(source: T, path: string, value: unknown): T => {
+  const [head, ...rest] = path.split('.');
+  const base = (source && typeof source === 'object' ? source : {}) as Record<string, unknown>;
+  return { ...base, [head]: rest.length ? writePath(base[head], rest.join('.'), value) : value } as T;
+};
+
+const sameValue = (a: unknown, b: unknown) => (typeof a === 'number' || typeof b === 'number' ? Number(a) === Number(b) : a === b);
+
 const SECTION_LABELS = Object.fromEntries(SECTION_GROUPS.flatMap((g) => g.sections.map((s) => [s.id, s.label]))) as Record<SectionId, string>;
 
 export default function TenantSettings() {
@@ -157,18 +282,18 @@ export default function TenantSettings() {
   const [statusNames, setStatusNames] = useState<Record<string, string>>({});
   const [bookingRules, setBookingRules] = useState<{ deadline: string; onMiss: OnMiss; release: string; cancel: string } | null>(null);
   const [equipmentDown, setEquipmentDown] = useState<EquipmentDown | null>(null);
-  const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string; reviewOver: string; approvalOver: string } | null>(null);
+  const [salesRules, setSalesRules] = useState<{ includeTax: boolean; taxRate: string; requireCash: boolean; partial: boolean; tolerance: string; autoRegister: boolean; refundDays: string; payFirst: boolean; arriveMinutes: string; reviewOver: string; approvalOver: string; tips: boolean; maxDiscount: string } | null>(null);
   const [commissionRules, setCommissionRules] = useState<{ base: 'net' | 'gross'; onProducts: boolean; onPackageUse: boolean; autoApprove: boolean } | null>(null);
   const [inventoryRules, setInventoryRules] = useState<{ allowNegative: boolean; consumeOnService: boolean; transferTwoStep: boolean; costMethod: CostMethod; alertMinStock: boolean } | null>(null);
-  const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string } | null>(null);
+  const [loyaltyRules, setLoyaltyRules] = useState<{ pointsEnabled: boolean; amountPerPoint: string; pointValue: string; minRedeemPoints: string; pointsValidityDays: string; giftCardsEnabled: boolean; giftCardValidityDays: string; vipMultiplier: string } | null>(null);
   const [quoteRules, setQuoteRules] = useState<{ validityDays: string; allowInstallments: boolean; autoCreateSale: boolean; trackClinicalZones: boolean; planValidityDays: string; cancelPolicy: QuoteCancelPolicy; portalAccept: boolean } | null>(null);
   const [walkinRules, setWalkinRules] = useState<{ selfCheckin: boolean; maxWait: string } | null>(null);
   const [classRules, setClassRules] = useState<{ waitlist: boolean; autoPromote: boolean; leaveHours: string } | null>(null);
   const [waitlistRules, setWaitlistRules] = useState<{ enabled: boolean; mode: 'all' | 'first'; hours: string; ready: boolean } | null>(null);
   const [graceDays, setGraceDays] = useState<string | null>(null);
   const [penaltyRules, setPenaltyRules] = useState<{ enabled: boolean; noShow: string; lateCancel: string; windowHours: number } | null>(null);
-  const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string; lateCancel: boolean; windowHours: number } | null>(null);
-  const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; linkHours: string } | null>(null);
+  const [misses, setMisses] = useState<{ action: MissAction; limit: string; days: string; lateCancel: boolean; windowHours: number; depositPercent: string } | null>(null);
+  const [paymentRules, setPaymentRules] = useState<{ requireDeposit: boolean; depositMinutes: string; refundHours: string; onCancel: 'credit' | 'refund'; linkHours: string } | null>(null);
   const [idle, setIdle] = useState<IdleValue>({ choice: '30', custom: '' });
   const [idleRoles, setIdleRoles] = useState<{ id: string; name: string; value: IdleValue | null }[]>([]);
   const [helpOn, setHelpOn] = useState(true);
@@ -190,6 +315,10 @@ export default function TenantSettings() {
 
   const apply = (payload: SettingsPayload) => {
     setData(payload);
+    applyState(payload);
+  };
+
+  const applyState = (payload: SettingsPayload) => {
     setModulesOff(payload.modules.filter((m) => m.can_toggle && !m.enabled).map((m) => m.key));
     setStatusNames(Object.fromEntries(
       (payload.appointment_statuses ?? []).filter((s) => s.name !== s.default_name).map((s) => [s.key, s.name]),
@@ -213,6 +342,8 @@ export default function TenantSettings() {
       arriveMinutes: String(payload.sales_rules.arrive_minutes ?? 15),
       reviewOver: String(payload.sales_rules.cash_review_over ?? 0),
       approvalOver: String(payload.sales_rules.refund_approval_over ?? 0),
+      tips: payload.sales_rules.tips_enabled ?? false,
+      maxDiscount: String(payload.sales_rules.max_discount ?? 0),
     } : null);
     setCommissionRules(payload.commission_rules ? {
       base: payload.commission_rules.base,
@@ -235,6 +366,7 @@ export default function TenantSettings() {
       pointsValidityDays: String(payload.loyalty_rules.points_validity_days),
       giftCardsEnabled: payload.loyalty_rules.gift_cards_enabled,
       giftCardValidityDays: String(payload.loyalty_rules.gift_card_validity_days),
+      vipMultiplier: String(payload.loyalty_rules.vip_multiplier ?? 2),
     } : null);
     setQuoteRules(payload.quote_rules ? {
       validityDays: String(payload.quote_rules.validity_days),
@@ -267,11 +399,12 @@ export default function TenantSettings() {
       hours: String(payload.waitlist_rules.reply_hours),
       ready: payload.waitlist_rules.offers_ready !== false,
     } : null);
-    setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days), lateCancel: Boolean(payload.booking_misses.count_late_cancel), windowHours: payload.booking_misses.window_hours ?? 24 } : null);
+    setMisses(payload.booking_misses ? { action: payload.booking_misses.action, limit: String(payload.booking_misses.limit), days: String(payload.booking_misses.block_days), lateCancel: Boolean(payload.booking_misses.count_late_cancel), windowHours: payload.booking_misses.window_hours ?? 24, depositPercent: String(payload.booking_misses.deposit_percent ?? 50) } : null);
     setPaymentRules(payload.payment_rules ? {
       requireDeposit: payload.payment_rules.require_deposit,
       depositMinutes: String(payload.payment_rules.deposit_minutes),
       refundHours: String(payload.payment_rules.deposit_refund_hours),
+      onCancel: payload.payment_rules.deposit_on_cancel === 'refund' ? 'refund' : 'credit',
       linkHours: String(payload.payment_rules.link_hours),
     } : null);
     setGroups(payload.customer_groups ? { inactive: String(payload.customer_groups.inactive_days), frequent: String(payload.customer_groups.frequent_visits), vip: String(payload.customer_groups.vip_spend), scope: payload.customer_groups.manager_scope ?? 'branch' } : null);
@@ -329,6 +462,8 @@ export default function TenantSettings() {
             arrive_minutes: Number(salesRules.arriveMinutes || 0),
             cash_review_over: Number(salesRules.reviewOver || 0),
             refund_approval_over: Number(salesRules.approvalOver || 0),
+            tips_enabled: salesRules.tips,
+            max_discount: Number(salesRules.maxDiscount || 0),
           },
         } : null;
       case 'inventario': return inventoryRules ? {
@@ -357,6 +492,7 @@ export default function TenantSettings() {
             points_validity_days: Number(loyaltyRules.pointsValidityDays || 0),
             gift_cards_enabled: loyaltyRules.giftCardsEnabled,
             gift_card_validity_days: Number(loyaltyRules.giftCardValidityDays || 0),
+            vip_multiplier: Math.min(5, Math.max(1, Number(loyaltyRules.vipMultiplier || 1))),
           },
         } : null;
       case 'presupuestos': return quoteRules ? {
@@ -398,12 +534,13 @@ export default function TenantSettings() {
             reply_hours: Number(waitlistRules.hours || 2),
           },
         } : null;
-      case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0), count_late_cancel: misses.lateCancel } } : null;
+      case 'inasistencias': return misses ? { booking_misses: { action: misses.action, limit: Number(misses.limit || 1), block_days: Number(misses.days || 0), count_late_cancel: misses.lateCancel, ...(misses.action === 'deposit' ? { deposit_percent: Math.min(100, Math.max(1, Number(misses.depositPercent || 50))) } : {}) } } : null;
       case 'adelantos': return paymentRules ? {
           payment_rules: {
             require_deposit: paymentRules.requireDeposit,
             deposit_minutes: Number(paymentRules.depositMinutes || 0),
             deposit_refund_hours: Number(paymentRules.refundHours || 0),
+            deposit_on_cancel: paymentRules.onCancel,
             link_hours: Number(paymentRules.linkHours || 0),
           },
         } : null;
@@ -601,7 +738,81 @@ export default function TenantSettings() {
   const current: SectionId = available[active] ? active : 'empresa';
   const show = (id: SectionId) => current === id;
 
+  const currentShape = (id: SectionId): Record<string, unknown> | null => {
+    const payload = payloadOf(id);
+    if (!payload) return null;
+    return id === 'salas' ? { resources: { equipment_down: payload.equipment_down } } : payload;
+  };
+
+  const showValue = (kind: FieldKind, value: unknown) => {
+    if (typeof kind === 'object') return kind[String(value)] ?? String(value);
+    if (kind === 'bool') return value ? 'Sí' : 'No';
+    const amount = Number(value);
+    if (kind === 'hours') return amount === 1 ? '1 hora' : `${amount} horas`;
+    if (kind === 'days') return amount === 1 ? '1 día' : `${amount} días`;
+    if (kind === 'minutes') return amount === 0 ? 'Nunca' : `${amount} min`;
+    if (kind === 'percent') return `${amount} %`;
+    if (kind === 'money') return `${currencySymbol()} ${amount}`;
+    return String(amount);
+  };
+
+  const changedFields = (id: SectionId) => {
+    const shape = currentShape(id);
+    if (!shape || !data?.factory) return [];
+    return (FACTORY_FIELDS[id] ?? []).flatMap((field) => {
+      const now = readPath(shape, field.path);
+      const factory = readPath(data.factory, field.path);
+      if (now === undefined || factory === undefined || factory === null || sameValue(now, factory)) return [];
+      return [{ ...field, now, factory }];
+    });
+  };
+
+  const resetField = (id: SectionId, path: string) => {
+    const shape = currentShape(id);
+    if (!data || !shape || !data.factory) return;
+    let merged: SettingsPayload = data;
+    for (const field of FACTORY_FIELDS[id] ?? []) {
+      const now = readPath(shape, field.path);
+      if (now !== undefined) merged = writePath(merged, field.path, now);
+    }
+    merged = writePath(merged, path, readPath(data.factory, path));
+    setMessage(null);
+    applyState(merged);
+  };
+
+  const factoryBox = (id: SectionId) => {
+    const changed = changedFields(id);
+    if (changed.length === 0) return null;
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 space-y-2" data-factory-box={id}>
+        <p className="text-xs font-semibold text-amber-800">Valores distintos a los de fábrica de tu rubro</p>
+        <ul className="space-y-1.5">
+          {changed.map((field) => (
+            <li key={field.path} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm" data-factory-field={field.path}>
+              <span className="text-slate-700">
+                <span className="font-semibold">{field.label}:</span> {showValue(field.kind, field.now)}
+                <span className="text-slate-500"> · de fábrica: {showValue(field.kind, field.factory)}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => resetField(id, field.path)}
+                disabled={!canSave}
+                className="text-xs font-semibold text-brand-ink hover:underline disabled:opacity-50 disabled:no-underline"
+                data-factory-reset={field.path}
+              >
+                Restablecer
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="text-[11px] text-slate-500">Al restablecer se pone el valor de fábrica; recuerda guardar.</p>
+      </div>
+    );
+  };
+
   const saveBar = (id: SectionId) => (
+    <>
+    {factoryBox(id)}
     <div className="flex flex-wrap items-center justify-end gap-4 pt-4 border-t border-slate-100" data-save-bar={id}>
       {message?.section === id && (
         <span className={`text-sm font-medium ${message.type === 'ok' ? 'text-emerald-600' : 'text-red-600'}`} data-save-message>{message.text}</span>
@@ -617,6 +828,7 @@ export default function TenantSettings() {
         {saving ? 'Guardando...' : 'Guardar'}
       </Button>
     </div>
+    </>
   );
 
   return (
@@ -721,8 +933,22 @@ export default function TenantSettings() {
           </div>
         )}
 
-        {unavailable.length > 0 && (
+        {(core.length > 0 || unavailable.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-100">
+            {core.length > 0 && (
+              <div className="space-y-2" data-core-modules>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Siempre activos</span>
+                <p className="text-xs text-slate-500">Son la base del sistema y vienen en todos los planes: no se apagan.</p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {core.map((module) => (
+                    <li key={module.key} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                      <Check className="w-3 h-3 shrink-0" /> {module.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {unavailable.length > 0 && (
             <div className="space-y-2">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">No disponibles para tu empresa</span>
               <ul className="space-y-1.5">
@@ -735,7 +961,13 @@ export default function TenantSettings() {
                   </li>
                 ))}
               </ul>
+              {unavailable.some((module) => module.locked === 'plan') && can('admin.plan') && (
+                <Link href="/companies?tab=plan" data-upgrade-plan className="inline-flex items-center gap-1.5 mt-1 px-3.5 py-2 text-xs font-bold bg-brand text-white rounded-xl hover:bg-brand-hover">
+                  Mejorar plan
+                </Link>
+              )}
             </div>
+            )}
           </div>
         )}
         {saveBar('modulos')}
@@ -1146,6 +1378,7 @@ export default function TenantSettings() {
       {show('moneda') && <CurrencySettings />}
 
       {show('pagina') && <BookingPageSettings />}
+      {show('pagina') && <ChannelSettings />}
 
       {show('ayuda') && (
       <section className={cardClass} data-card="help">
@@ -1186,6 +1419,7 @@ export default function TenantSettings() {
               ['includeTax', 'Los precios ya incluyen el IGV', 'El precio del servicio es lo que paga el cliente; el impuesto se desglosa en el comprobante. Si lo apagas, el IGV se suma encima del precio.'],
               ['requireCash', 'Exigir caja abierta para cobrar en efectivo', 'Sin un turno de caja abierto en la sede no se puede cobrar en efectivo. Si lo apagas, el cobro se registra igual, sin caja.'],
               ['partial', 'Aceptar pagos por partes', 'Una cita se puede cobrar en varios pagos o con dos medios. Si lo apagas, se cobra el total de una vez.'],
+              ['tips', 'Recibir propinas al cobrar', 'En el punto de venta aparece la casilla Propina. Se suma a lo que paga el cliente, pero no lleva IGV ni va en la boleta. Si lo apagas, no se pide propina (así viene).'],
               ['autoRegister', 'Crear una caja en cada sucursal nueva', 'Cada sucursal nace con su "Caja principal". Si lo apagas, las cajas de las sucursales nuevas las creas tú desde Caja; las que ya existen no se tocan.'],
             ] as const).map(([key, title, hint]) => (
               <div key={key} className="flex items-center justify-between gap-4 py-3 first:pt-0">
@@ -1268,6 +1502,22 @@ export default function TenantSettings() {
             />
             <span className="w-full text-xs text-slate-500">
               Quien tenga el permiso &quot;Aprobar cierres&quot; recibe un aviso y lo aprueba u observa con una nota. Con 0 no se pide revisión (así viene).
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3" data-row="max-discount">
+            <label htmlFor="max-discount" className="text-sm font-semibold text-slate-800">Descuento a mano de hasta</label>
+            <input
+              id="max-discount"
+              inputMode="decimal"
+              data-rule="max_discount"
+              value={salesRules.maxDiscount}
+              onChange={(e) => { setMessage(null); setSalesRules({ ...salesRules, maxDiscount: e.target.value.replace(/[^\d.]/g, '').slice(0, 5) }); }}
+              className={hoursInput}
+            />
+            <span className="text-sm text-slate-600">% de la venta, sin permiso especial.</span>
+            <span className="w-full text-xs text-slate-500">
+              Para descontar más hace falta el permiso &quot;Descuento alto&quot;, que viene con el gerente y la administración. Con 0 solo ellos dan descuentos a mano (así viene). Los cupones no cuentan aquí.
             </span>
           </div>
 
@@ -1540,6 +1790,20 @@ export default function TenantSettings() {
                 <span className="text-sm text-slate-600">días de ganarse.</span>
                 <span className="w-full text-xs text-slate-500">Con 0 días, los puntos no vencen.</span>
               </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="loyalty-vip-multiplier" className="text-sm font-semibold text-slate-800">Los clientes VIP ganan</label>
+                <input
+                  id="loyalty-vip-multiplier"
+                  inputMode="decimal"
+                  data-rule="vip_multiplier"
+                  value={loyaltyRules.vipMultiplier}
+                  onChange={(e) => { setMessage(null); setLoyaltyRules({ ...loyaltyRules, vipMultiplier: e.target.value.replace(/[^\d.]/g, '').slice(0, 4) }); }}
+                  className={hoursInput}
+                />
+                <span className="text-sm text-slate-600">veces los puntos de una compra.</span>
+                <span className="w-full text-xs text-slate-500">Con 1, ganan lo mismo que todos. Es VIP quien pagó el monto VIP o más en los últimos 12 meses (se cambia en Grupos de clientes). Va de 1 a 5.</span>
+              </div>
             </div>
           )}
 
@@ -1775,12 +2039,40 @@ export default function TenantSettings() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3" data-row="refund-hours">
-                    <label htmlFor="refund-hours" className="text-sm font-semibold text-slate-800">Se le devuelve el adelanto si cancela con al menos</label>
+                    <label htmlFor="refund-hours" className="text-sm font-semibold text-slate-800">Cancela a tiempo quien avisa con al menos</label>
                     <input id="refund-hours" inputMode="numeric" data-rule="deposit_refund_hours" value={paymentRules.refundHours} onChange={(e) => { setMessage(null); setPaymentRules({ ...paymentRules, refundHours: e.target.value.replace(/\D/g, '').slice(0, 3) }); }} className={hoursInput} />
                     <span className="text-sm text-slate-600">horas de anticipación.</span>
                     <span className="w-full text-xs text-slate-500">
-                      Ejemplo con 24 horas: si su cita es el sábado a las 10:00, se le devuelve si cancela hasta el viernes a las 10:00. Si cancela después o no asiste, el adelanto queda para la empresa. Con 0, siempre se devuelve si cancela antes de la cita.
+                      Ejemplo con 24 horas: si su cita es el sábado a las 10:00, cancela a tiempo hasta el viernes a las 10:00. Si cancela después o no asiste, el adelanto queda para la empresa. Con 0, cualquier cancelación antes de la cita es a tiempo.
                     </span>
+                  </div>
+
+                  <div className="space-y-2" data-row="deposit-on-cancel">
+                    <span className="block text-sm font-semibold text-slate-800">Si cancela a tiempo, el adelanto</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Si cancela a tiempo, el adelanto">
+                      {([
+                        { id: 'credit', title: 'Queda como saldo a favor', hint: 'El cliente lo usa en su próxima compra o cita. Lo ve en su portal y el equipo lo ve en su ficha y al cobrar.', icon: <Wallet size={18} /> },
+                        { id: 'refund', title: 'Se le devuelve el dinero', hint: 'Te llega un aviso de «Adelanto por devolver» y lo devuelves desde la venta.', icon: <Coins size={18} /> },
+                      ] as const).map((option) => {
+                        const chosen = paymentRules.onCancel === option.id;
+                        return (
+                          <OptionCard
+                            key={option.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={chosen}
+                            data-on-cancel={option.id}
+                            onClick={() => { setMessage(null); setPaymentRules({ ...paymentRules, onCancel: option.id }); }} selected={chosen} className="flex items-start gap-3 text-left rounded-xl border px-4 py-3 transition-colors"
+                          >
+                            <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
+                            <span>
+                              <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
+                              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                            </span>
+                          </OptionCard>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               )}
@@ -1804,7 +2096,7 @@ export default function TenantSettings() {
               <CalendarX2 className="w-4 h-4 text-brand-accent" /> Si reserva en línea y no asiste
             </SectionTitle>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Qué pasa con un cliente que reservó desde el portal y su cita terminó en "No asistió". Las citas que agenda tu equipo no cuentan aquí.
+              Qué pasa con {vocab.pick('client', 'un', 'una')} {vocab.client.toLowerCase()} que reservó desde el portal y su cita terminó en "No asistió". Las citas que agenda tu equipo no cuentan aquí.
             </p>
           </div>
 
@@ -1823,23 +2115,30 @@ export default function TenantSettings() {
                   <span className={`p-2 rounded-lg shrink-0 ${chosen ? 'bg-brand text-brand-soft' : 'bg-slate-100 text-slate-500'}`}>{option.icon}</span>
                   <span>
                     <span className="block text-sm font-bold text-brand-ink">{option.title}</span>
-                    <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{option.hint.replace('la lista de clientes', `la lista de ${vocab.clients.toLowerCase()}`)}</span>
                   </span>
                 </OptionCard>
               );
             })}
           </div>
 
-          {misses.action === 'block' && (
+          {(misses.action === 'block' || misses.action === 'deposit') && (
             <div className="flex flex-wrap items-center gap-3" data-row="miss-block">
-              <label htmlFor="miss-limit" className="text-sm font-semibold text-slate-800">Deja de reservar en línea al faltar</label>
+              <label htmlFor="miss-limit" className="text-sm font-semibold text-slate-800">{misses.action === 'deposit' ? 'Paga adelanto para reservar en línea al faltar' : 'Deja de reservar en línea al faltar'}</label>
               <input id="miss-limit" inputMode="numeric" data-rule="miss_limit" value={misses.limit} onChange={(e) => { setMessage(null); setMisses({ ...misses, limit: e.target.value.replace(/\D/g, '').slice(0, 2) }); }} className={hoursInput} />
               <span className="text-sm text-slate-600">{Number(misses.limit || 1) === 1 ? 'vez' : 'veces'}, durante</span>
               <input id="miss-days" inputMode="numeric" aria-label="Días sin reservar en línea" data-rule="miss_days" value={misses.days} onChange={(e) => { setMessage(null); setMisses({ ...misses, days: e.target.value.replace(/\D/g, '').slice(0, 4) }); }} className={hoursInput} />
               <span className="text-sm text-slate-600">días.</span>
+              {misses.action === 'deposit' && (
+                <>
+                  <span className="text-sm text-slate-600">El adelanto es el del servicio o, si el servicio no lleva, el</span>
+                  <input id="miss-deposit" inputMode="numeric" aria-label="Porcentaje del adelanto" data-rule="miss_deposit_percent" value={misses.depositPercent} onChange={(e) => { setMessage(null); setMisses({ ...misses, depositPercent: e.target.value.replace(/\D/g, '').slice(0, 3) }); }} className={hoursInput} />
+                  <span className="text-sm text-slate-600">% del precio.</span>
+                </>
+              )}
               <span className="w-full text-xs text-slate-500">
                 {Number(misses.days || 0) === 0
-                  ? 'Con 0 días no vuelve a reservar en línea hasta que tú se lo permitas desde su ficha.'
+                  ? (misses.action === 'deposit' ? 'Con 0 días el adelanto se pide siempre, hasta que se lo perdones desde su ficha.' : 'Con 0 días no vuelve a reservar en línea hasta que tú se lo permitas desde su ficha.')
                   : 'Los días se cuentan desde su última falta. Puedes perdonarle antes desde su ficha.'}
               </span>
             </div>

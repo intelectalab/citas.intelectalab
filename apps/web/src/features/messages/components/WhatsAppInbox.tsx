@@ -6,7 +6,7 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Eye, Hand, MessageCircle, MessagesSquare } from 'lucide-react';
+import { Bot, Eye, Hand, MessageCircle, MessagesSquare } from 'lucide-react';
 import { DataTable, type Column, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
@@ -102,7 +102,10 @@ export default function WhatsAppInbox() {
       {status && (
         <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${WHATSAPP_BADGES[status.state]}`} data-whatsapp-state={status.state}>
           <span className="flex items-center gap-2 text-sm font-semibold"><MessageCircle size={16} /> WhatsApp de tu empresa: {status.label}</span>
-          {canSettings && <Link href="/settings#whatsapp" className="text-xs font-bold underline underline-offset-2">Configurar WhatsApp</Link>}
+          <span className="flex flex-wrap items-center gap-3">
+            <Link href="/messages/assistant" data-open-assistant className="flex items-center gap-1 text-xs font-bold underline underline-offset-2"><Bot size={13} /> Recepcionista con IA</Link>
+            {canSettings && <Link href="/settings#whatsapp" className="text-xs font-bold underline underline-offset-2">Configurar WhatsApp</Link>}
+          </span>
         </div>
       )}
       <ErrorAlert message={error} />

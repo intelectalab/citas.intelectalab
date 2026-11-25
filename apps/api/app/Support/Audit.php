@@ -41,6 +41,8 @@ class Audit
         'tenant.created'                  => ['Creó la empresa', 'companies'],
         'tenant.updated'                  => ['Cambió los datos de la empresa', 'companies'],
         'tenant.deleted'                  => ['Eliminó la empresa', 'companies'],
+        'tenant.deletion_scheduled'       => ['Pidió borrar la empresa (se borra al cumplirse el plazo)', 'companies'],
+        'tenant.deletion_canceled'        => ['Anuló el borrado de la empresa', 'companies'],
         'tenant.plan_changed'             => ['Cambió el plan de la empresa', 'companies'],
         'tenant.modules_changed'          => ['Cambió los módulos que la plataforma le apaga', 'companies'],
         'tenant.suspended'                => ['Suspendió la empresa', 'companies'],
@@ -100,6 +102,7 @@ class Audit
         'auth.reset_requested'            => ['Pidió recuperar su contraseña', 'access'],
         'auth.password_reset'             => ['Cambió su contraseña con el enlace del correo', 'access'],
         'platform.mail_changed'           => ['Cambió el correo de la plataforma', 'platform'],
+        'platform.integration_changed'    => ['Cambió una integración de la plataforma', 'platform'],
         'platform.codes_off'              => ['Se apagó el código de la plataforma desde la consola del servidor', 'platform'],
         'tenant.user_security'            => ['Cambió el ingreso de una cuenta de una empresa', 'support'],
         'tenant.user_password'            => ['Le dio una contraseña temporal a una cuenta de una empresa', 'support'],
@@ -211,11 +214,19 @@ class Audit
         }
 
         try {
-            return DB::transaction(fn () => AuditEvent::create($data));
+            $event = DB::transaction(fn () => AuditEvent::create($data));
         } catch (\Throwable $error) {
             report($error);
             return null;
         }
+
+        $platform = ['actor_type' => $options['actor_type'] ?? self::actorType($actor), 'impersonator_user_id' => $optional['impersonator_user_id'], 'platform' => $options['platform'] ?? false];
+
+        if (PlatformLog::belongs($platform)) {
+            PlatformLog::record($data + $optional + ['actor_type' => $platform['actor_type'], 'audit_event_id' => $event->id]);
+        }
+
+        return $event;
     }
 
     public static function changed(array $before, array $after): array
@@ -268,7 +279,7 @@ class Audit
 
     public static function describe(string $action): array
     {
-        $catalog = self::ACTIONS + AuditActions\MoneyActions::ACTIONS + AuditActions\AdminActions::ACTIONS + AuditActions\AgendaActions::ACTIONS + AuditActions\CatalogActions::ACTIONS;
+        $catalog = self::ACTIONS + PlatformLog::ACTIONS + AuditActions\MoneyActions::ACTIONS + AuditActions\AdminActions::ACTIONS + AuditActions\AgendaActions::ACTIONS + AuditActions\CatalogActions::ACTIONS + AuditActions\CustomerActions::ACTIONS + AuditActions\SubscriptionActions::ACTIONS;
 
         if (isset($catalog[$action])) {
             return $catalog[$action];
@@ -418,7 +429,7 @@ class Audit
     private static function fieldLabel(string $path): string
     {
         $parts = explode('.', $path);
-        $fields = self::FIELDS + AuditActions\MoneyActions::FIELDS + AuditActions\AdminActions::FIELDS + AuditActions\AgendaActions::FIELDS + AuditActions\CatalogActions::FIELDS;
+        $fields = self::FIELDS + AuditActions\MoneyActions::FIELDS + AuditActions\AdminActions::FIELDS + AuditActions\AgendaActions::FIELDS + AuditActions\CatalogActions::FIELDS + AuditActions\CustomerActions::FIELDS + AuditActions\SubscriptionActions::FIELDS;
         $labels = array_map(fn ($part) => $fields[$part] ?? Str::ucfirst(str_replace('_', ' ', $part)), $parts);
 
         return implode(' · ', $labels);

@@ -23,6 +23,9 @@ import CustomerImport from './CustomerImport';
 import TagsManager from './TagsManager';
 import TagChip, { type CustomerTag } from './TagChip';
 import { formatPhone } from '@/lib/phone';
+import { formatMoney } from '@/lib/currency';
+import { dateOf, formatDate, timeOf } from '@/features/appointments/appointments';
+import { SEGMENT_TONES, daysSince, segmentLabel, type CustomerInsights, type SegmentCount } from '../insights';
 
 const VIEW_KEY = 'customers.view';
 
@@ -51,6 +54,7 @@ interface Customer {
   last_visit?: string | null;
   next_visit?: string | null;
   tags?: CustomerTag[];
+  insights?: CustomerInsights | null;
   status?: {
     id: string;
     name: string;
@@ -68,7 +72,10 @@ export default function CustomersTable() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, any>>({ biological_sex: '', tag_id: '' });
+  const [filters, setFilters] = useState<Record<string, any>>({ biological_sex: '', tag_id: '', home_branch_id: '' });
+  const [segments, setSegments] = useState<{ total: number; segments: SegmentCount[] } | null>(null);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const currency = user?.tenant?.currency?.code;
   const [tags, setTags] = useState<CustomerTag[]>([]);
   const [importing, setImporting] = useState(false);
   const [managingTags, setManagingTags] = useState(false);
@@ -106,10 +113,26 @@ export default function CustomersTable() {
   };
 
   useEffect(() => {
+    const openNew = () => { setEditingCustomer(null); setShowFormModal(true); };
+    if (new URLSearchParams(window.location.search).get('nuevo') === '1') {
+      window.history.replaceState(null, '', '/customers');
+      openNew();
+    }
+    window.addEventListener('customers:new', openNew);
+    return () => window.removeEventListener('customers:new', openNew);
+  }, []);
+
+  useEffect(() => {
     setView(savedView());
     loadBoard();
     api.get('/customer-tags').then((res) => setTags(res.data.tags ?? [])).catch(() => setTags([]));
+    api.get('/branches').then((res) => setBranches((Array.isArray(res.data) ? res.data : res.data?.data ?? []).map((b: { id: string; name: string }) => ({ id: b.id, name: b.name })))).catch(() => setBranches([]));
+    loadSegments();
   }, []);
+
+  const loadSegments = () => {
+    api.get('/customers/segments').then((res) => setSegments(res.data)).catch(() => setSegments(null));
+  };
 
   const changeView = (next: 'table' | 'board') => {
     setView(next);
@@ -119,6 +142,12 @@ export default function CustomersTable() {
   };
 
   const moveCustomer = (customerId: string, stageId: string) => {
+    const target = board?.stages.find((stage) => stage.id === stageId);
+    const row = customers.find((c) => c.id === customerId);
+    if (target?.system_key === 'booked' && row && !row.next_visit && hasModule('agenda') && can('agenda.create')) {
+      openNew({ customer: { id: row.id, code: row.code ?? '', first_name: row.first_name, last_name: row.last_name, phone: row.phone, document_number: row.document_number } });
+      return;
+    }
     const before = customers.find((c) => c.id === customerId)?.pipeline_stage_id ?? null;
     setCustomers((current) => current.map((c) => (c.id === customerId ? { ...c, pipeline_stage_id: stageId } : c)));
     api.put(`/customers/${customerId}/stage`, { stage_id: stageId, source: 'board' })
@@ -140,6 +169,12 @@ export default function CustomersTable() {
         { label: 'Otro', value: 'O' },
       ]
     },
+    ...(branches.length > 1 ? [{
+      id: 'home_branch_id',
+      label: 'Sede habitual',
+      type: 'select' as const,
+      options: branches.map((b) => ({ label: b.name, value: b.id })),
+    }] : []),
     ...(tags.length > 0 ? [{
       id: 'tag_id',
       label: 'Etiqueta',
@@ -148,11 +183,11 @@ export default function CustomersTable() {
     }] : []),
   ];
 
-  const fetchCustomers = async (search = '', currentFilters = filters) => {
+  const fetchCustomers = async (search = '', currentFilters = filters, segment = activeTab) => {
     try {
       setLoading(true);
       const res = await api.get('/customers', {
-        params: { search, ...currentFilters, per_page: 500 }
+        params: { search, ...currentFilters, segment: segment === 'all' ? undefined : segment, per_page: 500 }
       });
       const responseData = res.data;
       setTotal(Number(responseData?.total ?? (Array.isArray(responseData) ? responseData.length : 0)));
@@ -251,6 +286,13 @@ export default function CustomersTable() {
     { header: 'Distrito', value: (c) => c.district },
     { header: 'Sexo biológico', value: (c) => (c.biological_sex === 'M' ? 'Masculino' : c.biological_sex === 'F' ? 'Femenino' : c.biological_sex ? 'Otro' : '') },
     ...(board?.ready ? [{ header: 'Etapa', value: (c: Customer) => stageOf(board, c.pipeline_stage_id)?.name }] : []),
+    { header: 'Segmento', value: (c) => (c.insights?.segments ?? []).map((k) => segmentLabel(k, vocab.pick)).join(', ') },
+    { header: 'Visitas', type: 'number', value: (c) => c.insights?.visits ?? 0 },
+    { header: 'Última visita', type: 'date', value: (c) => c.last_visit },
+    { header: 'Próxima cita', type: 'date', value: (c) => c.next_visit },
+    ...(safeCustomers.some((c) => c.insights?.spend_12m != null) ? [{ header: 'Gasto de 12 meses', type: 'money' as const, value: (c: Customer) => c.insights?.spend_12m ?? 0 }] : []),
+    ...(safeCustomers.some((c) => c.insights?.points != null) ? [{ header: 'Puntos', type: 'number' as const, value: (c: Customer) => c.insights?.points ?? 0 }] : []),
+    { header: 'Origen', value: (c) => c.insights?.origin_label ?? '' },
     { header: 'Registrado', type: 'date', value: (c) => c.created_at },
   ];
 
@@ -349,6 +391,49 @@ export default function CustomersTable() {
       },
     } : null,
     {
+      header: 'Segmento',
+      cell: (pat) => (pat.insights?.segments?.length ?? 0) > 0 ? (
+        <div key={`seg-${pat.id}`} data-segments-cell className="flex flex-wrap gap-1 max-w-48">
+          {pat.insights!.segments.map((k) => (
+            <span key={k} className={`px-2 py-0.5 text-[11px] font-semibold rounded-md whitespace-nowrap ${SEGMENT_TONES[k] ?? 'bg-slate-100 text-slate-600'}`}>{segmentLabel(k, vocab.pick)}</span>
+          ))}
+        </div>
+      ) : <span key={`seg-${pat.id}`} className="text-xs text-slate-400">—</span>,
+    },
+    {
+      header: 'Visitas',
+      cell: (pat) => {
+        const days = daysSince(pat.last_visit);
+        return (
+          <div key={`visits-${pat.id}`} data-visits-cell className="text-xs text-slate-600 whitespace-nowrap">
+            <span className="block text-sm font-bold text-slate-800">{pat.insights?.visits ?? 0}</span>
+            <span className="block">{days === null ? 'Sin visitas' : days === 0 ? 'Vino hoy' : `Hace ${days} ${days === 1 ? 'día' : 'días'}`}</span>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Próxima cita',
+      cell: (pat) => (
+        <div key={`next-${pat.id}`} className="text-xs text-slate-600 whitespace-nowrap">
+          {pat.next_visit ? <><span className="block font-semibold text-slate-800 first-letter:uppercase">{formatDate(dateOf(pat.next_visit), { weekday: 'short', day: 'numeric', month: 'short' })}</span><span className="block">{timeOf(pat.next_visit)}</span></> : <span className="text-slate-400">—</span>}
+        </div>
+      ),
+    },
+    safeCustomers.some((c) => c.insights?.spend_12m != null) || safeCustomers.some((c) => c.insights?.points != null) ? {
+      header: 'Gasto y puntos',
+      cell: (pat) => (
+        <div key={`spend-${pat.id}`} className="text-xs text-slate-600 whitespace-nowrap">
+          {pat.insights?.spend_12m != null && <span className="block font-semibold text-slate-800" title="Gasto de los últimos 12 meses">{formatMoney(pat.insights.spend_12m, currency)}</span>}
+          {pat.insights?.points != null && <span className="block">{pat.insights.points} pts</span>}
+        </div>
+      ),
+    } : null,
+    {
+      header: 'Origen',
+      cell: (pat) => <span key={`origin-${pat.id}`} className="text-xs text-slate-600 whitespace-nowrap">{pat.insights?.origin_label ?? '—'}</span>,
+    },
+    {
       header: 'Sexo Biológico',
       cell: (pat) => {
         const sex = pat.biological_sex;
@@ -396,13 +481,21 @@ export default function CustomersTable() {
   return (
     <div className="space-y-6 mb-8">
       <div className="mb-6">
+        {!loading && total > safeCustomers.length && (
+          <p data-rows-cut className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Se muestran {safeCustomers.length} de {total} {vocab.clients.toLowerCase()}, en la lista y en el tablero. Para encontrar a los demás, búscalos por nombre, documento o celular, o usa los filtros.
+          </p>
+        )}
         <DataTable<Customer>
           title={`Gestión de ${vocab.clients}`}
           primaryActionLabel={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client}`}
           onPrimaryAction={can('customers.create') ? () => { setEditingCustomer(null); setShowFormModal(true); } : undefined}
-          tabs={[{ id: 'all', label: `${vocab.pick('client', 'Todos los', 'Todas las')} ${vocab.clients.toLowerCase()}`, count: safeCustomers.length }]}
+          tabs={[
+            { id: 'all', label: `${vocab.pick('client', 'Todos los', 'Todas las')} ${vocab.clients.toLowerCase()}`, count: segments?.total ?? safeCustomers.length },
+            ...(segments?.segments ?? []).map((seg) => ({ id: seg.key, label: segmentLabel(seg.key, vocab.pick), count: seg.count })),
+          ]}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={(id) => { setActiveTab(id); fetchCustomers(searchTerm, filters, id); }}
           searchTerm={searchTerm}
           onSearchChange={handleSearchChange}
           filterConfigs={filterConfigs}
@@ -419,10 +512,14 @@ export default function CustomersTable() {
             { id: 'last_name', label: 'Apellido', value: (c) => `${c.last_name} ${c.first_name}` },
             { id: 'document', label: 'Documento', value: (c) => c.document_number },
             { id: 'district', label: 'Distrito', value: (c) => c.district },
+            { id: 'last_visit', label: 'Última visita', type: 'date', value: (c) => c.last_visit },
+            { id: 'visits', label: 'Visitas', type: 'number', value: (c) => c.insights?.visits ?? 0 },
+            ...(safeCustomers.some((c) => c.insights?.spend_12m != null) ? [{ id: 'spend', label: 'Gasto de 12 meses', type: 'number' as const, value: (c: Customer) => c.insights?.spend_12m ?? 0 }] : []),
           ]}
           data={safeCustomers}
           exportTitle={vocab.clients}
           exportScreen="customers"
+          exportPermission="customers.export"
           exportColumns={exportColumns}
           exportNotice={total > safeCustomers.length ? `Se exportan ${safeCustomers.length} de ${total} ${vocab.clients.toLowerCase()}: la lista carga hasta 500. Filtra más para exportar el resto.` : undefined}
           getItemKey={(p) => p.id}
@@ -451,6 +548,8 @@ export default function CustomersTable() {
                 info={board}
                 clientWord={vocab.client}
                 onMove={moveCustomer}
+                currency={currency}
+                segmentName={(key) => segmentLabel(key, vocab.pick)}
                 onEditColumns={board.can_edit_columns ? () => setEditingColumns(true) : undefined}
                 onSchedule={hasModule('agenda') && can('agenda.create') ? (row) => openNew({ customer: { id: row.id, code: row.code ?? '', first_name: row.first_name, last_name: row.last_name, phone: row.phone, document_number: row.document_number } }) : undefined}
                 onWrite={can('messages.create') ? (row) => setWritingTo({ id: row.id, code: row.code ?? '', first_name: row.first_name, last_name: row.last_name, phone: row.phone, document_number: row.document_number }) : undefined}
@@ -482,14 +581,14 @@ export default function CustomersTable() {
           if (usesDependents) fetchCustomers(searchTerm, filters);
         }}
         initialData={editingCustomer}
-        onSubmitSuccess={() => { fetchCustomers(searchTerm, filters); loadBoard(); }}
+        onSubmitSuccess={() => { fetchCustomers(searchTerm, filters); loadBoard(); loadSegments(); }}
       />
 
       <CustomerImport
         isOpen={importing}
         clientsWord={vocab.clients}
         onClose={() => setImporting(false)}
-        onImported={() => { fetchCustomers(searchTerm, filters); loadBoard(); }}
+        onImported={() => { fetchCustomers(searchTerm, filters); loadBoard(); loadSegments(); }}
       />
 
       <TagsManager

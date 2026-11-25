@@ -10,7 +10,9 @@ export const catalogoTopics: HelpTopics = (vocab) => {
     '/products': {
       summary: 'Es el catálogo de productos: los que vendes, los que usas en las atenciones, o ambos. Muestra el stock de cada sede y avisa cuando algo baja del mínimo o se agota.',
       points: [
-        { title: 'Nuevo producto', text: 'Con nombre, precio, código, para qué es (se vende, uso interno o ambos), categoría, costo y stock mínimo.', perm: 'products.create' },
+        { title: 'Nuevo producto', text: 'Con nombre, precio, código, para qué es (se vende, uso interno o ambos), categoría, marca, unidad, código de barras, costo y stock mínimo. Un producto que se vende necesita un precio mayor que 0.', perm: 'products.create' },
+        { title: 'Página del producto', text: 'El nombre abre su página: stock en cada almacén (en rojo si está en el mínimo o debajo), en qué servicios se usa y sus últimos movimientos.' },
+        { title: 'Una columna por almacén', text: 'Con varias sedes, la lista tiene una columna por almacén y el total. Se busca también por marca o código de barras, y se filtra por marca.' },
         { title: 'Stock desde la primera entrada', text: 'Un producto sin entradas dice "Sin control". Empieza a llevar stock al registrar su primera entrada.' },
         { title: 'Tarjetas', text: 'Con stock al día, bajo el mínimo, agotados y valor en almacén.' },
         { title: 'Registrar movimiento', text: 'Entrada de unidades, salida o merma.', perm: 'inventory.create' },
@@ -35,6 +37,7 @@ export const catalogoTopics: HelpTopics = (vocab) => {
       points: [
         { title: 'Pestañas', text: 'Todos, entradas, salidas y consumos, y traslados (si tienes varias sedes).' },
         { title: 'Filtros', text: 'Por sede, producto, tipo de movimiento y fecha.' },
+        { title: 'Costo y referencia', text: 'Cada movimiento muestra su costo y de dónde viene: la venta, la compra, el traslado o la cita. Se ven los últimos 2000; los más antiguos, en el reporte de Inventario.' },
         { title: 'Registrar movimiento', text: 'Una entrada, una salida o una merma.', perm: 'inventory.create' },
         { title: 'Exportar', text: 'Descarga a Excel los movimientos que estás viendo.', perm: 'data.export' },
       ],
@@ -83,7 +86,8 @@ export const catalogoTopics: HelpTopics = (vocab) => {
     '/memberships': {
       summary: `Son planes que ${theClient} paga cada mes, trimestre, semestre o año y que le dan beneficios mientras estén vigentes: un descuento permanente y servicios incluidos en cada periodo. En "Planes" se definen; en "Socios" están las membresías vendidas.`,
       points: [
-        { title: 'Tarjetas', text: 'Socios vigentes, ingreso recurrente al mes, las que vencen en 7 días y las vencidas.' },
+        { title: 'Tarjetas', text: 'Socios vigentes, ingreso recurrente al mes, las que vencen en 7 días, las que están en periodo de gracia y las vencidas.' },
+        { title: 'Renovación', text: 'La columna dice si se renueva sola o a mano. Por ahora todas se renuevan a mano, vendiéndola otra vez en caja.' },
         { title: 'Vender membresía', text: `Lleva al punto de venta, pestaña Membresías. Hay que elegir a ${theClient}: la membresía queda a su nombre al cobrarla.`, perm: 'pos.create', module: 'pos' },
         { title: 'Nuevo plan', text: 'Nombre, precio, cada cuánto se paga y sus beneficios: un descuento (solo en servicios o también en productos) y servicios incluidos por periodo.', perm: 'memberships.create' },
         { title: 'Beneficios al cobrar', text: `En el punto de venta, si ${theClient} tiene una membresía vigente, el carrito aplica solo el servicio incluido o el descuento. En cada línea puedes elegir "Cobrar sin membresía".` },
@@ -138,7 +142,12 @@ export const catalogoTopics: HelpTopics = (vocab) => {
     '/loyalty/points': {
       summary: `Son los puntos que ganan tus ${cs} al comprar y que luego canjean como descuento. Aquí ves el saldo de cada uno y toda su historia.`,
       points: [
-        { title: 'Pestañas', text: 'Todos, con puntos, listos para canjear e historial.' },
+        { title: 'Reglas arriba', text: 'El texto de arriba resume cuántos puntos se ganan, cuánto vale cada uno, desde cuántos se canjea y cuándo vencen.' },
+        { title: 'Pestañas', text: 'Clientes, con puntos, listos para canjear, historial y referidos.' },
+        { title: 'Tarjetas', text: 'Puntos en circulación y cuánto se debe en canjes, lo ganado y canjeado en 30 días, y los clientes con puntos.' },
+        { title: 'Niveles', text: 'Bronce, Plata (desde 1200 en compras con puntos) y Oro (desde 3000), según lo que ganó en total.' },
+        { title: 'VIP', text: 'Quien pagó el monto VIP o más en 12 meses gana más puntos por compra (2 veces, se cambia en las reglas).' },
+        { title: 'Registrar referido', text: 'Anota quién recomendó a quién y los puntos de bono. El bono se suma cuando el recomendado completa su primera atención o compra.', perm: 'loyalty.create' },
         { title: 'Movimiento de puntos', text: 'Sumar, canjear, ajustar a mano o dar un premio por referido, con su motivo.', perm: 'loyalty.create' },
         { title: '+ Puntos y Canjear', text: `Atajos en la fila de cada ${c}.`, perm: 'loyalty.create|loyalty.edit' },
         { title: 'Historial', text: `Todo lo que ganó, canjeó o se le venció a ${aClient}.` },
@@ -162,8 +171,9 @@ export const catalogoTopics: HelpTopics = (vocab) => {
         { title: 'Emitir gift card', text: 'Con el monto, un código (o uno automático), los días que vale, quién la compra y para quién es.', perm: 'loyalty.create' },
         { title: 'Copiar código', text: 'Para enviarlo a quien la recibe.' },
         { title: 'Descontar', text: 'Rebaja un monto del saldo a mano.', perm: 'loyalty.edit' },
-        { title: 'Ampliar', text: 'Le da más días de vigencia.', perm: 'loyalty.edit' },
-        { title: 'Anular', text: 'Deja la tarjeta sin uso.', perm: 'loyalty.delete' },
+        { title: 'Tarjetas', text: 'Vigentes con su saldo por canjear (lo que se le debe a los clientes), lo vendido en total, por vencer y cerradas.' },
+        { title: 'Ampliar', text: 'Le da más días de vigencia. Pide el motivo.', perm: 'loyalty.edit' },
+        { title: 'Anular', text: 'Deja la tarjeta sin uso. Pide el motivo, que se ve en los movimientos.', perm: 'loyalty.delete' },
         { title: 'Vendidas en el punto de venta', text: 'Las que se venden en el punto de venta salen aquí con su venta. Se activan al pagarse y, si se devuelve la venta sin haberlas usado, se anulan solas.' },
       ],
       tasks: [
@@ -176,14 +186,32 @@ export const catalogoTopics: HelpTopics = (vocab) => {
       ],
     },
 
+    '/surveys': {
+      summary: `Después de cada atención ${aClient} recibe una sola pregunta: del 0 al 10, ¿nos recomendarías? Aquí ves las notas, el NPS, a quién hay que llamar y qué reseñas se muestran en tu página de reservas.`,
+      points: [
+        { title: 'Viene apagada', text: 'Ninguna encuesta sale hasta que la enciendes en "Cómo se envían". Sale unas horas después de que la cita queda atendida, una sola vez por cita, y solo a quien aceptó recibir mensajes.', perm: 'surveys.edit' },
+        { title: 'NPS', text: 'Promotores (9 y 10) menos detractores (0 a 6), sobre el total de respuestas. Va de −100 a +100. También ves la nota promedio por profesional, servicio y sede.' },
+        { title: 'Por recuperar', text: 'Cada nota de 0 a 6 te avisa en la campana y queda pendiente hasta que alguien anote que lo llamó o le escribió y qué se le ofreció.' },
+        { title: 'Reseñas', text: 'Solo se pueden publicar las que tienen comentario y cuyo autor aceptó que se muestren. Puedes ocultarlas o responderlas, pero nunca cambiar lo que escribió el cliente.' },
+        { title: 'Google', text: 'Si pones el enlace de reseñas de tu Perfil de Empresa de Google, a quien pone una nota alta se le invita a dejar su reseña ahí. A los detractores nunca se les ofrece.' },
+      ],
+      tasks: [
+        { title: 'Encender las encuestas', perm: 'surveys.edit', steps: ['Pulsa "Cómo se envían".', 'Enciende "Enviar la encuesta después de cada cita atendida" y elige cuántas horas después sale.', 'Pega el enlace de reseñas de Google si lo tienes y pulsa "Guardar".'] },
+        { title: `Recuperar a ${aClient} molesto`, perm: 'surveys.edit', steps: ['Entra a la pestaña "Por recuperar" y abre la encuesta.', 'Llámalo o escríbele y ofrécele una solución.', 'Anota qué se habló y pulsa "Registrar el contacto".'] },
+        { title: 'Publicar una reseña', perm: 'surveys.edit', steps: ['Abre una encuesta con comentario.', 'Revisa que no tenga datos de salud.', 'Pulsa "Publicar". Para quitarla, "Ocultar".'] },
+      ],
+    },
+
     '/automations': {
       summary: `Correos que salen solos cuando pasa algo con ${aClient}: su cumpleaños, su primera atención, si no asistió, si dejó de venir o si llegó a fidelizado.`,
       points: [
         { title: 'Encender o apagar', text: 'Vienen apagadas con un texto de ejemplo. El interruptor de cada fila las enciende. Solo les llega a quienes lleguen a esa situación desde que la enciendes.', perm: 'automations.edit' },
         { title: 'Editar', text: 'El lápiz abre su panel: hora o cuánto después sale, cuántas veces a la misma persona, cupón, asunto y mensaje con formato.', perm: 'automations.edit' },
         { title: 'Sin saturar', text: `Cada ${c} recibe como máximo una automatización por día, y solo si aceptó promociones por correo.` },
-        { title: 'Resultados', text: 'Cuántos correos salieron este mes y cuántos agendaron una cita en los 7 días siguientes.' },
+        { title: 'Resultados', text: 'Cuántos correos salieron este mes, cuántos agendaron una cita en los 7 días siguientes, cuántos tuvieron error y cuántas veces se ejecutaron.' },
+        { title: 'Historial', text: 'La pestaña «Historial» muestra cada envío: cuándo, a quién, por qué canal y cómo salió (enviado, con error o no enviado, con su motivo). Se filtra por resultado y por automatización.' },
         { title: 'Dónde se ven', text: 'Cada correo enviado queda en Mensajes, como "Automatización".' },
+        { title: 'Cuándo salen', text: 'El sistema las revisa solo cada pocos minutos. Abrir esta pantalla no envía nada: solo muestra cómo están.' },
       ],
       tasks: [
         { title: 'Encender el saludo de cumpleaños', perm: 'automations.edit', steps: ['Pulsa el lápiz de "Cumpleaños".', 'Revisa el asunto y el mensaje; elige un cupón si quieres regalar algo.', 'Enciende "Encendida" y pulsa "Guardar".'] },
@@ -199,7 +227,10 @@ export const catalogoTopics: HelpTopics = (vocab) => {
         { title: 'A cuántos les llega', text: 'Antes de enviarla ves cuántos la reciben por cada canal y por qué se deja fuera a los demás (sin correo, sin celular, sin permiso o de baja).' },
         { title: 'Tope de tu plan', text: 'Tu plan puede tener un tope de WhatsApp y de correos de campañas al mes. Si la campaña no cabe en lo que queda, no sale y te dice cuánto falta. Al 80 % te llega un aviso. El uso se ve en Empresa, frente al límite.' },
         { title: '¿A quiénes?', text: `Todos, nuevos, frecuentes, VIP, en riesgo de no volver, inactivos, registrados sin visitas, cumpleaños del mes, o quienes se hicieron un servicio o se atendieron en una sede.` },
-        { title: 'Ver cómo le llega', text: 'Muestra el correo tal como lo recibirá.' },
+        { title: 'Ver cómo le llega', text: 'Debajo del mensaje se ve el correo tal como lo recibirá un cliente del grupo elegido, con su nombre y el cupón.' },
+        { title: 'Borrador', text: '«Guardar borrador» guarda la campaña sin enviarla ni programarla. Queda en la lista como «Borrador» para terminarla después.', perm: 'campaigns.create' },
+        { title: 'Grupos de clientes', text: 'La pestaña «Grupos de clientes» dice cuántos hay hoy en cada grupo.' },
+        { title: 'Embudo', text: 'En la página de la campaña: a cuántos les llegaría, cuántos se enviaron, entregados y leídos (WhatsApp), cuántos agendaron y cuánto pagaron en los días siguientes. Los clics en los enlaces todavía no se cuentan.' },
         { title: 'Ver resultados', text: 'Enviados, omitidos (sin correo o sin permiso para promociones) y quiénes agendaron después.' },
         { title: 'Duplicar', text: 'Crea una campaña nueva con lo mismo, para repetirla.', perm: 'campaigns.create' },
         { title: 'Cambiar o cancelar', text: 'Una campaña programada se puede cambiar o cancelar antes de que salga.', perm: 'campaigns.edit' },
@@ -230,17 +261,28 @@ export const catalogoTopics: HelpTopics = (vocab) => {
         { title: 'Conversaciones de WhatsApp', text: 'Lo que te escriben al WhatsApp de tu empresa. Cada número se une solo al cliente que tiene ese celular. Las tarjetas muestran las que necesitan una persona, las que no has leído y las que aún se pueden responder.' },
         { title: 'Responder por WhatsApp', text: 'Solo dentro de las 24 horas después del último mensaje del cliente; luego WhatsApp solo deja enviar plantillas aprobadas.', perm: 'messages.reply' },
         { title: 'Necesita una persona', text: 'El asistente pasa a una persona las consultas de salud y lo que no sabe responder; quien puede responder recibe un aviso. Al terminar, pulsa "Marcar como atendida".', perm: 'messages.reply' },
+        { title: 'Filtro por canal', text: 'Si tu empresa envía por correo y por WhatsApp, en los filtros aparece «Canal».' },
+        { title: 'Recepcionista con IA', text: 'En "Recepcionista con IA" ves cuántas conversaciones atendió, cuántas citas creó, confirmó o cambió, cuántas preguntas resolvió y cuántas pasó a una persona. Las tarjetas filtran la lista y cada fila abre la conversación.' },
+        { title: 'Probar la recepcionista', text: 'Escribe como si fueras un cliente (puedes elegir cuál) y mira qué respondería. Usa tus servicios, sedes y horas libres reales, pero no guarda nada: no crea ni cambia citas y no sale ningún WhatsApp.', perm: 'settings.view' },
+        { title: 'Resumen al pasar a una persona', text: 'Cuando el asistente pasa la conversación a una persona, arriba de la conversación aparece un resumen de lo que escribió el cliente.' },
         { title: 'Sin permiso para promociones', text: 'Los avisos de citas, pagos y paquetes y los mensajes sueltos se envían igual; ese permiso solo cuenta para campañas.' },
         { title: 'Exportar', text: 'Descarga a Excel o CSV lo que estás viendo, en el orden de la lista. Eliges cuántas filas y qué columnas.', perm: 'data.export' },
       ],
       tasks: [
         { title: 'Escribirle a una persona', perm: 'messages.create', steps: ['Pulsa "Nuevo mensaje".', `Elige ${theClient} y, si quieres, un modelo como "Resultados listos".`, 'Escribe el asunto y el mensaje, y revisa "Ver cómo le llega".', 'Pulsa "Enviar ahora" o prográmalo.'] },
         { title: 'Arreglar un correo que falló', perm: 'messages.edit', steps: ['Pulsa la tarjeta "Con problemas".', 'Abre el mensaje y pulsa "Reintentar".'] },
+        { title: 'Probar la recepcionista con IA', perm: 'settings.view', steps: ['Pulsa "Recepcionista con IA".', 'Si quieres, elige el cliente que escribe.', 'Escribe un mensaje o pulsa una de las frases de ejemplo.', 'Lee la respuesta y lo que haría (por ejemplo, "Reservaría la cita"). Pulsa "Empezar de nuevo" para otra prueba.'] },
         { title: 'Responder a un cliente por WhatsApp', perm: 'messages.reply', steps: ['Pulsa "Conversaciones de WhatsApp".', 'Abre la conversación con el ojo o el último mensaje.', 'Escribe tu respuesta y pulsa "Enviar".'] },
       ],
       rules: [
         { title: 'Con qué correo se envía', text: 'Gmail, Outlook, Brevo o el servidor de tu empresa. Hay un botón para enviar un correo de prueba.', where: 'Configuración → Correo de tu empresa' },
         { title: 'WhatsApp y asistente', text: 'Conectar el WhatsApp de tu empresa con las claves de Meta, las plantillas aprobadas, si los avisos salen por correo, por WhatsApp o por ambos (por defecto, solo correo), a quién se le escribe y el asistente (apagado por defecto).', where: 'Configuración → WhatsApp y asistente' },
+        { title: 'WhatsApp por 360dialog', text: 'Si tu número lo administra 360dialog, elige esa opción y pega su clave. Al pulsar "Probar conexión" se registra sola la dirección para recibir los mensajes. Todo lo demás funciona igual que con Meta.', where: 'Configuración → WhatsApp y asistente' },
+        { title: 'Traer las plantillas aprobadas', text: 'Con la cuenta conectada (y el identificador de la cuenta de WhatsApp Business), el botón lee las plantillas aprobadas en Meta y te deja elegir la de cada aviso; ya no hace falta escribir su nombre.', where: 'Configuración → WhatsApp y asistente' },
+        { title: 'Asistente con inteligencia artificial', text: 'Pega la clave de Claude (Anthropic, recomendado) u OpenAI, o usa la de la plataforma si la activó. El asistente responde precios, horarios y horas libres reales, y reserva, cambia, confirma o cancela citas con las reglas de la reserva en línea (apágalo con "Puede reservar y cambiar citas" para que solo informe). Nunca responde temas de salud ni recibe datos de las fichas. Cuenta sus respuestas contra el tope del plan.', where: 'Configuración → WhatsApp y asistente' },
+        { title: 'Plantillas en revisión', text: 'Puedes enviar una plantilla nueva a revisión de Meta desde la misma pantalla y ver su estado (aprobada, en revisión, rechazada con su motivo, pausada). Fuera de las 24 horas, un aviso solo sale si su plantilla está aprobada; si no, sale por correo y se explica por qué.', where: 'Configuración → WhatsApp y asistente' },
+        { title: 'Pasar a una persona a tiempo', text: 'Si una conversación con el asistente no se resuelve en los minutos que elijas (10 de fábrica), o nadie le respondió al cliente, pasa a la bandeja con un resumen y avisa al equipo.', where: 'Configuración → WhatsApp y asistente' },
+        { title: 'Fotos y PDF por WhatsApp', text: 'Las fotos y documentos que manda el cliente se guardan y se abren con "Ver la foto". Para mandar uno, en la conversación pulsa "Foto o PDF" (hasta 5 MB) dentro de las 24 horas desde su último mensaje.', perm: 'messages.reply' },
         { title: 'Qué avisos se envían', text: 'Qué avisos automáticos salen y con qué texto.', where: 'Personalización → Mensajes al cliente' },
       ],
     },

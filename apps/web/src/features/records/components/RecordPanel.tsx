@@ -2,19 +2,21 @@
 
 import Badge from '@/app/components/common/Badge';
 import { inputClass } from '@/app/components/ui/forms/styles';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ClipboardList, Download, Eye, EyeOff, Lock, PenLine, RefreshCw, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ClipboardList, Copy, Download, Eye, EyeOff, Lock, Paperclip, PenLine, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import { formatDateTime } from '@/features/appointments/appointments';
 import RecordFieldInput from './RecordFieldInput';
-import { READ_ACTIONS, RECORD_STATUS, isEmptyValue, type AppointmentRecord, type CareRecord, type RecordData, type RecordField, type RecordValue } from '../records';
+import DependentAlert from '@/features/customers/components/DependentAlert';
+import { READ_ACTIONS, RECORD_STATUS, fileSize, isEmptyValue, type AppointmentRecord, type CareRecord, type RecordData, type RecordField, type RecordValue } from '../records';
 
 interface RecordPanelProps {
   appointmentId: string | null;
+  recordId?: string | null;
   onClose: () => void;
   onChanged?: () => void;
 }
@@ -38,7 +40,8 @@ function ReadOnlyFields({ fields, data }: { fields: RecordField[]; data: RecordD
   );
 }
 
-export default function RecordPanel({ appointmentId, onClose, onChanged }: RecordPanelProps) {
+export default function RecordPanel({ appointmentId, recordId = null, onClose, onChanged }: RecordPanelProps) {
+  const source = appointmentId ? `/appointments/${appointmentId}/record` : recordId ? `/record-sheets/${recordId}` : null;
   const { user, can } = useAuth();
   const vocab = useVocabulary();
   const [context, setContext] = useState<AppointmentRecord | null>(null);
@@ -53,6 +56,8 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   const [accessReason, setAccessReason] = useState('');
   const [confirmUpdate, setConfirmUpdate] = useState(false);
   const [showReads, setShowReads] = useState(false);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const applyRecord = (record: CareRecord | null) => {
     setData({ ...(record?.data ?? {}) });
@@ -60,7 +65,7 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   };
 
   useEffect(() => {
-    if (!appointmentId) return;
+    if (!source) return;
 
     setContext(null);
     setErrors({});
@@ -71,11 +76,11 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
     setConfirmUpdate(false);
     setLoading(true);
 
-    api.get(`/appointments/${appointmentId}/record`)
+    api.get(source)
       .then((res) => { setContext(res.data); applyRecord(res.data.record); })
       .catch((err) => setMessage({ type: 'error', text: err?.response?.data?.message || 'No se pudo cargar la ficha.' }))
       .finally(() => setLoading(false));
-  }, [appointmentId]);
+  }, [source]);
 
   const record = context?.record ?? null;
   const fields: RecordField[] = record?.fields ?? context?.template?.fields ?? [];
@@ -91,13 +96,13 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
   };
 
   const save = async (sign: boolean) => {
-    if (!context) return;
+    if (!context || !source) return;
 
     try {
       setBusy(sign ? 'sign' : 'save');
       setErrors({});
       setMessage(null);
-      const res = await api.put(`/appointments/${context.appointment.id}/record`, { data, consent_accepted: consent, sign });
+      const res = await api.put(source, { data, consent_accepted: consent, sign, correction_reason: isSigned ? correctionReason.trim() || null : null });
       setContext({ ...context, record: res.data, uses_record: true, template_update: sign ? null : context.template_update });
       applyRecord(res.data);
       setConfirmUpdate(false);
@@ -112,6 +117,54 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
         type: 'error',
         text: count > 1 ? `Faltan ${count} datos para firmar. Están marcados abajo.` : Object.values(found)[0] || err?.response?.data?.message || 'No se pudo guardar la ficha.',
       });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const uploadFile = async (file: File | undefined) => {
+    if (!file || !context?.record) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'El archivo pesa más de 10 MB. Usa uno más liviano.' });
+      return;
+    }
+    try {
+      setBusy('file');
+      setMessage(null);
+      const body = new FormData();
+      body.append('file', file);
+      const res = await api.post(`/care-records/${context.record.id}/files`, body, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setContext({ ...context, record: res.data });
+      setMessage({ type: 'ok', text: 'Archivo adjuntado.' });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.response?.data?.errors?.file?.[0] || err?.response?.data?.message || 'No se pudo adjuntar el archivo.' });
+    } finally {
+      setBusy('');
+      if (fileInput.current) fileInput.current.value = '';
+    }
+  };
+
+  const openFile = async (fileId: string) => {
+    if (!context?.record) return;
+    const opened = window.open('', '_blank');
+    try {
+      const res = await api.get(`/care-records/${context.record.id}/files/${fileId}/link`);
+      if (opened) opened.location.href = res.data.url;
+      else window.location.href = res.data.url;
+    } catch (err: any) {
+      opened?.close();
+      setMessage({ type: 'error', text: err?.response?.data?.message || 'No se pudo abrir el archivo.' });
+    }
+  };
+
+  const removeFile = async (fileId: string) => {
+    if (!context?.record) return;
+    try {
+      setBusy('file');
+      const res = await api.delete(`/care-records/${context.record.id}/files/${fileId}`);
+      setContext({ ...context, record: res.data });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.response?.data?.errors?.file?.[0] || err?.response?.data?.message || 'No se pudo quitar el archivo.' });
     } finally {
       setBusy('');
     }
@@ -203,12 +256,25 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
     }
   };
 
+  const lastReadable = context?.previous.find((item) => !item.hidden && (item.fields?.length ?? 0) > 0) ?? null;
+  const copyable = lastReadable ? fields.filter((field) => (lastReadable.fields ?? []).some((old) => old.key === field.key && old.type === field.type) && !isEmptyValue(lastReadable.data?.[field.key])) : [];
+
+  const copyLast = () => {
+    if (!lastReadable) return;
+    setData((current) => {
+      const next = { ...current };
+      copyable.forEach((field) => { next[field.key] = lastReadable.data?.[field.key]; });
+      return next;
+    });
+    setMessage({ type: 'ok', text: `Se copiaron ${copyable.length} ${copyable.length === 1 ? 'dato' : 'datos'} de la última ficha. Revísalos antes de guardar.` });
+  };
+
   const status = record ? RECORD_STATUS[record.status] : null;
   const readingByEmergency = Boolean(record?.reading_by_emergency);
 
   return (
     <FormDrawer
-      isOpen={appointmentId !== null}
+      isOpen={source !== null}
       onClose={onClose}
       title={record?.template_name ?? context?.template?.name ?? 'Ficha de atención'}
       subtitle={context ? [context.appointment.dependent ?? context.appointment.customer, context.appointment.service, formatDateTime(context.appointment.starts_at)].filter(Boolean).join(' · ') : undefined}
@@ -242,9 +308,11 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                 {!record && 'Llénala durante la atención. Puedes guardarla como borrador y firmarla al terminar.'}
                 {record?.status === 'draft' && `Borrador de ${record.author ?? 'alguien del equipo'}.`}
                 {record?.status === 'signed' && `Firmada el ${formatDateTime(record.signed_at!)}. Se puede corregir hasta el ${formatDateTime(record.locked_at!)}.`}
-                {record?.status === 'locked' && `Firmada el ${formatDateTime(record.signed_at!)}. Ya no se edita: solo admite notas.`}
+                {record?.status === 'locked' && `Firmada el ${formatDateTime(record.signed_at!)}. Ya no se cambia: admite notas y archivos.`}
               </span>
             </div>
+
+            <DependentAlert name={context.appointment.dependent} alert={context.appointment.dependent_alert} />
 
             {!record && context.private_by_default && (
               <p className="flex items-start gap-2 text-xs text-violet-600 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2">
@@ -397,6 +465,15 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
               </div>
             ) : (
               <>
+                {editable && !isSigned && copyable.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl" data-copy-last>
+                    <p className="text-xs text-slate-600">La última ficha es del {formatDateTime(lastReadable!.signed_at ?? lastReadable!.created_at)}. Puedes traer lo que se anotó ahí y cambiar lo que haga falta.</p>
+                    <button type="button" data-action="copy-last" disabled={busy !== ''} onClick={copyLast} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-brand-ink hover:bg-slate-100 transition-colors disabled:opacity-50">
+                      <Copy size={13} /> Copiar de la última ficha
+                    </button>
+                  </div>
+                )}
+
                 <section className="space-y-4" data-record-fields>
                   {fields.length === 0 && <p className="text-sm text-slate-400">Esta ficha no tiene campos.</p>}
 
@@ -434,6 +511,21 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                   </section>
                 )}
 
+                {isSigned && editable && (
+                  <section className="space-y-2" data-correction-reason>
+                    <label className={sectionTitle} htmlFor="record-correction">Motivo de la corrección</label>
+                    <input
+                      id="record-correction"
+                      maxLength={500}
+                      placeholder="Por ejemplo: se anotó mal la presión arterial"
+                      className={inputClass}
+                      value={correctionReason}
+                      onChange={(e) => setCorrectionReason(e.target.value)}
+                    />
+                    <p className="text-xs text-slate-500">La ficha ya está firmada: si cambias algo, lo que decía antes queda guardado como una nota, con tu nombre, la fecha y este motivo.</p>
+                  </section>
+                )}
+
                 {record && (record.addenda?.length ?? 0) > 0 && (
                   <section className="space-y-2" data-addenda>
                     <span className={sectionTitle}>Notas agregadas</span>
@@ -445,6 +537,42 @@ export default function RecordPanel({ appointmentId, onClose, onChanged }: Recor
                         </li>
                       ))}
                     </ol>
+                  </section>
+                )}
+
+                {record && record.files_ready === false && can('records.edit') && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Falta actualizar la base de datos para adjuntar archivos a las fichas (php artisan migrate).</p>
+                )}
+
+                {record && record.files_ready && ((record.files?.length ?? 0) > 0 || record.can_attach) && (
+                  <section className="space-y-2" data-record-files>
+                    <span className={sectionTitle}>Archivos adjuntos</span>
+                    {(record.files?.length ?? 0) > 0 && (
+                      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+                        {record.files!.map((file) => (
+                          <li key={file.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                            <button type="button" data-open-file onClick={() => openFile(file.id)} className="min-w-0 text-left">
+                              <span className="block text-sm font-semibold text-brand-accent truncate">{file.name}</span>
+                              <span className="block text-xs text-slate-500">{fileSize(file.size)} · {formatDateTime(file.at)}{file.by ? ` · ${file.by}` : ''}</span>
+                            </button>
+                            {file.can_delete && (
+                              <button type="button" data-remove-file disabled={busy !== ''} onClick={() => removeFile(file.id)} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-red-600 transition-colors disabled:opacity-50">
+                                <X size={13} /> Quitar
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {record.can_attach && (
+                      <>
+                        <input ref={fileInput} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx" onChange={(e) => uploadFile(e.target.files?.[0])} />
+                        <button type="button" data-attach-file disabled={busy !== ''} onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                          <Paperclip size={14} /> {busy === 'file' ? 'Subiendo...' : 'Adjuntar archivo'}
+                        </button>
+                        <p className="text-xs text-slate-500">PDF, fotos o Word de hasta 10 MB, por ejemplo un examen o una radiografía. Cada vez que alguien abre un archivo queda anotado.</p>
+                      </>
+                    )}
                   </section>
                 )}
 

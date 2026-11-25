@@ -35,7 +35,7 @@ class CustomerBoardController extends Controller
 
         CustomerStages::refreshStale($request->user()->tenant);
 
-        return response()->json($this->payload($request, CustomerStages::stages($request->user()->tenant)));
+        return response()->json($this->payload($request, CustomerStages::stages($request->user()->tenant, $request->user())));
     }
 
     public function saveColumns(Request $request)
@@ -58,7 +58,8 @@ class CustomerBoardController extends Controller
         $columns = $validated['columns'];
         ksort($columns);
 
-        $stages = CustomerStages::save($request->user()->tenant, array_values($columns), $validated['moves'] ?? [], $request->user());
+        CustomerStages::save($request->user()->tenant, array_values($columns), $validated['moves'] ?? [], $request->user());
+        $stages = CustomerStages::stages($request->user()->tenant, $request->user());
 
         return response()->json($this->payload($request, $stages) + ['message' => 'Columnas guardadas.']);
     }
@@ -68,7 +69,7 @@ class CustomerBoardController extends Controller
         abort_unless(CustomerStages::ready(), 503, 'Falta actualizar la base de datos: ejecuta php artisan migrate.');
 
         $tenant = $request->user()->tenant;
-        $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($customer);
+        $customer = Customer::visibleTo($request->user())->findOrFail($customer);
 
         $validated = $request->validate([
             'stage_id' => ['present', 'nullable', 'string', fn ($attribute, $value, $fail) => $value === null || $value === CustomerStages::AUTO || \Illuminate\Support\Str::isUuid($value) ? null : $fail('Esa columna no es válida.')],
@@ -83,7 +84,7 @@ class CustomerBoardController extends Controller
 
         return response()->json([
             'pipeline_stage_id' => $customer->fresh()->pipeline_stage_id,
-            'stages'            => CustomerStages::stages($tenant),
+            'stages'            => CustomerStages::stages($tenant, $request->user()),
         ]);
     }
 
@@ -94,8 +95,8 @@ class CustomerBoardController extends Controller
         }
 
         $tenant = $request->user()->tenant;
-        $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($customer);
-        $stages = CustomerStages::stages($tenant);
+        $customer = Customer::visibleTo($request->user())->findOrFail($customer);
+        $stages = CustomerStages::stages($tenant, $request->user());
 
         return response()->json($this->payload($request, $stages) + [
             'stage_id' => $customer->pipeline_stage_id,

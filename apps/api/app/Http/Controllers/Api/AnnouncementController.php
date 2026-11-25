@@ -14,7 +14,7 @@ class AnnouncementController extends Controller
 {
     public function feed(Request $request)
     {
-        return response()->json(['ready' => Announcements::ready(), 'items' => Announcements::forUser($request->user())]);
+        return response()->json(['ready' => Announcements::ready(), 'items' => Announcements::forUser($request->user(), $request->boolean('all'))]);
     }
 
     public function dismiss(Request $request, string $announcement)
@@ -64,7 +64,11 @@ class AnnouncementController extends Controller
             'business_type_ids.*' => 'uuid|exists:business_types,id',
             'starts_on'           => 'required|date_format:Y-m-d',
             'ends_on'             => 'nullable|date_format:Y-m-d|after_or_equal:starts_on',
+            'link_url'            => ['nullable', 'string', 'max:500', 'regex:#^(https://|/)[^\s]*$#'],
+            'link_label'          => 'nullable|string|max:60',
+            'published'           => 'nullable|boolean',
         ], [
+            'link_url.regex'             => 'El enlace debe empezar con https:// o con / (una pantalla del sistema).',
             'title.required'             => 'Escribe el título del anuncio.',
             'body.required'              => 'Escribe el texto del anuncio.',
             'plan_ids.required_if'       => 'Elige al menos un plan.',

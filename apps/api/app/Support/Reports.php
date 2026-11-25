@@ -14,6 +14,8 @@ class Reports
         'customers'    => ['label' => 'Clientes', 'advanced' => true],
         'pros'         => ['label' => 'Profesionales', 'advanced' => true],
         'catalog'      => ['label' => 'Servicios y productos', 'advanced' => true],
+        'cash'         => ['label' => 'Caja', 'advanced' => true],
+        'inventory'    => ['label' => 'Inventario', 'advanced' => true],
         'mine'         => ['label' => 'Mis números', 'advanced' => false],
     ];
 
@@ -27,6 +29,10 @@ class Reports
     ];
 
     public const PAID = ['paid', 'partial', 'partially_refunded'];
+
+    public const NO_SHOW_ALERT = 8;
+
+    public const REBOOK_DAYS = 60;
 
     public const MAX_DAYS = 366;
 
@@ -187,13 +193,18 @@ class Reports
             count(*) FILTER (WHERE a.status = ?) AS completed,
             count(*) FILTER (WHERE a.status = ?) AS cancelled,
             count(*) FILTER (WHERE a.status = ?) AS no_show,
-            count(*) FILTER (WHERE a.source = 'online') AS online,
+            count(*) FILTER (WHERE a.source = 'online' AND a.status <> ?) AS online,
             coalesce(sum(extract(epoch FROM a.ends_at - a.starts_at) / 60) FILTER (WHERE a.status NOT IN (?, ?)), 0) AS booked",
-            [AppointmentFlow::COMPLETED, AppointmentFlow::CANCELLED, AppointmentFlow::NO_SHOW, AppointmentFlow::CANCELLED, AppointmentFlow::NO_SHOW])->first();
+            [AppointmentFlow::COMPLETED, AppointmentFlow::CANCELLED, AppointmentFlow::NO_SHOW, AppointmentFlow::CANCELLED, AppointmentFlow::CANCELLED, AppointmentFlow::NO_SHOW])->first();
         $scheduled = $this->scheduledMinutes()['total'];
         $total = (int) $row->total;
+        $live = $total - (int) $row->cancelled;
+        $noShow = $total > 0 ? (int) round((int) $row->no_show * 100 / $total) : 0;
 
         return [
+            'online_percent' => $live > 0 ? (int) round((int) $row->online * 100 / $live) : 0,
+            'no_show_alert'  => $noShow > self::NO_SHOW_ALERT ? self::NO_SHOW_ALERT : null,
+            'class_attendees' => $this->classAttendees(),
             'appointments' => $total - (int) $row->cancelled,
             'completed'    => (int) $row->completed,
             'occupancy'    => $scheduled > 0 ? min(100, (int) round((float) $row->booked * 100 / $scheduled)) : null,
@@ -201,6 +212,23 @@ class Reports
             'no_show'      => $total > 0 ? (int) round((int) $row->no_show * 100 / $total) : 0,
             'online'       => (int) $row->online,
         ];
+    }
+
+    private function classAttendees(): ?int
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('class_enrollments') || !$this->tenant->hasModule('classes')) {
+            return null;
+        }
+
+        return DB::table('class_enrollments as e')
+            ->join('class_sessions as c', 'c.id', '=', 'e.class_session_id')
+            ->where('e.tenant_id', $this->tenant->id)
+            ->where('e.status', 'attended')
+            ->when($this->branchId, fn ($q, $id) => $q->where('c.branch_id', $id))
+            ->when($this->professionalId, fn ($q, $id) => $q->where('c.professional_id', $id))
+            ->where('c.starts_at', '>=', $this->iso($this->from))
+            ->where('c.starts_at', '<', $this->iso($this->to))
+            ->count();
     }
 
     public function appointmentsDetail(bool $advanced): array
@@ -221,11 +249,32 @@ class Reports
             'by_source' => $this->appointments()->whereNotIn('a.status', [AppointmentFlow::CANCELLED])->groupBy('a.source')
                 ->selectRaw('a.source, count(*) AS total')->orderByDesc('total')->get()
                 ->map(fn ($row) => ['key' => $row->source, 'label' => $sources[$row->source] ?? ucfirst((string) $row->source), 'value' => (int) $row->total])->values()->all(),
+            'by_channel' => $this->byChannel(),
             'heatmap' => !$advanced ? null : $this->appointments()->whereNotIn('a.status', AppointmentFlow::RELEASED)
                 ->selectRaw("extract(isodow FROM a.starts_at AT TIME ZONE '{$zone}')::int AS weekday, extract(hour FROM a.starts_at AT TIME ZONE '{$zone}')::int AS hour, count(*) AS total")
                 ->groupBy('weekday', 'hour')->get()
                 ->map(fn ($row) => ['weekday' => (int) $row->weekday, 'hour' => (int) $row->hour, 'value' => (int) $row->total])->values()->all(),
         ];
+    }
+
+    public function byChannel(): ?array
+    {
+        if (!Channels::ready()) {
+            return null;
+        }
+
+        return $this->appointments()->whereIn('a.source', ['online', 'portal'])->where('a.status', '!=', AppointmentFlow::CANCELLED)
+            ->groupBy('a.source', 'a.channel')
+            ->selectRaw('a.source, a.channel, count(*) AS total, count(*) FILTER (WHERE a.status = ?) AS completed', [AppointmentFlow::COMPLETED])
+            ->get()
+            ->groupBy(fn ($row) => $row->channel ?? $row->source)
+            ->map(fn ($rows, $key) => [
+                'key'       => $key,
+                'label'     => Channels::label($rows->first()->channel, $rows->first()->source),
+                'value'     => (int) $rows->sum('total'),
+                'completed' => (int) $rows->sum('completed'),
+            ])
+            ->sortByDesc('value')->values()->all();
     }
 
     public function customersSummary(): array
@@ -241,7 +290,7 @@ class Reports
             ->groupBy('a.customer_id')->selectRaw('a.customer_id, max(a.starts_at) AS last_at');
         $rebooked = DB::query()->fromSub($last, 'l')
             ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('appointments as n')->whereColumn('n.customer_id', 'l.customer_id')
-                ->whereColumn('n.created_at', '>', 'l.last_at')->where('n.status', '!=', AppointmentFlow::CANCELLED))
+                ->whereColumn('n.created_at', '>', 'l.last_at')->whereRaw("n.created_at <= l.last_at + interval '" . self::REBOOK_DAYS . " days'")->where('n.status', '!=', AppointmentFlow::CANCELLED))
             ->count();
 
         $new = $this->branchId
@@ -252,7 +301,19 @@ class Reports
             : DB::table('customers')->where('tenant_id', $this->tenant->id)->whereNull('deleted_at')
                 ->where('created_at', '>=', $this->iso($this->from))->where('created_at', '<', $this->iso($this->to))->count();
 
+        $spend = DB::table('sales as s')
+            ->where('s.tenant_id', $this->tenant->id)
+            ->whereIn('s.status', self::PAID)
+            ->where('s.currency', $this->currency())
+            ->whereNotNull('s.customer_id')
+            ->when($this->branchId, fn ($q, $id) => $q->where('s.branch_id', $id))
+            ->whereRaw('coalesce(s.paid_at, s.created_at) < ?', [$this->iso($this->to)])
+            ->selectRaw('count(DISTINCT s.customer_id) AS customers, coalesce(sum(s.paid), 0) AS total')
+            ->first();
+
         return [
+            'avg_spend' => (int) $spend->customers > 0 ? round((float) $spend->total / (int) $spend->customers, 2) : 0.0,
+            'rebook_days' => self::REBOOK_DAYS,
             'attended'  => $attended->count(),
             'new'       => $new,
             'returning' => $returning,
@@ -384,6 +445,172 @@ class Reports
                 'income'  => round((float) $row->income, 2),
                 'last_at' => Carbon::parse($row->last_at)->toIso8601String(),
             ])->values()->all();
+    }
+
+    private function cashSessions()
+    {
+        return DB::table('cash_sessions as cs')
+            ->where('cs.tenant_id', $this->tenant->id)
+            ->where('cs.currency', $this->currency())
+            ->when($this->branchId, fn ($q, $id) => $q->where('cs.branch_id', $id))
+            ->where('cs.opened_at', '>=', $this->iso($this->from))
+            ->where('cs.opened_at', '<', $this->iso($this->to));
+    }
+
+    public function cash(bool $money): array
+    {
+        $sessions = $this->cashSessions()
+            ->selectRaw("count(*) AS total, count(*) FILTER (WHERE cs.status = 'closed') AS closed, count(*) FILTER (WHERE cs.status = 'closed' AND cs.difference <> 0) AS with_difference")
+            ->selectRaw("coalesce(sum(cs.difference) FILTER (WHERE cs.difference < 0), 0) AS short, coalesce(sum(cs.difference) FILTER (WHERE cs.difference > 0), 0) AS over")
+            ->first();
+        $movements = DB::table('cash_movements as m')->joinSub($this->cashSessions()->select('cs.id'), 'ss', 'ss.id', '=', 'm.cash_session_id');
+        $byType = (clone $movements)->groupBy('m.type')->selectRaw('m.type, sum(m.amount) AS amount')->pluck('amount', 'type');
+        $amount = fn (string $type) => $money ? round((float) ($byType[$type] ?? 0), 2) : null;
+
+        $summary = [
+            'sessions'        => (int) $sessions->total,
+            'closed'          => (int) $sessions->closed,
+            'with_difference' => (int) $sessions->with_difference,
+            'sales'           => $amount('sale'),
+            'income'          => $amount('income'),
+            'expense'         => $amount('expense'),
+            'withdrawal'      => $amount('withdrawal'),
+            'refund'          => $amount('refund'),
+            'short'           => $money ? round((float) $sessions->short, 2) : null,
+            'over'            => $money ? round((float) $sessions->over, 2) : null,
+            'online'          => $money ? OnlineCash::totals(OnlineCash::payments($this->tenant->id, $this->currency(), $this->branchId, $this->from, $this->to))['net'] : null,
+        ];
+
+        if (!$money) {
+            return ['summary' => $summary, 'by_day' => null, 'registers' => null, 'differences' => null];
+        }
+
+        $signed = "sum(CASE WHEN m.type IN ('sale', 'income') THEN m.amount ELSE -m.amount END)";
+        $byDay = (clone $movements)->selectRaw($this->localDay('m.created_at') . " AS day, {$signed} AS amount")->groupBy('day')->pluck('amount', 'day');
+        $registerTotals = (clone $movements)->join('cash_sessions as s2', 's2.id', '=', 'm.cash_session_id')
+            ->groupBy('s2.cash_register_id')->selectRaw("s2.cash_register_id AS id, sum(m.amount) FILTER (WHERE m.type = 'sale') AS sales, {$signed} AS net")
+            ->get()->keyBy('id');
+
+        $registers = $this->cashSessions()->join('cash_registers as r', 'r.id', '=', 'cs.cash_register_id')
+            ->leftJoin('branches as b', 'b.id', '=', 'cs.branch_id')
+            ->groupBy('r.id', 'r.name', 'b.name')
+            ->selectRaw('r.id, r.name, b.name AS branch, count(*) AS sessions, coalesce(sum(cs.difference), 0) AS difference')
+            ->orderBy('r.name')->get()
+            ->map(fn ($row) => [
+                'id'         => $row->id,
+                'name'       => $row->name,
+                'branch'     => $row->branch,
+                'sessions'   => (int) $row->sessions,
+                'sales'      => round((float) ($registerTotals[$row->id]->sales ?? 0), 2),
+                'net'        => round((float) ($registerTotals[$row->id]->net ?? 0), 2),
+                'difference' => round((float) $row->difference, 2),
+            ])->values()->all();
+
+        $onlineBranches = OnlineCash::byBranch($this->tenant, $this->branchId, $this->from, $this->to);
+        $branchNames = $onlineBranches ? DB::table('branches')->whereIn('id', array_keys($onlineBranches))->pluck('name', 'id') : collect();
+
+        foreach ($onlineBranches as $branchId => $online) {
+            $registers[] = [
+                'id'         => "online:{$branchId}",
+                'name'       => OnlineCash::NAME,
+                'branch'     => $branchNames[$branchId] ?? null,
+                'sessions'   => 0,
+                'sales'      => $online['received'],
+                'net'        => $online['net'],
+                'difference' => 0.0,
+                'online'     => true,
+            ];
+        }
+
+        $differences =$this->cashSessions()->join('cash_registers as r', 'r.id', '=', 'cs.cash_register_id')
+            ->leftJoin('users as u', 'u.id', '=', 'cs.closed_by')
+            ->where('cs.status', 'closed')->where('cs.difference', '<>', 0)
+            ->orderByRaw('abs(cs.difference) DESC')->limit(20)
+            ->get(['cs.id', 'r.name AS register', 'cs.closed_at', 'cs.difference', 'cs.closing_notes', DB::raw("trim(concat(u.first_name, ' ', u.last_name)) AS closed_by")])
+            ->map(fn ($row) => [
+                'id'         => $row->id,
+                'register'   => $row->register,
+                'closed_at'  => $row->closed_at ? Carbon::parse($row->closed_at)->toIso8601String() : null,
+                'closed_by'  => $row->closed_by,
+                'difference' => round((float) $row->difference, 2),
+                'notes'      => $row->closing_notes,
+            ])->values()->all();
+
+        return [
+            'summary'     => $summary,
+            'by_day'      => array_map(fn ($day) => ['day' => $day, 'value' => round((float) ($byDay[$day] ?? 0), 2)], $this->dayKeys()),
+            'registers'   => $registers,
+            'differences' => $differences,
+        ];
+    }
+
+    public function inventory(bool $money): array
+    {
+        $warehouses = DB::table('warehouses')->where('tenant_id', $this->tenant->id)
+            ->when($this->branchId, fn ($q, $id) => $q->where('branch_id', $id))
+            ->pluck('id');
+
+        $stock = DB::table('products as p')
+            ->leftJoinSub(
+                DB::table('stock_balances')->where('tenant_id', $this->tenant->id)->whereIn('warehouse_id', $warehouses)
+                    ->groupBy('product_id')->selectRaw('product_id, sum(quantity) AS quantity'),
+                'sb', 'sb.product_id', '=', 'p.id'
+            )
+            ->where('p.tenant_id', $this->tenant->id)->whereNull('p.deleted_at')
+            ->where('p.status', 'active')->where('p.track_stock', true);
+
+        $totals = (clone $stock)->selectRaw('count(*) AS products, coalesce(sum(greatest(coalesce(sb.quantity, 0), 0) * p.cost), 0) AS value')
+            ->selectRaw('count(*) FILTER (WHERE p.min_stock > 0 AND coalesce(sb.quantity, 0) <= p.min_stock) AS low, count(*) FILTER (WHERE coalesce(sb.quantity, 0) <= 0) AS empty')
+            ->first();
+
+        $movements = DB::table('inventory_movements as m')->join('products as p', 'p.id', '=', 'm.product_id')
+            ->where('m.tenant_id', $this->tenant->id)->whereIn('m.warehouse_id', $warehouses)
+            ->where('m.created_at', '>=', $this->iso($this->from))
+            ->where('m.created_at', '<', $this->iso($this->to));
+
+        $value = 'abs(m.quantity) * coalesce(m.unit_cost, p.cost)';
+        $byType = (clone $movements)->whereNotIn('m.type', ['transfer_out', 'transfer_in'])
+            ->groupBy('m.type')->selectRaw("m.type, sum(abs(m.quantity)) AS quantity, sum({$value}) AS value, count(*) AS total")
+            ->get()->keyBy('type');
+        $sum = fn (array $types, string $field) => round((float) collect($types)->sum(fn ($type) => (float) ($byType[$type]->{$field} ?? 0)), 2);
+
+        $out = ['sale', 'service_consumption'];
+        $top = (clone $movements)->whereIn('m.type', $out)
+            ->groupBy('p.id', 'p.name', 'p.sku')
+            ->selectRaw("p.id, p.name, p.sku, sum(abs(m.quantity)) FILTER (WHERE m.type = 'sale') AS sold, sum(abs(m.quantity)) FILTER (WHERE m.type = 'service_consumption') AS used, sum(abs(m.quantity)) AS quantity, sum({$value}) AS value")
+            ->orderByDesc('quantity')->limit(10)->get()
+            ->map(fn ($row) => [
+                'id'       => $row->id,
+                'name'     => $row->name,
+                'sku'      => $row->sku,
+                'sold'     => (float) ($row->sold ?? 0),
+                'used'     => (float) ($row->used ?? 0),
+                'quantity' => (float) $row->quantity,
+                'value'    => $money ? round((float) $row->value, 2) : null,
+            ])->values()->all();
+
+        $low = (clone $stock)->where(fn ($q) => $q->where(fn ($w) => $w->where('p.min_stock', '>', 0)->whereRaw('coalesce(sb.quantity, 0) <= p.min_stock'))->orWhereRaw('coalesce(sb.quantity, 0) <= 0'))
+            ->orderByRaw('coalesce(sb.quantity, 0) - p.min_stock')->limit(20)
+            ->get(['p.id', 'p.name', 'p.sku', 'p.min_stock', DB::raw('coalesce(sb.quantity, 0) AS quantity')])
+            ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name, 'sku' => $row->sku, 'quantity' => (float) $row->quantity, 'min_stock' => (float) $row->min_stock])
+            ->values()->all();
+
+        return [
+            'summary' => [
+                'products'   => (int) $totals->products,
+                'value'      => $money ? round((float) $totals->value, 2) : null,
+                'low'        => (int) $totals->low,
+                'empty'      => (int) $totals->empty,
+                'in_value'   => $money ? $sum(['purchase', 'return'], 'value') : null,
+                'out_value'  => $money ? $sum($out, 'value') : null,
+                'adjust'     => (int) ($byType['adjustment']->total ?? 0),
+            ],
+            'by_type' => collect(Inventory::MOVEMENT_LABELS)->except(['transfer_out', 'transfer_in'])
+                ->map(fn ($label, $type) => ['key' => $type, 'label' => $label, 'value' => (float) ($byType[$type]->quantity ?? 0)])
+                ->filter(fn ($row) => $row['value'] > 0)->values()->all(),
+            'moved'   => $top,
+            'low'     => $low,
+        ];
     }
 
     public function catalog(bool $products): array

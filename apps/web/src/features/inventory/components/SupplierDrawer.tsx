@@ -116,8 +116,9 @@ export default function SupplierDrawer({
               <label className={labelClass} htmlFor="supplier-doc">RUC / Documento</label>
               <input
                 id="supplier-doc"
-                maxLength={30}
-                placeholder="20123456789"
+                maxLength={11}
+                inputMode="numeric"
+                placeholder="RUC de 11 dígitos"
                 className={inputClass}
                 value={form.documentNumber}
                 onChange={(e) => set({ documentNumber: e.target.value })}

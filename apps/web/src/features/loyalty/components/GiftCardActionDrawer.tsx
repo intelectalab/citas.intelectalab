@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarPlus, CreditCard } from 'lucide-react';
+import { Ban, CalendarPlus, CreditCard } from 'lucide-react';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Button from '@/app/components/common/Button';
 import { ErrorAlert } from '@/app/components/common/Alert';
@@ -13,7 +13,7 @@ import type { GiftCardRow, LoyaltyBoardData } from '../loyalty';
 
 interface Props {
   giftCard: GiftCardRow | null;
-  mode: 'redeem' | 'extend' | null;
+  mode: 'redeem' | 'extend' | 'cancel' | null;
   currency: string;
   onClose: () => void;
   onSaved: (data: LoyaltyBoardData, notice: string) => void;
@@ -22,6 +22,7 @@ interface Props {
 export default function GiftCardActionDrawer({ giftCard, mode, currency, onClose, onSaved }: Props) {
   const [amount, setAmount] = useState('');
   const [days, setDays] = useState('30');
+  const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,6 +30,7 @@ export default function GiftCardActionDrawer({ giftCard, mode, currency, onClose
     if (!giftCard || !mode) return;
     setAmount(giftCard.balance.toFixed(2));
     setDays('30');
+    setReason('');
     setError('');
   }, [giftCard, mode]);
 
@@ -44,9 +46,13 @@ export default function GiftCardActionDrawer({ giftCard, mode, currency, onClose
           amount: Number(amount || 0),
         });
         onSaved(res.data, `Se descontaron ${money(Number(amount || 0), currency)} de la gift card ${giftCard.code}.`);
+      } else if (mode === 'cancel') {
+        const res = await api.post<LoyaltyBoardData>(`/loyalty/gift-cards/${giftCard.id}/cancel`, { reason: reason.trim() });
+        onSaved(res.data, `Gift card ${giftCard.code} anulada.`);
       } else {
         const res = await api.post<LoyaltyBoardData>(`/loyalty/gift-cards/${giftCard.id}/extend`, {
           days: Number(days || 0),
+          reason: reason.trim(),
         });
         onSaved(res.data, `Se amplió la vigencia de la gift card ${giftCard.code}.`);
       }
@@ -62,9 +68,9 @@ export default function GiftCardActionDrawer({ giftCard, mode, currency, onClose
     <FormDrawer
       isOpen={Boolean(giftCard && mode)}
       onClose={onClose}
-      title={mode === 'redeem' ? `Descontar saldo · ${giftCard?.code ?? ''}` : `Ampliar vigencia · ${giftCard?.code ?? ''}`}
+      title={mode === 'redeem' ? `Descontar saldo · ${giftCard?.code ?? ''}` : mode === 'cancel' ? `Anular · ${giftCard?.code ?? ''}` : `Ampliar vigencia · ${giftCard?.code ?? ''}`}
       subtitle={giftCard ? `Saldo disponible: ${money(giftCard.balance, currency)}` : undefined}
-      icon={mode === 'redeem' ? <CreditCard size={20} /> : <CalendarPlus size={20} />}
+      icon={mode === 'redeem' ? <CreditCard size={20} /> : mode === 'cancel' ? <Ban size={20} /> : <CalendarPlus size={20} />}
     >
       {giftCard && (
         <form id="gc-action-form" onSubmit={handleSubmit} className="space-y-4">
@@ -93,6 +99,10 @@ export default function GiftCardActionDrawer({ giftCard, mode, currency, onClose
                 También puedes descontarla automáticamente al cobrar una cita o venta eligiendo &quot;Gift card&quot; como medio de pago.
               </p>
             </div>
+          ) : mode === 'cancel' ? (
+            <p className="text-sm text-slate-700">
+              Su saldo de {money(giftCard.balance, currency)} queda en cero y deja de aceptarse como medio de pago.
+            </p>
           ) : (
             <div>
               <label className={labelClass} htmlFor="gc-extend-days">Días adicionales de vigencia *</label>
@@ -107,12 +117,27 @@ export default function GiftCardActionDrawer({ giftCard, mode, currency, onClose
             </div>
           )}
 
+          {mode !== 'redeem' && (
+            <div>
+              <label className={labelClass} htmlFor="gc-action-reason">Motivo *</label>
+              <input
+                id="gc-action-reason"
+                required
+                maxLength={255}
+                placeholder={mode === 'cancel' ? 'Ej. Se emitió por error' : 'Ej. La clienta estuvo de viaje'}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? 'Guardando...' : mode === 'redeem' ? 'Descontar saldo' : 'Ampliar vigencia'}
+            <Button type="submit" variant="primary" className={mode === 'cancel' ? '!bg-rose-600 hover:!bg-rose-700' : ''} disabled={saving || (mode !== 'redeem' && reason.trim().length < 3)}>
+              {saving ? 'Guardando...' : mode === 'redeem' ? 'Descontar saldo' : mode === 'cancel' ? 'Anular gift card' : 'Ampliar vigencia'}
             </Button>
           </div>
         </form>

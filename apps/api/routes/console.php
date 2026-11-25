@@ -30,11 +30,29 @@ Schedule::command('subscriptions:expire')->hourly();
 
 Artisan::command('billing:dunning', function () {
     $bajas = \App\Support\Cancellations::runDue();
+    \App\Support\Addons::expireDue();
     $done = \App\Support\Dunning::run();
-    $this->info("Bajas pedidas que terminaron: {$bajas}. Planes vencidos revisados: {$done['revisadas']}. Cobros intentados: {$done['cobros']}. Avisos: {$done['avisos']}. Cancelados: {$done['canceladas']}.");
+    $cuadre = \App\Support\SaasEvents::reconcile();
+    $this->info("Bajas pedidas que terminaron: {$bajas}. Planes vencidos revisados: {$done['revisadas']}. Cobros intentados: {$done['cobros']}. Avisos: {$done['avisos']}. Cancelados: {$done['canceladas']}. Ingresos mensuales corregidos: {$cuadre}.");
 })->purpose('Cobra los planes vencidos con la tarjeta guardada, avisa a las empresas y cancela las que pasaron el plazo');
 
 Schedule::command('billing:dunning')->hourly()->withoutOverlapping();
+
+Artisan::command('tenants:retention', function () {
+    $borradas = \App\Support\TenantDeletion::runDue();
+    $this->info("Empresas borradas desde la consola que cumplieron su plazo: {$borradas}.");
+
+    if (!\App\Support\DataRetention::config()['enabled']) {
+        $this->info('El borrado de datos de empresas dadas de baja está apagado (se enciende en la consola, Cobros).');
+
+        return;
+    }
+
+    $done = \App\Support\DataRetention::run();
+    $this->info("Empresas avisadas: {$done['avisos']}. Empresas con datos borrados: {$done['borradas']}.");
+})->purpose('Avisa y, pasado el plazo, borra los datos personales de las empresas dadas de baja (si está encendido)');
+
+Schedule::command('tenants:retention')->dailyAt('04:20')->withoutOverlapping();
 
 Artisan::command('billing:sync', function () {
     $links = \App\Support\PaymentLinks::checkPending();
@@ -51,6 +69,20 @@ Artisan::command('invoices:retry', function () {
 
 Schedule::command('invoices:retry')->everyTenMinutes()->withoutOverlapping();
 
+Artisan::command('billing:documents', function () {
+    $sent = \App\Support\PlanInvoices::retryPending(200);
+    $this->info("Boletas y facturas del plan reenviadas o consultadas: {$sent}.");
+})->purpose('Vuelve a enviar a SUNAT las boletas y facturas de los planes que quedaron pendientes');
+
+Schedule::command('billing:documents')->everyTenMinutes()->withoutOverlapping();
+
+Artisan::command('exports:run', function () {
+    $done = \App\Support\DataExports::runPending();
+    $this->info("Archivos de datos preparados: {$done['run']}. Archivos vencidos borrados: {$done['removed']}.");
+})->purpose('Prepara los archivos con todos los datos que quedaron en cola y borra los que vencieron');
+
+Schedule::command('exports:run')->everyFiveMinutes()->withoutOverlapping();
+
 Artisan::command('messages:send', function () {
     if (!\App\Support\Messaging::ready()) {
         $this->warn(\App\Support\Messaging::NOT_READY);
@@ -64,8 +96,9 @@ Artisan::command('messages:send', function () {
 
     $campaigns = \App\Support\Campaigns::dispatchDue();
     $automations = \App\Support\Automations::runDue();
+    $surveys = \App\Support\Surveys::sendDue();
     $done = \App\Support\Messaging::process(null, 200);
-    $this->info("Campañas que salieron: {$campaigns}. Automatizaciones: {$automations}. Enviados: {$done['sent']}. Con error: {$done['failed']}. No enviados: {$done['not_sent']}.");
+    $this->info("Campañas que salieron: {$campaigns}. Automatizaciones: {$automations}. Encuestas: {$surveys}. Enviados: {$done['sent']}. Con error: {$done['failed']}. No enviados: {$done['not_sent']}.");
 })->purpose('Arma los recordatorios y envía los mensajes pendientes o programados');
 
 Schedule::command('messages:send')->everyFiveMinutes()->withoutOverlapping();
@@ -189,3 +222,24 @@ Artisan::command('seguridad:sin-codigo', function () {
     $this->info("Listo: las cuentas de la plataforma ya entran sin código. Cuentas desbloqueadas o sin código obligatorio: {$unlocked}.");
     $this->line('Las empresas quedan como estaban. Vuelve a encender el código en la consola cuando el correo funcione.');
 })->purpose('Emergencia: apaga el código al entrar de las cuentas de la plataforma (superadmin y soporte) y las desbloquea');
+
+Artisan::command('integrations:watch', function () {
+    $avisos = 0;
+
+    foreach (\App\Support\GatewayWebhooks::due() as $row) {
+        \App\Support\GatewayWebhooks::retry($row, fn (\Illuminate\Http\Request $req) => app(\App\Http\Controllers\Api\PaymentController::class)->processWebhook($req, $row->provider, $row->owner_key));
+        $avisos++;
+    }
+
+    $pasadas = \App\Support\Assistant::sweep();
+    $this->info("Avisos de pasarelas reintentados: {$avisos}. Conversaciones de WhatsApp pasadas a una persona por tiempo: {$pasadas}.");
+})->purpose('Reintenta los avisos de Culqi, Mercado Pago e Izipay que fallaron y pasa a una persona las conversaciones que nadie respondió a tiempo');
+
+Schedule::command('integrations:watch')->everyMinute()->withoutOverlapping();
+
+Artisan::command('billing:card-expiry', function () {
+    $done = \App\Support\CardExpiry::run();
+    $this->info("Empresas avisadas por tarjeta del plan por vencer o vencida: {$done['avisos']}.");
+})->purpose('Avisa a las empresas cuya tarjeta del plan vence en los próximos 30 días o ya venció');
+
+Schedule::command('billing:card-expiry')->dailyAt('09:10')->withoutOverlapping();

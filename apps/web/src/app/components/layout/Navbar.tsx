@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Search, ChevronDown, LogOut, Menu, Moon, Sun, Users, LifeBuoy, UserRound } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, Moon, Sun, Users, LifeBuoy, UserRound } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import NotificationsBell from '@/features/notifications/components/NotificationsBell';
 import HelpButton from '@/features/help/components/HelpButton';
+import GlobalSearch from './GlobalSearch';
+import QuickCreate from './QuickCreate';
+import BranchFocus from './BranchFocus';
 
 export const SWITCH_ACCOUNT_EMAIL_KEY = 'switch_account_email';
 
@@ -36,6 +39,7 @@ export default function Navbar({ onOpenMenu }: { onOpenMenu?: () => void }) {
     if (!isOpen) return;
 
     const onClick = (event: MouseEvent) => {
+      if ((event.target as Element)?.closest?.('[data-floating]')) return;
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
@@ -67,16 +71,11 @@ export default function Navbar({ onOpenMenu }: { onOpenMenu?: () => void }) {
         </button>
       )}
 
-      <div className="hidden md:flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full w-96 border border-transparent focus-within:border-brand-accent focus-within:bg-white transition-all">
-        <Search size={18} className="text-gray-400" />
-        <input
-          type="text"
-          placeholder="Buscar o preguntar..."
-          className="bg-transparent border-none outline-none text-sm w-full text-gray-700 placeholder-gray-400"
-        />
-      </div>
+      {user?.tenant ? <GlobalSearch /> : <div className="hidden md:block w-96" />}
 
       <div className="flex items-center gap-2 sm:gap-4 ml-auto md:ml-0">
+        <BranchFocus />
+        <QuickCreate />
         <HelpButton />
         <NotificationsBell />
 
@@ -105,6 +104,12 @@ export default function Navbar({ onOpenMenu }: { onOpenMenu?: () => void }) {
                 <span className="block text-xs text-slate-500 truncate">{user?.email}</span>
                 <span className="block text-xs text-slate-400 mt-0.5">{roleLabel}{context ? ` · ${context}` : ''}</span>
               </div>
+
+              {(user?.branch_choices?.length ?? 0) > 1 && (
+                <div className="sm:hidden px-4 py-3 border-b border-slate-100">
+                  <BranchFocus inline />
+                </div>
+              )}
 
               <div className="py-1.5 border-b border-slate-100">
                 {!user?.impersonator && (

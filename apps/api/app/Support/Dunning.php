@@ -238,6 +238,7 @@ class Dunning
 
         PlanBilling::notify($subscription->tenant_id, 'subscription.overdue', 'Tu plan está vencido', $text, "overdue:{$subscription->id}:" . Subscriptions::endOf($subscription)?->format('YmdHis') . ":{$day}");
         self::mailAdmins($subscription, 'Tu plan está vencido', '<p>' . e($text) . '</p><p>Págalo en Mi empresa → Plan, con el botón «Pagar ahora».</p>');
+        PlatformWhatsApp::notify($subscription->tenant_id, $locked ? 'readonly' : 'overdue', [$tenant->name, (string) $subscription->plan?->getAttribute('name'), $amount, self::dateText($readOnly)]);
     }
 
     private static function announceReadOnly(Subscription $subscription): void
@@ -245,8 +246,10 @@ class Dunning
         $text = 'Tu empresa quedó en solo lectura porque el plan no está pagado. Puedes ver y exportar tus datos; para volver a agendar y vender, paga el plan en Mi empresa → Plan.'
             . ' Si no se paga antes del ' . self::dateText(self::cancelOn($subscription)) . ', el plan se cancelará.';
 
+        SaasEvents::record($subscription->tenant_id, null, ['meta' => ['reason' => 'read_only']]);
         PlanBilling::notify($subscription->tenant_id, 'subscription.locked', 'Tu empresa está en solo lectura', $text, "readonly:{$subscription->id}:" . Subscriptions::endOf($subscription)?->format('YmdHis'));
         self::mailAdmins($subscription, 'Tu empresa está en solo lectura', '<p>' . e($text) . '</p>');
+        PlatformWhatsApp::notify($subscription->tenant_id, 'readonly', [(string) Tenant::whereKey($subscription->tenant_id)->value('name')]);
     }
 
     private static function cancel(Subscription $subscription, int $day): void
@@ -254,9 +257,11 @@ class Dunning
         $subscription->update(['status' => 'canceled', 'canceled_at' => now()]);
         self::log($subscription, 'cancel', 'ok', 'Cancelado por falta de pago.', null, null, $day);
         Subscriptions::forget($subscription->tenant_id);
+        SaasEvents::record($subscription->tenant_id, null, ['meta' => ['reason' => 'unpaid']]);
         $text = 'Tu plan se canceló por falta de pago. Tus datos se conservan: si pagas el plan, tu empresa vuelve a tener todo como estaba.';
         PlanBilling::notify($subscription->tenant_id, 'subscription.canceled', 'Tu plan se canceló', $text, "canceled:{$subscription->id}");
         self::mailAdmins($subscription, 'Tu plan se canceló', '<p>' . e($text) . '</p>');
+        PlatformWhatsApp::notify($subscription->tenant_id, 'canceled', [(string) Tenant::whereKey($subscription->tenant_id)->value('name')]);
     }
 
     public static function retryNow(Subscription $subscription, User $actor): array
@@ -276,7 +281,7 @@ class Dunning
         self::remind($subscription, self::dayOf($subscription) ?? 0);
         self::log($subscription, 'remind', 'sent', null, null, $actor->id);
 
-        return ['ok' => true, 'message' => 'Le enviamos el recordatorio por correo y dentro del sistema.'];
+        return ['ok' => true, 'message' => PlatformWhatsApp::enabled() ? 'Le enviamos el recordatorio por correo, por WhatsApp y dentro del sistema.' : 'Le enviamos el recordatorio por correo y dentro del sistema.'];
     }
 
     public static function extend(Subscription $subscription, User $actor): array
@@ -289,6 +294,39 @@ class Dunning
         PlanBilling::notify($subscription->tenant_id, 'subscription.extended', 'Te dimos más días para pagar', 'Tienes ' . self::EXTEND_DAYS . ' días más para pagar tu plan: hasta el ' . self::dateText($readOnly) . '.', "extend:{$subscription->id}:" . now()->format('YmdHis'));
 
         return ['ok' => true, 'message' => 'Prórroga dada: ahora queda en solo lectura el ' . self::dateText($readOnly) . '.'];
+    }
+
+    public static function summary(array $list): array
+    {
+        $monthStart = now(PlatformReports::ZONE)->startOfMonth()->utc();
+        $recovered = ['count' => 0, 'amount' => 0.0];
+
+        if (self::ready()) {
+            $periods = DB::table('saas_dunning_attempts')->where('created_at', '>=', now()->subDays(60))
+                ->groupBy('subscription_id')->selectRaw('subscription_id, min(period_end) as since')->pluck('since', 'subscription_id');
+
+            if ($periods->isNotEmpty()) {
+                $invoices = DB::table('subscription_invoices')->whereIn('subscription_id', $periods->keys())->where('paid_at', '>=', $monthStart)->get(['subscription_id', 'amount', 'paid_at']);
+
+                foreach ($invoices as $invoice) {
+                    if (Carbon::parse($invoice->paid_at)->gte(Carbon::parse($periods[$invoice->subscription_id]))) {
+                        $recovered['amount'] += (float) $invoice->amount;
+                        $recovered['count']++;
+                    }
+                }
+            }
+        }
+
+        $rows = collect($list);
+
+        return [
+            'to_collect'       => round((float) $rows->sum('amount'), 2),
+            'to_collect_count' => $rows->count(),
+            'readonly'         => $rows->where('state', 'locked')->count(),
+            'grace'            => $rows->where('state', 'grace')->count(),
+            'recovered'        => round($recovered['amount'], 2),
+            'recovered_count'  => $recovered['count'],
+        ];
     }
 
     public static function overdueList(): array
@@ -309,7 +347,7 @@ class Dunning
                     'subscription_id' => $subscription->id,
                     'tenant'          => ['id' => $tenant?->id, 'name' => $tenant?->name],
                     'plan'            => $subscription->plan?->name,
-                    'amount'          => Subscriptions::price($subscription->plan, $subscription->billing_cycle),
+                    'amount'          => Subscriptions::charge($subscription),
                     'currency'        => $subscription->plan?->currency ?? 'PEN',
                     'state'           => $state['state'],
                     'ended_at'        => Subscriptions::endOf($subscription)?->setTimezone($zone)->format('Y-m-d'),

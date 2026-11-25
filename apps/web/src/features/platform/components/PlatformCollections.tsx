@@ -14,14 +14,18 @@ import { money, momentOf } from '@/features/sales/sales';
 import { PAYMENT_STATUS, cycleLabel, type TransferPayment } from '@/features/billing/billing';
 import PlatformOverdue from './PlatformOverdue';
 import PlatformCancellations from './PlatformCancellations';
+import PlatformPlanInvoicing from './PlatformPlanInvoicing';
+import PlatformNoticesAndRetention from './PlatformNoticesAndRetention';
 
-const TABS: { id: 'review' | 'paid' | 'rejected' | 'all' | 'overdue' | 'cancellations'; label: string }[] = [
+const TABS: { id: 'review' | 'paid' | 'rejected' | 'all' | 'overdue' | 'cancellations' | 'documents' | 'notices'; label: string }[] = [
   { id: 'review', label: 'Por revisar' },
   { id: 'paid', label: 'Aprobados' },
   { id: 'rejected', label: 'No confirmados' },
   { id: 'all', label: 'Todos' },
   { id: 'overdue', label: 'Pagos vencidos' },
   { id: 'cancellations', label: 'Bajas' },
+  { id: 'documents', label: 'Boletas y facturas' },
+  { id: 'notices', label: 'WhatsApp y borrado de datos' },
 ];
 
 const REASONS = ['No encontramos el abono en la cuenta.', 'El monto no coincide con el del plan.', 'El comprobante no se lee bien.'];
@@ -42,7 +46,7 @@ export default function PlatformCollections() {
   const [busy, setBusy] = useState('');
 
   const load = useCallback(() => {
-    if (tab === 'overdue' || tab === 'cancellations') return;
+    if (tab === 'overdue' || tab === 'cancellations' || tab === 'documents' || tab === 'notices') return;
     api.get('/admin/billing/transfers', { params: { status: tab } })
       .then((res) => { setRows(res.data.transfers); setCounts(res.data.counts ?? {}); setError(''); })
       .catch((err) => setError(apiError(err, 'No se pudieron cargar los cobros.')));
@@ -89,12 +93,12 @@ export default function PlatformCollections() {
       <div className="flex flex-wrap gap-2" role="tablist">
         {TABS.map((item) => (
           <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} data-collections-tab={item.id} onClick={() => setTab(item.id)} className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors ${tab === item.id ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
-            {item.label}{item.id !== 'all' && item.id !== 'overdue' && item.id !== 'cancellations' && counts[item.id] ? ` (${counts[item.id]})` : ''}
+            {item.label}{item.id !== 'all' && item.id !== 'overdue' && item.id !== 'cancellations' && item.id !== 'documents' && item.id !== 'notices' && counts[item.id] ? ` (${counts[item.id]})` : ''}
           </button>
         ))}
       </div>
 
-      {tab === 'cancellations' ? <PlatformCancellations /> : tab === 'overdue' ? <PlatformOverdue onChanged={refetchUser} /> : (
+      {tab === 'notices' ? <PlatformNoticesAndRetention /> : tab === 'documents' ? <PlatformPlanInvoicing /> : tab === 'cancellations' ? <PlatformCancellations /> : tab === 'overdue' ? <PlatformOverdue onChanged={refetchUser} /> : (
       <>
       <SuccessAlert message={notice} />
       <ErrorAlert message={error} />

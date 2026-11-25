@@ -16,7 +16,7 @@ class WebSite
 
     public const FAQ = [
         ['q' => '¿Necesito tarjeta para la prueba gratis?', 'a' => 'No. Creas tu cuenta, usas todo el plan durante la prueba y recién al final decides si te quedas.'],
-        ['q' => '¿Puedo cambiar de plan después?', 'a' => 'Sí. Puedes subir o bajar de plan cuando quieras desde Mi empresa; el cambio se aplica en tu siguiente periodo.'],
+        ['q' => '¿Puedo cambiar de plan después?', 'a' => 'Sí, desde Mi empresa. Si subes de plan empieza al momento y pagas solo la diferencia por los días que faltan; si bajas, el cambio se aplica en tu siguiente periodo.'],
         ['q' => '¿Cómo pago?', 'a' => 'Con tarjeta de crédito o débito y cobro automático, o con transferencia, Yape o Plin si eliges el pago anual.'],
         ['q' => '¿Mis datos están seguros?', 'a' => 'Cada empresa ve solo lo suyo, todo viaja cifrado y puedes descargar o pedir la baja de tus datos cuando quieras.'],
         ['q' => '¿Mis clientes pueden reservar solos?', 'a' => 'Sí. Tienes una página de reservas propia con tus servicios y horarios, que puedes compartir por WhatsApp o redes.'],
@@ -39,6 +39,8 @@ class WebSite
             'cta_title'        => 'Prueba gratis, sin tarjeta',
             'cta_text'         => 'Crea tu cuenta en minutos y empieza a agendar hoy.',
             'contact_form'     => true,
+            'chat_enabled'     => true,
+            'chat_greeting'    => 'Hola, soy el asistente de {producto}. Te ayudo con precios, funciones y qué plan te conviene.',
             'faq'              => self::FAQ,
             'ga4_id'           => null,
             'meta_pixel_id'    => null,
@@ -50,7 +52,64 @@ class WebSite
                 'cookies'    => self::defaultCookies(),
             ],
             'legal_updated_at' => null,
+        ] + self::contentDefaults();
+    }
+
+    public static function contentDefaults(): array
+    {
+        return [
+            'promo_enabled'       => false,
+            'promo_text'          => null,
+            'promo_coupon'        => null,
+            'hero_video_url'      => null,
+            'video_url'           => null,
+            'video_title'         => null,
+            'video_chapters'      => [],
+            'trust_badges'        => [],
+            'results'             => [],
+            'testimonials'        => [],
+            'partners_enabled'    => false,
+            'partners_title'      => null,
+            'partners_text'       => null,
+            'partners_conditions' => null,
+            'popup_enabled'       => false,
+            'popup_title'         => null,
+            'popup_text'          => null,
+            'popup_delay'         => 20,
+            'demo_enabled'        => true,
         ];
+    }
+
+    private static function list(mixed $value, array $keys, int $max): array
+    {
+        return array_slice(array_values(array_filter(array_map(function ($item) use ($keys) {
+            if (!is_array($item)) {
+                return null;
+            }
+
+            $row = [];
+
+            foreach ($keys as $key) {
+                $row[$key] = trim(strip_tags((string) ($item[$key] ?? ''))) ?: null;
+            }
+
+            return $row;
+        }, (array) $value), fn ($row) => $row && $row[$keys[0]] !== null && ($row[$keys[1]] ?? 'x') !== null)), 0, $max);
+    }
+
+    public static function cleanContent(array $values): array
+    {
+        $out = [];
+
+        foreach (['video_chapters' => [['time', 'label'], 12], 'trust_badges' => [['label', 'detail'], 8], 'results' => [['value', 'label'], 6], 'testimonials' => [['text', 'name', 'business', 'rubro', 'result'], 12]] as $key => [$keys, $max]) {
+            if (array_key_exists($key, $values)) {
+                $out[$key] = $key === 'trust_badges'
+                    ? array_slice(array_values(array_filter(array_map(fn ($i) => is_array($i) && trim((string) ($i['label'] ?? '')) !== '' ? ['label' => trim(strip_tags((string) $i['label'])), 'detail' => trim(strip_tags((string) ($i['detail'] ?? ''))) ?: null] : null, (array) $values[$key]))), 0, $max)
+                    : self::list($values[$key], $keys, $max);
+            }
+        }
+
+        return $out;
     }
 
     public static function settings(): array
@@ -97,15 +156,62 @@ class WebSite
             'seo_description'  => $site['seo_description'],
             'texts'            => array_intersect_key($site, array_flip(['rubros_title', 'rubros_text', 'pricing_title', 'pricing_text', 'cta_title', 'cta_text'])),
             'contact_form'     => (bool) $site['contact_form'],
+            'chat'             => ['enabled' => (bool) $site['chat_enabled'], 'greeting' => self::fill((string) $site['chat_greeting'])],
             'faq'              => $site['faq'],
             'analytics'        => ['ga4_id' => $site['ga4_id'], 'meta_pixel_id' => $site['meta_pixel_id']],
             'cookie_banner'    => (bool) $site['cookie_banner'],
-            'cookie_text'      => $site['cookie_text'],
+            'cookie_text'      => !$site['ga4_id'] && !$site['meta_pixel_id'] && $site['cookie_text'] === self::defaults()['cookie_text']
+                ? 'Usamos solo cookies propias, necesarias para que el sitio funcione. No usamos cookies de medición.'
+                : $site['cookie_text'],
             'legal_name'       => $values['legal_name'],
             'legal_tax_id'     => $values['legal_tax_id'],
             'landing'          => $look['landing'] ?? null,
             'brand'            => $look['brand'] ?? null,
+            'content'          => self::publicContent($site),
         ];
+    }
+
+    public static function publicContent(array $site): array
+    {
+        $text = fn ($value) => trim((string) $value) !== '' ? trim((string) $value) : null;
+        $video = fn ($value) => is_string($value) && preg_match('#^https://#i', trim($value)) ? trim($value) : null;
+        $coupon = $text($site['promo_coupon']);
+
+        return [
+            'promo'        => $site['promo_enabled'] && $text($site['promo_text'])
+                ? ['text' => $text($site['promo_text']), 'coupon' => $coupon ? mb_strtoupper($coupon) : null]
+                : null,
+            'hero_video'   => $video($site['hero_video_url']),
+            'video'        => $video($site['video_url'])
+                ? ['url' => $video($site['video_url']), 'title' => $text($site['video_title']), 'chapters' => array_values((array) $site['video_chapters'])]
+                : null,
+            'trust_badges' => array_values((array) $site['trust_badges']),
+            'results'      => array_values((array) $site['results']),
+            'testimonials' => array_values((array) $site['testimonials']),
+            'partners'     => $site['partners_enabled'] && $text($site['partners_title'])
+                ? ['title' => $text($site['partners_title']), 'text' => $text($site['partners_text']), 'conditions' => $text($site['partners_conditions'])]
+                : null,
+            'popup'        => $site['popup_enabled'] && $text($site['popup_title'])
+                ? ['title' => $text($site['popup_title']), 'text' => $text($site['popup_text']), 'delay' => max(5, min(120, (int) $site['popup_delay']))]
+                : null,
+            'demo'         => (bool) $site['demo_enabled'],
+        ];
+    }
+
+    public static function addons(): array
+    {
+        if (!Addons::ready()) {
+            return [];
+        }
+
+        return Addons::catalog()->map(fn ($a) => [
+            'code'          => $a->code,
+            'name'          => $a->name,
+            'description'   => $a->description,
+            'monthly_price' => round((float) $a->monthly_price, 2),
+            'currency'      => $a->currency ?? 'PEN',
+            'currency_symbol' => Currency::present($a->currency ?? 'PEN')['symbol'],
+        ])->values()->all();
     }
 
     public static function plans(): array
@@ -149,6 +255,7 @@ class WebSite
                     'color'       => $type->color,
                     'vocabulary'  => $vocabulary,
                     'updated_at'  => $type->updated_at,
+                    'group'       => WebRubros::groupOf($type->slug),
                 ];
 
                 if ($withTemplate) {
@@ -166,6 +273,11 @@ class WebSite
                     ])->take(4)->values();
                     $row['modules_off'] = array_values($off);
                     $row['dependents'] = is_string($type->dependents) ? (json_decode($type->dependents, true) ?: []) : (array) $type->dependents;
+                    $record = $template['record_template'] ?? null;
+                    $row['record'] = is_array($record) && !empty($record['fields'])
+                        ? ['name' => $record['name'] ?? 'Ficha de atención', 'fields' => collect($record['fields'])->pluck('label')->filter()->take(10)->values()->all()]
+                        : null;
+                    $row['content'] = WebRubros::content($type->slug);
                 }
 
                 return $row;

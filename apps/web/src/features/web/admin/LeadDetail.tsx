@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRightLeft, Loader2, MessageSquarePlus, StickyNote } from 'lucide-react';
+import { ArrowRightLeft, Loader2, MessagesSquare, MessageSquarePlus, StickyNote } from 'lucide-react';
 import { api } from '@/lib/axios';
 import Badge from '@/app/components/common/Badge';
 import BackLink from '@/app/components/common/BackLink';
@@ -104,6 +104,8 @@ export default function LeadDetail({ id }: { id: string }) {
               ['Fuente', lead.source_label],
               ['Campaña', [lead.utm.source, lead.utm.medium, lead.utm.campaign].filter(Boolean).join(' · ') || null],
               ['Cupón', lead.coupon],
+              ['Cómo nos conoció', lead.heard_from_label ?? null],
+              ['Artículo del blog', lead.utm.post ?? null],
               ['Llegó', when(lead.created_at)],
               ['Empezó la prueba', when(lead.trial_at) || null],
               ['Pagó', when(lead.paid_at) || null],
@@ -121,12 +123,12 @@ export default function LeadDetail({ id }: { id: string }) {
           <ol className="space-y-3" data-lead-events>
             {events.map((event) => (
               <li key={event.id} className="flex gap-3">
-                <span className={`mt-0.5 w-7 h-7 rounded-full shrink-0 flex items-center justify-center ${event.kind === 'note' ? 'bg-amber-50 text-amber-700' : 'bg-brand-soft/20 text-brand-accent'}`}>
-                  {event.kind === 'note' ? <StickyNote size={14} /> : <ArrowRightLeft size={14} />}
+                <span className={`mt-0.5 w-7 h-7 rounded-full shrink-0 flex items-center justify-center ${event.kind === 'note' ? 'bg-amber-50 text-amber-700' : event.kind === 'chat' ? 'bg-sky-50 text-sky-700' : 'bg-brand-soft/20 text-brand-accent'}`}>
+                  {event.kind === 'note' ? <StickyNote size={14} /> : event.kind === 'chat' ? <MessagesSquare size={14} /> : <ArrowRightLeft size={14} />}
                 </span>
                 <span className="min-w-0 text-sm">
                   <span className="block font-semibold text-slate-800">
-                    {event.kind === 'note' ? 'Nota' : event.from_label ? `De ${event.from_label} a ${event.to_label}` : `Llegó como ${event.to_label}`}
+                    {event.kind === 'note' ? 'Nota' : event.kind === 'chat' ? 'Conversación en el chat del sitio' : event.from_label ? `De ${event.from_label} a ${event.to_label}` : `Llegó como ${event.to_label}`}
                   </span>
                   {event.body && <span className="block text-slate-600 whitespace-pre-line break-words">{event.body}</span>}
                   <span className="block text-xs text-slate-400">{when(event.at)}{event.user_name ? ` · ${event.user_name}` : ' · automático'}</span>

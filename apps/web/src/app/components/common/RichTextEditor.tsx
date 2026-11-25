@@ -19,14 +19,17 @@ interface RichTextEditorProps {
   disabled?: boolean;
   minHeight?: number;
   linkVariables?: { token: string; label: string }[];
+  sitePaths?: boolean;
   ref?: Ref<RichTextHandle>;
 }
 
 const TOKEN = /^\[[^\]\s]+\]$/;
 
-const normalizeUrl = (raw: string) => {
+const SITE_PATH = /^\/(?!\/)\S*$/;
+
+const normalizeUrl = (raw: string, sitePaths = false) => {
   const url = raw.trim();
-  if (!url || TOKEN.test(url) || /^(https?:\/\/|mailto:)/i.test(url)) return url;
+  if (!url || TOKEN.test(url) || /^(https?:\/\/|mailto:)/i.test(url) || (sitePaths && SITE_PATH.test(url))) return url;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url)) return `mailto:${url}`;
   return `https://${url}`;
 };
@@ -48,7 +51,7 @@ function ToolButton({ active = false, disabled, label, onClick, children }: { ac
   );
 }
 
-export default function RichTextEditor({ id, value, onChange, onFocus, disabled = false, minHeight = 200, linkVariables = [], ref }: RichTextEditorProps) {
+export default function RichTextEditor({ id, value, onChange, onFocus, disabled = false, minHeight = 200, linkVariables = [], sitePaths = false, ref }: RichTextEditorProps) {
   const emitted = useRef<string | null>(null);
   const [linking, setLinking] = useState(false);
   const [url, setUrl] = useState('');
@@ -69,7 +72,7 @@ export default function RichTextEditor({ id, value, onChange, onFocus, disabled 
           autolink: true,
           defaultProtocol: 'https',
           HTMLAttributes: { rel: 'noopener', target: null },
-          isAllowedUri: (uri, ctx) => TOKEN.test(uri) || ctx.defaultValidate(uri),
+          isAllowedUri: (uri, ctx) => TOKEN.test(uri) || (sitePaths && SITE_PATH.test(uri)) || ctx.defaultValidate(uri),
         },
       }),
     ],
@@ -123,12 +126,12 @@ export default function RichTextEditor({ id, value, onChange, onFocus, disabled 
   };
 
   const applyLink = (target = url) => {
-    const href = normalizeUrl(target);
+    const href = normalizeUrl(target, sitePaths);
     if (!editor) return;
     if (!href) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
     } else if (editor.state.selection.empty && !state?.link) {
-      editor.chain().focus().insertContent({ type: 'text', text: TOKEN.test(href) ? 'Abrir enlace' : href, marks: [{ type: 'link', attrs: { href } }] }).run();
+      editor.chain().focus().insertContent({ type: 'text', text: TOKEN.test(href) || SITE_PATH.test(href) ? (linkVariables.find((v) => v.token === href)?.label ?? 'Abrir enlace') : href, marks: [{ type: 'link', attrs: { href } }] }).run();
     } else {
       editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
     }

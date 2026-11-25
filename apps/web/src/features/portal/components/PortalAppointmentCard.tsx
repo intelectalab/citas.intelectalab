@@ -15,11 +15,15 @@ interface PortalAppointmentCardProps {
   onCancel?: (appointment: PortalAppointment) => void;
   onMiss?: 'notify' | 'notify_release' | 'release';
   arriveMinutes?: number;
+  windowHours?: number;
+  contactPhone?: string | null;
 }
 
-export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel, onMiss = 'notify', arriveMinutes = 0 }: PortalAppointmentCardProps) {
+export default function PortalAppointmentCard({ appointment, featured = false, busy = false, onConfirm, onReschedule, onCancel, onMiss = 'notify', arriveMinutes = 0, windowHours, contactPhone }: PortalAppointmentCardProps) {
   const date = dateOf(appointment.starts_at);
   const hasActions = appointment.can_confirm || appointment.can_reschedule || appointment.can_cancel;
+  const hoursLeft = (new Date(appointment.starts_at).getTime() - Date.now()) / 3600000;
+  const insideWindow = windowHours !== undefined && appointment.is_upcoming && hoursLeft > 0 && hoursLeft < windowHours && !appointment.can_cancel && !appointment.can_reschedule;
 
   return (
     <article
@@ -89,9 +93,18 @@ export default function PortalAppointmentCard({ appointment, featured = false, b
                 ? `Cancelaste a tiempo: la sede te devolverá el adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)}.`
                 : appointment.deposit.outcome === 'refunded'
                   ? `Se te devolvió el adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)}.`
+                  : appointment.deposit.outcome === 'credited'
+                    ? `Cancelaste a tiempo: el adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)} quedó como saldo a favor para tu próxima compra o cita.`
                   : appointment.deposit.outcome === 'retained'
                     ? `El adelanto de ${money(appointment.deposit.amount, appointment.deposit.currency)} quedó para la sede porque la cita se canceló tarde o no asististe.`
-                    : `Pagaste ${money(appointment.deposit.amount, appointment.deposit.currency)} de adelanto. ${appointment.deposit.balance > 0 ? `Falta ${money(appointment.deposit.balance, appointment.deposit.currency)}, que pagas en la sede.` : ''} Si cancelas con al menos ${appointment.deposit.refund_hours} horas de anticipación, se te devuelve.`}
+                    : `Pagaste ${money(appointment.deposit.amount, appointment.deposit.currency)} de adelanto. ${appointment.deposit.balance > 0 ? `Falta ${money(appointment.deposit.balance, appointment.deposit.currency)}, que pagas en la sede.` : ''} Si cancelas con al menos ${appointment.deposit.refund_hours} horas de anticipación, ${appointment.deposit.on_cancel === 'refund' ? 'se te devuelve' : 'queda como saldo a favor para tu próxima compra o cita'}.`}
+            </p>
+          )}
+
+          {insideWindow && (
+            <p data-inside-window className="text-xs font-medium text-amber-700">
+              Faltan menos de {windowHours} horas para tu cita: ya no se puede cambiar ni cancelar en línea.{' '}
+              {contactPhone ? <>Si necesitas hacerlo, llama a la sede al <a href={`tel:${contactPhone.replace(/[^\d+]/g, '')}`} className="font-bold underline">{contactPhone}</a>.</> : 'Si necesitas hacerlo, comunícate con la sede.'}
             </p>
           )}
 

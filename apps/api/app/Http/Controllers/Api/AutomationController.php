@@ -75,7 +75,6 @@ class AutomationController extends Controller
 
     private function payload(Tenant $tenant): array
     {
-        Automations::run($tenant);
         $results = Automations::results($tenant);
         $coupons = $this->coupons($tenant);
 
@@ -86,7 +85,49 @@ class AutomationController extends Controller
             'email'         => $this->emailState($tenant),
             'inactive_days' => (int) AppointmentFlow::rule($tenant, 'crm.inactive_days'),
             'booked_days'   => Automations::BOOKED_DAYS,
+            'history'       => $this->history($tenant),
+            'month'         => $this->monthTotals($tenant),
         ];
+    }
+
+    private const RESULT_LABELS = ['sent' => 'Enviado', 'skipped' => 'No se envió', 'failed' => 'Con error'];
+
+    private function history(Tenant $tenant): array
+    {
+        $labels = collect(Automations::TRIGGERS)->map(fn ($t) => $t['label'])->all();
+        $hasMessage = \Illuminate\Support\Facades\Schema::hasColumn('automation_logs', 'message_id');
+
+        return DB::table('automation_logs as l')
+            ->join('automation_rules as r', 'r.id', '=', 'l.automation_rule_id')
+            ->leftJoin('customers as c', 'c.id', '=', 'l.customer_id')
+            ->when($hasMessage, fn ($q) => $q->leftJoin('messages as m', 'm.id', '=', 'l.message_id'))
+            ->where('l.tenant_id', $tenant->id)
+            ->orderByDesc('l.created_at')
+            ->limit(300)
+            ->get(array_merge(['l.id', 'l.result', 'l.reason', 'l.created_at', 'l.customer_id', 'r.trigger_event', 'c.first_name', 'c.last_name'], $hasMessage ? ['m.status as message_status', 'm.channel as message_channel'] : []))
+            ->map(fn ($row) => [
+                'id'           => $row->id,
+                'automation'   => $labels[$row->trigger_event] ?? $row->trigger_event,
+                'customer'     => $row->customer_id ? ['id' => $row->customer_id, 'name' => \App\Support\Person::name($row)] : null,
+                'result'       => $row->result,
+                'result_label' => ($row->message_status ?? null) === 'simulated' ? 'Simulado' : (self::RESULT_LABELS[$row->result] ?? $row->result),
+                'reason'       => $row->reason,
+                'channel'      => ($row->message_channel ?? null) === 'whatsapp' ? 'WhatsApp' : 'Correo',
+                'at'           => \Illuminate\Support\Carbon::parse($row->created_at)->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function monthTotals(Tenant $tenant): array
+    {
+        $row = DB::table('automation_logs')
+            ->where('tenant_id', $tenant->id)
+            ->where('created_at', '>=', now($tenant->zone())->startOfMonth()->toIso8601String())
+            ->selectRaw("count(*) FILTER (WHERE result = 'failed') AS failed, count(*) FILTER (WHERE result = 'skipped') AS skipped, count(*) AS runs")
+            ->first();
+
+        return ['failed' => (int) $row->failed, 'skipped' => (int) $row->skipped, 'runs' => (int) $row->runs];
     }
 
     public function index(Request $request)

@@ -1,4 +1,4 @@
-export type CampaignStatus = 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'blocked';
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'blocked';
 
 export type EmailState = 'none' | 'simulated' | 'ok';
 
@@ -17,6 +17,9 @@ export interface ChannelResults {
 }
 
 export interface CampaignResults {
+  delivered?: number;
+  read?: number;
+  revenue?: number;
   sent: number;
   pending: number;
   failed: number;
@@ -161,6 +164,14 @@ export interface Audience {
   channel?: CampaignChannel;
   channels?: Partial<Record<'email' | 'whatsapp', Record<string, number>>>;
   quota?: Partial<Record<'email' | 'whatsapp', QuotaState>>;
+  sample?: { first_name: string; name: string } | null;
+}
+
+export interface SegmentCount {
+  key: string;
+  label: string;
+  hint: string;
+  count: number;
 }
 
 export const COUPON_TOKEN = '[Cupón]';
@@ -172,6 +183,7 @@ export const copyName = (name: string) => {
 };
 
 export const CAMPAIGN_BADGES: Record<CampaignStatus, string> = {
+  draft: 'bg-amber-50 text-amber-800',
   scheduled: 'bg-violet-50 text-violet-700',
   sending: 'bg-sky-50 text-sky-700',
   sent: 'bg-emerald-50 text-emerald-700',

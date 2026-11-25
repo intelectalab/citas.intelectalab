@@ -1,0 +1,94 @@
+name: Recorridos en el navegador
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: recorridos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Playwright (escritorio y celular)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      E2E_DB: erp_saas_e2e_test
+      E2E_PG_CONTAINER: ${{ job.services.postgres.id }}
+      E2E_API_PORT: 8001
+      E2E_WEB_PORT: 3005
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cliente de PostgreSQL 17
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-common lsof
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, pgsql, mbstring, intl, gd, zip, bcmath
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Dependencias de la API
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Dependencias de la web
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Dependencias de los recorridos
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Correr los recorridos
+        working-directory: e2e
+        run: node run.mjs
+
+      - name: Informe de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-playwright
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7

@@ -382,7 +382,7 @@ describe('mora: cobros, avisos, solo lectura y cancelación', function () {
         expect(Subscriptions::state($this->co->tenant->id)['state'])->toBe('locked')
             ->and(DB::table('saas_dunning_attempts')->where('kind', 'readonly')->count())->toBe(1);
 
-        $this->as($this->co->owner)->postJson('/api/branches', ['name' => 'Otra sede'])->assertStatus(402)->assertJsonPath('code', 'PLAN_LOCKED');
+        $this->as($this->co->owner)->postJson('/api/branches', ['name' => 'Otra sede'])->assertStatus(423)->assertJsonPath('code', 'TENANT_SUSPENDED');
 
         correrMora($this, 45);
         $sub = suscripcion($this->co->tenant->id);

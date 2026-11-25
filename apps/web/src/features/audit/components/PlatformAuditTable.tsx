@@ -22,6 +22,7 @@ export default function PlatformAuditTable() {
   const [areas, setAreas] = useState<Record<string, string>>({});
   const [ready, setReady] = useState(true);
   const [truncated, setTruncated] = useState(false);
+  const [separate, setSeparate] = useState(false);
   const [range, setRange] = useState<DateRange | null>(null);
   const [area, setArea] = useState('all');
   const [card, setCard] = useState('');
@@ -48,6 +49,7 @@ export default function PlatformAuditTable() {
         setAreas(res.data.areas);
         setReady(res.data.ready);
         setTruncated(res.data.truncated);
+        setSeparate(Boolean(res.data.separate));
         setError('');
       })
       .catch((err) => setError(apiError(err, 'No se pudo cargar la auditoría.')));
@@ -70,7 +72,7 @@ export default function PlatformAuditTable() {
     (area === 'all' || row.area === area)
     && (!card || cards[card](row))
     && (!filters.actor || row.actor.name === filters.actor)
-    && (!term || normalize(`${row.label} ${row.actor.name} ${row.tenant?.name ?? ''} ${row.entity_label ?? ''} ${row.impersonator?.name ?? ''} ${changeSummary(row)}`).includes(term)),
+    && (!term || normalize(`${row.code ?? ''} ${row.label} ${row.actor.name} ${row.tenant?.name ?? ''} ${row.entity_label ?? ''} ${row.impersonator?.name ?? ''} ${changeSummary(row)}`).includes(term)),
   );
 
   const usedAreas = [...new Set(all.map((row) => row.area))];
@@ -98,6 +100,10 @@ export default function PlatformAuditTable() {
   ];
 
   const columns: Column<AuditRow>[] = [
+    ...(separate ? [{
+      header: 'Código',
+      cell: (row: AuditRow) => <span key={`code-${row.id}`} className="font-mono text-xs font-bold text-brand-ink whitespace-nowrap" data-log-code>{row.code ?? '—'}</span>,
+    }] : []),
     {
       header: 'Cuándo',
       cell: (row) => (
@@ -142,6 +148,7 @@ export default function PlatformAuditTable() {
   ];
 
   const exportColumns: ExportColumn<AuditRow>[] = [
+    { header: 'Código', value: (row) => row.code ?? null },
     { header: 'Fecha', type: 'datetime', value: (row) => row.at },
     { header: 'Persona', value: (row) => row.impersonator?.name ?? row.actor.name },
     { header: 'En la cuenta de', value: (row) => (row.impersonator ? row.actor.name : null) },
@@ -164,7 +171,7 @@ export default function PlatformAuditTable() {
       )}
 
       <DataTable<AuditRow>
-        title="Auditoría de la plataforma"
+        title={separate ? 'Bitácora de la plataforma' : 'Auditoría de la plataforma'}
         tabs={[{ id: 'all', label: 'Todo', count: all.length }, ...usedAreas.map((id) => ({ id, label: areas[id] ?? id, count: all.filter((row) => row.area === id).length }))]}
         activeTab={area}
         onTabChange={setArea}
@@ -181,7 +188,7 @@ export default function PlatformAuditTable() {
         ]}
         columns={columns}
         data={visible}
-        exportTitle="Auditoría de la plataforma"
+        exportTitle="Bitácora de la plataforma"
         exportScreen="admin-audit"
         exportColumns={exportColumns}
         getItemKey={(row) => row.id}

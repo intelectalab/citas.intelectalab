@@ -31,10 +31,18 @@ class RegisterTenantController extends Controller
         SignupGuard::check($request);
 
         $validated = $request->validate([
-            'ruc'             => 'required|string|max:30',
+            'ruc'             => ['required', 'string', 'regex:/^(10|15|17|20)\d{9}$/', function ($attribute, $value, $fail) {
+                if (is_string($value) && preg_match('/^(10|15|17|20)\d{9}$/', $value) && !\App\Http\Controllers\Api\InventoryController::validRuc($value)) {
+                    $fail('Revisa el RUC: el último número no coincide con los demás. Puede que se haya escrito mal un número.');
+                }
+            }],
             'company_name'    => 'required|string|max:200', 
             'commercial_name' => 'nullable|string|max:200',
-            'phone'           => 'nullable|string|max:30',
+            'phone'           => ['nullable', 'string', 'max:30', function ($attribute, $value, $fail) {
+                if (is_string($value) && trim($value) !== '' && !preg_match('/^9\d{8}$/', preg_replace('/^(\+?51)/', '', preg_replace('/[\s-]/', '', $value)))) {
+                    $fail('Escribe un celular de 9 dígitos que empiece con 9.');
+                }
+            }],
             'address'         => 'nullable|string|max:255',
             'department'      => 'required|string|max:100',
             'district'        => 'nullable|string|max:100',
@@ -51,6 +59,12 @@ class RegisterTenantController extends Controller
             'plan_id'         => ['required', 'uuid', Rule::exists('saas_plans', 'id')->where('status', 'active')->where('is_public_catalog', true)],
             'coupon'          => 'nullable|string|max:30',
             'utm'             => 'nullable|array',
+            'heard_from'      => ['nullable', Rule::in(array_keys(\App\Support\WebLeads::HEARD_FROM))],
+            'sample_data'     => 'nullable|boolean',
+            'accept_terms'    => 'sometimes|accepted',
+        ], [
+            'ruc.regex'             => 'El RUC tiene 11 números y empieza con 10, 15, 17 o 20.',
+            'accept_terms.accepted' => 'Para crear tu cuenta acepta los términos y la política de privacidad.',
         ]);
 
         $coupon = trim((string) ($validated['coupon'] ?? ''));
@@ -93,7 +107,16 @@ class RegisterTenantController extends Controller
             'phone'  => $validated['phone'] ?? null,
             'utm'    => $validated['utm'] ?? [],
             'coupon' => $coupon !== '' ? \App\Support\PlanCoupons::normalize($coupon) : null,
+            'heard_from' => $validated['heard_from'] ?? null,
         ]);
+
+        if (!empty($validated['sample_data']) && \App\Support\SampleData::ready()) {
+            try {
+                \App\Support\Rls::asTenant($result['tenant']->id, fn () => \App\Support\SampleData::create($result['tenant']->fresh(), $result['user']));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         \App\Support\Referrals::attach($result['tenant'], $validated['ref'] ?? null, $validated['email']);
 

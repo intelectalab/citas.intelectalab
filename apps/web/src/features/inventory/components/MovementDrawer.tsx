@@ -326,11 +326,11 @@ export default function MovementDrawer({
 
           <div>
             <label className={labelClass} htmlFor="movement-reason">
-              Observación o motivo {mode === 'exit' ? '*' : '(opcional)'}
+              Observación o motivo {mode === 'exit' || (mode === 'count' && countDelta !== 0) ? '*' : '(opcional)'}
             </label>
             <input
               id="movement-reason"
-              required={mode === 'exit'}
+              required={mode === 'exit' || (mode === 'count' && countDelta !== 0)}
               maxLength={255}
               placeholder={
                 mode === 'count'

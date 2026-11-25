@@ -28,6 +28,17 @@ class WebLeads
         'chatbot'  => 'Chat del sitio',
     ];
 
+    public const HEARD_FROM = [
+        'google'    => 'Buscando en Google',
+        'facebook'  => 'Facebook o Instagram',
+        'tiktok'    => 'TikTok',
+        'youtube'   => 'YouTube',
+        'referido'  => 'Me lo recomendaron',
+        'evento'    => 'En una feria o evento',
+        'blog'      => 'Leyendo el blog',
+        'otro'      => 'Otro',
+    ];
+
     public const PAGES = ['home', 'pricing', 'business', 'blog', 'post', 'legal', 'signup'];
 
     private static ?bool $ready = null;
@@ -35,6 +46,13 @@ class WebLeads
     public static function ready(): bool
     {
         return self::$ready ??= Schema::hasTable('web_visits') && Schema::hasTable('web_lead_events');
+    }
+
+    public static function heardReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= Schema::hasColumn('web_leads', 'heard_from');
     }
 
     public static function cleanUtm(mixed $utm): array
@@ -47,6 +65,10 @@ class WebLeads
             if (is_string($value) && trim($value) !== '') {
                 $out[$key] = mb_substr(trim(strip_tags($value)), 0, 80);
             }
+        }
+
+        if (is_array($utm) && is_string($utm['post'] ?? null) && preg_match('/^[a-z0-9-]{1,90}$/', $utm['post'])) {
+            $out['post'] = $utm['post'];
         }
 
         return $out;
@@ -108,7 +130,7 @@ class WebLeads
                 'trial_at'      => $values['trial_at'] ?? null,
                 'created_at'    => now(),
                 'updated_at'    => now(),
-            ]);
+            ] + (!empty($values['heard_from']) && self::heardReady() ? ['heard_from' => $values['heard_from']] : []));
             self::event($id, 'stage', null, $values['stage'] ?? 'new', $values['note'] ?? null, $user);
 
             return $id;
@@ -151,7 +173,7 @@ class WebLeads
                         'business_type' => $existing->business_type ?: $businessType,
                         'coupon'        => $values['coupon'] ?? $existing->coupon,
                         'updated_at'    => now(),
-                    ]);
+                    ] + (!empty($values['heard_from']) && self::heardReady() ? ['heard_from' => $values['heard_from']] : []));
                     self::event($existing->id, 'stage', $existing->stage, 'trial', 'Se registró en la web y empezó su prueba.');
 
                     return;
@@ -170,6 +192,7 @@ class WebLeads
                     'coupon'        => $values['coupon'] ?? null,
                     'trial_at'      => now(),
                     'note'          => 'Se registró en la web y empezó su prueba.',
+                    'heard_from'    => $values['heard_from'] ?? null,
                 ]);
             });
         } catch (\Throwable $e) {
@@ -265,6 +288,7 @@ class WebLeads
             'stage'               => $lead->stage,
             'stage_label'         => self::STAGES[$lead->stage] ?? $lead->stage,
             'coupon'              => $lead->coupon,
+            'heard_from_label'    => isset($lead->heard_from) && $lead->heard_from ? (self::HEARD_FROM[$lead->heard_from] ?? $lead->heard_from) : null,
             'lost_reason'         => $lead->lost_reason,
             'tenant_id'           => $lead->tenant_id,
             'tenant_name'         => $lead->tenant_name ?? null,

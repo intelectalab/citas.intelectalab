@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\AuditEvent;
 use App\Models\CareRecord;
 use App\Models\CareRecordAddendum;
+use App\Models\CareRecordFile;
 use App\Models\CareRecordRead;
 use App\Models\Professional;
 use App\Models\RecordTemplate;
@@ -20,6 +21,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
 
@@ -42,11 +45,19 @@ class CareRecordController extends Controller
 
     private function ownProfessionalId(User $user): ?string
     {
-        if ($user->isTenantAdmin() || !$user->roles()->where('slug', 'professional')->exists()) {
+        if ($user->isTenantAdmin() || $user->allows('records.all')) {
             return null;
         }
 
-        return Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id') ?? 'none';
+        $professionalId = Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id');
+
+        if ($professionalId) {
+            return $professionalId;
+        }
+
+        $restricted = Access::scopeOf($user) === 'own' || $user->roles()->where('slug', 'professional')->exists();
+
+        return $restricted ? 'none' : null;
     }
 
     private function appointment(Request $request, string $id): Appointment
@@ -359,6 +370,7 @@ class CareRecordController extends Controller
                 'starts_at'    => $appointment->starts_at->copy()->setTimezone($this->timezone($tenant))->format(self::LOCAL_FORMAT),
                 'customer'     => $appointment->customer ? \App\Support\Person::name($appointment->customer) : null,
                 'dependent'    => $appointment->dependent?->name,
+                'dependent_alert' => trim((string) $appointment->dependent?->getAttribute('alert')) ?: null,
                 'service'      => $appointment->service?->name,
                 'professional' => $appointment->professional?->display_name,
             ],
@@ -370,7 +382,7 @@ class CareRecordController extends Controller
                 'consent_text'    => $template->consent_text,
                 'require_consent' => $template->require_consent,
             ] : null,
-            'private_by_default'   => (bool) AppointmentFlow::rule($tenant, 'records.private_to_author'),
+            'private_by_default'   => (bool) AppointmentFlow::rule($tenant, 'records.private_to_author') || (bool) ($template?->is_confidential ?? false),
             'required_to_complete' => (bool) AppointmentFlow::rule($tenant, 'records.require_on_complete'),
             'lock_hours'           => (int) AppointmentFlow::rule($tenant, 'records.lock_hours'),
             'previous'             => $previous->map(fn (CareRecord $r) => $this->present($r, $tenant, $user)),
@@ -388,6 +400,7 @@ class CareRecordController extends Controller
             'data'             => 'present|array',
             'consent_accepted' => 'boolean',
             'sign'             => 'boolean',
+            'correction_reason' => 'nullable|string|max:500',
         ]);
 
         if (in_array($appointment->status, AppointmentFlow::RELEASED, true)) {
@@ -419,7 +432,7 @@ class CareRecordController extends Controller
                     'customer_dependent_id' => $appointment->customer_dependent_id,
                     'appointment_id'        => $appointment->id,
                     'professional_id'       => $appointment->professional_id,
-                    'is_private'            => (bool) AppointmentFlow::rule($tenant, 'records.private_to_author'),
+                    'is_private'            => (bool) AppointmentFlow::rule($tenant, 'records.private_to_author') || (bool) ($template->is_confidential ?? false),
                     'status'                => CareRecord::DRAFT,
                     'created_by'            => $user->id,
                 ]);
@@ -446,13 +459,15 @@ class CareRecordController extends Controller
             $consent = !empty($validated['consent_accepted']);
 
             if ($strict && $requireConsent && $record->consent_text && !$consent) {
-                $errors['consent'] = 'Falta que el cliente acepte el consentimiento.';
+                $errors['consent'] = 'Falta marcar la casilla del consentimiento antes de firmar.';
             }
 
             if ($errors) {
                 throw ValidationException::withMessages($errors);
             }
 
+            $previous = $record->exists ? ($record->data ?? []) : [];
+            $previousConsent = (bool) $record->consent_accepted;
             $record->data = $values;
 
             if ($consent !== (bool) $record->consent_accepted) {
@@ -462,6 +477,7 @@ class CareRecordController extends Controller
 
             if ($record->exists && $record->status === CareRecord::SIGNED && $record->isDirty(['data', 'consent_accepted'])) {
                 $auditAction = 'record.corrected';
+                $this->keepCorrection($record, $user, $previous, $previousConsent, $validated['correction_reason'] ?? null);
             }
 
             if ($sign && $record->status === CareRecord::DRAFT) {
@@ -469,7 +485,7 @@ class CareRecordController extends Controller
                 $record->status = CareRecord::SIGNED;
                 $record->signed_at = now();
                 $record->signed_by = $user->id;
-                $record->locked_at = now()->addHours(max(0, (int) AppointmentFlow::rule($tenant, 'records.lock_hours')));
+                $record->locked_at = now();
             }
 
             $record->save();
@@ -486,6 +502,56 @@ class CareRecordController extends Controller
         }
 
         return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
+    }
+
+    private function shown(mixed $value): string
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return '(vacío)';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Sí' : 'No';
+        }
+
+        if (is_array($value)) {
+            $flat = array_is_list($value) && collect($value)->every(fn ($v) => is_scalar($v)) ? implode(', ', $value) : json_encode($value, JSON_UNESCAPED_UNICODE);
+
+            return mb_strimwidth((string) $flat, 0, 300, '…');
+        }
+
+        return mb_strimwidth((string) $value, 0, 300, '…');
+    }
+
+    private function keepCorrection(CareRecord $record, User $user, array $before, bool $consentBefore, ?string $reason): void
+    {
+        $after = $record->data ?? [];
+        $lines = [];
+
+        foreach ($record->template_snapshot ?? [] as $field) {
+            $key = $field['key'] ?? null;
+
+            if (!$key || ($before[$key] ?? null) == ($after[$key] ?? null)) {
+                continue;
+            }
+
+            $lines[] = '• ' . ($field['label'] ?? $key) . ': decía «' . $this->shown($before[$key] ?? null) . '» y ahora dice «' . $this->shown($after[$key] ?? null) . '».';
+        }
+
+        if ($consentBefore !== (bool) $record->consent_accepted) {
+            $lines[] = '• Consentimiento: ' . ($record->consent_accepted ? 'ahora está aceptado.' : 'ya no está aceptado.');
+        }
+
+        $reason = trim((string) $reason);
+
+        CareRecordAddendum::create([
+            'tenant_id'      => $record->tenant_id,
+            'care_record_id' => $record->id,
+            'author_user_id' => $user->id,
+            'note'           => mb_substr('Corrección de la ficha firmada' . ($reason !== '' ? ". Motivo: {$reason}" : '') . ".
+" . implode("
+", $lines ?: ['• Sin cambios visibles en los campos.']), 0, 5000),
+        ]);
     }
 
     private function audit(Request $request, string $action, CareRecord $record, ?Appointment $appointment = null): void
@@ -528,6 +594,101 @@ class CareRecordController extends Controller
         return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
     }
 
+    private static ?bool $filesReady = null;
+
+    public static function filesReady(): bool
+    {
+        return self::$filesReady ??= Schema::hasTable('care_record_files');
+    }
+
+    private const FILES_NOT_READY = 'Falta actualizar la base de datos para adjuntar archivos a las fichas: ejecuta php artisan migrate.';
+
+    private function recordFile(CareRecord $record, string $id): CareRecordFile
+    {
+        return CareRecordFile::where('care_record_id', $record->id)->whereNull('deleted_at')->findOrFail($id);
+    }
+
+    public function uploadFile(Request $request, string $careRecord)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        abort_unless(self::filesReady(), 503, self::FILES_NOT_READY);
+        $record = $this->find($request, $careRecord);
+
+        abort_unless($this->canRead($record, $user) && $this->isOwn($record, $user), 403, 'Esta ficha es privada: solo le adjunta archivos quien la escribió.');
+
+        $request->validate([
+            'file' => 'required|file|max:' . CareRecordFile::MAX_KB . '|mimes:' . implode(',', CareRecordFile::MIMES),
+        ], [
+            'file.required' => 'Elige el archivo.',
+            'file.max'      => 'El archivo pesa más de ' . intdiv(CareRecordFile::MAX_KB, 1024) . ' MB. Usa uno más liviano.',
+            'file.mimes'    => 'Solo se adjuntan PDF, fotos (JPG, PNG, WEBP, HEIC) o documentos de Word.',
+            'file.uploaded' => 'No se pudo subir el archivo. Intenta de nuevo.',
+        ]);
+
+        if (CareRecordFile::where('care_record_id', $record->id)->whereNull('deleted_at')->count() >= CareRecordFile::MAX_PER_RECORD) {
+            throw ValidationException::withMessages(['file' => 'Una ficha lleva como máximo ' . CareRecordFile::MAX_PER_RECORD . ' archivos.']);
+        }
+
+        $upload = $request->file('file');
+        $path = $upload->store("care-records/{$tenant->id}/{$record->id}", 'local');
+
+        CareRecordFile::create([
+            'tenant_id'      => $tenant->id,
+            'care_record_id' => $record->id,
+            'file_name'      => mb_substr($upload->getClientOriginalName() ?: 'archivo', 0, 190),
+            'mime'           => mb_substr((string) ($upload->getMimeType() ?: 'application/octet-stream'), 0, 100),
+            'size'           => (int) $upload->getSize(),
+            'path'           => $path,
+            'uploaded_by'    => $user->id,
+        ]);
+        $this->audit($request, 'record.file_added', $record);
+
+        return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user), 201);
+    }
+
+    public function fileLink(Request $request, string $careRecord, string $recordFile)
+    {
+        $this->tenant($request);
+        abort_unless(self::filesReady(), 503, self::FILES_NOT_READY);
+        $record = $this->find($request, $careRecord);
+        abort_unless($this->canRead($record, $request->user()), 403, 'Esta ficha es privada: no puedes ver sus archivos.');
+        $file = $this->recordFile($record, $recordFile);
+        $this->logRead($request, $record, 'file');
+
+        return response()->json([
+            'url'        => url(URL::temporarySignedRoute('care-record-files.download', now()->addMinutes(CareRecordFile::LINK_MINUTES), ['recordFile' => $file->id], false)),
+            'expires_in' => CareRecordFile::LINK_MINUTES,
+        ]);
+    }
+
+    public function downloadFile(string $recordFile)
+    {
+        $file = \App\Support\Rls::bypass(fn () => CareRecordFile::whereNull('deleted_at')->find($recordFile));
+        abort_unless($file && Storage::disk('local')->exists($file->path), 404, 'Este archivo ya no está disponible.');
+
+        return Storage::disk('local')->download($file->path, $file->file_name, ['Cache-Control' => 'private, no-store']);
+    }
+
+    public function deleteFile(Request $request, string $careRecord, string $recordFile)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        abort_unless(self::filesReady(), 503, self::FILES_NOT_READY);
+        $record = $this->find($request, $careRecord);
+        $file = $this->recordFile($record, $recordFile);
+
+        if ($record->status !== CareRecord::DRAFT) {
+            throw ValidationException::withMessages(['file' => 'La ficha ya está firmada: sus archivos se conservan. Si uno está mal, adjunta el correcto y explícalo en una nota.']);
+        }
+
+        abort_unless($file->uploaded_by === $user->id || $user->isTenantAdmin(), 403, 'Solo quien subió el archivo lo puede quitar.');
+        $file->update(['deleted_at' => now()]);
+        $this->audit($request, 'record.file_removed', $record);
+
+        return response()->json($this->present($record->fresh(self::RELATIONS), $tenant, $user));
+    }
+
     public function index(Request $request)
     {
         $tenant = $this->tenant($request);
@@ -536,6 +697,7 @@ class CareRecordController extends Controller
 
         $validated = $request->validate([
             'customer_id' => 'nullable|uuid',
+            'customer_dependent_id' => 'nullable|uuid',
             'status'      => 'nullable|in:draft,signed,locked',
             'search'      => 'nullable|string|max:100',
             'from'        => 'nullable|date_format:Y-m-d',
@@ -550,11 +712,11 @@ class CareRecordController extends Controller
             ->when($own, fn ($q) => $q->where('professional_id', $own))
             ->when(Access::branchLimit($user), fn ($q, $id) => $q->where('branch_id', $id))
             ->when($validated['customer_id'] ?? null, fn ($q, $id) => $q->where('customer_id', $id))
+            ->when($validated['customer_dependent_id'] ?? null, fn ($q, $id) => $q->where('customer_dependent_id', $id))
             ->when($validated['from'] ?? null, fn ($q, $from) => $q->where('created_at', '>=', Carbon::parse($from, $timezone)->startOfDay()->toIso8601String()))
             ->when($validated['to'] ?? null, fn ($q, $to) => $q->where('created_at', '<', Carbon::parse($to, $timezone)->addDay()->startOfDay()->toIso8601String()))
             ->when($status === 'draft', fn ($q) => $q->where('status', CareRecord::DRAFT))
-            ->when($status === 'signed', fn ($q) => $q->where('status', CareRecord::SIGNED)->where(fn ($q) => $q->whereNull('locked_at')->orWhere('locked_at', '>', now())))
-            ->when($status === 'locked', fn ($q) => $q->where('status', '!=', CareRecord::DRAFT)->where('locked_at', '<=', now()))
+            ->when(in_array($status, ['signed', 'locked'], true), fn ($q) => $q->where('status', '!=', CareRecord::DRAFT))
             ->when($validated['search'] ?? null, function ($q, $search) {
                 $q->whereHas('customer', function ($q) use ($search) {
                     $q->where(function ($q) use ($search) {
@@ -579,6 +741,237 @@ class CareRecordController extends Controller
         $this->logRead($request, $record, 'view');
 
         return response()->json($this->withReads($this->present($record, $tenant, $user), $record, $tenant, $user));
+    }
+
+    public function sheetTemplates(Request $request)
+    {
+        $tenant = $this->tenant($request);
+
+        return response()->json([
+            'templates' => RecordTemplate::where('tenant_id', $tenant->id)
+                ->where('status', 'active')
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get(['id', 'name', 'description'])
+                ->map(fn (RecordTemplate $t) => ['id' => $t->id, 'name' => $t->name, 'description' => $t->description])
+                ->values(),
+        ]);
+    }
+
+    public function storeLoose(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $validated = $request->validate([
+            'customer_id'           => 'required|uuid',
+            'record_template_id'    => 'required|uuid',
+            'customer_dependent_id' => 'nullable|uuid',
+        ], [
+            'customer_id.required'        => 'Elige a quién es la ficha.',
+            'record_template_id.required' => 'Elige qué ficha vas a llenar.',
+        ]);
+
+        $customer = \App\Models\Customer::visibleTo($user)->findOrFail($validated['customer_id']);
+        $template = RecordTemplate::where('tenant_id', $tenant->id)->where('status', 'active')->find($validated['record_template_id']);
+
+        if (!$template) {
+            throw ValidationException::withMessages(['record_template_id' => 'Esa plantilla de ficha no existe o está inactiva.']);
+        }
+
+        $dependentId = $validated['customer_dependent_id'] ?? null;
+
+        if ($dependentId && !$customer->dependents()->whereKey($dependentId)->exists()) {
+            throw ValidationException::withMessages(['customer_dependent_id' => 'Ese dependiente no es de esta persona.']);
+        }
+
+        $own = $this->ownProfessionalId($user);
+        abort_if($own === 'none', 403, 'Tu cuenta no está ligada a un profesional: no puede abrir fichas.');
+        $professionalId = $own ?: Professional::where('tenant_id', $tenant->id)->where('user_id', $user->id)->value('id');
+
+        $record = new CareRecord([
+            'tenant_id'             => $tenant->id,
+            'branch_id'             => Access::branchLimit($user) ?? $user->branch_id,
+            'record_template_id'    => $template->id,
+            'template_snapshot'     => $template->fields ?? [],
+            'template_name'         => $template->name,
+            'consent_text'          => $template->consent_text,
+            'customer_id'           => $customer->id,
+            'customer_dependent_id' => $dependentId,
+            'appointment_id'        => null,
+            'professional_id'       => $professionalId,
+            'is_private'            => (bool) AppointmentFlow::rule($tenant, 'records.private_to_author') || (bool) ($template->is_confidential ?? false),
+            'status'                => CareRecord::DRAFT,
+            'created_by'            => $user->id,
+        ]);
+
+        if (Schema::hasColumn('care_records', 'require_consent')) {
+            $record->require_consent = (bool) $template->require_consent;
+        }
+
+        $record->save();
+        $this->audit($request, 'record.created_without_appointment', $record);
+
+        return response()->json(['id' => $record->id], 201);
+    }
+
+    private function looseContext(Request $request, CareRecord $record, bool $logReads = false): array
+    {
+        $tenant = $this->tenant($request);
+        $user = $request->user();
+        $record->loadMissing(self::RELATIONS);
+
+        $previous = CareRecord::where('tenant_id', $tenant->id)
+            ->where('customer_id', $record->customer_id)
+            ->when($record->customer_dependent_id, fn ($q, $id) => $q->where('customer_dependent_id', $id))
+            ->where('id', '!=', $record->id)
+            ->where('status', '!=', CareRecord::DRAFT)
+            ->with(self::RELATIONS)
+            ->orderByDesc('signed_at')
+            ->limit(5)
+            ->get();
+
+        if ($logReads) {
+            $this->logRead($request, $record, 'view');
+
+            foreach ($previous as $old) {
+                $this->logRead($request, $old, 'previous');
+            }
+        }
+
+        return [
+            'appointment' => [
+                'id'              => null,
+                'code'            => null,
+                'status'          => null,
+                'starts_at'       => $record->created_at->copy()->setTimezone($this->timezone($tenant))->format(self::LOCAL_FORMAT),
+                'customer'        => $record->customer ? \App\Support\Person::name($record->customer) : null,
+                'dependent'       => $record->dependent?->name,
+                'dependent_alert' => trim((string) $record->dependent?->getAttribute('alert')) ?: null,
+                'service'         => null,
+                'professional'    => $record->professional?->display_name,
+            ],
+            'uses_record'          => true,
+            'record'               => $this->withReads($this->present($record, $tenant, $user), $record, $tenant, $user),
+            'template'             => null,
+            'private_by_default'   => (bool) $record->is_private,
+            'required_to_complete' => false,
+            'lock_hours'           => (int) AppointmentFlow::rule($tenant, 'records.lock_hours'),
+            'previous'             => $previous->map(fn (CareRecord $r) => $this->present($r, $tenant, $user)),
+            'template_update'      => null,
+        ];
+    }
+
+    public function sheet(Request $request, string $careRecord)
+    {
+        $record = $this->find($request, $careRecord);
+        abort_if($record->appointment_id, 422, 'Esta ficha es de una cita: ábrela desde la cita.');
+
+        return response()->json($this->looseContext($request, $record, true));
+    }
+
+    public function saveSheet(Request $request, string $careRecord)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'data'              => 'present|array',
+            'consent_accepted'  => 'boolean',
+            'sign'              => 'boolean',
+            'correction_reason' => 'nullable|string|max:500',
+        ]);
+        $sign = !empty($validated['sign']);
+        $auditAction = null;
+        $found = $this->find($request, $careRecord);
+        abort_if($found->appointment_id, 422, 'Esta ficha es de una cita: ábrela desde la cita.');
+
+        $record = DB::transaction(function () use ($found, $user, $validated, $sign, &$auditAction) {
+            $record = CareRecord::whereKey($found->id)->lockForUpdate()->first();
+            abort_unless($this->isOwn($record, $user), 403, 'Esta ficha es privada: solo la cambia quien la escribió.');
+
+            if ($record->currentStatus() === CareRecord::LOCKED) {
+                throw ValidationException::withMessages(['data' => 'La ficha ya está bloqueada. Puedes agregarle una nota.']);
+            }
+
+            $requireConsent = $this->storesRequireConsent($record) ? (bool) $record->require_consent : (bool) RecordTemplate::whereKey($record->record_template_id)->value('require_consent');
+            $strict = $sign || $record->status === CareRecord::SIGNED;
+            [$values, $errors] = RecordFields::values($record->template_snapshot ?? [], $validated['data'], $strict);
+            $consent = !empty($validated['consent_accepted']);
+
+            if ($strict && $requireConsent && $record->consent_text && !$consent) {
+                $errors['consent'] = 'Falta marcar la casilla del consentimiento antes de firmar.';
+            }
+
+            if ($errors) {
+                throw ValidationException::withMessages($errors);
+            }
+
+            $previous = $record->data ?? [];
+            $previousConsent = (bool) $record->consent_accepted;
+            $record->data = $values;
+
+            if ($consent !== (bool) $record->consent_accepted) {
+                $record->consent_accepted = $consent;
+                $record->consent_accepted_at = $consent ? now() : null;
+            }
+
+            if ($record->status === CareRecord::SIGNED && $record->isDirty(['data', 'consent_accepted'])) {
+                $auditAction = 'record.corrected';
+                $this->keepCorrection($record, $user, $previous, $previousConsent, $validated['correction_reason'] ?? null);
+            }
+
+            if ($sign && $record->status === CareRecord::DRAFT) {
+                $auditAction = 'record.signed';
+                $record->status = CareRecord::SIGNED;
+                $record->signed_at = now();
+                $record->signed_by = $user->id;
+                $record->locked_at = now();
+            }
+
+            $record->save();
+
+            if ($record->status === CareRecord::SIGNED) {
+                $this->syncLooseRecall($record);
+            }
+
+            return $record;
+        });
+
+        if ($auditAction) {
+            $this->audit($request, $auditAction, $record);
+        }
+
+        return response()->json($this->present($record->fresh(self::RELATIONS), $this->tenant($request), $user));
+    }
+
+    private function syncLooseRecall(CareRecord $record): void
+    {
+        $control = RecordFields::nextControl($record->template_snapshot ?? [], $record->data ?? []);
+        $existing = DB::table('recalls')->where('tenant_id', $record->tenant_id)->whereIn('status', ['pending', 'notified'])->where('care_record_id', $record->id)->first();
+
+        if (!$control) {
+            if ($existing) {
+                DB::table('recalls')->where('id', $existing->id)->delete();
+            }
+
+            return;
+        }
+
+        $values = ['label' => $control['label'], 'due_date' => $control['date'], 'updated_at' => now()];
+
+        if ($existing) {
+            DB::table('recalls')->where('id', $existing->id)->update($values);
+
+            return;
+        }
+
+        DB::table('recalls')->insert($values + [
+            'tenant_id'             => $record->tenant_id,
+            'customer_id'           => $record->customer_id,
+            'customer_dependent_id' => $record->customer_dependent_id,
+            'care_record_id'        => $record->id,
+            'professional_id'       => $record->professional_id,
+            'status'                => 'pending',
+            'created_at'            => now(),
+        ]);
     }
 
     private function find(Request $request, string $id): CareRecord
@@ -691,6 +1084,17 @@ class CareRecordController extends Controller
             'require_consent' => (bool) $record->require_consent,
             'fields'         => $readable ? ($record->template_snapshot ?? []) : [],
             'data'           => $readable ? (object) ($record->data ?? []) : (object) [],
+            'files_ready'    => self::filesReady(),
+            'can_attach'     => $readable && self::filesReady() && $this->isOwn($record, $user) && $user->allows('records.edit'),
+            'files'          => $readable && self::filesReady() ? CareRecordFile::where('care_record_id', $record->id)->whereNull('deleted_at')->with('uploader')->orderBy('created_at')->get()->map(fn (CareRecordFile $file) => [
+                'id'         => $file->id,
+                'name'       => $file->file_name,
+                'size'       => $file->size,
+                'mime'       => $file->mime,
+                'by'         => $file->uploader ? \App\Support\Person::name($file->uploader) : null,
+                'at'         => $local($file->created_at),
+                'can_delete' => $status === CareRecord::DRAFT && ($file->uploaded_by === $user->id || $user->isTenantAdmin()),
+            ])->values() : [],
             'addenda'        => $readable ? $record->addenda->map(fn (CareRecordAddendum $note) => [
                 'note' => $note->note,
                 'by'   => $note->author ? \App\Support\Person::name($note->author) : null,

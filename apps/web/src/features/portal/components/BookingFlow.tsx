@@ -1,5 +1,6 @@
 'use client';
 
+import TurnstileBox from '@/app/components/common/TurnstileBox';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CalendarCheck, Check, ChevronLeft, ChevronRight, Clock, Hourglass, Loader2, PawPrint, Plus, Search, UserRound, Video } from 'lucide-react';
@@ -7,7 +8,7 @@ import { api } from '@/lib/axios';
 import { makeVocabulary, useVocabulary } from '@/hooks/useVocabulary';
 import Select from '@/app/components/common/Select';
 import { addDays, dateOf, formatDate, timeOf, todayISO } from '@/features/appointments/appointments';
-import { portalError, type PortalAppointment, type PortalAvailability, type PortalCatalog, type PortalDependent, type PortalOverview } from '../portal';
+import { portalError, type PortalAppointment, type PortalAvailability, type PortalCatalog, type PortalDay, type PortalDependent, type PortalOverview, type PortalService } from '../portal';
 import { money } from '@/features/sales/sales';
 import GuestFields, { emptyGuest, guestReady, type GuestData } from './GuestFields';
 
@@ -17,6 +18,11 @@ export interface GuestBooking {
   documentTypes: { id: string; name: string; value: string | null; length: number | null; minimum: number | null }[];
   privacyHtml: string | null;
   portalSignup: boolean;
+  channel?: string | null;
+  captchaSiteKey?: string | null;
+  onStart?: () => void;
+  onBooked?: (detail: { value: number | null; service: string | null }) => void;
+  branches?: { id: string; name: string; address: string | null }[];
 }
 
 interface BookingFlowProps {
@@ -67,7 +73,7 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
   const base = guest ? `/public/booking/${guest.slug}` : '/portal';
   const [you, setYou] = useState<GuestData>(emptyGuest);
   const [requestKey, setRequestKey] = useState(newKey);
-  const [portalInfo, setPortalInfo] = useState<{ email: string | null; first_use: boolean } | null>(null);
+  const [portalInfo, setPortalInfo] = useState<{ email: string | null; first_use: boolean; known?: boolean } | null>(null);
 
   const [dependentId, setDependentId] = useState(overview.dependents.items.length === 1 ? overview.dependents.items[0].id : '');
   const [serviceId, setServiceId] = useState(reschedule?.service?.id ?? '');
@@ -77,11 +83,18 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
   const [time, setTime] = useState('');
   const [notes, setNotes] = useState('');
   const [pageStart, setPageStart] = useState(todayISO());
+  const [dayCounts, setDayCounts] = useState<Record<string, PortalDay>>({});
+  const [jumped, setJumped] = useState(false);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
 
   const [availability, setAvailability] = useState<PortalAvailability | null>(null);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [captcha, setCaptcha] = useState('');
+  const [captchaRound, setCaptchaRound] = useState(0);
+  const [captchaDown, setCaptchaDown] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<PortalAppointment | null>(null);
 
@@ -115,6 +128,25 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
   const [savingPet, setSavingPet] = useState(false);
 
   const service = catalog.services.find((s) => s.id === serviceId) ?? null;
+  const categories = useMemo(
+    () => [...new Set(catalog.services.map((s) => s.category).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'es')),
+    [catalog.services],
+  );
+  const plain = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const shownServices = catalog.services.filter((s) =>
+    (!category || s.category === category) && (!query.trim() || plain(`${s.name} ${s.category ?? ''}`).includes(plain(query.trim()))),
+  );
+  const priceHere = service ? Number(service.branch_prices?.[branchId] ?? service.price) : 0;
+  const depositOf = (item: PortalService) => Number((branchId ? item.deposit_amounts?.[branchId] : undefined) ?? item.deposit_amount ?? 0);
+  const depositHere = service ? depositOf(service) : 0;
+  const listPrice = (item: PortalService) => {
+    if (branchId) return money(Number(item.branch_prices?.[branchId] ?? item.price));
+    const prices = catalog.branches
+      .filter((b) => !item.branch_ids?.length || item.branch_ids.includes(b.id))
+      .map((b) => Number(item.branch_prices?.[b.id] ?? item.price));
+    if (prices.length < 2 || new Set(prices).size < 2) return money(prices[0] ?? Number(item.price));
+    return `desde ${money(Math.min(...prices))}`;
+  };
 
   const professionals = useMemo(
     () => catalog.professionals.filter((p) =>
@@ -164,6 +196,62 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
       .finally(() => setLoadingTimes(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, date, serviceId, branchId, professionalId]);
+
+  const daysUrl = guest ? `/public/booking/${guest.slug}/days` : '/portal/availability/days';
+
+  const loadDays = (from: string, count = 7) =>
+    api.get(daysUrl, {
+      params: {
+        service_id: serviceId,
+        branch_id: branchId,
+        from,
+        days: count,
+        ...(professionalId ? { professional_id: professionalId } : {}),
+        ...(reschedule ? { ignore_id: reschedule.id } : {}),
+      },
+    }).then((res) => (res.data?.days ?? []) as PortalDay[]);
+
+  useEffect(() => {
+    if (step !== 'when' || !serviceId || !branchId) return;
+    let alive = true;
+
+    loadDays(pageStart)
+      .then((list) => {
+        if (!alive) return;
+        setDayCounts((prev) => ({ ...prev, ...Object.fromEntries(list.map((d) => [d.date, d])) }));
+      })
+      .catch(() => undefined);
+
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, pageStart, serviceId, branchId, professionalId]);
+
+  useEffect(() => {
+    setDayCounts({});
+    setJumped(false);
+  }, [serviceId, branchId, professionalId]);
+
+  useEffect(() => {
+    if (step !== 'when' || !serviceId || !branchId || jumped || time) return;
+    let alive = true;
+    setJumped(true);
+
+    loadDays(todayISO(), 14)
+      .then((list) => {
+        if (!alive) return;
+        setDayCounts((prev) => ({ ...prev, ...Object.fromEntries(list.map((d) => [d.date, d])) }));
+        const current = list.find((d) => d.date === date);
+        const first = list.find((d) => d.free > 0);
+        if (first && (!current || current.free === 0)) {
+          setPageStart(first.date > addDays(todayISO(), DAYS_PER_PAGE - 1) ? first.date : todayISO());
+          setDate(first.date);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, serviceId, branchId, professionalId, jumped]);
 
   const pickDate = (day: string) => {
     setDate(day);
@@ -223,8 +311,9 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
     }
   })();
 
-  const goNext = () => { setError(''); setStepIndex((index) => Math.min(index + 1, steps.length - 1)); };
+  const goNext = () => { setError(''); if (guest && stepIndex === 0) guest.onStart?.(); setStepIndex((index) => Math.min(index + 1, steps.length - 1)); };
   const goBack = () => { setError(''); if (stepIndex === 0) onExit(); else setStepIndex((index) => index - 1); };
+  const goTo = (target: Step) => { const index = steps.indexOf(target); if (index >= 0) { setError(''); setStepIndex(index); } };
 
   const submit = async () => {
     try {
@@ -252,6 +341,8 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
               marketing: you.marketing,
               website: you.website,
               request_key: requestKey,
+              channel: guest.channel ?? null,
+              ...(captcha ? { turnstile_token: captcha } : {}),
             })
           : await api.post('/portal/appointments', {
               service_id: serviceId,
@@ -265,11 +356,15 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
         router.push(`/pay/${res.data.deposit.token}`);
         return;
       }
-      if (guest) setPortalInfo(res.data?.portal ?? null);
+      if (guest) {
+        setPortalInfo(res.data?.portal ?? null);
+        guest.onBooked?.({ value: service ? Number(service.price) : null, service: service?.name ?? null });
+      }
       setDone(res.data);
     } catch (err: any) {
       setError(portalError(err, 'No se pudo completar la reserva.'));
       if (guest && err?.response?.status !== 409) setRequestKey(newKey());
+      if (guest?.captchaSiteKey) setCaptchaRound((value) => value + 1);
       if (err?.response?.data?.code === 'SLOT_UNAVAILABLE') {
         setRequestKey(newKey());
         setTime('');
@@ -299,6 +394,27 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
             {done.service?.name}{done.professional ? ` · ${done.professional.display_name}` : ''} · Código {done.code}
           </p>
         </div>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left" data-done-ticket>
+          {([
+            ['Lugar', done.is_virtual ? 'En línea, por videollamada' : done.branch?.name],
+            ['Dirección', !done.is_virtual ? guest?.branches?.find((b) => b.id === done.branch?.id)?.address : null],
+            [vocab.dependent, done.dependent?.name],
+            ['Estado', done.status_name],
+            ['Adelanto', done.deposit
+              ? `${money(done.deposit.amount, done.deposit.currency)} pagado${done.deposit.balance > 0 ? ` · falta ${money(done.deposit.balance, done.deposit.currency)} en la sede` : ''}`
+              : service?.needs_deposit ? 'Pendiente de pago' : null],
+          ] as [string, string | null | undefined][]).filter(([, value]) => value).map(([label, value]) => (
+            <div key={label} className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+              <dt className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</dt>
+              <dd className="text-sm font-semibold text-slate-800">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {done.is_virtual && (
+          <p className="text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3 text-left" data-done-virtual>
+            {done.video_url ? 'Ya tienes el enlace de la videollamada en el portal, en "Mis citas".' : 'El enlace de la videollamada te llegará antes de la cita y lo verás en el portal, en "Mis citas".'}
+          </p>
+        )}
         {guest ? (
           <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3 space-y-1.5 text-left" data-guest-done>
             <p>
@@ -307,7 +423,9 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
             </p>
             <p>
               Para ver, confirmar{policies.cancel_allowed ? `, cambiar o cancelar (hasta ${policies.cancel_window_hours} horas antes)` : ''} tu cita, entra al portal con tu correo.
-              {portalInfo?.first_use ? ' Como es tu primera vez, tu contraseña es tu número de documento; luego te pediremos crear una propia.' : ' Si es tu primera vez, tu contraseña es tu número de documento.'}
+              {portalInfo?.known
+                ? ' Ya tenías una cuenta: entra con tu correo y tu contraseña. Si no la recuerdas, pídele a la empresa que te dé una nueva.'
+                : portalInfo?.first_use ? ' Como es tu primera vez, tu contraseña es tu número de documento; luego te pediremos crear una propia.' : ''}
             </p>
           </div>
         ) : (
@@ -431,10 +549,50 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
           </>
         )}
 
+        {step === 'service' && catalog.services.length > 4 && (
+          <div className="space-y-2.5" data-service-tools>
+            <label className="relative block">
+              <span className="sr-only">Buscar servicio</span>
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <input
+                type="search"
+                data-service-search
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar servicio"
+                autoComplete="off"
+                className={`${inputClass} pl-10`}
+              />
+            </label>
+            {categories.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto select-scroll pb-1" role="group" aria-label="Categorías">
+                {[['', 'Todos'], ...categories.map((c) => [c, c])].map(([value, label]) => (
+                  <button
+                    key={value || 'all'}
+                    type="button"
+                    data-category={value || 'all'}
+                    aria-pressed={category === value}
+                    onClick={() => setCategory(value)}
+                    className={`shrink-0 px-3 py-1.5 text-xs font-bold rounded-full border transition-colors ${
+                      category === value ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-brand-accent'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === 'service' && catalog.services.length > 0 && shownServices.length === 0 && (
+          <p className="text-sm text-slate-500" data-no-services>No hay servicios con ese nombre. Prueba con otra palabra o elige «Todos».</p>
+        )}
+
         {step === 'service' && (
           catalog.services.length === 0
             ? <p className="text-sm text-slate-500">Por ahora no hay servicios para reservar en línea. Comunícate con la sede.</p>
-            : catalog.services.map((item) => (
+            : shownServices.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -449,23 +607,31 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
                     {item.is_virtual && <span title="Por videollamada"><Video size={14} className="text-brand-accent" /></span>}
                   </span>
                   <span className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
-                    <Clock size={12} /> {item.duration_minutes} min{item.category ? ` · ${item.category}` : ''}
+                    <Clock size={12} /> {item.duration_minutes} min{item.category ? ` · ${item.category}` : ''}{item.is_virtual ? ' · En línea' : ''}
                   </span>
+                  {item.description && <span className="block text-xs text-slate-500 mt-0.5 line-clamp-2">{item.description}</span>}
                   {item.package && (
                     <span className="block text-xs font-semibold text-emerald-700 mt-1" data-service-package>Con tu paquete {item.package.name}: {item.package.available === 1 ? 'te queda 1 sesión por reservar' : `te quedan ${item.package.available} sesiones por reservar`}.</span>
                   )}
                   {item.needs_deposit && (
-                    <span className="block text-xs font-medium text-brand-accent mt-1">Se reserva pagando un adelanto de {money(item.deposit_amount ?? 0)}{item.deposit_label?.includes('%') ? ` (${item.deposit_label})` : ''}.</span>
+                    <span className="block text-xs font-medium text-brand-accent mt-1" data-service-deposit>
+                      {!branchId && item.deposit_label?.includes('%') && Object.keys(item.deposit_amounts ?? {}).length > 0
+                        ? `Se reserva pagando un adelanto del ${item.deposit_label} del precio de la sede.`
+                        : `Se reserva pagando un adelanto de ${money(depositOf(item))}${item.deposit_label?.includes('%') ? ` (${item.deposit_label})` : ''}.`}
+                    </span>
                   )}
                 </span>
-                <span className="text-sm font-extrabold text-brand-ink shrink-0">{money(item.price)}</span>
+                <span className="text-sm font-extrabold text-brand-ink shrink-0" data-service-price>{listPrice(item)}</span>
               </button>
             ))
         )}
 
         {step === 'branch' && catalog.branches.filter((item) => !service?.branch_ids?.length || service.branch_ids.includes(item.id)).map((item) => (
           <button key={item.id} type="button" data-branch={item.name} aria-pressed={branchId === item.id} onClick={() => { setBranchId(item.id); setProfessionalId(''); setTime(''); }} className={optionClass(branchId === item.id)}>
-            <span className="text-sm font-bold text-slate-800">{item.name}</span>
+            <span className="flex-1 text-sm font-bold text-slate-800">{item.name}</span>
+            {service && Object.keys(service.branch_prices ?? {}).length > 0 && (
+              <span className="text-sm font-extrabold text-brand-ink shrink-0" data-branch-price>{money(Number(service.branch_prices?.[item.id] ?? service.price))}</span>
+            )}
           </button>
         ))}
 
@@ -500,22 +666,30 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
                 <ChevronLeft size={16} />
               </button>
               <div className="flex-1 grid grid-cols-7 gap-1.5" data-days>
-                {days.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    data-day={day}
-                    aria-pressed={date === day}
-                    onClick={() => pickDate(day)}
-                    className={`flex flex-col items-center py-2 rounded-xl border transition-colors ${
-                      date === day ? 'bg-brand border-brand text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-brand-accent'
-                    }`}
-                  >
-                    <span className="text-[10px] font-semibold uppercase opacity-80">{formatDate(day, { weekday: 'short' }).replace('.', '')}</span>
-                    <span className="text-lg font-black leading-tight">{day.slice(8, 10)}</span>
-                    <span className="text-[10px] opacity-80">{formatDate(day, { month: 'short' }).replace('.', '')}</span>
-                  </button>
-                ))}
+                {days.map((day) => {
+                  const info = dayCounts[day];
+                  const empty = info ? info.free === 0 : false;
+                  const label = !info ? formatDate(day, { month: 'short' }).replace('.', '') : info.free > 0 ? `${info.free} ${info.free === 1 ? 'libre' : 'libres'}` : info.state === 'closed' ? 'Cerrado' : info.state === 'out' ? '—' : day === todayISO() ? 'Sin cupo' : 'Lleno';
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      data-day={day}
+                      data-day-state={info?.state}
+                      aria-pressed={date === day}
+                      aria-label={`${formatDate(day)}: ${label}`}
+                      disabled={empty && date !== day}
+                      onClick={() => pickDate(day)}
+                      className={`flex flex-col items-center py-2 rounded-xl border transition-colors disabled:cursor-not-allowed ${
+                        date === day ? 'bg-brand border-brand text-white' : empty ? 'bg-slate-50 border-slate-200 text-slate-400' : 'bg-white border-slate-200 text-slate-700 hover:border-brand-accent'
+                      }`}
+                    >
+                      <span className="text-[10px] font-semibold uppercase opacity-80">{formatDate(day, { weekday: 'short' }).replace('.', '')}</span>
+                      <span className="text-lg font-black leading-tight">{day.slice(8, 10)}</span>
+                      <span className={`text-[10px] leading-tight text-center ${info && info.free > 0 && date !== day ? 'text-emerald-700 font-bold' : 'opacity-80'}`}>{label}</span>
+                    </button>
+                  );
+                })}
               </div>
               <button
                 type="button"
@@ -643,18 +817,25 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
           <div className="space-y-4">
             <dl className="rounded-2xl border border-slate-200 divide-y divide-slate-100" data-summary>
               {([
-                ['Servicio', reschedule?.service?.name ?? service?.name],
-                ['A nombre de', guest ? `${you.first_name} ${you.last_name}`.trim() : null],
-                [vocab.dependent, isReschedule ? reschedule?.dependent?.name : guest ? you.dependent_name.trim() : chosenDependent?.name],
-                ['Fecha', formatDate(date)],
-                ['Hora', time],
-                [vocab.pro, chosenProfessional?.display_name ?? vocab.pick('pro', 'El primero disponible', 'La primera disponible')],
-                ['Sede', catalog.branches.find((b) => b.id === branchId)?.name],
-                ['Precio', service ? money(service.price) : reschedule ? money(reschedule.price) : null],
-              ] as [string, string | null | undefined][]).filter(([, value]) => value).map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+                ['Servicio', reschedule?.service?.name ?? service?.name, 'service'],
+                ['A nombre de', guest ? `${you.first_name} ${you.last_name}`.trim() : null, 'you'],
+                [vocab.dependent, isReschedule ? reschedule?.dependent?.name : guest ? you.dependent_name.trim() : chosenDependent?.name, guest ? 'you' : 'who'],
+                ['Fecha', formatDate(date), 'when'],
+                ['Hora', time, null],
+                [vocab.pro, chosenProfessional?.display_name ?? vocab.pick('pro', 'El primero disponible', 'La primera disponible'), 'professional'],
+                ['Sede', catalog.branches.find((b) => b.id === branchId)?.name, 'branch'],
+                ['Precio', service ? money(priceHere) : reschedule ? money(reschedule.price) : null, null],
+              ] as [string, string | null | undefined, Step | null][]).filter(([, value]) => value).map(([label, value, target]) => (
+                <div key={label} className="flex items-center justify-between gap-3 px-4 py-3">
                   <dt className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</dt>
-                  <dd className="text-sm font-semibold text-slate-800 text-right first-letter:uppercase">{value}</dd>
+                  <dd className="flex items-center gap-3 text-sm font-semibold text-slate-800 text-right first-letter:uppercase">
+                    <span>{value}</span>
+                    {target && steps.includes(target) && target !== 'review' && (
+                      <button type="button" data-change={target} onClick={() => goTo(target)} className="text-xs font-bold text-brand-accent hover:text-brand-ink shrink-0">
+                        Cambiar
+                      </button>
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -678,12 +859,13 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
             {!isReschedule && service?.needs_deposit && (
               <div data-deposit-notice className="text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3 space-y-1.5">
                 <p>
-                  <span className="font-bold">Para reservar pagas {money(service.deposit_amount ?? 0)} de adelanto ahora</span>; el resto ({money(Math.max(0, Number(service.price) - (service.deposit_amount ?? 0)))}) lo pagas en la sede.
+                  {service.deposit_for_misses && <span className="block mb-1">Por inasistencias anteriores a citas reservadas en línea, esta reserva lleva un adelanto.</span>}
+                  <span className="font-bold">Para reservar pagas {money(depositHere)} de adelanto ahora</span>; el resto ({money(Math.max(0, priceHere - depositHere))}) lo pagas en la sede.
                 </p>
                 <p>
-                  Tu horario se reserva recién al pagar: tienes {policies.deposit_minutes ?? 30} minutos. Si otra persona toma ese horario antes, el link se anula y no se te cobra nada; si demoras, revisa que siga libre.
+                  Te apartamos el horario por 10 minutos mientras pagas, y tienes {policies.deposit_minutes ?? 30} minutos para pagar. Si demoras más de 10 minutos y otra persona toma ese horario, el link se anula y no se te cobra nada.
                 </p>
-                <p>Si cancelas con al menos {policies.deposit_refund_hours ?? 24} horas de anticipación, se te devuelve el adelanto.</p>
+                <p>Si cancelas con al menos {policies.deposit_refund_hours ?? 24} horas de anticipación, {policies.deposit_on_cancel === 'refund' ? 'se te devuelve el adelanto' : 'el adelanto queda como saldo a favor para tu próxima compra o cita'}. Si cancelas después o no vienes, el adelanto no se devuelve.</p>
               </div>
             )}
 
@@ -710,17 +892,43 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
               <p data-miss-notice className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                 {policies.miss.action === 'note'
                   ? 'Si no asistes y no cancelas a tiempo, quedará registrado en tu ficha.'
+                  : policies.miss.action === 'deposit'
+                  ? `Si no asistes a ${policies.miss.limit === 1 ? 'una cita reservada' : `${policies.miss.limit} citas reservadas`} por aquí, para volver a reservar en línea tendrás que pagar un adelanto${policies.miss.block_days > 0 ? ` durante ${policies.miss.block_days} días` : ''}.`
                   : `Si no asistes a ${policies.miss.limit === 1 ? 'una cita reservada' : `${policies.miss.limit} citas reservadas`} por aquí, no podrás volver a reservar en línea ${
                       policies.miss.block_days > 0 ? `durante ${policies.miss.block_days} días` : 'hasta que la sede lo permita'
                     }.`}
               </p>
             )}
 
-            {policies.cancel_allowed && (
-              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3">
-                Podrás cambiar o cancelar tu cita {guest ? 'desde el portal' : 'desde aquí'} hasta {policies.cancel_window_hours} horas antes.
-              </p>
+            {(service?.is_virtual || (isReschedule && reschedule?.is_virtual)) && (
+              <div data-virtual-notice className="flex items-start gap-2.5 text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3">
+                <Video size={16} className="shrink-0 mt-0.5 text-brand-accent" />
+                <div className="space-y-1">
+                  <p className="font-bold">Es una atención en línea, por videollamada.</p>
+                  <p>El enlace para entrar te llega con la confirmación y lo verás en el portal, en &quot;Mis citas&quot;. Conéctate unos minutos antes desde tu celular o computadora, con cámara, micrófono y buena señal de internet, en un lugar tranquilo.</p>
+                </div>
+              </div>
             )}
+
+            <div data-policies-before className="text-xs text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-4 py-3 space-y-1.5">
+              <p className="font-bold text-slate-700">Antes de confirmar</p>
+              <ul className="list-disc pl-4 space-y-1">
+                {policies.cancel_allowed ? (
+                  <li>
+                    Puedes cambiar o cancelar tu cita {guest ? 'desde el portal' : 'desde aquí'} hasta {policies.cancel_window_hours} horas antes
+                    {policies.reschedule_max > 0 ? ` (puedes cambiarla hasta ${policies.reschedule_max === 1 ? '1 vez' : `${policies.reschedule_max} veces`})` : ''}.
+                  </li>
+                ) : (
+                  <li>Para cambiar o cancelar tu cita, comunícate con la sede.</li>
+                )}
+                {(policies.late_fee_percent ?? 0) > 0 && (
+                  <li>Si cancelas con menos de {policies.cancel_window_hours} horas, se cobra el {policies.late_fee_percent} % del servicio.</li>
+                )}
+                {(policies.noshow_fee_percent ?? 0) > 0 && <li>Si no asistes sin avisar, se cobra el {policies.noshow_fee_percent} % del servicio.</li>}
+                {service?.needs_deposit && <li>Si no asistes o cancelas tarde, el adelanto no se devuelve.</li>}
+                <li>{policies.auto_confirm ? 'Tu cita queda confirmada al instante.' : 'Tu cita queda pendiente hasta que la sede la confirme; también podrás confirmarla tú desde el portal.'}</li>
+              </ul>
+            </div>
           </div>
         )}
 
@@ -735,6 +943,8 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
           />
         )}
 
+        {guest?.captchaSiteKey && step === 'review' && <TurnstileBox siteKey={guest.captchaSiteKey} onToken={setCaptcha} onUnavailable={() => setCaptchaDown(true)} resetKey={captchaRound} />}
+
         {error && <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>}
       </div>
 
@@ -748,11 +958,11 @@ export default function BookingFlow({ overview, catalog, reschedule, guest, onDo
           <button
             type="button"
             data-action="submit"
-            disabled={saving}
+            disabled={saving || Boolean(guest?.captchaSiteKey && !captcha && !captchaDown)}
             onClick={submit}
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors disabled:opacity-50"
           >
-            <CalendarCheck size={16} /> {saving ? 'Guardando...' : isReschedule ? 'Cambiar mi cita' : service?.needs_deposit ? `Pagar adelanto de ${money(service.deposit_amount ?? 0)}` : 'Reservar cita'}
+            <CalendarCheck size={16} /> {saving ? 'Guardando...' : isReschedule ? 'Cambiar mi cita' : service?.needs_deposit ? `Pagar adelanto de ${money(depositHere)}` : 'Reservar cita'}
           </button>
         ) : (
           <button

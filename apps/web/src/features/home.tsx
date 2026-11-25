@@ -8,10 +8,17 @@ import { useVocabulary } from '@/hooks/useVocabulary';
 import PlanSelection from '@/features/subscriptions/PlanSelection';
 import PlatformHomeCards from '@/features/platform/components/PlatformHomeCards';
 import AnnouncementsBar from '@/features/announcements/components/AnnouncementsBar';
+import OnboardingCard from '@/features/onboarding/OnboardingCard';
 import { formatDateTime, statusStyle, timeOf } from '@/features/appointments/appointments';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { formatMoney } from '@/lib/currency';
+import { useAppointmentPanels } from '@/features/appointments/components/useAppointmentPanels';
+import RevenueCard, { type RevenueDay } from '@/features/dashboard/RevenueCard';
+import { LowStockCard, MarketingCard, type LowStockItem, type MarketingData } from '@/features/dashboard/SideCards';
+import MyDay, { BlockMyTimeButton, type MyDayData } from '@/features/dashboard/MyDay';
 import {
+  ShoppingCart,
+  FileText,
   Plus,
   Users,
   Building2,
@@ -49,26 +56,32 @@ interface DashboardData {
     total: number;
     last_week: number;
     completed: number;
-    value: number;
+    value: number | null;
     waiting: number;
     in_progress: number;
     to_confirm: number;
     released: number;
     occupancy: number | null;
     branches: { name: string | null; count: number }[];
-    upcoming: { id: string; starts_at: string; who: string | null; service: string | null; professional: string | null; branch: string | null; status: string; status_name: string }[];
+    upcoming: { id: string; starts_at: string; who: string | null; service: string | null; professional: string | null; branch: string | null; status: string; status_name: string; source?: string | null }[];
   };
   month: {
     attended: number;
     no_show: number;
     cancelled: number;
     attendance: number | null;
-    value: number;
+    value: number | null;
     new_customers: number;
     new_customers_before: number;
     top_services: { name: string; count: number }[];
+    ticket?: number | null;
+    sales?: number | null;
   };
-  pending: { key: string; count: number; href: string }[];
+  revenue?: RevenueDay[] | null;
+  low_stock?: LowStockItem[];
+  marketing?: MarketingData | null;
+  my_day?: MyDayData | null;
+  pending: { key: string; count: number; href: string; names?: string[] }[];
   activity: { at: string; from: string | null; to: string; to_name: string; by: string | null; by_customer: boolean; code: string | null; who: string | null; customer_id?: string | null; service: string | null }[];
 }
 
@@ -101,6 +114,8 @@ export default function HomePage() {
       .then((res) => { setData(res.data); setError(''); })
       .catch((err) => setError(err?.response?.data?.message || 'No se pudo cargar el resumen de tu empresa.'));
   }, []);
+
+  const { openNew, openDetail, panels } = useAppointmentPanels(load);
 
   useEffect(() => {
     if (loading || !showsDashboard) return;
@@ -168,6 +183,24 @@ export default function HomePage() {
     waitlist: { label: 'En lista de espera', detail: 'Esperan que se libere un horario' },
     walkin: { label: 'En cola sin cita hoy', detail: `${vocab.clients} esperando atención` },
     draft_records: { label: 'Fichas sin firmar', detail: 'Borradores por terminar' },
+    low_stock: { label: 'Productos con poco stock', detail: 'Llegaron a su stock mínimo o se acabaron' },
+    missing_records: { label: 'Atenciones sin ficha', detail: 'Atendidas en los últimos 7 días y su ficha no se empezó' },
+    quotes_sent: { label: 'Presupuestos sin respuesta', detail: `Se enviaron y ${vocab.pick('client', 'el', 'la')} ${client} aún no responde` },
+    uncharged: { label: 'Atenciones sin cobrar', detail: 'Atendidas en los últimos 7 días y todavía sin venta' },
+    cash_closed: { label: 'Caja cerrada', detail: 'Ábrela para cobrar en efectivo' },
+    cash_stale: { label: 'Caja abierta desde otro día', detail: 'Cierra el turno anterior con su arqueo' },
+    cash_review: { label: 'Cierres de caja con diferencia', detail: 'Revisa la explicación y apruébalos u obsérvalos' },
+    invoices_error: { label: 'Comprobantes con error o rechazados', detail: 'Reintenta el envío o emite una nota de crédito' },
+    payment_links: { label: 'Pagos por enlace pendientes', detail: 'Enlaces enviados que aún no se pagan' },
+    transfers_review: { label: 'Transferencias por revisar', detail: `Comprobantes que mandaron ${vocab.pick('client', 'los', 'las')} ${clients} al pagar` },
+    commissions_pending: { label: 'Comisiones por aprobar', detail: 'Calculadas y esperando tu aprobación' },
+    memberships_ending: { label: 'Membresías que vencen en 5 días', detail: 'Ofrece la renovación a tiempo' },
+    refunds_pending: { label: 'Devoluciones por aprobar', detail: 'Pedidas por caja o recepción' },
+    messages_failed: { label: 'Mensajes no entregados', detail: 'De los últimos 2 días: revisa el número o el correo' },
+  };
+  const pendingDetail = (item: DashboardData['pending'][number]) => {
+    const base = pendingLabels[item.key]?.detail;
+    return item.names && item.names.length > 0 && item.count > 0 ? `${item.names.join(', ')}${item.count > item.names.length ? '…' : ''} · ${base}` : base;
   };
   const pendingItems = (data?.pending ?? []).filter((item) => item.count > 0);
   const clearItems = (data?.pending ?? []).filter((item) => item.count === 0);
@@ -210,14 +243,50 @@ export default function HomePage() {
         </div>
 
         {showsDashboard && (
-          <div className="flex items-center gap-3">
-            <Link
-              href="/agenda"
-              className="bg-brand hover:bg-brand-hover text-white font-bold px-5 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center gap-2 text-sm shadow-sm transition-all hover:shadow-md active:scale-95"
-            >
-              <Plus className="w-4 h-4 text-brand-soft stroke-[2.5]" />
-              Nueva cita
-            </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {can('agenda.create') ? (
+              <button
+                type="button"
+                onClick={() => openNew()}
+                data-action="new-appointment"
+                className="bg-brand hover:bg-brand-hover text-white font-bold px-5 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center gap-2 text-sm shadow-sm transition-all hover:shadow-md active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-brand-soft stroke-[2.5]" />
+                Nueva cita
+              </button>
+            ) : (
+              <Link
+                href="/agenda"
+                className="bg-brand hover:bg-brand-hover text-white font-bold px-5 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm flex items-center gap-2 text-sm shadow-sm transition-all hover:shadow-md active:scale-95"
+              >
+                <CalendarIcon className="w-4 h-4 text-brand-soft" />
+                Ver agenda
+              </Link>
+            )}
+
+            {!own && hasModule('pos') && can('pos.view') && (
+              <Link
+                href="/pos"
+                data-action="new-sale"
+                className="bg-white hover:bg-slate-50 text-brand-ink font-semibold px-4 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm text-sm transition-all border border-slate-200 flex items-center gap-2 shadow-2xs"
+              >
+                <ShoppingCart className="w-4 h-4 text-brand-accent" />
+                Nueva venta
+              </Link>
+            )}
+
+            {hasModule('quotes') && can('quotes.view') && (
+              <Link
+                href="/quotes"
+                data-action="quotes"
+                className="bg-white hover:bg-slate-50 text-brand-ink font-semibold px-4 py-2.5 rounded-tl-xl rounded-br-xl rounded-tr-sm rounded-bl-sm text-sm transition-all border border-slate-200 flex items-center gap-2 shadow-2xs"
+              >
+                <FileText className="w-4 h-4 text-brand-accent" />
+                Presupuestos
+              </Link>
+            )}
+
+            {own && data?.my_day?.can_block && <BlockMyTimeButton onSaved={load} />}
 
             <Link
               href="/appointments"
@@ -230,6 +299,8 @@ export default function HomePage() {
         )}
       </div>
 
+      {hasTenant && !own && <OnboardingCard />}
+
       {error && (
         <p role="alert" className="p-4 bg-red-50 border border-red-100 text-red-700 rounded-2xl text-xs font-semibold">{error}</p>
       )}
@@ -240,8 +311,11 @@ export default function HomePage() {
         </div>
       )}
 
+      {data?.my_day && <MyDay data={data.my_day} onOpen={openDetail} onChanged={load} />}
+
       {data && (
         <>
+          {!data.my_day && (
           <div className="bg-white rounded-tr-[2rem] rounded-bl-[2rem] rounded-tl-md rounded-br-md border border-slate-200/80 shadow-xs p-6" data-card="upcoming">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div className="flex items-center gap-2">
@@ -265,17 +339,17 @@ export default function HomePage() {
                 )}
 
                 {data.today.upcoming.map((item) => (
-                  <Link key={item.id} href="/agenda" data-upcoming={item.id} className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-brand-soft/60 transition-colors">
+                  <button type="button" key={item.id} onClick={() => openDetail(item.id)} data-upcoming={item.id} className="w-full text-left flex items-center gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-brand-soft/60 transition-colors cursor-pointer">
                     <div className="text-xs font-bold text-slate-400 w-12 text-right">{timeOf(item.starts_at)}</div>
                     <div className={`w-1 h-8 rounded-full ${statusStyle(item.status).dot}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-brand-ink truncate">{item.who ?? vocab.client}</p>
                       <p className="text-[11px] text-slate-500 truncate">
-                        {[item.service, own ? null : item.professional, data.today.branches.length > 1 ? item.branch : null].filter(Boolean).join(' • ')}
+                        {[item.service, own ? null : item.professional, data.today.branches.length > 1 ? item.branch : null, item.source].filter(Boolean).join(' • ')}
                       </p>
                     </div>
                     <span className={`px-2 py-0.5 text-[10px] rounded-md font-semibold shrink-0 ${statusStyle(item.status).badge}`}>{item.status_name}</span>
-                  </Link>
+                  </button>
                 ))}
               </div>
 
@@ -316,6 +390,7 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <div className="lg:col-span-4 bg-gradient-to-br from-brand to-brand-hover text-white rounded-tl-[2rem] rounded-br-[2rem] rounded-tr-md rounded-bl-md p-7 flex flex-col justify-between shadow-lg relative overflow-hidden" data-card="today">
@@ -344,7 +419,7 @@ export default function HomePage() {
 
               <div className="relative z-10 mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-slate-300">
                 <span>{data.today.occupancy === null ? 'Sin horario hoy' : `Agenda ocupada: ${data.today.occupancy}%`}</span>
-                <span className="font-bold text-brand-soft">{money(data.today.value)} atendido</span>
+                {data.today.value !== null && <span className="font-bold text-brand-soft">{money(data.today.value)} {own ? 'atendido' : 'cobrado hoy'}</span>}
               </div>
             </div>
 
@@ -397,7 +472,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div>
-                    <span className="text-3xl font-extrabold text-brand-ink tracking-tight">{money(data.month.value)}</span>
+                    <span className="text-3xl font-extrabold text-brand-ink tracking-tight">{data.month.value === null ? '—' : money(data.month.value)}</span>
                     <div className="mt-2 inline-flex items-center gap-1.5 text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] font-semibold">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500" /> {data.month.attended} citas atendidas
                     </div>
@@ -417,6 +492,8 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
+          {data.revenue && <RevenueCard days={data.revenue} ticket={data.month.ticket ?? null} sales={data.month.sales ?? null} canReports={can('reports.view')} />}
         </>
       )}
 
@@ -512,7 +589,7 @@ export default function HomePage() {
                         : <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800">{pendingLabels[item.key]?.label ?? item.key}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{pendingLabels[item.key]?.detail}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{pendingDetail(item)}</p>
                       </div>
                     </div>
                     {item.count > 0 ? (
@@ -526,9 +603,11 @@ export default function HomePage() {
             </div>
 
             <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
-              <Link href="/agenda" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-ink hover:text-brand-accent transition-colors cursor-pointer">
-                <Plus className="w-3.5 h-3.5 text-brand-accent" /> Nueva cita
-              </Link>
+              {can('agenda.create') ? (
+                <button type="button" onClick={() => openNew()} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-ink hover:text-brand-accent transition-colors cursor-pointer">
+                  <Plus className="w-3.5 h-3.5 text-brand-accent" /> Nueva cita
+                </button>
+              ) : <span />}
               <span className="text-[11px] text-slate-400">{pendingItems.length} {pendingItems.length === 1 ? 'pendiente' : 'pendientes'}</span>
             </div>
           </div>
@@ -575,6 +654,15 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {data && ((data.low_stock?.length ?? 0) > 0 || data.marketing) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {data.marketing && <MarketingCard data={data.marketing} />}
+          {(data.low_stock?.length ?? 0) > 0 && <LowStockCard items={data.low_stock!} />}
+        </div>
+      )}
+
+      {showsDashboard && panels}
     </div>
   );
 }

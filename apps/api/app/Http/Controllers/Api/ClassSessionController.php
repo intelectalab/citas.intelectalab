@@ -133,7 +133,7 @@ class ClassSessionController extends Controller
         ]);
         $zone = $tenant->zone();
         $from = isset($validated['from']) ? Carbon::createFromFormat('Y-m-d', $validated['from'], $zone)->startOfDay() : now($zone)->startOfDay()->subDays(30);
-        $to = isset($validated['to']) ? Carbon::createFromFormat('Y-m-d', $validated['to'], $zone)->startOfDay()->addDay() : now($zone)->startOfDay()->addDays(60);
+        $to = isset($validated['to']) ? Carbon::createFromFormat('Y-m-d', $validated['to'], $zone)->startOfDay()->addDay() : now($zone)->startOfDay()->addDays(365);
         abort_if($from->diffInDays($to) > 400, 422, 'Se puede ver hasta un año a la vez.');
 
         $limit = Access::branchLimit($request->user());

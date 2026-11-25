@@ -172,7 +172,7 @@ async function main() {
   const result = spawnSync(process.execPath, [join(here, 'node_modules', '@playwright', 'test', 'cli.js'), 'test', ...playwrightArgs], {
     cwd: here,
     stdio: 'inherit',
-    env: { ...process.env, E2E_API: `http://localhost:${API_PORT}/api`, E2E_WEB: `http://localhost:${WEB_PORT}` },
+    env: { ...apiEnv, E2E_API: `http://localhost:${API_PORT}/api`, E2E_WEB: `http://localhost:${WEB_PORT}`, E2E_API_DIR: api, E2E_PHP: PHP },
   });
 
   console.log('\n4/4 Limpieza');

@@ -47,7 +47,82 @@ class WebPosts
             $warnings[] = 'No tiene portada: al compartirlo saldrá sin imagen.';
         }
 
+        $body = (string) ($post->body ?? '');
+        $text = RichText::toText($body);
+        $words = str_word_count(Str::ascii($text));
+
+        if (trim((string) ($post->excerpt ?? '')) === '') {
+            $warnings[] = 'Falta el resumen: es lo que se ve en la lista del blog.';
+        }
+
+        if ($words < 300) {
+            $warnings[] = "El artículo es corto ({$words} palabras): a Google le van mejor los de 300 palabras o más.";
+        }
+
+        if (!preg_match('/<h[23][\s>]/i', $body)) {
+            $warnings[] = 'No tiene subtítulos: divide el texto con al menos un subtítulo.';
+        }
+
+        if (preg_match_all('/<img\b(?![^>]*\balt="[^"]+")[^>]*>/i', $body) > 0) {
+            $warnings[] = 'Hay imágenes sin texto alternativo: descríbelas para buscadores y lectores de pantalla.';
+        }
+
+        if (!preg_match('#href="/(register|precios|rubros|blog)#i', $body)) {
+            $warnings[] = 'No enlaza a otras páginas del sitio (por ejemplo a Precios o a la prueba gratis).';
+        }
+
+        $keyword = mb_strtolower(trim((string) ($post->keyword ?? '')));
+
+        if ($keyword === '') {
+            $warnings[] = 'Falta la palabra clave: la frase que la gente escribiría en Google para encontrarlo.';
+        } else {
+            $has = fn (?string $value) => str_contains(Str::ascii(mb_strtolower((string) $value)), Str::ascii($keyword));
+            $first = mb_substr($text, 0, 600);
+
+            if (!$has($post->title ?? '') && !$has($title)) {
+                $warnings[] = 'La palabra clave no está en el título.';
+            }
+
+            if ($description !== '' && !$has($description)) {
+                $warnings[] = 'La palabra clave no está en la descripción para buscadores.';
+            }
+
+            if (!$has($first)) {
+                $warnings[] = 'La palabra clave no aparece al comienzo del texto.';
+            }
+
+            if (!str_contains((string) ($post->slug ?? ''), Str::slug($keyword))) {
+                $warnings[] = 'La dirección del artículo no lleva la palabra clave.';
+            }
+        }
+
         return $warnings;
+    }
+
+    public static function statsReady(): bool
+    {
+        static $ready = null;
+
+        return $ready ??= self::ready() && Schema::hasColumn('web_posts', 'views') && Schema::hasColumn('web_posts', 'keyword');
+    }
+
+    public static function countView(string $slug): void
+    {
+        if (self::statsReady()) {
+            DB::table('web_posts')->where('slug', $slug)->where('status', 'published')->increment('views');
+        }
+    }
+
+    public static function stats(): array
+    {
+        if (!Schema::hasTable('web_leads')) {
+            return [];
+        }
+
+        return DB::table('web_leads')->whereRaw("utm->>'post' IS NOT NULL")
+            ->selectRaw("utm->>'post' AS slug, COUNT(*) AS leads, COUNT(*) FILTER (WHERE source = 'registro') AS signups")
+            ->groupByRaw("utm->>'post'")->get()
+            ->mapWithKeys(fn ($row) => [$row->slug => ['leads' => (int) $row->leads, 'signups' => (int) $row->signups]])->all();
     }
 
     public static function coverUrl(object $post): ?string
@@ -74,8 +149,10 @@ class WebPosts
             'published_at'       => $post->published_at,
             'updated_at'         => $post->updated_at,
             'author'             => $post->author,
+            'keyword'            => $post->keyword ?? null,
+            'views'              => (int) ($post->views ?? 0),
             'reading_minutes'    => max(1, (int) ceil(str_word_count($text) / 200)),
-            'body'               => $withBody ? RichText::clean((string) $post->body) : null,
+            'body'               => $withBody ? RichText::cleanForSite((string) $post->body) : null,
         ];
     }
 

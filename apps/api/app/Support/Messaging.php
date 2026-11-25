@@ -58,7 +58,11 @@ class Messaging
         'Condiciones' => 'Condiciones del paquete',
         'Enlace'      => 'Enlace para confirmar o cancelar la cita',
         'Membresía'   => 'Nombre de la membresía',
+        'Encuesta'    => 'Enlace para responder la encuesta',
         'Videollamada' => 'Enlace de la videollamada (si la cita es en línea)',
+        'Turno'       => 'Número de turno en la cola sin cita',
+        'Espera'      => 'Espera aproximada en minutos',
+        'Delante'     => 'Personas que esperan antes',
     ];
 
     public const KINDS = [
@@ -156,7 +160,7 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
         ],
         'recall_due' => [
             'label' => 'Control por vencer',
-            'when'  => 'Unos días antes de la fecha de un control pendiente.',
+            'when'  => 'Unos días antes de la fecha de un control pendiente. No le llega a quien pidió no recibir correos.',
             'vars'  => ['Nombre', 'Control', 'Fecha', 'Empresa'],
             'subject' => 'Se acerca tu [Control]',
             'body'  => "Hola [Nombre]:\n\nSe acerca la fecha de tu [Control] ([Fecha]). Reserva tu cita en nuestro portal o escríbenos.\n\n[Empresa]",
@@ -175,6 +179,27 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
             'vars'  => ['Nombre', 'Paquete', 'Sesiones', 'Vence', 'Condiciones', 'Portal', 'Empresa'],
             'subject' => 'Tu paquete [Paquete] está listo',
             'body'  => "Hola [Nombre]:\n\nGracias por tu compra. Tu paquete [Paquete] trae [Sesiones] y vale hasta el [Vence].\n\n[Condiciones]\n\nReserva tus sesiones en tu portal:\n[Portal]\n\n[Empresa]",
+        ],
+        'survey' => [
+            'label' => 'Encuesta de satisfacción',
+            'when'  => 'Unas horas después de una cita atendida, si la empresa encendió las encuestas en Encuestas y reseñas. Solo a quien aceptó recibir mensajes.',
+            'vars'  => ['Nombre', 'Servicio', 'Profesional', 'Encuesta', 'Empresa'],
+            'subject' => '¿Cómo te fue en [Empresa]?',
+            'body'  => "Hola [Nombre]:\n\nGracias por venir a tu cita de [Servicio] con [Profesional]. ¿Nos cuentas cómo te fue? Es una sola pregunta y toma menos de un minuto:\n\n[Encuesta]\n\n[Empresa]",
+        ],
+        'walkin_ticket' => [
+            'label' => 'Tu turno en la cola',
+            'when'  => 'Al anotar a alguien en la cola sin cita, desde recepción o desde el kiosko. Viene apagado: enciéndelo si quieres que le llegue su turno.',
+            'vars'  => ['Nombre', 'Turno', 'Servicio', 'Sede', 'Delante', 'Espera', 'Empresa'],
+            'subject' => 'Tu turno en [Empresa]: [Turno]',
+            'body'  => "Hola [Nombre]:
+
+Tu turno es el [Turno] para [Servicio] en [Sede]. Antes de ti hay [Delante] y la espera es de unos [Espera] minutos.
+
+Te llamaremos por tu turno. Si te retiras, avísanos en recepción.
+
+[Empresa]",
+            'off'   => true,
         ],
         'portal_access' => [
             'label' => 'Acceso al portal',
@@ -233,7 +258,7 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
     {
         $config = self::emailConfig($tenantId);
 
-        return $config && ($config['provider'] === 'simulated' || (!empty($config['host']) && !empty($config['from_address'])));
+        return $config && ($config['provider'] === 'simulated' || \App\Support\Mail\ApiTransport::ready($config));
     }
 
     public static function settings(string $tenantId): array
@@ -242,6 +267,10 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
         $result = [];
 
         foreach (self::KINDS as $kind => $def) {
+            if ($kind === 'recall_due') {
+                $def['options'] = ['days' => Recalls::noticeDays(\App\Models\Tenant::find($tenantId))];
+            }
+
             $row = $saved[$kind] ?? null;
             $options = $row ? (is_string($row->options) ? json_decode($row->options, true) : (array) $row->options) : [];
 
@@ -250,7 +279,7 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
                 'label'    => $def['label'],
                 'when'     => $def['when'],
                 'manual'   => (bool) ($def['manual'] ?? false),
-                'enabled'  => $row ? (bool) $row->enabled : true,
+                'enabled'  => $row ? (bool) $row->enabled : empty($def['off']),
                 'subject'  => $row?->subject ?: $def['subject'],
                 'body'     => $row?->body ?: $def['body'],
                 'custom'   => (bool) ($row?->subject || $row?->body),
@@ -315,6 +344,10 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
 
             if (!empty($vars['Videollamada']) && in_array($kind, ['booking_confirmation', 'reminder', 'appointment_rescheduled'], true) && !str_contains($settings['body'], '[Videollamada]')) {
                 $settings['body'] = RichText::append($settings['body'], 'Enlace de la videollamada: [Videollamada]');
+            }
+
+            if (!empty($extra['append'])) {
+                $settings['body'] = RichText::append($settings['body'], (string) $extra['append']);
             }
 
             $data = [
@@ -498,6 +531,10 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
     {
         $raw = $e->getMessage();
 
+        if ($e instanceof \App\Support\Mail\ApiMailException) {
+            return $raw;
+        }
+
         return match (true) {
             str_contains($raw, '535') || stripos($raw, 'authentication') !== false || stripos($raw, 'Username and Password not accepted') !== false
                 => 'El servidor de correo no aceptó el usuario o la contraseña. Revisa los datos en Configuración → Correo (en Gmail se usa una contraseña de aplicación).',
@@ -513,15 +550,7 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
 
     public static function send(array $config, string $to, ?string $toName, string $subject, string $body, string $tenantId): void
     {
-        $mailer = Mail::build([
-            'transport' => 'smtp',
-            'scheme'    => ($config['security'] ?? 'tls') === 'ssl' ? 'smtps' : 'smtp',
-            'host'      => $config['host'],
-            'port'      => (int) ($config['port'] ?? 587),
-            'username'  => $config['username'] ?? null,
-            'password'  => $config['password'] ?? null,
-            'timeout'   => 20,
-        ]);
+        $mailer = Mail::build(\App\Support\Mail\ApiTransport::mailer($config, 'tls'));
 
         $tenant = Tenant::with(['settings', 'businessType'])->find($tenantId);
         $logo = EmailDesign::logoPath($tenantId);
@@ -571,10 +600,91 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
         ];
     }
 
+    private static ?array $held = null;
+
+    public static function hold(callable $work): array
+    {
+        $previous = self::$held;
+        self::$held = [];
+
+        try {
+            $work();
+
+            return self::$held;
+        } finally {
+            self::$held = $previous;
+        }
+    }
+
+    public static function releaseSeries(Tenant $tenant, array $held, string $seriesKey, ?string $label = null): void
+    {
+        try {
+            if (!self::ready()) {
+                return;
+            }
+
+            $booked = collect($held)->filter(fn (array $h) => $h['from'] === null && in_array($h['to'], [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true))->pluck('appointment');
+            $cancelled = collect($held)->filter(fn (array $h) => $h['to'] === AppointmentFlow::CANCELLED && $h['from'] !== $h['to'] && $h['appointment']->starts_at->isFuture())->pluck('appointment');
+            $other = collect($held)->reject(fn (array $h) => ($h['from'] === null && in_array($h['to'], [AppointmentFlow::PENDING, AppointmentFlow::CONFIRMED], true)) || $h['to'] === AppointmentFlow::CANCELLED);
+
+            foreach ($other as $h) {
+                self::appointmentChanged($tenant, $h['appointment'], $h['from'], $h['to']);
+            }
+
+            foreach (['booking_confirmation' => $booked, 'appointment_cancelled' => $cancelled] as $kind => $list) {
+                $list = $list->sortBy(fn (Appointment $a) => $a->starts_at->timestamp)->values();
+
+                if ($list->isEmpty()) {
+                    continue;
+                }
+
+                if ($list->count() === 1) {
+                    $only = $list->first();
+                    self::appointmentChanged($tenant, $only, $kind === 'booking_confirmation' ? null : AppointmentFlow::CONFIRMED, $kind === 'booking_confirmation' ? $only->status : AppointmentFlow::CANCELLED);
+                    continue;
+                }
+
+                $first = $list->first();
+                $first->loadMissing(['customer', 'branch']);
+
+                if (!$first->customer) {
+                    continue;
+                }
+
+                $timezone = AppointmentScheduler::timezone($first->branch ?? new \App\Models\Branch(), $tenant);
+                $lines = $list->take(12)->map(fn (Appointment $a) => '• ' . ucfirst(self::longDate($a->starts_at->copy()->setTimezone($timezone))) . ' a las ' . Packages::hour($a->starts_at->copy()->setTimezone($timezone)->format('H:i')));
+                $more = $list->count() > 12 ? "\n• y " . ($list->count() - 12) . ' fechas más' : '';
+                $intro = $kind === 'booking_confirmation'
+                    ? 'Esta cita se repite' . ($label ? ' ' . mb_strtolower($label) : '') . '. Quedaron agendadas ' . $list->count() . ' fechas:'
+                    : 'También se cancelaron las demás fechas de la serie. En total, ' . $list->count() . ' citas:';
+
+                self::queue($tenant, $kind, $first->customer, self::appointmentVars($tenant, $first), [
+                    'branch_id'   => $first->branch_id,
+                    'entity_type' => 'appointment',
+                    'entity_id'   => $first->id,
+                    'dedupe_key'  => ($kind === 'booking_confirmation' ? 'series:' : 'series-cancel:') . $seriesKey,
+                    'append'      => $intro . "\n" . $lines->implode("\n") . $more,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     public static function appointmentChanged(Tenant $tenant, Appointment $appointment, ?string $from, string $to): void
     {
         try {
             if (!self::ready() || !$appointment->customer_id) {
+                return;
+            }
+
+            if (self::$held !== null) {
+                if ($to === AppointmentFlow::CANCELLED) {
+                    self::cancelPendingFor($tenant->id, $appointment->id);
+                }
+
+                self::$held[] = ['appointment' => $appointment, 'from' => $from, 'to' => $to];
+
                 return;
             }
 
@@ -665,6 +775,27 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
         ]);
     }
 
+    public static function walkinTicket(Tenant $tenant, object $entry, ?array $estimate): ?object
+    {
+        $customer = $entry->customer_id ? Customer::find($entry->customer_id) : null;
+
+        if (!$customer) {
+            return null;
+        }
+
+        $ahead = max(0, (int) ($estimate['position'] ?? 1) - 1);
+
+        return self::queue($tenant, 'walkin_ticket', $customer, [
+            'Turno'    => (string) $entry->ticket,
+            'Servicio' => (string) (DB::table('services')->where('id', $entry->service_id)->value('name') ?? ''),
+            'Sede'     => (string) (DB::table('branches')->where('id', $entry->branch_id)->value('name') ?? ''),
+            'Delante'  => $ahead === 0 ? 'nadie' : ($ahead === 1 ? '1 persona' : "{$ahead} personas"),
+            'Espera'   => (string) max(0, (int) ($estimate['wait_minutes'] ?? 0)),
+        ], [
+            'branch_id' => $entry->branch_id, 'entity_type' => 'walkin', 'entity_id' => $entry->id, 'dedupe_key' => "walkin:{$entry->id}",
+        ]);
+    }
+
     public static function waitlistSlot(Tenant $tenant, Appointment $appointment, ?\App\Models\WaitlistEntry $only = null): void
     {
         try {
@@ -672,18 +803,74 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
                 return;
             }
 
-            $vars = self::appointmentVars($tenant, $appointment);
+            $vars = array_intersect_key(self::appointmentVars($tenant, $appointment), array_flip(['Servicio', 'Fecha', 'Hora', 'Profesional', 'Sede', 'Empresa']));
             $entries = $only ? collect([$only->loadMissing(['customer', 'service'])]) : Waitlist::matching($tenant, $appointment)->with(['customer', 'service'])->limit(20)->get();
 
             foreach ($entries as $entry) {
                 self::queue($tenant, 'waitlist_slot', $entry->customer, ['Servicio' => $entry->service?->name ?? $vars['Servicio']] + $vars, [
                     'branch_id' => $appointment->branch_id, 'entity_type' => 'waitlist', 'entity_id' => $entry->id,
-                    'dedupe_key' => "waitlist:{$entry->id}:{$appointment->id}",
+                    'dedupe_key' => "waitlist:{$entry->id}:{$appointment->id}:" . $appointment->starts_at->timestamp,
                 ]);
             }
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    public static function waitlistNotice(Tenant $tenant, \App\Models\WaitlistEntry $entry, ?User $user): array
+    {
+        if (!self::ready()) {
+            return ['sent' => false, 'blocked' => true, 'message' => 'Los mensajes aún no están disponibles: falta actualizar la base de datos.'];
+        }
+
+        $entry->loadMissing(['customer', 'service', 'branch', 'professional']);
+        $day = Waitlist::slots($tenant, $entry, 1)['days'][0] ?? null;
+        $group = $day['groups'][0] ?? null;
+
+        if (!$day || !$group) {
+            return ['sent' => false, 'blocked' => true, 'message' => 'No hay horarios libres que le sirvan en las próximas 3 semanas, así que no se le envió nada. Vuelve a intentarlo cuando se libere uno.'];
+        }
+
+        $timezone = AppointmentScheduler::timezone($entry->branch, $tenant);
+        $message = self::queue($tenant, 'waitlist_slot', $entry->customer, [
+            'Servicio'    => $entry->service?->name ?? '',
+            'Fecha'       => self::longDate(Carbon::parse($day['date'], $timezone)),
+            'Hora'        => Packages::hour($group['slots'][0]),
+            'Sede'        => $entry->branch?->name ?? '',
+            'Profesional' => $group['professional']['display_name'] ?? '',
+        ], ['force' => true, 'user' => $user, 'branch_id' => $entry->branch_id, 'entity_type' => 'waitlist', 'entity_id' => $entry->id]);
+
+        return self::noticeResult($message);
+    }
+
+    public static function recallNotice(Tenant $tenant, \App\Models\Recall $recall, ?User $user): array
+    {
+        if (!self::ready()) {
+            return ['sent' => false, 'blocked' => true, 'message' => 'Los mensajes aún no están disponibles: falta actualizar la base de datos.'];
+        }
+
+        $recall->loadMissing('customer');
+        $message = self::queue($tenant, 'recall_due', $recall->customer, [
+            'Control' => $recall->label ?: 'control',
+            'Fecha'   => self::longDate(Carbon::parse($recall->due_date->format('Y-m-d'), $tenant->zone())),
+        ], ['force' => true, 'user' => $user, 'entity_type' => 'recall', 'entity_id' => $recall->id]);
+
+        return self::noticeResult($message);
+    }
+
+    private static function noticeResult(?object $message): array
+    {
+        if (!$message) {
+            return ['sent' => false, 'message' => 'No se pudo preparar el aviso. Inténtalo otra vez.'];
+        }
+
+        if (($message->status ?? '') === 'not_sent') {
+            return ['sent' => false, 'message' => 'Se marcó como avisado, pero el mensaje no salió: ' . lcfirst(preg_replace('/^No enviado:\s*/u', '', (string) ($message->error ?: 'no se pudo enviar.')))];
+        }
+
+        $channel = ($message->channel ?? 'email') === 'whatsapp' ? 'por WhatsApp' : 'por correo';
+
+        return ['sent' => true, 'channel' => $message->channel ?? 'email', 'message' => "Se le envió el aviso {$channel}."];
     }
 
     public static function portalUrl(): string
@@ -801,11 +988,12 @@ Tu membresía [Membresía] vence el [Vence]. Renuévala en tu próxima visita pa
             }
 
             if ($settings['recall_due']['enabled'] && Schema::hasTable('recalls')) {
-                $days = max(0, (int) ($settings['recall_due']['options']['days'] ?? 3));
+                $days = max(0, (int) ($settings['recall_due']['options']['days'] ?? Recalls::noticeDays($tenant)));
                 $today = now($timezone)->startOfDay();
 
                 foreach (\App\Models\Recall::where('tenant_id', $tenant->id)->whereIn('status', \App\Models\Recall::OPEN)
                     ->whereBetween('due_date', [$today->format('Y-m-d'), $today->copy()->addDays($days)->format('Y-m-d')])
+                    ->when(Schema::hasTable('customer_consents'), fn ($q) => $q->whereNotExists(fn ($c) => $c->select(DB::raw(1))->from('customer_consents as cc')->whereColumn('cc.customer_id', 'recalls.customer_id')->where('cc.channel', 'email')->where('cc.granted', false)))
                     ->with('customer')->limit(300)->get() as $recall) {
                     self::queue($tenant, 'recall_due', $recall->customer, [
                         'Control' => $recall->label ?: 'control',

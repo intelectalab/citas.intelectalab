@@ -96,6 +96,7 @@ class PaymentController extends Controller
                 'public_key'     => $mask($saved['public_key'] ?? null),
                 'secret_key'     => $mask($saved['secret_key'] ?? null),
                 'webhook_secret' => $mask($saved['webhook_secret'] ?? null),
+                'username'       => $saved['username'] ?? null,
                 'saved_at'       => Carbon::parse($row->updated_at)->toIso8601String(),
                 'mode'           => $row->mode,
             ];
@@ -122,6 +123,8 @@ class PaymentController extends Controller
                 'simulation' => $simulation,
                 'webhook_url' => rtrim((string) config('app.url'), '/') . '/api/webhooks/payments/mercadopago/' . $tenant->id,
                 'culqi_webhook_url' => rtrim((string) config('app.url'), '/') . '/api/webhooks/payments/culqi/' . $tenant->id,
+                'izipay_webhook_url' => rtrim((string) config('app.url'), '/') . '/api/webhooks/payments/izipay/' . $tenant->id,
+                'log'        => \App\Support\IntegrationLog::recent($tenant->id, 'payments', 30),
                 'connected'  => $rows->keys()->filter(fn ($key) => in_array($key, PaymentLinks::PREFERENCE, true))->values(),
                 'providers'  => collect(PaymentLinks::PROVIDERS)
                     ->filter(fn ($p, $key) => $key !== 'simulated' || $simulation)
@@ -161,6 +164,7 @@ class PaymentController extends Controller
             'public_key'     => 'nullable|string|max:255',
             'secret_key'     => 'nullable|string|max:255',
             'webhook_secret' => 'nullable|string|max:255',
+            'username'       => 'nullable|string|max:255',
             'disconnect'     => 'nullable|boolean',
         ]);
 
@@ -213,12 +217,16 @@ class PaymentController extends Controller
                 'public_key'     => trim((string) ($validated['public_key'] ?? '')) ?: ($old['public_key'] ?? null),
                 'secret_key'     => trim((string) ($validated['secret_key'] ?? '')) ?: ($old['secret_key'] ?? null),
                 'webhook_secret' => trim((string) ($validated['webhook_secret'] ?? '')) ?: ($old['webhook_secret'] ?? null),
+                'username'       => trim((string) ($validated['username'] ?? '')) ?: ($old['username'] ?? null),
             ];
 
             if (!$keys['public_key'] || !$keys['secret_key']) {
-                throw ValidationException::withMessages(['public_key' => $provider === 'mercadopago'
-                    ? 'Escribe la Public Key y el Access Token de tu aplicación de Mercado Pago.'
-                    : 'Escribe la llave pública y la llave secreta que te dio ' . PaymentLinks::PROVIDERS[$provider]['label'] . '.']);
+                throw ValidationException::withMessages(['public_key' => match ($provider) {
+                    'mercadopago' => 'Escribe la Public Key y el Access Token de tu aplicación de Mercado Pago.',
+                    'niubiz'      => 'Escribe el código de comercio, el usuario y la contraseña de la integración que te dio Niubiz.',
+                    'izipay'      => 'Escribe el usuario (identificador de la tienda) y la contraseña que aparecen en el Back Office de Izipay.',
+                    default       => 'Escribe la llave pública y la llave secreta que te dio ' . PaymentLinks::PROVIDERS[$provider]['label'] . '.',
+                }]);
             }
 
             $settings = [];
@@ -254,6 +262,46 @@ class PaymentController extends Controller
 
                 $settings = ['currency' => \App\Support\Currency::of($tenant)];
                 $validated['mode'] = str_contains($keys['secret_key'], '_live_') ? 'production' : 'sandbox';
+            }
+
+            if (in_array($provider, ['niubiz', 'izipay'], true) && !in_array(\App\Support\Currency::of($tenant), ['PEN', 'USD'], true)) {
+                throw ValidationException::withMessages(['secret_key' => PaymentLinks::PROVIDERS[$provider]['label'] . ' solo cobra en soles o dólares y tu empresa trabaja en ' . \App\Support\Currency::of($tenant) . '.']);
+            }
+
+            if ($provider === 'niubiz') {
+                if (!preg_match('/^\d{6,12}$/', $keys['public_key'])) {
+                    throw ValidationException::withMessages(['public_key' => 'El código de comercio de Niubiz va solo con números (te lo dio Niubiz al afiliarte).']);
+                }
+
+                if (!$keys['username']) {
+                    throw ValidationException::withMessages(['username' => 'Escribe el usuario de la integración que te dio Niubiz (suele ser un correo).']);
+                }
+
+                $validated['mode'] = ($validated['mode'] ?? null) === 'production' ? 'production' : 'sandbox';
+                $check = (new \App\Support\Payments\NiubizClient($keys['public_key'], $keys['username'], $keys['secret_key'], $validated['mode'] === 'production'))->accessToken(true);
+                \App\Support\IntegrationLog::write($tenant->id, 'payments', 'niubiz', 'test', $check['ok'], $check['ok'] ? 'Credenciales guardadas y aceptadas por Niubiz.' : $check['message']);
+
+                if (!$check['ok']) {
+                    throw ValidationException::withMessages(['secret_key' => $check['message']]);
+                }
+
+                $settings = ['currency' => \App\Support\Currency::of($tenant)];
+            }
+
+            if ($provider === 'izipay') {
+                if (!preg_match('/^(test|prod)password_/', $keys['secret_key'])) {
+                    throw ValidationException::withMessages(['secret_key' => 'La contraseña de Izipay empieza con testpassword_ (pruebas) o prodpassword_ (producción). Cópiala del Back Office → Configuración → Tienda → Claves de API REST.']);
+                }
+
+                $check = (new \App\Support\Payments\IzipayClient($keys['public_key'], $keys['secret_key']))->test();
+                \App\Support\IntegrationLog::write($tenant->id, 'payments', 'izipay', 'test', $check['ok'], $check['ok'] ? 'Credenciales guardadas y aceptadas por Izipay.' : $check['message']);
+
+                if (!$check['ok']) {
+                    throw ValidationException::withMessages(['secret_key' => $check['message'] ?? 'Izipay no respondió como se esperaba.']);
+                }
+
+                $settings = ['currency' => \App\Support\Currency::of($tenant)];
+                $validated['mode'] = \App\Support\Payments\IzipayClient::production($keys['secret_key']) ? 'production' : 'sandbox';
             }
 
             $values += [
@@ -308,13 +356,19 @@ class PaymentController extends Controller
         $provider = in_array($key, PaymentLinks::PREFERENCE, true) ? PaymentLinks::providerFor($tenant->id, $key) : PaymentLinks::provider($tenant);
 
         if (!$provider) {
-            return response()->json(['ok' => false, 'message' => PaymentLinks::NOT_CONNECTED]);
+            $label = in_array($key, PaymentLinks::PREFERENCE, true) ? (PaymentLinks::PROVIDERS[$key]['label'] ?? $key) : null;
+
+            return response()->json(['ok' => false, 'message' => $label ? "Primero escribe las claves de {$label} y pulsa «Guardar y conectar»; después puedes probar la conexión." : PaymentLinks::NOT_CONNECTED]);
         }
 
         try {
             $result = $provider->test();
         } catch (ValidationException $e) {
             $result = ['ok' => false, 'message' => collect($e->errors())->flatten()->first()];
+        }
+
+        if (!in_array($provider->key(), ['niubiz', 'izipay'], true)) {
+            \App\Support\IntegrationLog::write($tenant->id, 'payments', $provider->key(), 'test', (bool) $result['ok'], $result['message']);
         }
 
         return response()->json(['ok' => $result['ok'], 'message' => $result['message']]);
@@ -411,9 +465,74 @@ class PaymentController extends Controller
             'email' => 'nullable|email|max:150',
         ], ['token.regex' => 'Culqi no devolvió una tarjeta válida. Inténtalo de nuevo.']);
 
-        $result = PaymentLinks::payWithCulqi($token, $validated['token'], $validated['email'] ?? null);
+        $extra = $request->validate([
+            'authentication_3ds'   => 'nullable|array',
+            'authentication_3ds.*' => 'nullable|string|max:200',
+            'device'               => 'nullable|string|max:120',
+        ]);
+
+        $result = PaymentLinks::payWithCulqi($token, $validated['token'], $validated['email'] ?? null, $extra['authentication_3ds'] ?? null, $extra['device'] ?? null);
 
         return response()->json(['result' => $result, 'link' => PaymentLinks::publicView($token)]);
+    }
+
+    private static function niubizTrouble(string $token, string $title, string $message, ?string $retryUrl, string $retryLabel, int $status = 200)
+    {
+        $back = e(PaymentLinks::url($token));
+        $retry = $retryUrl
+            ? '<p style="margin-top:24px"><a href="' . e($retryUrl) . '" data-niubiz-retry style="display:inline-block;padding:12px 20px;border-radius:12px;background:#0f172a;color:#fff;font-weight:bold;font-size:14px;text-decoration:none">' . e($retryLabel) . '</a></p>'
+            : '';
+
+        $html = '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . e($title) . '</title></head>'
+            . '<body style="margin:0;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;color:#0f172a;text-align:center">'
+            . '<div style="max-width:420px;margin:0 auto;background:#fff;border-radius:16px;padding:24px 20px;box-shadow:0 1px 3px rgba(15,23,42,.08)">'
+            . '<h1 style="font-size:18px;margin:0 0 8px" data-niubiz-trouble>' . e($title) . '</h1><p style="font-size:14px;color:#475569;line-height:1.5;margin:0">' . e($message) . '</p>'
+            . $retry
+            . '<p style="margin-top:16px;font-size:13px"><a href="' . $back . '" style="color:#475569">Volver a la página del pago</a></p></div></body></html>';
+
+        return response($html, $status)->header('Content-Type', 'text/html; charset=utf-8');
+    }
+
+    public function niubizForm(Request $request, string $token)
+    {
+        try {
+            return response(PaymentLinks::niubizForm($token, (string) $request->ip()))->header('Content-Type', 'text/html; charset=utf-8');
+        } catch (ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first() ?: 'Niubiz no abrió el formulario de pago.';
+
+            if ($message === 'Este link ya no está esperando pago.') {
+                return redirect()->away(PaymentLinks::url($token) . '?volver=1');
+            }
+
+            return self::niubizTrouble($token, 'No se pudo abrir el pago', 'Niubiz no respondió a tiempo y no se cobró nada. Espera un momento y vuelve a intentarlo.', \App\Support\Payments\NiubizPaymentProvider::formUrl($token), 'Volver a intentar');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            return self::niubizTrouble($token, 'No se pudo abrir el pago', $e->getMessage() ?: 'Este link de pago no está disponible.', null, '', $e->getStatusCode());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return self::niubizTrouble($token, 'No se pudo abrir el pago', 'Se cortó la conexión con Niubiz y no se cobró nada. Espera un momento y vuelve a intentarlo.', \App\Support\Payments\NiubizPaymentProvider::formUrl($token), 'Volver a intentar');
+        }
+    }
+
+    public function niubiz(Request $request, string $token)
+    {
+        $transaction = (string) $request->input('transactionToken', '');
+
+        if ($transaction !== '' && preg_match('/^[A-Za-z0-9_-]{8,120}$/', $transaction)) {
+            try {
+                PaymentLinks::payWithNiubiz($token, $transaction);
+            } catch (ValidationException $e) {
+                report($e);
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+                return self::niubizTrouble($token, 'No se pudo completar el pago', $e->getMessage() ?: 'Este link de pago no está disponible.', null, '', $e->getStatusCode());
+            } catch (\Throwable $e) {
+                report($e);
+
+                return self::niubizTrouble($token, 'No pudimos confirmar tu pago', 'Se cortó la conexión con Niubiz mientras se revisaba tu pago. Antes de pagar otra vez, revisa el estado: si el cobro pasó, aparecerá como pagado en unos minutos.', PaymentLinks::url($token) . '?volver=1', 'Ver el estado de mi pago');
+            }
+        }
+
+        return redirect()->away(PaymentLinks::url($token) . '?volver=1');
     }
 
     public function check(string $token)
@@ -429,6 +548,15 @@ class PaymentController extends Controller
     {
         abort_unless(PaymentLinks::ready(), 404);
 
+        if (\App\Support\GatewayWebhooks::tracks($provider, $owner)) {
+            return \App\Support\GatewayWebhooks::receive($request, $provider, $owner, fn (Request $req) => $this->processWebhook($req, $provider, $owner));
+        }
+
+        return $this->processWebhook($request, $provider, $owner);
+    }
+
+    public function processWebhook(Request $request, string $provider, ?string $owner = null)
+    {
         if ($owner === 'platform' && in_array($provider, ['mercadopago', 'culqi'], true)) {
             return response()->json(\App\Support\PlanBilling::webhook($request, $provider));
         }
@@ -441,6 +569,25 @@ class PaymentController extends Controller
             $event = $notice ? $gateway->status($notice['id']) : null;
 
             return response()->json($event ? PaymentLinks::handle('culqi', $event, $owner) : ['status' => 'ignored']);
+        }
+
+        if ($provider === 'izipay') {
+            abort_unless($owner && Str::isUuid($owner), 404);
+            $gateway = PaymentLinks::providerFor($owner, 'izipay');
+            abort_unless($gateway, 404);
+            $notice = $gateway->parse($request);
+
+            if (!$notice) {
+                \App\Support\IntegrationLog::write($owner, 'payments', 'izipay', 'webhook', false, 'Llegó un aviso con una firma que no coincide: no se tomó en cuenta.');
+
+                return response()->json(['message' => 'Firma no válida.'], 400);
+            }
+
+            $link = $notice['id'] !== '' ? DB::table('payment_links')->where('tenant_id', $owner)->where('provider', 'izipay')->where('token', $notice['id'])->first() : null;
+            $event = $link && $link->external_id ? $gateway->status($link->external_id) : null;
+            \App\Support\IntegrationLog::write($owner, 'payments', 'izipay', 'webhook', true, $event ? 'Aviso de pago recibido y comprobado con Izipay.' : 'Aviso recibido sin cambios.');
+
+            return response()->json($event && $event['type'] !== 'payment.pending' ? PaymentLinks::handle('izipay', $event, $owner) : ['status' => 'ignored']);
         }
 
         if ($provider !== 'mercadopago') {

@@ -153,9 +153,9 @@ it('valida el periodo elegido a mano', function () {
 
 it('no mezcla ventas ni sedes de otra empresa', function () {
     $otra = $this->company(['modules_off' => []]);
-    $servicioAjeno = $this->servicePriced($otra->tenant, 999, 'Ajeno');
+    $servicioAjeno = $this->servicePriced($otra->tenant, 699, 'Ajeno');
     $ventaAjena = $this->as($otra->owner)->postJson('/api/pos/sales', ['branch_id' => $otra->branch->id, 'items' => [['type' => 'service', 'id' => $servicioAjeno->id, 'quantity' => 1]]])->assertCreated()->json('sale');
-    $this->pay($otra, $ventaAjena['id'], ['method' => 'card', 'amount' => 999])->assertOk();
+    $this->pay($otra, $ventaAjena['id'], ['method' => 'card', 'amount' => 699])->assertOk();
     ($this->cobrar)($this->servicio, 'card');
 
     $datos = ($this->reporte)(['branch_id' => $otra->branch->id])->assertOk()->json();

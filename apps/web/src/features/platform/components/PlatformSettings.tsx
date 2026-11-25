@@ -10,6 +10,7 @@ import Switch from '@/app/components/common/Switch';
 import PlatformCurrencies from './PlatformCurrencies';
 import PlatformBilling from './PlatformBilling';
 import PlatformMailCard from './PlatformMailCard';
+import PlatformIntegrationsCard from './PlatformIntegrationsCard';
 import PlatformPayMethods from './PlatformPayMethods';
 
 interface PlatformValues {
@@ -231,6 +232,7 @@ export default function PlatformSettings() {
       </div>
 
       <PlatformMailCard />
+      <PlatformIntegrationsCard />
 
       <PlatformPayMethods />
 

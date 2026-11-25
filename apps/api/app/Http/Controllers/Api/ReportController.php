@@ -21,11 +21,35 @@ class ReportController extends Controller
 
     public function show(Request $request)
     {
-        $user = $request->user();
-        $tenant = $user->tenant;
-        abort_unless($tenant, 403);
+        abort_unless($request->user()->tenant !== null, 403);
 
-        $validated = $request->validate([
+        return response()->json($this->build($request->user(), $this->filters($request)));
+    }
+
+    public function export(Request $request)
+    {
+        abort_unless($request->user()->tenant !== null, 403);
+        $result = \App\Support\ReportExports::request($request->user(), $this->filters($request), $request);
+        $days = \App\Support\DataExports::DAYS;
+
+        return response()->json($result + [
+            'message' => $result['queued']
+                ? "Es un reporte grande: lo estamos preparando. Te avisaremos en la campana cuando esté listo y lo tendrás en «Tus descargas» por {$days} días."
+                : ($result['export']['status'] === 'ready' ? 'Tu reporte está listo.' : 'No se pudo preparar el reporte. Inténtalo de nuevo.'),
+            'items'   => \App\Support\ReportExports::listFor($request->user()),
+        ], $result['queued'] ? 202 : 201);
+    }
+
+    public function exports(Request $request)
+    {
+        abort_unless($request->user()->tenant !== null, 403);
+
+        return response()->json(['items' => \App\Support\ReportExports::listFor($request->user()), 'ready' => \App\Support\ReportExports::ready()]);
+    }
+
+    public function filters(Request $request): array
+    {
+        return $request->validate([
             'tab'       => ['sometimes', Rule::in(array_keys(Reports::TABS))],
             'period'    => ['sometimes', Rule::in(array_keys(Reports::PERIODS))],
             'from'      => 'required_if:period,custom|nullable|date_format:Y-m-d',
@@ -35,14 +59,25 @@ class ReportController extends Controller
             'from.required_if' => 'Elige desde qué día.',
             'to.required_if'   => 'Elige hasta qué día.',
         ]);
+    }
+
+    public function build(\App\Models\User $user, array $validated): array
+    {
+        $tenant = $user->tenant;
+        abort_unless($tenant instanceof \App\Models\Tenant, 403);
 
         $ownPro = \App\Models\Professional::where('tenant_id', $tenant->id)->where('user_id', $user->id)->value('id');
         $ownOnly = !$user->allows('reports.view') || Access::scopeOf($user) === 'own';
         abort_if($ownOnly && !$ownPro, 403, 'Tu cuenta no está ligada a un profesional: no hay números propios que mostrar.');
         abort_if($ownOnly && !$user->allows('reports.own') && !$user->allows('reports.view'), 403);
 
+        $available = fn (string $key) => match ($key) {
+            'cash'      => $tenant->hasModule('pos'),
+            'inventory' => \App\Support\Inventory::enabled($tenant),
+            default     => true,
+        };
         $tab = $ownOnly ? 'mine' : ($validated['tab'] ?? 'sales');
-        $tab = $tab === 'mine' && !$ownPro ? 'sales' : $tab;
+        $tab = ($tab === 'mine' && !$ownPro) || !$available($tab) ? 'sales' : $tab;
         $period = $validated['period'] ?? '30';
 
         if ($period === 'custom') {
@@ -91,6 +126,8 @@ class ReportController extends Controller
             ],
             'catalog' => collect($current->catalog($tenant->hasModule('inventory')))
                 ->map(fn ($rows) => $rows === null ? null : array_map(fn ($row) => $money ? $row : array_merge($row, ['income' => null, 'collected' => null]), $rows))->all(),
+            'cash'      => $current->cash($money) + ['previous' => $advanced ? $previous->cash($money)['summary'] : null],
+            'inventory' => $current->inventory($money) + ['previous' => $advanced ? $previous->inventory($money)['summary'] : null],
             'mine' => [
                 'summary'   => $money ? $current->mine() : array_merge($current->mine(), ['income' => null, 'commissions' => null]),
                 'previous'  => $money ? $previous->mine() : array_merge($previous->mine(), ['income' => null, 'commissions' => null]),
@@ -100,13 +137,13 @@ class ReportController extends Controller
             ],
         };
 
-        return response()->json([
+        return [
             'tab'      => $tab,
             'tabs'     => collect(Reports::TABS)
-                ->filter(fn ($t, $key) => $ownOnly ? $key === 'mine' : ($key !== 'mine' || $ownPro))
+                ->filter(fn ($t, $key) => $ownOnly ? $key === 'mine' : (($key !== 'mine' || $ownPro) && $available($key)))
                 ->map(fn ($t, $key) => ['key' => $key, 'label' => $t['label'], 'locked' => $t['advanced'] && !$advanced])->values(),
             'own_only' => $ownOnly,
-            'periods'  => collect(Reports::PERIODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values(),
+            'periods'  => collect(Reports::PERIODS)->map(fn ($label, $key) => ['value' => (string) $key, 'label' => $label])->values(),
             'branches' => $branches,
             'branch_id' => $branchId,
             'branch_locked' => (bool) $limit,
@@ -123,7 +160,7 @@ class ReportController extends Controller
             'currency' => Currency::of($tenant),
             'locked'   => $locked,
             'data'     => $data,
-        ]);
+        ];
     }
 
     private function hide(array $summary, bool $money): array

@@ -33,6 +33,8 @@ export interface TenantFormData extends Tenant {
   admin_first_name: string;
   admin_last_name: string;
   admin_email: string;
+  load_sample?: boolean;
+  confirm_duplicates?: boolean;
 }
 
 interface FormTenantProps {
@@ -62,6 +64,8 @@ const EMPTY_FORM: TenantFormData = {
   admin_first_name: '',
   admin_last_name: '',
   admin_email: '',
+  load_sample: false,
+  confirm_duplicates: false,
 };
 
 const inputClass =
@@ -79,11 +83,13 @@ export default function FormTenant({
   const [error, setError] = useState<string | null>(null);
   const [businessTypes, setBusinessTypes] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
+  const [duplicates, setDuplicates] = useState<string[]>([]);
 
   const isEditing = Boolean(initialData);
 
   useEffect(() => {
     setError(null);
+    setDuplicates([]);
 
     if (initialData) {
       setFormData({
@@ -129,6 +135,7 @@ export default function FormTenant({
       setError(null);
       await onSubmit(formData);
     } catch (err: any) {
+      if (err.response?.data?.code === 'DUPLICATES') setDuplicates(err.response.data.duplicates ?? []);
       const errors = err.response?.data?.errors;
       const first = errors ? (Object.values(errors)[0] as string[])[0] : null;
       setError(first || err.response?.data?.message || 'No se pudo guardar el tenant.');
@@ -190,7 +197,10 @@ export default function FormTenant({
               {selectedType && (
                 <p className="text-[11px] text-slate-400 mt-1.5">
                   Empieza con {(selectedType.template?.categories ?? []).reduce((total: number, category: any) => total + (category.services?.length ?? 0), 0)} servicios
-                  {selectedType.template?.record_template?.name ? ` y la ficha "${selectedType.template.record_template.name}"` : ''}.
+                  {selectedType.template?.record_template?.name ? ` y la ficha "${selectedType.template.record_template.name}"` : ''}
+                  {(selectedType.template?.rooms ?? []).length ? `, ${(selectedType.template.rooms ?? []).length} salas o equipos` : ''}
+                  {(selectedType.template?.packages ?? []).length ? `, ${(selectedType.template.packages ?? []).length} ${(selectedType.template.packages ?? []).length === 1 ? 'paquete' : 'paquetes'}` : ''}
+                  {(selectedType.template?.memberships ?? []).length ? ` y ${(selectedType.template.memberships ?? []).length} ${(selectedType.template.memberships ?? []).length === 1 ? 'membresía' : 'membresías'}` : ''}.
                   Nombra a sus clientes "{selectedType.vocabulary?.clients ?? 'Clientes'}".
                 </p>
               )}
@@ -248,7 +258,7 @@ export default function FormTenant({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>RUC *</label>
-                <input type="text" required maxLength={30} value={formData.tax_id} onChange={(e) => set('tax_id', e.target.value)} className={`${inputClass} font-mono`} placeholder="20123456789" />
+                <input type="text" required inputMode="numeric" maxLength={11} value={formData.tax_id} onChange={(e) => set('tax_id', e.target.value.replace(/\D/g, ''))} className={`${inputClass} font-mono`} placeholder="20123456786" />
               </div>
               <div>
                 <label className={labelClass}>Teléfono</label>
@@ -297,6 +307,24 @@ export default function FormTenant({
               <input type="email" required maxLength={190} value={formData.admin_email} onChange={(e) => set('admin_email', e.target.value)} className={inputClass} placeholder="admin@empresa.com" />
               <span className="text-[10px] text-slate-400 mt-1 block">Será el dueño de la cuenta. Le llegará un correo para crear su contraseña (si el correo de la plataforma no funciona, verás una contraseña temporal al crear).</span>
             </div>
+
+            <label className="flex items-start gap-2.5 cursor-pointer pt-2">
+              <input type="checkbox" checked={Boolean(formData.load_sample)} onChange={(e) => set('load_sample', e.target.checked)} className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand" />
+              <span className="text-sm text-slate-700">
+                Cargar datos de ejemplo
+                <span className="block text-xs text-slate-500">Clientes, {selectedType?.vocabulary?.pros?.toLowerCase() ?? 'profesionales'} y citas de muestra para que la empresa vea cómo funciona. Se borran desde sus Primeros pasos.</span>
+              </span>
+            </label>
+
+            {duplicates.length > 0 && (
+              <label className="flex items-start gap-2.5 cursor-pointer rounded-lg border border-amber-200 bg-amber-50 p-3" data-tenant-duplicates>
+                <input type="checkbox" checked={Boolean(formData.confirm_duplicates)} onChange={(e) => set('confirm_duplicates', e.target.checked)} className="mt-0.5 rounded border-slate-300 text-brand-ink focus:ring-brand" />
+                <span className="text-sm text-amber-900">
+                  Crear igual
+                  <span className="block text-xs">{duplicates.join(' ')}</span>
+                </span>
+              </label>
+            )}
 
             <p className={sectionClass}>Sistema</p>
           </>

@@ -49,7 +49,7 @@ class Penalties
             return 0.0;
         }
 
-        return ($sale->deposit_outcome ?? null) === 'refund_due' ? 0.0 : PaymentLinks::depositPaid($sale->id);
+        return in_array($sale->deposit_outcome ?? null, ['refund_due', 'refunded', 'credited'], true) ? 0.0 : PaymentLinks::depositPaid($sale->id);
     }
 
     public static function amount(Tenant $tenant, Appointment $appointment, string $kind): float

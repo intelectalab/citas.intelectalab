@@ -1,10 +1,10 @@
 'use client';
 
 import Badge from '@/app/components/common/Badge';
-import { ErrorAlert } from '@/app/components/common/Alert';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CalendarClock, CalendarPlus, CheckCircle, Edit2, Eye, Hourglass, PhoneCall, Repeat, RotateCcw, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarCheck2, CalendarClock, CalendarPlus, CheckCircle, Edit2, Eye, Hourglass, PhoneCall, Repeat, RotateCcw, XCircle } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { AppModal } from '@/app/components/ui/modals/AppModal';
@@ -46,6 +46,7 @@ export default function RecallsTable() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filters, setFilters] = useState<Record<string, any>>({ service_id: '', professional_id: '' });
   const [activeCard, setActiveCard] = useState('');
+  const [summary, setSummary] = useState<{ total: number; booked: number; rate: number | null } | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Recall | null>(null);
@@ -53,6 +54,7 @@ export default function RecallsTable() {
   const [discardReason, setDiscardReason] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(() => {
     api.get('/recalls', {
@@ -72,6 +74,10 @@ export default function RecallsTable() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    api.get('/recalls/summary').then((res) => setSummary(res.data)).catch(() => setSummary(null));
+  }, [recalls.length]);
+
+  useEffect(() => {
     api.get('/appointments/context')
       .then((res) => { setServices(res.data.services ?? []); setProfessionals(res.data.professionals ?? []); })
       .catch(() => { setServices([]); setProfessionals([]); });
@@ -87,7 +93,10 @@ export default function RecallsTable() {
     try {
       setBusyId(recall.id);
       setError('');
-      await api.post(`/recalls/${recall.id}/status`, { status, ...(reason ? { reason } : {}) });
+      setNotice('');
+      const res = await api.post(`/recalls/${recall.id}/status`, { status, ...(reason ? { reason } : {}) });
+      const sent = res.data?.notice;
+      if (sent) (sent.sent ? setNotice : setError)(sent.message);
       load();
     } catch (err) {
       setError(apiError(err, 'No se pudo actualizar el control.'));
@@ -139,6 +148,15 @@ export default function RecallsTable() {
       borderColorClass: !activeCard ? 'border-slate-400 ring-2 ring-slate-400/20' : 'hover:border-slate-300',
       onClick: () => setActiveCard(''),
     },
+    ...(summary ? [{
+      title: 'Terminaron en cita',
+      value: summary.rate === null ? '—' : `${summary.booked} (${summary.rate} %)`,
+      hint: summary.total > 0 ? `De ${summary.total} controles de los últimos 12 meses que ya vencieron o se cerraron.` : 'Aún no hay controles vencidos o cerrados.',
+      icon: <CalendarCheck2 size={18} />,
+      iconColorClass: 'text-emerald-600',
+      borderColorClass: 'hover:border-slate-300',
+      onClick: () => setView('booked'),
+    }] : []),
     ...CARDS.map((item) => ({
       title: item.title,
       value: recalls.filter(item.match).length,
@@ -276,7 +294,7 @@ export default function RecallsTable() {
             {can('recalls.edit') && (<button
               data-notify={r.id}
               aria-pressed={r.status === 'notified'}
-              title={r.status === 'notified' ? 'Ya se le avisó. Clic para quitar la marca' : 'Marcar que ya se le avisó'}
+              title={r.status === 'notified' ? 'Ya se le avisó. Clic para quitar la marca' : 'Avisarle por correo o WhatsApp que se acerca su control'}
               disabled={busy}
               onClick={() => changeStatus(r, r.status === 'notified' ? 'pending' : 'notified')}
               className={`${iconButton} ${r.status === 'notified' ? 'text-sky-600 bg-sky-50' : 'hover:text-sky-600 hover:bg-sky-50'}`}
@@ -301,6 +319,7 @@ export default function RecallsTable() {
   return (
     <div className="space-y-6 mb-8">
       <ErrorAlert message={error} />
+      <SuccessAlert message={notice} />
 
       <div className="mb-6">
         <DataTable<Recall>

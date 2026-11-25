@@ -60,8 +60,8 @@ export default function PayPlanDrawer({ open, billing, activate = false, onClose
 
   if (!open) return null;
 
-  const plan = billing.pending_plan ?? (billing.plan ? { name: billing.plan.name, price: billing.price, billing_cycle: billing.billing_cycle } : null);
-  const amount = plan?.price ?? billing.price;
+  const plan = billing.pending_plan ?? (billing.plan ? { name: billing.plan.name, price: billing.charge ?? billing.price, billing_cycle: billing.billing_cycle } : null);
+  const amount = plan?.price ?? billing.charge ?? billing.price;
   const currency = billing.plan?.currency;
   const transferBlocked = Boolean(billing.methods?.transfer) && !transferAllowed(billing, plan?.billing_cycle);
   const cardTitle = billing.provider === 'mercadopago' ? 'Tarjeta u otros medios con Mercado Pago' : 'Tarjeta de crédito o débito';

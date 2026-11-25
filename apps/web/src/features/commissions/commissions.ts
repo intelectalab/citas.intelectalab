@@ -61,7 +61,7 @@ export interface CommissionsPayload {
   entries: CommissionEntry[];
 }
 
-export type RuleType = 'service' | 'exception' | 'product';
+export type RuleType = 'service' | 'exception' | 'category' | 'product';
 
 export interface CommissionRule {
   id: string;
@@ -72,6 +72,8 @@ export interface CommissionRule {
   service: string | null;
   product_id: string | null;
   product: string | null;
+  category_id: string | null;
+  category: string | null;
   percent: number;
   fixed: number;
   active: boolean;
@@ -84,13 +86,14 @@ export interface RulesPayload {
   base: 'net' | 'gross';
   on_products: boolean;
   professionals: { id: string; name: string; commission_percent: string | number | null }[];
-  services: { id: string; name: string; price: string | number }[];
+  services: { id: string; name: string; price: string | number; category_id: string | null }[];
+  categories: { id: string; name: string; color?: string | null }[];
   product_list: { id: string; name: string; price: string | number }[];
 }
 
 export interface RulePreview {
   found: boolean;
-  source?: 'exception' | 'service' | 'own' | 'product' | 'products';
+  source?: 'exception' | 'service' | 'category' | 'own' | 'product' | 'products';
   label?: string;
   amount?: number;
   message: string;

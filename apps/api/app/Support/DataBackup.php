@@ -50,6 +50,16 @@ class DataBackup
                     ->map(fn ($p) => [$when($p->created_at), $p->code, Sales::METHODS[$p->method] ?? Sales::OTHER_METHODS[$p->method] ?? $p->method, self::num($p->amount), $p->external_reference, $p->status, $p->branch]), ['Monto']);
         }
 
+        if (Schema::hasTable('invoices')) {
+            $docTypes = ['ticket' => 'Ticket', 'boleta' => 'Boleta', 'factura' => 'Factura', 'nota_credito' => 'Nota de crédito'];
+            $sunat = ['pending' => 'Por enviar', 'accepted' => 'Aceptado', 'rejected' => 'Rechazado', 'not_applicable' => 'No aplica'];
+            $sheets[] = self::sheet('Comprobantes', ['Tipo', 'Número', 'Fecha', 'Venta', 'Cliente', 'Documento del cliente', 'Base', 'IGV', 'Total', 'Moneda', 'Estado', 'SUNAT'],
+                DB::table('invoices as i')->leftJoin('sales as v', 'v.id', '=', 'i.sale_id')
+                    ->where('i.tenant_id', $tenant->id)->orderBy('i.issued_at')->limit(self::LIMIT)
+                    ->get(['i.doc_type', 'i.serie', 'i.number', 'i.issued_at', 'v.code', 'i.customer_name', 'i.customer_doc_number', 'i.taxable', 'i.tax', 'i.total', 'i.currency', 'i.status', 'i.sunat_status'])
+                    ->map(fn ($i) => [$docTypes[$i->doc_type] ?? $i->doc_type, $i->serie . '-' . str_pad((string) $i->number, 8, '0', STR_PAD_LEFT), $when($i->issued_at), $i->code, $i->customer_name, $i->customer_doc_number, self::num($i->taxable), self::num($i->tax), self::num($i->total), $i->currency, $i->status === 'voided' ? 'Anulado' : 'Emitido', $sunat[$i->sunat_status] ?? $i->sunat_status]), ['Base', 'IGV', 'Total']);
+        }
+
         $sheets[] = self::sheet('Servicios', ['Nombre', 'Duración (min)', 'Precio', 'Descripción'],
             DB::table('services')->where('tenant_id', $tenant->id)->orderBy('name')->limit(self::LIMIT)->get()
                 ->map(fn ($s) => [$s->name, (int) ($s->duration_minutes ?? 0), self::num($s->price), $s->description ?? null]), ['Precio']);

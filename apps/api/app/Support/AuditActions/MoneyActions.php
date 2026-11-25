@@ -47,9 +47,12 @@ class MoneyActions
         'quote.session_deducted'  => ['Descontó una sesión del plan de tratamiento sin cita', 'money'],
         'loyalty.points_adjusted' => ['Registró un movimiento de puntos', 'money'],
         'gift_card.issued'        => ['Emitió una gift card', 'money'],
+        'customer_credit.created' => ['Pasó un adelanto a saldo a favor', 'money'],
         'gift_card.discounted'    => ['Descontó saldo de una gift card', 'money'],
         'gift_card.extended'      => ['Amplió la vigencia de una gift card', 'money'],
         'gift_card.cancelled'     => ['Anuló una gift card', 'money'],
+        'loyalty.referral_registered' => ['Registró un cliente referido', 'money'],
+        'sale.discount_authorized' => ['Autorizó con su clave un descuento alto', 'money'],
     ];
 
     public const FIELDS = [

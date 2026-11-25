@@ -34,6 +34,7 @@ class Campaigns
     ];
 
     public const STATUS_LABELS = [
+        'draft'     => 'Borrador',
         'scheduled' => 'Programada',
         'sending'   => 'Enviando',
         'sent'      => 'Enviada',
@@ -539,7 +540,27 @@ class Campaigns
                 ->first();
         }
 
+        $revenue = 0.0;
+
+        if ($campaign->sent_at) {
+            $from = Carbon::parse($campaign->sent_at);
+            $revenue = (float) DB::table('sales as s')
+                ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('marketing_campaign_recipients as r')
+                    ->join('messages as m', 'm.id', '=', 'r.message_id')
+                    ->whereColumn('r.customer_id', 's.customer_id')
+                    ->where('r.marketing_campaign_id', $campaign->id)
+                    ->whereIn('m.status', self::REACHED))
+                ->where('s.tenant_id', $campaign->tenant_id)
+                ->whereIn('s.status', ['paid', 'partial', 'partially_refunded'])
+                ->whereRaw('coalesce(s.paid_at, s.created_at) >= ?', [$from->toIso8601String()])
+                ->whereRaw('coalesce(s.paid_at, s.created_at) < ?', [$from->copy()->addDays(self::BOOKED_DAYS)->toIso8601String()])
+                ->sum('s.paid');
+        }
+
         return [
+            'delivered'  => $sum('delivered'),
+            'read'       => $sum('read'),
+            'revenue'    => round($revenue, 2),
             'sent'       => $sum('sent'),
             'pending'    => $sum('pending'),
             'failed'     => $sum('failed'),

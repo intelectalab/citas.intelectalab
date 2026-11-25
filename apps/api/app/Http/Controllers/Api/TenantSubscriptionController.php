@@ -77,19 +77,43 @@ class TenantSubscriptionController extends Controller
         ]);
 
         AuditEvent::record($request, 'subscription.extended', $tenant, $before, ['ends_at' => $endsAt]);
+        \App\Support\Subscriptions::forget($tenant->id);
+        \App\Support\SaasEvents::record($tenant->id);
 
         return response()->json(app(TenantController::class)->detail($tenant));
+    }
+
+    public function markPastDue(Request $request, string $tenant)
+    {
+        [$tenant, $subscription] = $this->subscription($tenant);
+        $reason = trim((string) $request->validate(['reason' => 'required|string|min:10|max:500'], ['reason.required' => 'Escribe por qué marcas el pago como vencido.', 'reason.min' => 'Cuenta el motivo con un poco más de detalle (al menos 10 letras).'])['reason']);
+        $state = \App\Support\Subscriptions::state($tenant)['state'];
+
+        abort_unless($subscription->status === 'active' && $state === 'active', 422, 'Solo se marca como vencido un plan pagado y vigente. Si está en prueba, en gracia o en solo lectura, ya se maneja solo.');
+
+        $before = $subscription->only(['status', 'ends_at']);
+        $subscription->update(['ends_at' => now()->subMinute()]);
+        \App\Support\Subscriptions::forget($tenant->id);
+
+        AuditEvent::record($request, 'tenant.marked_past_due', $tenant, $before, ['ends_at' => $subscription->ends_at, 'reason' => $reason]);
+        \App\Support\SaasEvents::record($tenant->id);
+        \App\Support\PlanBilling::notify($tenant->id, 'subscription.past_due', 'Tu plan quedó vencido', 'No se confirmó el pago de tu plan. Págalo en Mi empresa → Plan para que tu empresa no quede en solo lectura.', 'past-due:' . $subscription->id . ':' . now()->format('YmdHi'));
+
+        return response()->json(app(TenantController::class)->detail($tenant->fresh()));
     }
 
     public function cancel(Request $request, string $tenant)
     {
         [$tenant, $subscription] = $this->subscription($tenant);
+        $reason = trim((string) $request->validate(['reason' => 'required|string|min:10|max:500'], ['reason.required' => 'Escribe el motivo de la cancelación.', 'reason.min' => 'Cuenta el motivo con un poco más de detalle (al menos 10 letras).'])['reason']);
 
         $before = $subscription->only(['status', 'ends_at']);
         \App\Support\PlanBilling::cancelCard($subscription);
         $subscription->update(['status' => 'canceled', 'canceled_at' => now()]);
 
-        AuditEvent::record($request, 'subscription.canceled', $tenant, $before, ['status' => 'canceled']);
+        AuditEvent::record($request, 'subscription.canceled', $tenant, $before, ['status' => 'canceled', 'reason' => $reason]);
+        \App\Support\Subscriptions::forget($tenant->id);
+        \App\Support\SaasEvents::record($tenant->id, null, ['meta' => ['reason' => 'platform']]);
 
         return response()->json(app(TenantController::class)->detail($tenant));
     }

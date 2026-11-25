@@ -28,6 +28,7 @@ class Appointment extends Model
         'ends_at',
         'status',
         'source',
+        'channel',
         'price',
         'notes',
         'reschedule_count',
@@ -42,6 +43,8 @@ class Appointment extends Model
         'created_by',
         'customer_package_id',
         'video_url',
+        'series_id',
+        'series_number',
     ];
 
     protected $casts = [
@@ -57,6 +60,15 @@ class Appointment extends Model
     ];
 
     protected $dateFormat = 'Y-m-d H:i:sP';
+
+    protected static function booted(): void
+    {
+        static::saving(function (Appointment $appointment) {
+            if (!$appointment->exists || $appointment->isDirty(['starts_at', 'ends_at', 'branch_id', 'service_id'])) {
+                $appointment->room_id = \App\Support\RoomBooking::pick($appointment);
+            }
+        });
+    }
 
     public static function nextCode(string $tenantId): string
     {

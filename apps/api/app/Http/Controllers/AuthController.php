@@ -82,6 +82,9 @@ class AuthController extends Controller
                 'billing' => \App\Support\Subscriptions::present($tenant, $user),
             ] : null,
             'currencies' => \App\Support\Currency::catalog(),
+            'branch_choices' => $tenant && \App\Support\Access::ownBranchLimit($user) === null
+                ? \Illuminate\Support\Facades\DB::table('branches')->where('tenant_id', $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+                : [],
             'customer' => null,
         ]);
     }

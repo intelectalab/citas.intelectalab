@@ -26,7 +26,26 @@ export interface AutomationsPayload {
   inactive_days: number;
   booked_days: number;
   message?: string;
+  history?: AutomationRun[];
+  month?: { failed: number; skipped: number; runs: number };
 }
+
+export interface AutomationRun {
+  id: string;
+  automation: string;
+  customer: { id: string; name: string } | null;
+  result: 'sent' | 'skipped' | 'failed';
+  result_label: string;
+  reason: string | null;
+  channel: string;
+  at: string;
+}
+
+export const RUN_BADGES: Record<AutomationRun['result'], string> = {
+  sent: 'bg-emerald-50 text-emerald-700',
+  skipped: 'bg-slate-100 text-slate-600',
+  failed: 'bg-rose-50 text-rose-700',
+};
 
 export const REPEAT_OPTIONS = [
   { value: 0, label: 'Una sola vez por cliente' },

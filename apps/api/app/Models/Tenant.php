@@ -48,6 +48,7 @@ class Tenant extends Model
 
     protected $casts = [
         'modules_off' => 'array',
+        'billing' => 'array',
         'business_profile' => 'array',
         'business_profile_synced_at' => 'datetime',
     ];
@@ -190,9 +191,18 @@ class Tenant extends Model
         );
 
         $core = SaasModule::coreKeys();
-        $optional = array_diff($plan->moduleKeys(), $off);
+        $optional = array_diff(array_merge($plan->moduleKeys(), \App\Support\Addons::moduleKeys($this->id)), $off);
 
         return $this->resolvedModules = array_values(array_unique(array_merge($core, $optional)));
+    }
+
+    public function planLimits(): array
+    {
+        $subscription = $this->activeSubscription;
+
+        $plan = $subscription instanceof Subscription ? $subscription->plan : null;
+
+        return \App\Support\Addons::extend($this->id, $plan instanceof SaaSPlan ? $plan->limits : null);
     }
 
     public function zone(): string
@@ -260,6 +270,49 @@ class Tenant extends Model
         );
     }
 
+    public const TEMPLATE_RULE_ALIASES = [
+        'loyalty.enabled' => 'loyalty.points_enabled',
+    ];
+
+    public function applyTemplateRules(): array
+    {
+        $template = $this->businessProfile('default_rules');
+        $applied = [];
+
+        foreach (self::TEMPLATE_RULE_ALIASES as $from => $to) {
+            if (array_key_exists($from, $template) && !array_key_exists($to, $template)) {
+                $applied[$to] = $template[$from];
+            }
+        }
+
+        if ($applied) {
+            $settings = $this->settings()->first();
+
+            if ($settings) {
+                $settings->rules = array_merge($applied, $settings->rules ?? []);
+                $settings->save();
+                $this->unsetRelation('settings');
+            }
+        }
+
+        $hours = $template['reminders.hours_before'] ?? null;
+
+        if (is_numeric($hours) && (int) $hours >= 1 && (int) $hours <= 168 && \App\Support\Messaging::ready()) {
+            DB::table('message_settings')->insertOrIgnore([
+                'id'         => (string) Str::uuid(),
+                'tenant_id'  => $this->id,
+                'kind'       => 'reminder',
+                'enabled'    => true,
+                'options'    => json_encode(['hours' => (int) $hours]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $applied['reminders.hours_before'] = (int) $hours;
+        }
+
+        return $applied;
+    }
+
     public function installBusinessTemplate(): array
     {
         $installed = ['categories' => 0, 'services' => 0, 'record_templates' => 0];
@@ -274,6 +327,11 @@ class Tenant extends Model
         $activeStatusId = Status::whereHas('module', fn ($q) => $q->where('name', 'services'))
             ->whereNull('tenant_id')
             ->where('is_default', true)
+            ->value('id');
+
+        $inactiveStatusId = Status::whereHas('module', fn ($q) => $q->where('name', 'services'))
+            ->whereNull('tenant_id')
+            ->where('slug', 'inactive')
             ->value('id');
 
         $now = now();
@@ -313,7 +371,7 @@ class Tenant extends Model
                     'capacity'             => $service['capacity'] ?? 1,
                     'recall_label'         => $service['recall']['label'] ?? null,
                     'recall_days'          => $service['recall']['days'] ?? null,
-                    'status_id'            => $activeStatusId,
+                    'status_id'            => ($service['active'] ?? true) === false && $inactiveStatusId ? $inactiveStatusId : $activeStatusId,
                     'created_at'           => $now,
                     'updated_at'           => $now,
                 ]);

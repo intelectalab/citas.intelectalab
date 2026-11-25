@@ -39,6 +39,7 @@ class BusinessTypeController extends Controller
     {
         $type = BusinessType::withCount('tenants')->findOrFail($id)->makeVisible('template');
         $type->setAttribute('outdated_tenants_count', count($this->outdatedTenants($type)));
+        $type->setAttribute('has_factory', (bool) \App\Support\BusinessTemplates::factoryOf($type));
 
         return response()->json($type);
     }
@@ -134,7 +135,25 @@ class BusinessTypeController extends Controller
             \App\Support\Audit::log($request, 'business_type.updated', ['entity_type' => 'business_type', 'entity_id' => $type->id, 'entity_label' => $type->name, 'before' => $was, 'after' => $now]);
         }
 
+        $type->loadCount('tenants');
+        $type->setAttribute('outdated_tenants_count', count($this->outdatedTenants($type)));
+        $type->setAttribute('has_factory', (bool) \App\Support\BusinessTemplates::factoryOf($type));
+
         return response()->json($type->makeVisible('template'));
+    }
+
+    public function reset(Request $request, string $id)
+    {
+        $type = BusinessType::findOrFail($id);
+        $before = $type->only(['template', 'default_rules', 'modules_off', 'vocabulary', 'dependents']);
+        $type = \App\Support\BusinessTemplates::reset($type);
+
+        \App\Support\Audit::log($request, 'business_type.reset', ['entity_type' => 'business_type', 'entity_id' => $type->id, 'entity_label' => $type->name, 'before' => ['plantilla' => count($before['template']['categories'] ?? []) . ' categorías'], 'after' => ['plantilla' => count($type->template['categories'] ?? []) . ' categorías']]);
+
+        $type->loadCount('tenants');
+        $type->setAttribute('outdated_tenants_count', count($this->outdatedTenants($type)));
+
+        return response()->json($type->makeVisible('template')->toArray() + ['has_factory' => true, 'message' => 'Listo: el rubro volvió a su plantilla de fábrica. Las empresas que ya existen no cambian.']);
     }
 
     public function destroy(Request $request, string $id)
@@ -200,6 +219,27 @@ class BusinessTypeController extends Controller
             'template.categories.*.services.*.recall'               => 'sometimes|array',
             'template.categories.*.services.*.recall.label'         => 'required_with:template.categories.*.services.*.recall|string|max:150',
             'template.categories.*.services.*.recall.days'          => 'required_with:template.categories.*.services.*.recall|integer|min:1',
+            'template.categories.*.services.*.active'               => 'sometimes|boolean',
+            'template.categories.*.services.*.rooms'                => 'sometimes|array',
+            'template.categories.*.services.*.rooms.*'              => 'string|max:60',
+            'template.rooms'                                        => 'sometimes|array|max:40',
+            'template.rooms.*.name'                                 => 'required|string|max:100',
+            'template.rooms.*.type'                                 => 'nullable|string|max:60',
+            'template.rooms.*.kind'                                 => ['sometimes', Rule::in(['room', 'equipment'])],
+            'template.packages'                                     => 'sometimes|array|max:30',
+            'template.packages.*.name'                              => 'required|string|max:150',
+            'template.packages.*.price'                             => 'required|numeric|min:0',
+            'template.packages.*.validity_days'                     => 'required|integer|min:1|max:3650',
+            'template.packages.*.items'                             => 'required|array|min:1',
+            'template.packages.*.items.*.code'                      => 'required|string|max:30',
+            'template.packages.*.items.*.sessions'                  => 'required|integer|min:1|max:200',
+            'template.memberships'                                  => 'sometimes|array|max:30',
+            'template.memberships.*.name'                           => 'required|string|max:150',
+            'template.memberships.*.price'                          => 'required|numeric|min:0',
+            'template.memberships.*.discount_percent'               => 'sometimes|numeric|min:0|max:100',
+            'template.memberships.*.items'                          => 'sometimes|array',
+            'template.memberships.*.items.*.code'                   => 'required|string|max:30',
+            'template.memberships.*.items.*.sessions'               => 'required|integer|min:1|max:99',
             'template.record_template'                              => 'nullable|array',
             'template.record_template.name'                         => 'required_with:template.record_template|string|max:150',
             'template.record_template.fields'                       => 'sometimes|array',
@@ -209,6 +249,9 @@ class BusinessTypeController extends Controller
         ], [
             'modules_off.*.in' => 'Ese módulo no existe o es un módulo base, que no se puede apagar.',
             'color.regex'      => 'El color debe tener el formato #RRGGBB.',
+            'template.packages.*.items.required' => 'Cada paquete necesita al menos un servicio.',
+            'template.packages.*.items.min'      => 'Cada paquete necesita al menos un servicio.',
+            'template.rooms.*.name.required'     => 'Escribe el nombre de cada sala o equipo.',
         ]);
 
         if (isset($validated['vocabulary'])) {

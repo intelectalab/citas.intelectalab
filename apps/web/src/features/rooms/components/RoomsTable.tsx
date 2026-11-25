@@ -11,9 +11,10 @@ import { AppModal } from '@/app/components/ui/modals/AppModal';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import FormRoom from './FormRoom';
+import RoomMaintenance from './RoomMaintenance';
 import type { Room } from '@/features/branches/branches';
 
-export type RoomRow = Room & { created_at?: string };
+export type RoomRow = Room & { created_at?: string; capacity?: number; services?: string[]; minutes_today?: number; maintenance_reason?: string | null };
 
 interface RoomList {
   can_manage: boolean;
@@ -43,6 +44,7 @@ export default function RoomsTable() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<RoomRow | null>(null);
   const [deleting, setDeleting] = useState<RoomRow | null>(null);
+  const [servicing, setServicing] = useState<RoomRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -125,7 +127,10 @@ export default function RoomsTable() {
     { header: 'Descripción', value: (r) => r.description ?? '' },
     ...(list?.links_equipment ? [{ header: 'Está en', value: (r: RoomRow) => r.parent_name ?? '' }] : []),
     { header: 'Sede', value: (r) => r.branch_name ?? '' },
-    { header: 'Estado', value: (r) => (statusOf(r) === 'active' ? 'En uso' : 'Fuera de uso') },
+    { header: 'Capacidad', type: 'number', value: (r) => r.capacity ?? 1 },
+    { header: 'Servicios que la usan', value: (r) => (r.services ?? []).join(', ') },
+    { header: 'Uso hoy (min)', type: 'number', value: (r) => r.minutes_today ?? 0 },
+    { header: 'Estado', value: (r) => (r.maintenance_reason ? `En mantenimiento: ${r.maintenance_reason}` : statusOf(r) === 'active' ? 'En uso' : 'Fuera de uso') },
     { header: 'Equipos fuera de uso', value: (r) => (r.down_equipment ?? []).join(', ') },
     { header: 'Registrado', type: 'date', value: (r) => r.created_at },
   ];
@@ -170,12 +175,29 @@ export default function RoomsTable() {
       ),
     },
     {
+      header: 'Capacidad',
+      cell: (room) => <span key={`capacity-${room.id}`} className="text-sm font-semibold text-slate-700" data-capacity={room.capacity ?? 1}>{room.capacity ?? 1}</span>,
+    },
+    {
+      header: 'Servicios que la usan',
+      cell: (room) => (
+        <span key={`services-${room.id}`} className="block max-w-[14rem] text-xs text-slate-600" data-room-services>
+          {room.services?.length ? room.services.join(', ') : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'Uso hoy',
+      cell: (room) => <span key={`use-${room.id}`} className="text-sm text-slate-700 whitespace-nowrap" data-minutes-today={room.minutes_today ?? 0}>{room.minutes_today ?? 0} min</span>,
+    },
+    {
       header: 'Estado',
       cell: (room) => (
         <div key={`status-${room.id}`}>
-          <Badge data-status={statusOf(room)} tone={statusOf(room) === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} nowrap>
-            {statusOf(room) === 'active' ? 'En uso' : 'Fuera de uso'}
+          <Badge data-status={statusOf(room)} tone={room.maintenance_reason ? 'bg-amber-50 text-amber-700' : statusOf(room) === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} nowrap>
+            {room.maintenance_reason ? 'En mantenimiento' : statusOf(room) === 'active' ? 'En uso' : 'Fuera de uso'}
           </Badge>
+          {room.maintenance_reason && <span className="block mt-1.5 text-[11px] text-amber-700">{room.maintenance_reason}</span>}
           {(room.down_equipment?.length ?? 0) > 0 && (
             <span data-equipment-note className={`block mt-1.5 text-[11px] font-semibold ${room.auto_down ? 'text-rose-600' : 'text-amber-700'}`}>
               {room.auto_down ? 'Por' : 'Observación:'} {room.down_equipment!.join(', ')} fuera de uso
@@ -188,6 +210,9 @@ export default function RoomsTable() {
       header: 'Acciones',
       cell: (room: RoomRow) => (
         <div key={`actions-${room.id}`} className="flex items-center gap-1">
+          <button type="button" data-maintenance={room.id} title={room.maintenance_reason ? `Terminar el mantenimiento de ${room.name}` : `Poner ${room.name} en mantenimiento`} onClick={() => { setError(''); setNotice(''); setServicing(room); }} className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${room.maintenance_reason ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-500 hover:text-brand-ink hover:bg-slate-100'}`}>
+            <Wrench size={14} /> {room.maintenance_reason ? 'Terminar' : 'Mantenimiento'}
+          </button>
           <button title={`Editar ${room.name}`} onClick={() => { setEditing(room); setFormOpen(true); }} className={`${iconButton} hover:text-brand-ink hover:bg-slate-100`}>
             <Edit2 size={16} />
           </button>
@@ -226,6 +251,8 @@ export default function RoomsTable() {
             { id: 'name', label: 'Nombre', value: (r) => r.name },
             { id: 'kind', label: 'Tipo', value: (r) => KIND_LABELS[r.kind] },
             { id: 'branch', label: 'Sede', value: (r) => r.branch_name },
+            { id: 'capacity', label: 'Capacidad', type: 'number', value: (r) => r.capacity ?? 1 },
+            { id: 'use', label: 'Uso hoy', type: 'number', value: (r) => r.minutes_today ?? 0 },
             { id: 'status', label: 'Estado', value: (r) => ((r.effective_status ?? r.status) === 'active' ? 'En uso' : 'Fuera de uso') },
             { id: 'created_at', label: 'Fecha de registro', type: 'date', value: (r) => r.created_at },
           ]}
@@ -251,6 +278,12 @@ export default function RoomsTable() {
         rooms={list?.links_equipment ? rooms.filter((r) => r.kind === 'room') : []}
         defaultBranchId={filters.branch_id}
         onSaved={load}
+      />
+
+      <RoomMaintenance
+        room={servicing}
+        onClose={() => setServicing(null)}
+        onDone={(message) => { setServicing(null); setNotice(message); load(); }}
       />
 
       <AppModal

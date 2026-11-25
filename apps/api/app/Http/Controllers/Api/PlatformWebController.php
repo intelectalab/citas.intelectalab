@@ -288,6 +288,8 @@ class PlatformWebController extends Controller
             'cta_title'        => 'required|string|max:120',
             'cta_text'         => 'nullable|string|max:300',
             'contact_form'     => 'boolean',
+            'chat_enabled'     => 'boolean',
+            'chat_greeting'    => 'nullable|string|max:300',
             'faq'              => 'array|max:12',
             'faq.*.q'          => 'required|string|max:200',
             'faq.*.a'          => 'required|string|max:1000',
@@ -299,7 +301,47 @@ class PlatformWebController extends Controller
             'legal.terminos'   => 'nullable|string|max:60000',
             'legal.privacidad' => 'nullable|string|max:60000',
             'legal.cookies'    => 'nullable|string|max:60000',
+            'promo_enabled'    => 'boolean',
+            'promo_text'       => 'nullable|string|max:160',
+            'promo_coupon'     => ['nullable', 'string', 'max:30', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'hero_video_url'   => ['nullable', 'string', 'max:300', 'regex:#^https://#i'],
+            'video_url'        => ['nullable', 'string', 'max:300', 'regex:#^https://#i'],
+            'video_title'      => 'nullable|string|max:120',
+            'video_chapters'   => 'array|max:12',
+            'video_chapters.*.time'  => ['required', 'string', 'regex:/^\d{1,2}:\d{2}$/'],
+            'video_chapters.*.label' => 'required|string|max:80',
+            'trust_badges'     => 'array|max:8',
+            'trust_badges.*.label'  => 'required|string|max:60',
+            'trust_badges.*.detail' => 'nullable|string|max:120',
+            'results'          => 'array|max:6',
+            'results.*.value'  => 'required|string|max:20',
+            'results.*.label'  => 'required|string|max:100',
+            'testimonials'     => 'array|max:12',
+            'testimonials.*.text'     => 'required|string|max:400',
+            'testimonials.*.name'     => 'required|string|max:80',
+            'testimonials.*.business' => 'nullable|string|max:120',
+            'testimonials.*.rubro'    => 'nullable|string|max:50|exists:business_types,slug',
+            'testimonials.*.result'   => 'nullable|string|max:80',
+            'partners_enabled'    => 'boolean',
+            'partners_title'      => 'nullable|string|max:120',
+            'partners_text'       => 'nullable|string|max:400',
+            'partners_conditions' => 'nullable|string|max:2000',
+            'popup_enabled'    => 'boolean',
+            'popup_title'      => 'nullable|string|max:100',
+            'popup_text'       => 'nullable|string|max:300',
+            'popup_delay'      => 'nullable|integer|min:5|max:120',
+            'demo_enabled'     => 'boolean',
         ], [
+            'promo_coupon.regex'            => 'El cupón lleva solo letras, números y guiones.',
+            'hero_video_url.regex'          => 'El video debe ser un enlace que empiece con https://',
+            'video_url.regex'               => 'El video debe ser un enlace que empiece con https://',
+            'video_chapters.*.time.regex'   => 'Escribe el minuto de cada capítulo como 0:00 o 12:30.',
+            'video_chapters.*.label.required' => 'Ponle un nombre a cada capítulo.',
+            'trust_badges.*.label.required' => 'Cada sello necesita su nombre.',
+            'results.*.value.required'      => 'Cada resultado necesita su cifra.',
+            'results.*.label.required'      => 'Cada resultado necesita su descripción.',
+            'testimonials.*.text.required'  => 'Cada testimonio necesita su texto.',
+            'testimonials.*.name.required'  => 'Cada testimonio necesita el nombre de quien lo dice.',
             'url.url'            => 'Escribe la dirección completa, por ejemplo https://www.tusitio.com.',
             'whatsapp.regex'     => 'Escribe el WhatsApp solo con números, con el código del país (ej. +51 999 888 777).',
             'ga4_id.regex'       => 'El código de Google Analytics empieza con G- (ej. G-AB12CD34EF).',
@@ -310,7 +352,9 @@ class PlatformWebController extends Controller
         ]);
 
         $before = WebSite::settings();
-        $next = array_merge($before, $values);
+        $next = array_merge($before, $values, WebSite::cleanContent($values));
+        $next['popup_delay'] = (int) ($next['popup_delay'] ?? 20) ?: 20;
+        $next['promo_coupon'] = !empty($next['promo_coupon']) ? mb_strtoupper(trim($next['promo_coupon'])) : null;
         $next['url'] = $next['url'] ? rtrim($next['url'], '/') : null;
         $next['legal'] = array_merge($before['legal'], collect($values['legal'] ?? [])->map(fn ($html) => RichText::normalize((string) $html))->all());
 
@@ -338,7 +382,7 @@ class PlatformWebController extends Controller
 
         return response()->json([
             'ready'          => true,
-            'items'          => DB::table('web_posts')->orderByDesc('updated_at')->get()->map(fn ($post) => $this->postRow($post))->values(),
+            'items'          => (function () { $stats = WebPosts::stats(); return DB::table('web_posts')->orderByDesc('updated_at')->get()->map(fn ($post) => $this->postRow($post) + ($stats[$post->slug] ?? ['leads' => 0, 'signups' => 0]))->values(); })(),
             'business_types' => DB::table('business_types')->orderBy('sort_order')->get(['slug', 'name'])->map(fn ($b) => ['value' => $b->slug, 'label' => $b->name]),
         ]);
     }
@@ -360,6 +404,7 @@ class PlatformWebController extends Controller
             'seo_title'       => 'nullable|string|max:120',
             'seo_description' => 'nullable|string|max:300',
             'author'          => 'nullable|string|max:150',
+            'keyword'         => 'nullable|string|max:80',
             'status'          => 'required|in:draft,published',
         ], [
             'title.required' => 'Escribe el título del artículo.',
@@ -368,7 +413,13 @@ class PlatformWebController extends Controller
             'slug.regex'     => 'La dirección lleva solo letras sin tildes, números y guiones.',
         ]);
 
-        $values['body'] = RichText::normalize($values['body']);
+        $values['body'] = RichText::cleanForSite($values['body']);
+
+        if (WebPosts::statsReady()) {
+            $values['keyword'] = trim((string) ($values['keyword'] ?? '')) !== '' ? mb_strtolower(trim($values['keyword'])) : null;
+        } else {
+            unset($values['keyword']);
+        }
 
         return $values;
     }

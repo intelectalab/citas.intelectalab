@@ -90,6 +90,11 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function file(string $invoice, string $kind)
+    {
+        return Invoicing::serveFile($invoice, $kind);
+    }
+
     public function resend(Request $request, string $invoice)
     {
         $tenant = $this->tenant($request);

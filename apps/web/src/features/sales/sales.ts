@@ -15,7 +15,7 @@ export interface SaleInvoice {
   total: string;
   status: string;
   simulated: boolean;
-  sunat_status: 'pending' | 'accepted' | 'rejected' | 'not_applicable';
+  sunat_status: 'pending' | 'accepted' | 'observed' | 'rejected' | 'not_applicable';
   sunat_message: string | null;
   reason?: string | null;
   issued_at: string;
@@ -42,6 +42,9 @@ export interface Sale {
   status_label: string;
   subtotal: number;
   discount: number;
+  manual_discount?: number;
+  discount_reason?: string | null;
+  tip?: number;
   tax: number;
   total: number;
   paid: number;
@@ -56,7 +59,7 @@ export interface Sale {
   invoice: SaleInvoice | null;
   refunded?: number;
   deposit?: number;
-  deposit_outcome?: 'refund_due' | 'retained' | 'refunded' | null;
+  deposit_outcome?: 'refund_due' | 'retained' | 'refunded' | 'credited' | null;
 }
 
 export interface PaymentLink {
@@ -127,13 +130,14 @@ export interface ChargeContext {
   packages?: { id: string; code: string; name: string; created: { code: string; starts_at: string }[]; failed: { date: string; time: string | null; message: string }[] }[];
   memberships?: { id: string; code: string; name: string; renewed: boolean; replaced?: string | null; ends_at: string }[];
   gift_cards?: { code: string; amount: number; recipient_name: string | null; expires_at: string | null }[];
-  next_visit?: { customer_id: string; service_id: string; service_name: string; professional_id: string | null; branch_id: string; dependent_id: string | null } | null;
+  next_visit?: { suggested_days?: number | null; suggested_date?: string | null; customer_id: string; service_id: string; service_name: string; professional_id: string | null; branch_id: string; dependent_id: string | null } | null;
   membership?: { code: string; name: string; included: boolean; percent: number; pos_url: string } | null;
   package?: {
     current: { id: string; code: string; name: string; status: string; consumed: boolean; usage_label: string | null; late_policy: string } | null;
     usable: { id: string; code: string; name: string; sessions_available: number; sessions_total: number; sessions_used: number; expires_at: string; days_left: number }[];
     can_use: boolean;
   } | null;
+  credit?: { balance: number } | null;
   loyalty?: {
     points_enabled: boolean;
     gift_cards_enabled: boolean;
@@ -170,6 +174,7 @@ export interface CashMovement {
 }
 
 export interface CashSession {
+  closing_count?: { value: number; quantity: number }[] | null;
   mine?: boolean;
   hidden?: boolean;
   currency?: string;
@@ -195,6 +200,7 @@ export interface CashSession {
   closing_notes: string | null;
   movement_count: number;
   by_method: { method: string; label: string; total: number; count: number }[];
+  online?: { total: number; count: number };
   movements?: CashMovement[];
   tolerance?: number;
   review_status?: 'pending' | 'approved' | 'observed' | null;
@@ -223,6 +229,37 @@ export interface CashBoardData {
   branches: { id: string; name: string }[];
   registers: CashRegister[];
   sessions: CashSession[];
+  online?: { date: string; currency: string; branches: OnlineCashBranch[] } | null;
+}
+
+export interface OnlineCashBranch {
+  branch_id: string;
+  branch_name: string;
+  received: number;
+  refunded: number;
+  net: number;
+  count: number;
+}
+
+export interface OnlineCashPayment {
+  id: string;
+  at: string;
+  method: string;
+  method_label: string;
+  provider: string | null;
+  amount: number;
+  sale_id: string | null;
+  sale_code: string | null;
+  customer: string | null;
+  branch: string | null;
+}
+
+export interface OnlineCashDay {
+  date: string;
+  currency: string;
+  branch_id: string | null;
+  totals: { received: number; refunded: number; net: number; count: number };
+  payments: OnlineCashPayment[];
 }
 
 export const money = (value: number | string | null | undefined, currency?: string | null): string => formatMoney(value, currency);
@@ -239,6 +276,7 @@ export const cleanAmount = (text: string): string => {
 
 export const SUNAT_LABELS: Record<SaleInvoice['sunat_status'], string> = {
   accepted: 'Aceptado por SUNAT',
+  observed: 'Aceptado por SUNAT con observaciones',
   pending: 'Pendiente de envío a SUNAT',
   rejected: 'Rechazado por SUNAT',
   not_applicable: 'Comprobante interno',
@@ -301,13 +339,35 @@ export interface SaleDetail extends Sale {
   can_manage: boolean;
   void_blocked: string | null;
   refund_available: number;
+  refund_to_loyalty?: number;
   refund_blocked: string | null;
+  refund_stock?: { product_id: string; name: string; left: number }[];
   refund_methods: { value: string; label: string }[];
   cash_sessions: { id: string; register_name: string }[];
   can_approve?: boolean;
   refund_approval_over?: number;
   refund_requests?: RefundRequest[];
+  penalty_notice?: string | null;
+  commissions?: SaleCommission[] | null;
 }
+
+export interface SaleCommission {
+  id: string;
+  professional: string | null;
+  description: string;
+  base: number;
+  percent: number;
+  fixed: number;
+  amount: number;
+  status_label: string;
+  source_label: string;
+}
+
+export const SALE_STAGES: { id: 'pending' | 'partial' | 'paid'; label: string }[] = [
+  { id: 'pending', label: 'Por cobrar' },
+  { id: 'partial', label: 'Pago parcial' },
+  { id: 'paid', label: 'Pagada' },
+];
 
 export interface RefundRequest {
   id: string;

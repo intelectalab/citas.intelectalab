@@ -92,7 +92,7 @@ export default function FormCompany({ isOpen, onClose, initialData, onSaved }: F
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass} htmlFor="company-tax">RUC</label>
-              <input id="company-tax" type="text" inputMode="numeric" maxLength={11} placeholder="11 dígitos" className={inputClass} value={form.tax_id} onChange={(e) => set({ tax_id: e.target.value.replace(/\D/g, '') })} />
+              <input id="company-tax" type="text" inputMode="numeric" maxLength={11} placeholder="11 dígitos, empieza con 10 o 20" className={inputClass} value={form.tax_id} onChange={(e) => set({ tax_id: e.target.value.replace(/\D/g, '') })} />
             </div>
             <div>
               <label className={labelClass} htmlFor="company-phone">Teléfono</label>

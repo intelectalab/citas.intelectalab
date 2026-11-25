@@ -31,6 +31,7 @@ const SCREENS: { path: string; perm: string; exact?: boolean }[] = [
   { path: '/messages', perm: 'messages.view' },
   { path: '/campaigns', perm: 'campaigns.view' },
   { path: '/automations', perm: 'automations.view' },
+  { path: '/surveys', perm: 'surveys.view' },
   { path: '/reports', perm: 'reports.view|reports.own' },
   { path: '/branches', perm: 'branches.view' },
   { path: '/companies', perm: 'company.view' },

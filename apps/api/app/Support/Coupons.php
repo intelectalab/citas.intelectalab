@@ -60,12 +60,20 @@ class Coupons
 
     public static function redeem(object $coupon, string $saleId, ?string $customerId, float $discount): void
     {
+        $taken = DB::table('coupons')
+            ->where('id', $coupon->id)
+            ->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses'))
+            ->increment('used_count');
+
+        if ($taken === 0) {
+            throw ValidationException::withMessages(['coupon_code' => 'Ese cupón ya agotó sus usos.']);
+        }
+
         DB::table('coupon_redemptions')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $coupon->tenant_id, 'coupon_id' => $coupon->id,
             'sale_id' => $saleId, 'customer_id' => $customerId, 'discount_amount' => $discount, 'created_at' => now(),
         ]);
-
-        DB::table('coupons')->where('id', $coupon->id)->increment('used_count');
     }
 
     public static function ofSale(string $saleId, ?string $currency = null): ?array

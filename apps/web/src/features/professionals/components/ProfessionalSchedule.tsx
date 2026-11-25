@@ -20,6 +20,14 @@ interface Range {
 interface ScheduleRow extends Range {
   branch_id: string;
   weekday: number;
+  valid_from?: string | null;
+  valid_until?: string | null;
+}
+
+interface Period {
+  valid_from: string;
+  valid_until: string;
+  week: Record<number, Range[]>;
 }
 
 interface Branch {
@@ -73,6 +81,18 @@ const MOMENTS: { key: 'starts_at' | 'ends_at'; label: string; time: string }[] =
 
 const emptyWeek = (): Record<number, Range[]> => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
 
+const shortDate = (value: string) => value.split('-').reverse().join('/');
+
+const periodLabel = (period: Period) => {
+  if (period.valid_from && period.valid_until) return `Del ${shortDate(period.valid_from)} al ${shortDate(period.valid_until)}`;
+  if (period.valid_from) return `Desde el ${shortDate(period.valid_from)}`;
+  if (period.valid_until) return `Hasta el ${shortDate(period.valid_until)}`;
+  return 'Vale siempre';
+};
+
+const copyWeek = (week: Record<number, Range[]>) =>
+  Object.fromEntries(Object.entries(week).map(([day, ranges]) => [day, ranges.map((range) => ({ ...range }))])) as Record<number, Range[]>;
+
 const formatDateTime = (value: string) =>
   new Date(value).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -89,7 +109,11 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [rows, setRows] = useState<ScheduleRow[]>([]);
-  const [week, setWeek] = useState<Record<number, Range[]>>(emptyWeek);
+  const [branchHours, setBranchHours] = useState<ScheduleRow[]>([]);
+  const [periods, setPeriods] = useState<Period[]>([{ valid_from: '', valid_until: '', week: emptyWeek() }]);
+  const [active, setActive] = useState(0);
+  const [periodsReady, setPeriodsReady] = useState(false);
+  const week = periods[active]?.week ?? emptyWeek();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [blockForm, setBlockForm] = useState(emptyBlock);
   const [removing, setRemoving] = useState<Block | null>(null);
@@ -100,13 +124,27 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
   const [error, setError] = useState('');
   const [blockError, setBlockError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [outside, setOutside] = useState<{ id: string; code: string; starts_at: string; customer: string | null }[]>([]);
+  const [beyondBranch, setBeyondBranch] = useState<string[]>([]);
 
-  const weekFor = (allRows: ScheduleRow[], branch: string) => {
-    const next = emptyWeek();
+  const periodsFor = (allRows: ScheduleRow[], branch: string): Period[] => {
+    const byKey = new Map<string, Period>();
     allRows
       .filter((row) => row.branch_id === branch)
-      .forEach((row) => next[row.weekday].push({ starts: row.starts, ends: row.ends }));
-    return next;
+      .forEach((row) => {
+        const key = `${row.valid_from ?? ''}|${row.valid_until ?? ''}`;
+        if (!byKey.has(key)) byKey.set(key, { valid_from: row.valid_from ?? '', valid_until: row.valid_until ?? '', week: emptyWeek() });
+        byKey.get(key)!.week[row.weekday].push({ starts: row.starts, ends: row.ends });
+      });
+    const list = Array.from(byKey.values()).sort((a, b) => (a.valid_from || a.valid_until ? 1 : 0) - (b.valid_from || b.valid_until ? 1 : 0) || a.valid_from.localeCompare(b.valid_from));
+    return list.length ? list : [{ valid_from: '', valid_until: '', week: emptyWeek() }];
+  };
+
+  const showPeriods = (list: Period[]) => {
+    setPeriods(list);
+    const today = new Date().toLocaleDateString('en-CA');
+    const current = list.findIndex((p) => (p.valid_from || p.valid_until) && (!p.valid_from || p.valid_from <= today) && (!p.valid_until || today <= p.valid_until));
+    setActive(current >= 0 ? current : 0);
   };
 
   useEffect(() => {
@@ -131,8 +169,10 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
 
         setBranches(branchList);
         setRows(allRows);
+        setBranchHours(scheduleRes.data.branch_hours ?? []);
+        setPeriodsReady(Boolean(scheduleRes.data.periods_ready));
         setBranchId(firstBranch);
-        setWeek(weekFor(allRows, firstBranch));
+        showPeriods(periodsFor(allRows, firstBranch));
         setBlocks(blocksRes.data ?? []);
       })
       .catch((err) => setError(firstError(err, 'No se pudo cargar el horario.')))
@@ -141,13 +181,32 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
 
   const changeBranch = (id: string) => {
     setBranchId(id);
-    setWeek(weekFor(rows, id));
+    showPeriods(periodsFor(rows, id));
     setSaved(false);
     setError('');
   };
 
   const updateDay = (weekday: number, ranges: Range[]) => {
-    setWeek((current) => ({ ...current, [weekday]: ranges }));
+    setPeriods((current) => current.map((period, index) => (index === active ? { ...period, week: { ...period.week, [weekday]: ranges } } : period)));
+    setSaved(false);
+  };
+
+  const updatePeriod = (changes: Partial<Period>) => {
+    setPeriods((current) => current.map((period, index) => (index === active ? { ...period, ...changes } : period)));
+    setSaved(false);
+  };
+
+  const addPeriod = () => {
+    const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA');
+    setPeriods((current) => [...current, { valid_from: tomorrow, valid_until: '', week: copyWeek(week) }]);
+    setActive(periods.length);
+    setSaved(false);
+  };
+
+  const removePeriod = () => {
+    const next = periods.filter((_, index) => index !== active);
+    setPeriods(next.length ? next : [{ valid_from: '', valid_until: '', week: emptyWeek() }]);
+    setActive(0);
     setSaved(false);
   };
 
@@ -170,9 +229,14 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
     try {
       setSaving(true);
       setError('');
-      const ranges = DAYS.flatMap((day) => week[day.weekday].map((range) => ({ weekday: day.weekday, ...range })));
-      const res = await api.put(`/professionals/${professional.id}/schedule`, { branch_id: branchId, ranges });
+      const rangesOf = (target: Record<number, Range[]>) => DAYS.flatMap((day) => target[day.weekday].map((range) => ({ weekday: day.weekday, ...range })));
+      const res = await api.put(`/professionals/${professional.id}/schedule`, periodsReady
+        ? { branch_id: branchId, periods: periods.map((period) => ({ valid_from: period.valid_from || null, valid_until: period.valid_until || null, ranges: rangesOf(period.week) })) }
+        : { branch_id: branchId, ranges: rangesOf(week) });
       setRows(res.data.schedules ?? []);
+      showPeriods(periodsFor(res.data.schedules ?? [], branchId));
+      setOutside(res.data.outside ?? []);
+      setBeyondBranch(res.data.branch_closed ?? []);
       setSaved(true);
     } catch (err) {
       setError(firstError(err, 'No se pudo guardar el horario.'));
@@ -247,6 +311,42 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
               />
             )}
 
+            {periodsReady && (
+              <div className="space-y-3 rounded-xl border border-slate-200 p-4" data-schedule-periods>
+                <Select
+                  label="Vigencia"
+                  clearable={false}
+                  value={active}
+                  onChange={(e) => setActive(Number(e.target.value))}
+                  options={periods.map((period, index) => ({ value: index, label: periodLabel(period) }))}
+                  onAdd={addPeriod}
+                  addLabel="Nuevo horario desde una fecha"
+                />
+                {periods[active] && (periods[active].valid_from || periods[active].valid_until || active > 0) ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div data-period-from>
+                        <span className={labelClass}>Desde</span>
+                        <DateField ariaLabel="Vigencia: desde" value={periods[active].valid_from} max={periods[active].valid_until || undefined} onChange={(value) => updatePeriod({ valid_from: value })} />
+                      </div>
+                      <div data-period-until>
+                        <span className={labelClass}>Hasta (opcional)</span>
+                        <DateField ariaLabel="Vigencia: hasta" value={periods[active].valid_until} min={periods[active].valid_from || undefined} onChange={(value) => updatePeriod({ valid_until: value })} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-slate-500">En estas fechas reemplaza al horario de siempre. Sin «hasta», sigue hasta que lo cambies.</span>
+                      <button type="button" onClick={removePeriod} className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" data-period-remove>
+                        Quitar este horario
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <span className="block text-xs text-slate-500">Vale siempre, salvo en las fechas de otro horario. Usa el «+» si desde una fecha atiende distinto (por ejemplo, «desde el 1 de diciembre, de 9 a 1»).</span>
+                )}
+              </div>
+            )}
+
             <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
               {DAYS.map((day) => {
                 const ranges = week[day.weekday];
@@ -260,6 +360,19 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
                     </div>
 
                     <div className="flex-1 space-y-2">
+                      {(() => {
+                        const open = branchHours.filter((h) => h.branch_id === branchId && h.weekday === day.weekday);
+                        const elsewhere = rows.filter((r) => r.branch_id !== branchId && r.weekday === day.weekday);
+                        const nameOf = (id: string) => branches.find((b) => b.id === id)?.name ?? 'otra sede';
+                        return (
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400" data-day-hints={day.weekday}>
+                            <span data-branch-hours>{open.length ? `Sede: ${open.map((h) => `${h.starts}–${h.ends}`).join(', ')}` : 'Sede cerrada'}</span>
+                            {elsewhere.length > 0 && (
+                              <span data-other-branch className="text-amber-700">En {elsewhere.map((r) => `${nameOf(r.branch_id)} ${r.starts}–${r.ends}`).join(', ')}</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {!isOn && <span className="block text-sm text-slate-400 pt-1.5">No atiende</span>}
 
                       {ranges.map((range, index) => (
@@ -309,6 +422,24 @@ export default function ProfessionalSchedule({ isOpen, onClose, professional, in
 
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
             {saved && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">Horario guardado.</p>}
+            {saved && beyondBranch.length > 0 && (
+              <div data-schedule-beyond-branch className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                <p className="font-semibold">Parte de este horario queda fuera del horario de la sede. En esas horas no se podrá agendar.</p>
+                <ul className="text-xs space-y-0.5">
+                  {beyondBranch.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+              </div>
+            )}
+            {saved && outside.length > 0 && (
+              <div data-schedule-outside className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                <p className="font-semibold">{outside.length === 1 ? 'Queda 1 cita por venir fuera del nuevo horario' : `Quedan ${outside.length} citas por venir fuera del nuevo horario`}. Siguen agendadas: reprográmalas o avisa.</p>
+                <ul className="text-xs space-y-0.5">
+                  {outside.slice(0, 10).map((a) => (
+                    <li key={a.id}><span className="font-semibold">{a.code}</span> · {a.starts_at.slice(0, 10).split('-').reverse().join('/')} {a.starts_at.slice(11, 16)}{a.customer ? ` · ${a.customer}` : ''}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="flex justify-end">
               <Button

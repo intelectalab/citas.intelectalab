@@ -765,6 +765,7 @@ class Memberships
                 'grace_until'      => $m->status === 'grace' ? self::graceUntil($tenant, $m) : null,
                 'paused_at'        => $m->status === 'paused' && $m->paused_at ? Carbon::parse($m->paused_at)->setTimezone($tenant->zone())->toDateString() : null,
                 'paused_days'      => (int) ($m->paused_days ?? 0),
+                'auto_renew'       => (bool) ($m->auto_renew ?? false),
                 'cancel_reason'    => $m->status === 'cancelled' ? ($m->cancel_reason ?? null) : null,
                 'cancelled_at'     => $m->cancelled_at ? Carbon::parse($m->cancelled_at)->setTimezone($tenant->zone())->toDateString() : null,
             ];

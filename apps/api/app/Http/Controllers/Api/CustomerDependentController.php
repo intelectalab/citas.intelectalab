@@ -16,7 +16,7 @@ class CustomerDependentController extends Controller
 
         abort_unless($tenant && $tenant->dependents()['enabled'], 403, 'Tu rubro no usa dependientes.');
 
-        return Customer::where('tenant_id', $tenant->id)->findOrFail($customerId);
+        return Customer::visibleTo($request->user())->findOrFail($customerId);
     }
 
     public static function auditable(CustomerDependent $dependent): array
@@ -28,6 +28,13 @@ class CustomerDependentController extends Controller
             'birth_date'     => $dependent->birth_date?->format('Y-m-d'),
             'biological_sex' => ['M' => 'Masculino', 'F' => 'Femenino', 'O' => 'Otro'][$dependent->biological_sex] ?? null,
             'notes'          => $dependent->notes ? mb_strimwidth($dependent->notes, 0, 160, '…') : null,
+            'alert'          => $dependent->alert ?? null,
+            'weight_kg'      => $dependent->weight_kg !== null ? rtrim(rtrim(number_format((float) $dependent->weight_kg, 2, '.', ''), '0'), '.') : null,
+            'color'          => $dependent->color ?? null,
+            'sterilized'     => $dependent->sterilized === null ? null : ($dependent->sterilized ? 'Sí' : 'No'),
+            'microchip'      => $dependent->microchip ?? null,
+            'relationship'   => $dependent->relationship ?? null,
+            'document_number' => $dependent->document_number ?? null,
         ];
     }
 
@@ -47,13 +54,16 @@ class CustomerDependentController extends Controller
     {
         $customer = $this->customer($request, $customer);
 
-        return response()->json($customer->dependents()->orderBy('name')->get());
+        $rows = $customer->dependents()->orderBy('name')->get();
+        $stats = \App\Support\CustomerInsights::dependentStats($request->user()->tenant, $customer, $rows->pluck('id')->all());
+
+        return response()->json($rows->map(fn (CustomerDependent $d) => $d->toArray() + ['stats' => $stats[$d->id] ?? null])->values());
     }
 
     public function store(Request $request, string $customer)
     {
         $customer = $this->customer($request, $customer);
-        $validated = $request->validate(CustomerDependent::rules());
+        $validated = CustomerDependent::cleanAlert($request->validate(CustomerDependent::staffRules()));
 
         $dependent = $customer->dependents()->create($validated + [
             'tenant_id' => $customer->tenant_id,
@@ -70,7 +80,7 @@ class CustomerDependentController extends Controller
         $dependent = $customer->dependents()->findOrFail($dependent);
 
         $auditBefore = self::auditable($dependent);
-        $dependent->update($request->validate(CustomerDependent::rules()));
+        $dependent->update(CustomerDependent::cleanAlert($request->validate(CustomerDependent::staffRules())));
         [$from, $to] = Audit::changed($auditBefore, self::auditable($dependent));
 
         if ($from || $to) {

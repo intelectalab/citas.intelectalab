@@ -17,12 +17,13 @@ class AccountPasswordController extends Controller
 
         $validated = $request->validate([
             'current_password' => 'required|string',
-            'password'         => 'required|string|min:8|max:100|confirmed',
+            'password'         => ['required', 'string', 'min:8', 'max:100', 'confirmed', 'regex:/[a-z]/', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
         ], [
             'current_password.required' => 'Escribe la contraseña con la que entraste.',
             'password.required'         => 'Escribe tu contraseña nueva.',
             'password.min'              => 'La contraseña debe tener al menos 8 caracteres.',
             'password.confirmed'        => 'Las dos contraseñas no coinciden.',
+            'password.regex'            => 'La contraseña debe tener al menos una mayúscula, una minúscula y un número.',
         ]);
 
         if (!Hash::check($validated['current_password'], $user->getAuthPassword())) {

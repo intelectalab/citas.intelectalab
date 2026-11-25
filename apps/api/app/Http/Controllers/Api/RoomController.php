@@ -44,6 +44,8 @@ class RoomController extends Controller
             'branch'      => $room->branch_id ? DB::table('branches')->where('id', $room->branch_id)->value('name') : null,
             'parent_room' => !empty($room->parent_id) ? DB::table('rooms')->where('id', $room->parent_id)->value('name') : null,
             'in_use'      => ($room->status ?? 'active') === 'active',
+            'room_capacity' => isset($room->capacity) ? (int) $room->capacity : null,
+            'maintenance_reason' => $room->maintenance_reason ?? null,
         ];
     }
 
@@ -77,7 +79,10 @@ class RoomController extends Controller
             'kind'        => ['nullable', Rule::in(['room', 'equipment'])],
             'status'      => ['nullable', Rule::in(['active', 'inactive'])],
             'parent_id'   => ['nullable', 'uuid', Rule::exists('rooms', 'id')->where('branch_id', $branchId)->where('kind', 'room')],
+            'capacity'    => 'sometimes|nullable|integer|min:1|max:500',
         ], [
+            'capacity.min'  => 'La capacidad es de al menos 1.',
+            'capacity.max'  => 'La capacidad va hasta 500.',
             'name.required' => 'Escribe el nombre.',
             'name.unique'   => 'Esta sucursal ya tiene una sala o equipo con ese nombre.',
             'parent_id.exists' => 'Elige una sala de la misma sede.',
@@ -85,7 +90,11 @@ class RoomController extends Controller
 
         $kind = $validated['kind'] ?? 'room';
 
-        return (Rooms::hasParent() ? ['parent_id' => $kind === 'equipment' ? ($validated['parent_id'] ?? null) : null] : []) + [
+        $extras = \App\Support\CatalogExtras::roomFields();
+        $capacity = $extras && array_key_exists('capacity', $validated) ? ['capacity' => (int) ($validated['capacity'] ?? 1)] : [];
+        $back = $extras && ($validated['status'] ?? 'active') === 'active' ? ['maintenance_reason' => null, 'maintenance_since' => null] : [];
+
+        return $capacity + $back + (Rooms::hasParent() ? ['parent_id' => $kind === 'equipment' ? ($validated['parent_id'] ?? null) : null] : []) + [
             'name'        => trim($validated['name']),
             'description' => $validated['description'] ?? null,
             'kind'        => $validated['kind'] ?? 'room',
@@ -96,7 +105,36 @@ class RoomController extends Controller
 
     private function present(string $id): object
     {
-        return DB::table('rooms')->where('id', $id)->first(['id', 'branch_id', 'name', 'description', 'kind', 'status']);
+        return DB::table('rooms')->where('id', $id)->first(['id', 'branch_id', 'name', 'description', 'kind', 'status', ...(\App\Support\CatalogExtras::roomFields() ? ['capacity', 'maintenance_reason', 'maintenance_since'] : [])]);
+    }
+
+    public function maintenance(Request $request, string $room)
+    {
+        $this->assertCanManage($request);
+        abort_unless($request->user()->allows('rooms.edit'), 403, 'Tu cuenta no tiene permiso para cambiar las salas y equipos.');
+        abort_unless(\App\Support\CatalogExtras::roomFields(), 409, 'Falta actualizar la base de datos para registrar mantenimientos.');
+        $room = $this->find($request, $room);
+
+        $validated = $request->validate([
+            'action' => ['required', Rule::in(['start', 'end'])],
+            'reason' => 'nullable|string|max:255|required_if:action,start',
+        ], ['reason.required_if' => 'Escribe qué mantenimiento se hace (por ejemplo, «cambio de camilla»).']);
+
+        $starting = $validated['action'] === 'start';
+        $before = $this->auditable($room);
+        DB::table('rooms')->where('id', $room->id)->update([
+            'status'             => $starting ? 'inactive' : 'active',
+            'maintenance_reason' => $starting ? trim($validated['reason']) : null,
+            'maintenance_since'  => $starting ? now() : null,
+            'updated_at'         => now(),
+        ]);
+
+        $this->notifyIfEquipmentChanged($request, $room);
+        $fresh = DB::table('rooms')->where('id', $room->id)->first();
+        [$from, $to] = Audit::changed($before, $this->auditable($fresh));
+        $this->auditChange($request, $starting ? 'room.maintenance_started' : 'room.maintenance_ended', $fresh, $from, $to);
+
+        return response()->json($this->present($room->id));
     }
 
     public function index(Request $request)
@@ -110,6 +148,21 @@ class RoomController extends Controller
 
         $rooms = $user->tenant ? Rooms::listing($user->tenant, $limit) : collect();
         $mode = Rooms::mode($user->tenant);
+
+        if ($user->tenant && $rooms->isNotEmpty()) {
+            $usage = \App\Support\CatalogExtras::roomUsageToday($user->tenant, $rooms->pluck('id')->all());
+            $services = \App\Support\RoomBooking::ready()
+                ? DB::table('service_rooms')->join('services', 'services.id', '=', 'service_rooms.service_id')
+                    ->where('service_rooms.tenant_id', $user->tenant_id)
+                    ->orderBy('services.name')
+                    ->get(['service_rooms.room_id', 'services.name'])
+                    ->groupBy('room_id')
+                : collect();
+            $rooms = $rooms->map(fn (array $room) => $room + [
+                'services'      => ($services[$room['id']] ?? collect())->pluck('name')->values()->all(),
+                'minutes_today' => (int) ($usage[$room['id']] ?? 0),
+            ]);
+        }
 
         return response()->json([
             'can_manage' => $user->allows('rooms.edit'),

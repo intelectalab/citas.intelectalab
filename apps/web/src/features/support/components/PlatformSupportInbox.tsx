@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Inbox, LifeBuoy, UserCheck } from 'lucide-react';
+import { AlertTriangle, Inbox, KeyRound, LifeBuoy, Siren, UserCheck } from 'lucide-react';
 import { api } from '@/lib/axios';
 import Badge from '@/app/components/common/Badge';
 import Switch from '@/app/components/common/Switch';
@@ -39,6 +39,7 @@ export default function PlatformSupportInbox() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({ priority: '', topic: '' });
   const [onlyLate, setOnlyLate] = useState(false);
+  const [only, setOnly] = useState<'' | 'urgent' | 'access'>('');
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
@@ -57,10 +58,13 @@ export default function PlatformSupportInbox() {
     return true;
   };
   const late = tickets.filter((t) => t.overdue).length;
+  const hasAccess = (t: Ticket) => Boolean(t.access_until && new Date(t.access_until).getTime() > Date.now());
   const term = search.trim().toLowerCase();
   const shown = tickets
     .filter((t) => inTab(t, tab))
     .filter((t) => !onlyLate || t.overdue)
+    .filter((t) => only !== 'urgent' || (t.priority === 'urgent' && t.status !== 'resolved'))
+    .filter((t) => only !== 'access' || hasAccess(t))
     .filter((t) => !filters.priority || t.priority === filters.priority)
     .filter((t) => !filters.topic || t.topic === filters.topic)
     .filter((t) => !term || `${t.code} ${t.subject} ${t.tenant?.name ?? ''}`.toLowerCase().includes(term));
@@ -78,6 +82,8 @@ export default function PlatformSupportInbox() {
     { title: 'Vencidos', value: late, icon: <AlertTriangle size={18} />, iconColorClass: 'text-rose-600', onClick: () => setOnlyLate(!onlyLate), borderColorClass: onlyLate ? 'border-rose-500 ring-2 ring-rose-100 shadow-sm' : 'hover:border-rose-300' },
     { title: 'Por atender', value: tickets.filter((t) => inTab(t, 'pending')).length, icon: <Inbox size={18} />, iconColorClass: 'text-sky-600', onClick: () => setTab('pending') },
     { title: 'Asignados a mí', value: tickets.filter((t) => inTab(t, 'mine')).length, icon: <UserCheck size={18} />, iconColorClass: 'text-violet-600', onClick: () => setTab('mine') },
+    { title: 'Urgentes', value: tickets.filter((t) => t.priority === 'urgent' && t.status !== 'resolved').length, icon: <Siren size={18} />, iconColorClass: 'text-rose-600', onClick: () => setOnly(only === 'urgent' ? '' : 'urgent'), borderColorClass: only === 'urgent' ? 'border-rose-500 ring-2 ring-rose-100 shadow-sm' : 'hover:border-rose-300' },
+    { title: 'Con acceso autorizado', value: tickets.filter(hasAccess).length, icon: <KeyRound size={18} />, iconColorClass: 'text-emerald-600', onClick: () => setOnly(only === 'access' ? '' : 'access'), borderColorClass: only === 'access' ? 'border-emerald-500 ring-2 ring-emerald-100 shadow-sm' : 'hover:border-emerald-300' },
   ];
 
   const columns: Column<Ticket>[] = [
@@ -123,7 +129,7 @@ export default function PlatformSupportInbox() {
         ]}
         filterValues={filters}
         onFilterChange={(id, value) => setFilters({ ...filters, [id]: value ?? '' })}
-        onClearFilters={() => { setFilters({ priority: '', topic: '' }); setOnlyLate(false); }}
+        onClearFilters={() => { setFilters({ priority: '', topic: '' }); setOnlyLate(false); setOnly(''); }}
         sortOptions={[
           { id: 'due', label: 'Plazo', type: 'date', value: (t) => t.due_at },
           { id: 'last', label: 'Última novedad', type: 'date', value: (t) => t.last_message_at },

@@ -15,6 +15,7 @@ use App\Support\Audit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Access;
@@ -73,7 +74,169 @@ class AvailabilityBlockController extends Controller
             'branch_kinds'       => $kinds(AvailabilityBlock::BRANCH_KINDS),
             'can_block_branch'   => $own === null,
             'can_manage_holidays' => $request->user()->allows('holidays.edit'),
+            'rooms'              => $own === null && $this->roomsOn($tenant)
+                ? DB::table('rooms as r')
+                    ->leftJoin('rooms as p', 'p.id', '=', 'r.parent_id')
+                    ->join('branches as b', 'b.id', '=', 'r.branch_id')
+                    ->where('r.tenant_id', $tenant->id)
+                    ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('r.branch_id', $id))
+                    ->orderBy('b.name')->orderByRaw('coalesce(p.name, r.name)')->orderBy('r.kind', 'desc')->orderBy('r.name')
+                    ->get(['r.id', 'r.name', 'r.kind', 'r.branch_id', 'b.name as branch_name', 'p.name as parent_name'])
+                    ->map(fn (object $r) => ['id' => $r->id, 'name' => $r->name, 'kind' => $r->kind, 'branch_id' => $r->branch_id, 'branch_name' => $r->branch_name, 'parent_name' => $r->parent_name])
+                    ->values()
+                : [],
         ]);
+    }
+
+    private function roomsOn(Tenant $tenant): bool
+    {
+        return \App\Support\RoomBooking::enabled($tenant) && \App\Support\RoomBlocks::ready();
+    }
+
+    private function findRoomBlock(Tenant $tenant, string $id): ?object
+    {
+        if (!\App\Support\RoomBlocks::ready() || !\Illuminate\Support\Str::isUuid($id)) {
+            return null;
+        }
+
+        return DB::table('room_blocks as rb')
+            ->join('rooms as r', 'r.id', '=', 'rb.room_id')
+            ->leftJoin('branches as b', 'b.id', '=', 'r.branch_id')
+            ->leftJoin('users as u', 'u.id', '=', 'rb.created_by')
+            ->where('rb.tenant_id', $tenant->id)
+            ->where('rb.id', $id)
+            ->first(['rb.*', 'r.name as room_name', 'r.kind as room_kind', 'r.branch_id', 'r.parent_id', 'b.name as branch_name', 'u.first_name as by_first', 'u.last_name as by_last']);
+    }
+
+    private function roomBlocksQuery(Tenant $tenant)
+    {
+        return DB::table('room_blocks as rb')
+            ->join('rooms as r', 'r.id', '=', 'rb.room_id')
+            ->leftJoin('branches as b', 'b.id', '=', 'r.branch_id')
+            ->leftJoin('users as u', 'u.id', '=', 'rb.created_by')
+            ->where('rb.tenant_id', $tenant->id)
+            ->select(['rb.*', 'r.name as room_name', 'r.kind as room_kind', 'r.branch_id', 'r.parent_id', 'b.name as branch_name', 'u.first_name as by_first', 'u.last_name as by_last']);
+    }
+
+    private function roomAffectedQuery(Tenant $tenant, object $room, Carbon $startsAt, Carbon $endsAt): Builder
+    {
+        $roomId = $room->kind === 'equipment' && $room->parent_id ? $room->parent_id : $room->id;
+
+        return Appointment::where('tenant_id', $tenant->id)
+            ->whereIn('status', self::AFFECTED_STATUSES)
+            ->where('room_id', $roomId)
+            ->where('starts_at', '<', $endsAt->toIso8601String())
+            ->where('ends_at', '>', $startsAt->toIso8601String())
+            ->where('ends_at', '>', now()->toIso8601String());
+    }
+
+    private function presentRoomBlock(object $block, Tenant $tenant): array
+    {
+        $timezone = $this->timezone($tenant);
+        $startsAt = Carbon::parse($block->starts_at);
+        $endsAt = Carbon::parse($block->ends_at);
+        $room = (object) ['id' => $block->room_id, 'kind' => $block->room_kind, 'parent_id' => $block->parent_id];
+
+        return [
+            'id'              => $block->id,
+            'professional_id' => null,
+            'branch_id'       => $block->branch_id,
+            'room_id'         => $block->room_id,
+            'professional'    => null,
+            'branch'          => $block->branch_id ? ['id' => $block->branch_id, 'name' => $block->branch_name] : null,
+            'room'            => ['id' => $block->room_id, 'name' => $block->room_name, 'kind' => $block->room_kind],
+            'scope'           => 'room',
+            'kind'            => 'room',
+            'kind_label'      => $block->room_kind === 'equipment' ? 'Equipo fuera de uso' : 'Sala bloqueada',
+            'overridable'     => false,
+            'reason'          => $block->reason,
+            'starts_at'       => $startsAt->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+            'ends_at'         => $endsAt->copy()->setTimezone($timezone)->format(self::LOCAL_FORMAT),
+            'state'           => $endsAt->lte(now()) ? 'past' : ($startsAt->lte(now()) ? 'current' : 'upcoming'),
+            'affected_count'  => $this->roomAffectedQuery($tenant, $room, $startsAt, $endsAt)->count(),
+            'can_manage'      => true,
+            'created_by_name' => trim(($block->by_first ?? '') . ' ' . ($block->by_last ?? '')) ?: null,
+            'created_at'      => $block->created_at ? Carbon::parse($block->created_at)->setTimezone($timezone)->format(self::LOCAL_FORMAT) : null,
+        ];
+    }
+
+    private function roomValidated(Request $request, Tenant $tenant, ?string $own, bool $full = true): array
+    {
+        abort_unless($this->roomsOn($tenant), 403, 'Tu empresa no tiene encendido el módulo de salas y equipos.');
+        abort_if($own !== null, 403, 'Solo el personal administrativo puede bloquear una sala o un equipo.');
+
+        $validated = $request->validate([
+            'room_id'   => 'required|uuid',
+            'starts_at' => 'required|date_format:' . self::LOCAL_FORMAT,
+            'ends_at'   => 'required|date_format:' . self::LOCAL_FORMAT,
+            'reason'    => ($full ? 'required' : 'nullable') . '|string|max:255',
+        ], [
+            'starts_at.required' => 'Indica desde cuándo.',
+            'ends_at.required'   => 'Indica hasta cuándo.',
+            'reason.required'    => 'Escribe el motivo.',
+        ]);
+
+        $room = DB::table('rooms')->where('tenant_id', $tenant->id)->where('id', $validated['room_id'])->first();
+        abort_unless($room, 404);
+        $this->assertBranch($request, null, $room->branch_id);
+
+        $timezone = $this->timezone($tenant);
+        $startsAt = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['starts_at'], $timezone)->startOfMinute();
+        $endsAt = Carbon::createFromFormat(self::LOCAL_FORMAT, $validated['ends_at'], $timezone)->startOfMinute();
+
+        if ($endsAt->lte($startsAt)) {
+            throw ValidationException::withMessages(['ends_at' => 'La fecha de fin debe ser posterior a la de inicio.']);
+        }
+
+        return [$room, trim((string) ($validated['reason'] ?? '')), $startsAt, $endsAt];
+    }
+
+    private function storeRoomBlock(Request $request, Tenant $tenant, ?string $own)
+    {
+        [$room, $reason, $startsAt, $endsAt] = $this->roomValidated($request, $tenant, $own);
+        $id = (string) \Illuminate\Support\Str::uuid();
+
+        DB::table('room_blocks')->insert([
+            'id' => $id, 'tenant_id' => $tenant->id, 'room_id' => $room->id,
+            'starts_at' => $startsAt->toIso8601String(), 'ends_at' => $endsAt->toIso8601String(),
+            'reason' => $reason, 'created_by' => $request->user()->id, 'created_at' => now(),
+        ]);
+
+        $block = $this->findRoomBlock($tenant, $id);
+        $this->auditRoom($request, 'room_block.created', $block, [], $this->roomAuditable($block));
+
+        return response()->json($this->presentRoomBlock($block, $tenant), 201);
+    }
+
+    private function roomAuditable(object $block): array
+    {
+        return array_filter([
+            'room'      => $block->room_name,
+            'branch'    => $block->branch_name,
+            'reason'    => $block->reason,
+            'starts_at' => Carbon::parse($block->starts_at)->toIso8601String(),
+            'until_at'  => Carbon::parse($block->ends_at)->toIso8601String(),
+        ]);
+    }
+
+    private function auditRoom(Request $request, string $action, object $block, array $before = [], array $after = []): void
+    {
+        Audit::log($request, $action, array_filter([
+            'tenant'       => $block->tenant_id,
+            'entity_type'  => 'room_block',
+            'entity_id'    => $block->id,
+            'entity_label' => $block->room_name,
+            'branch_id'    => $block->branch_id,
+            'before'       => $before ?: null,
+            'after'        => $after ?: null,
+        ], fn ($value) => $value !== null));
+    }
+
+    private function roomAffectedList(Tenant $tenant, object $block): array
+    {
+        $room = (object) ['id' => $block->room_id, 'kind' => $block->room_kind, 'parent_id' => $block->parent_id];
+
+        return $this->mapAffected($tenant, $this->roomAffectedQuery($tenant, $room, Carbon::parse($block->starts_at), Carbon::parse($block->ends_at)));
     }
 
     public function index(Request $request)
@@ -95,7 +258,7 @@ class AvailabilityBlockController extends Controller
         $from = $request->filled('from') ? Carbon::parse($request->input('from'), $timezone) : now();
 
         $blocks = AvailabilityBlock::where('tenant_id', $tenant->id)
-            ->with(['professional:id,display_name', 'branch:id,name'])
+            ->with(['professional:id,display_name', 'branch:id,name', 'creator:id,first_name,last_name'])
             ->when($own, fn ($q) => $q->where(fn ($q) => $q->where('professional_id', $own)->orWhereNull('professional_id')))
             ->when($request->filled('professional_id'), fn ($q) => $q->where('professional_id', $request->input('professional_id')))
             ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->input('branch_id')))
@@ -105,13 +268,36 @@ class AvailabilityBlockController extends Controller
             ->when($request->filled('to'), fn ($q) => $q->where('starts_at', '<', Carbon::parse($request->input('to'), $timezone)->toIso8601String()))
             ->get();
 
-        return response()->json($blocks->map(fn (AvailabilityBlock $block) => $this->present($block, $tenant, $own)));
+        $rows = $blocks->map(fn (AvailabilityBlock $block) => $this->present($block, $tenant, $own));
+
+        if ($own === null && $this->roomsOn($tenant) && !$request->filled('professional_id')) {
+            $rooms = $this->roomBlocksQuery($tenant)
+                ->when($request->filled('branch_id'), fn ($q) => $q->where('r.branch_id', $request->input('branch_id')))
+                ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('r.branch_id', $id))
+                ->when($past, fn ($q) => $q->where('rb.ends_at', '<=', now()->toIso8601String())->orderByDesc('rb.starts_at')->limit(200))
+                ->when(!$past, fn ($q) => $q->where('rb.ends_at', '>', $from->toIso8601String())->orderBy('rb.starts_at'))
+                ->when($request->filled('to'), fn ($q) => $q->where('rb.starts_at', '<', Carbon::parse($request->input('to'), $timezone)->toIso8601String()))
+                ->get();
+
+            $rows = $rows->concat($rooms->map(fn (object $block) => $this->presentRoomBlock($block, $tenant)))
+                ->sortBy('starts_at', SORT_REGULAR, $past)
+                ->values();
+        }
+
+        return response()->json($rows);
     }
 
     public function show(Request $request, string $id)
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+
+        if ($own === null && ($room = $this->findRoomBlock($tenant, $id))) {
+            $this->assertBranch($request, null, $room->branch_id);
+
+            return response()->json($this->presentRoomBlock($room, $tenant) + ['affected' => $this->roomAffectedList($tenant, $room)]);
+        }
+
         $block = $this->find($tenant, $id, $own, false);
         $this->assertBranch($request, $block->professional_id, $block->branch_id);
 
@@ -124,6 +310,13 @@ class AvailabilityBlockController extends Controller
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+
+        if ($request->filled('room_id')) {
+            [$room, , $startsAt, $endsAt] = $this->roomValidated($request, $tenant, $own, false);
+
+            return response()->json($this->mapAffected($tenant, $this->roomAffectedQuery($tenant, $room, $startsAt, $endsAt)));
+        }
+
         [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own, false);
 
         return response()->json($this->affectedList($tenant, $data['professional_id'], $data['branch_id'], $startsAt, $endsAt));
@@ -133,6 +326,11 @@ class AvailabilityBlockController extends Controller
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+
+        if ($request->filled('room_id')) {
+            return $this->storeRoomBlock($request, $tenant, $own);
+        }
+
         [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own);
 
         $block = AvailabilityBlock::create($this->columns($data, $startsAt, $endsAt) + [
@@ -150,6 +348,26 @@ class AvailabilityBlockController extends Controller
     {
         $tenant = $this->tenant($request);
         $own = $this->ownProfessionalId($request->user());
+
+        if ($own === null && ($room = $this->findRoomBlock($tenant, $id))) {
+            $this->assertBranch($request, null, $room->branch_id);
+            $request->merge(['room_id' => $request->input('room_id', $room->room_id)]);
+            [$target, $reason, $startsAt, $endsAt] = $this->roomValidated($request, $tenant, $own);
+            $before = $this->roomAuditable($room);
+            DB::table('room_blocks')->where('id', $room->id)->update([
+                'room_id' => $target->id, 'reason' => $reason,
+                'starts_at' => $startsAt->toIso8601String(), 'ends_at' => $endsAt->toIso8601String(),
+            ]);
+            $room = $this->findRoomBlock($tenant, $id);
+            [$from, $to] = Audit::changed($before, $this->roomAuditable($room));
+
+            if ($from || $to) {
+                $this->auditRoom($request, 'room_block.updated', $room, $from, $to);
+            }
+
+            return response()->json($this->presentRoomBlock($room, $tenant));
+        }
+
         $block = $this->find($tenant, $id, $own);
         $this->assertBranch($request, $block->professional_id, $block->branch_id);
         [$data, $startsAt, $endsAt] = $this->validated($request, $tenant, $own);
@@ -171,6 +389,15 @@ class AvailabilityBlockController extends Controller
     public function destroy(Request $request, string $id)
     {
         $tenant = $this->tenant($request);
+
+        if ($this->ownProfessionalId($request->user()) === null && ($room = $this->findRoomBlock($tenant, $id))) {
+            $this->assertBranch($request, null, $room->branch_id);
+            DB::table('room_blocks')->where('id', $room->id)->delete();
+            $this->auditRoom($request, 'room_block.deleted', $room, $this->roomAuditable($room));
+
+            return response()->json(['message' => 'Bloqueo eliminado correctamente']);
+        }
+
         $block = $this->find($tenant, $id, $this->ownProfessionalId($request->user()));
         $this->assertBranch($request, $block->professional_id, $block->branch_id);
         $block->loadMissing(['professional:id,display_name', 'branch:id,name']);
@@ -238,7 +465,7 @@ class AvailabilityBlockController extends Controller
     private function find(Tenant $tenant, string $id, ?string $own, bool $manage = true): AvailabilityBlock
     {
         $block = AvailabilityBlock::where('tenant_id', $tenant->id)
-            ->with(['professional:id,display_name', 'branch:id,name'])
+            ->with(['professional:id,display_name', 'branch:id,name', 'creator:id,first_name,last_name'])
             ->findOrFail($id);
 
         if ($own && $block->professional_id !== $own) {
@@ -337,7 +564,12 @@ class AvailabilityBlockController extends Controller
 
     private function affectedList(Tenant $tenant, ?string $professionalId, ?string $branchId, Carbon $startsAt, Carbon $endsAt): array
     {
-        return $this->affectedQuery($tenant, $professionalId, $branchId, $startsAt, $endsAt)
+        return $this->mapAffected($tenant, $this->affectedQuery($tenant, $professionalId, $branchId, $startsAt, $endsAt));
+    }
+
+    private function mapAffected(Tenant $tenant, Builder $query): array
+    {
+        return $query
             ->with(['customer:id,first_name,last_name', 'service:id,name', 'professional:id,display_name', 'branch:id,timezone'])
             ->orderBy('starts_at')
             ->limit(100)
@@ -384,6 +616,8 @@ class AvailabilityBlockController extends Controller
             'state'           => $endsAt->lte(now()) ? 'past' : ($startsAt->lte(now()) ? 'current' : 'upcoming'),
             'affected_count'  => $this->affectedQuery($tenant, $block->professional_id, $block->branch_id, $startsAt, $endsAt)->count(),
             'can_manage'      => $own === null || $block->professional_id === $own,
+            'created_by_name' => $block->created_by ? (($creator = $block->creator) ? \App\Support\Person::name($creator) : null) : null,
+            'created_at'      => $block->created_at ? Carbon::parse($block->created_at)->setTimezone($timezone)->format(self::LOCAL_FORMAT) : null,
         ];
     }
 }

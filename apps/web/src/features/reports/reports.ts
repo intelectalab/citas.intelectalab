@@ -1,4 +1,66 @@
-export type ReportTab = 'sales' | 'appointments' | 'customers' | 'pros' | 'catalog' | 'mine';
+export type ReportTab = 'sales' | 'appointments' | 'customers' | 'pros' | 'catalog' | 'cash' | 'inventory' | 'mine';
+
+export interface CashSummary {
+  sessions: number;
+  closed: number;
+  with_difference: number;
+  sales: number | null;
+  income: number | null;
+  expense: number | null;
+  withdrawal: number | null;
+  refund: number | null;
+  short: number | null;
+  over: number | null;
+  online?: number | null;
+}
+
+export interface CashRegisterRow {
+  id: string;
+  name: string;
+  branch: string | null;
+  sessions: number;
+  sales: number;
+  net: number;
+  difference: number;
+  online?: boolean;
+}
+
+export interface CashDifferenceRow {
+  id: string;
+  register: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  difference: number;
+  notes: string | null;
+}
+
+export interface InventorySummary {
+  products: number;
+  value: number | null;
+  low: number;
+  empty: number;
+  in_value: number | null;
+  out_value: number | null;
+  adjust: number;
+}
+
+export interface MovedProduct {
+  id: string;
+  name: string;
+  sku: string;
+  sold: number;
+  used: number;
+  quantity: number;
+  value: number | null;
+}
+
+export interface LowStockRow {
+  id: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  min_stock: number;
+}
 
 export interface Serie {
   key?: string;
@@ -23,9 +85,14 @@ export interface AppointmentsSummary {
   cancelled: number;
   no_show: number;
   online: number;
+  online_percent?: number;
+  no_show_alert?: number | null;
+  class_attendees?: number | null;
 }
 
 export interface CustomersSummary {
+  avg_spend?: number;
+  rebook_days?: number;
   attended: number;
   new: number;
   returning: number;
@@ -92,7 +159,7 @@ export interface ReportPayload {
   currency: string;
   locked: boolean;
   data: {
-    summary?: SalesSummary | AppointmentsSummary | CustomersSummary | MineSummary;
+    summary?: SalesSummary | AppointmentsSummary | CustomersSummary | MineSummary | CashSummary | InventorySummary;
     previous?: SalesSummary | AppointmentsSummary | CustomersSummary | MineSummary | null;
     by_day?: { day: string; value: number | null }[];
     customers?: MyCustomer[];
@@ -103,12 +170,18 @@ export interface ReportPayload {
       by_type?: Serie[];
       occupancy_by_day?: { day: string; value: number | null }[];
       by_source?: Serie[];
+      by_channel?: Serie[] | null;
       heatmap?: { weekday: number; hour: number; value: number }[] | null;
     } | null;
     top?: TopCustomer[] | null;
     rows?: ProRow[];
     services?: CatalogRow[];
     products?: CatalogRow[] | null;
+    registers?: CashRegisterRow[] | null;
+    differences?: CashDifferenceRow[] | null;
+    by_type?: Serie[];
+    moved?: MovedProduct[];
+    low?: LowStockRow[];
   } | null;
 }
 

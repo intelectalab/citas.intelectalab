@@ -10,8 +10,9 @@ import RichTextEditor from '@/app/components/common/RichTextEditor';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { apiError } from '@/features/appointments/appointments';
+import SiteContentEditor, { type ContentValues } from './SiteContentEditor';
 
-interface Settings {
+interface Settings extends ContentValues {
   url: string | null;
   phone: string | null;
   whatsapp: string | null;
@@ -26,6 +27,8 @@ interface Settings {
   cta_title: string;
   cta_text: string;
   contact_form: boolean;
+  chat_enabled?: boolean;
+  chat_greeting?: string | null;
   faq: { q: string; a: string }[];
   ga4_id: string | null;
   meta_pixel_id: string | null;
@@ -83,7 +86,15 @@ export default function SiteSettingsPage() {
     try {
       setBusy(true);
       setError('');
-      const payload = { ...values, url: values.url || null, faq: values.faq.filter((item) => item.q.trim() || item.a.trim()) };
+      const payload = {
+        ...values,
+        url: values.url || null,
+        faq: values.faq.filter((item) => item.q.trim() || item.a.trim()),
+        video_chapters: (values.video_chapters ?? []).filter((item) => item.time.trim() || item.label.trim()),
+        trust_badges: (values.trust_badges ?? []).filter((item) => item.label.trim()),
+        results: (values.results ?? []).filter((item) => item.value.trim() || item.label.trim()),
+        testimonials: (values.testimonials ?? []).filter((item) => item.text.trim() || item.name.trim()),
+      };
       const res = await api.put('/admin/web/settings', payload);
       setValues(res.data.values);
       setDirty(false);
@@ -125,6 +136,11 @@ export default function SiteSettingsPage() {
           <span className="text-sm"><span className="block font-semibold text-slate-700">Formulario «¿Prefieres que te llamemos?»</span><span className="block text-xs text-slate-500">Quien lo llena aparece en Embudo e interesados.</span></span>
           <Switch label="Formulario de contacto" checked={values.contact_form} onChange={(v) => set('contact_form', v)} />
         </div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3" data-site-chat-setting>
+          <span className="text-sm"><span className="block font-semibold text-slate-700">Chat del sitio</span><span className="block text-xs text-slate-500">Responde precios, funciones y qué plan conviene según cuántas personas atienden, usando tus preguntas frecuentes. Quien deja sus datos aparece en Embudo e interesados con la fuente «Chat del sitio».</span></span>
+          <Switch label="Chat del sitio" checked={values.chat_enabled ?? true} onChange={(v) => set('chat_enabled', v)} />
+        </div>
+        {(values.chat_enabled ?? true) && <Field id="site-chat-greeting" label="Saludo del chat" value={values.chat_greeting ?? ''} onChange={(v) => set('chat_greeting', v)} max={300} hint="Puedes usar {producto} para el nombre del sistema." />}
       </section>
 
       <section className={card}>
@@ -161,6 +177,8 @@ export default function SiteSettingsPage() {
         {!values.cookie_banner && (values.ga4_id || values.meta_pixel_id) && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Sin el aviso nadie puede aceptar, así que Google Analytics y el píxel no se cargarán.</p>}
         <Area id="site-cookie-text" label="Texto del aviso" value={values.cookie_text} onChange={(v) => set('cookie_text', v)} max={400} />
       </section>
+
+      <SiteContentEditor values={values} set={(key, value) => set(key, value as Settings[typeof key])} />
 
       <section className={card}>
         <div className="flex items-center justify-between gap-3">

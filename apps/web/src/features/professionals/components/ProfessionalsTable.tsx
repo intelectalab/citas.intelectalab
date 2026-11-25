@@ -40,6 +40,17 @@ interface Professional {
   }>;
 }
 
+interface Overview {
+  color?: string | null;
+  today_count: number;
+  occupancy: number | null;
+  branches: string[];
+  services_count: number;
+  vacation: { starts: string; ends: string; now: boolean } | null;
+}
+
+const shortDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' });
+
 interface PlanUsage {
   key: string;
   used: number;
@@ -59,6 +70,7 @@ export default function ProfessionalsTable() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [scheduleProfessional, setScheduleProfessional] = useState<Professional | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -76,6 +88,13 @@ export default function ProfessionalsTable() {
   });
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [planUsage, setPlanUsage] = useState<PlanUsage[]>([]);
+  const [overview, setOverview] = useState<Record<string, Overview>>({});
+
+  const fetchOverview = () => {
+    api.get('/team-overview')
+      .then((res) => setOverview(res.data && typeof res.data === 'object' ? res.data : {}))
+      .catch(() => setOverview({}));
+  };
 
   const fetchPlanUsage = async () => {
     try {
@@ -123,6 +142,7 @@ export default function ProfessionalsTable() {
   useEffect(() => {
     fetchProfessionals();
     fetchPlanUsage();
+    fetchOverview();
   }, []);
 
   const handleSearchChange = (val: string) => {
@@ -160,7 +180,35 @@ export default function ProfessionalsTable() {
           fetchPlanUsage();
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         } catch (error: any) {
-          console.error('Error al eliminar profesional:', error);
+          const data = error?.response?.data;
+          const target = professionals.find((p) => p.id === id) ?? null;
+          if (data?.code === 'HAS_HISTORY' && target && can('professionals.edit')) {
+            setModalConfig({
+              isOpen: true,
+              type: 'confirm',
+              variant: 'default',
+              title: 'No se puede eliminar',
+              message: data.message,
+              confirmText: 'Desactivar en su lugar',
+              cancelText: 'Cancelar',
+              onConfirm: () => {
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+                setEditingProfessional(target);
+                setDeactivating(true);
+                setShowFormModal(true);
+              },
+            });
+          } else {
+            setModalConfig({
+              isOpen: true,
+              type: 'alert',
+              variant: 'default',
+              title: 'No se eliminó',
+              message: data?.message || `No se pudo eliminar a este ${proLower}.`,
+              confirmText: 'Entendido',
+              onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+            });
+          }
         } finally {
           setIsActionLoading(false);
         }
@@ -168,9 +216,22 @@ export default function ProfessionalsTable() {
     });
   };
 
-  const handleCreationSuccess = (credentials?: { email: string; tempPassword?: string }) => {
+  const handleCreationSuccess = (credentials?: { email?: string; tempPassword?: string; notice?: string }) => {
     fetchProfessionals(searchTerm, filters);
     fetchPlanUsage();
+    fetchOverview();
+    if (credentials?.notice) {
+      setModalConfig({
+        isOpen: true,
+        type: 'alert',
+        variant: 'default',
+        title: 'Cambios guardados',
+        message: credentials.notice,
+        confirmText: 'Entendido',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
     if (credentials?.tempPassword) {
       setModalConfig({
         isOpen: true,
@@ -260,7 +321,7 @@ export default function ProfessionalsTable() {
       header: vocab.pro,
       cell: (prof) => (
         <div key={`name-${prof.id}`} className={styles.customerCell}>
-          <div className={styles.avatar}>
+          <div className={styles.avatar} style={overview[prof.id]?.color ? { backgroundColor: overview[prof.id]!.color as string, color: '#fff' } : undefined} data-agenda-color={overview[prof.id]?.color ?? ''}>
             <Contact size={16} />
           </div>
           <div>
@@ -268,9 +329,45 @@ export default function ProfessionalsTable() {
             <span className="block text-xs text-slate-400 font-mono">
               {prof.user?.email ? prof.user.email : 'Sin usuario vinculado'}
             </span>
+            {overview[prof.id]?.vacation && (
+              <span data-vacation className="inline-block mt-1 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-sky-50 text-sky-700">
+                {overview[prof.id]!.vacation!.now ? 'De vacaciones hasta el ' : `Vacaciones ${shortDay(overview[prof.id]!.vacation!.starts)} – `}{shortDay(overview[prof.id]!.vacation!.ends)}
+              </span>
+            )}
           </div>
         </div>
       ),
+    },
+    {
+      header: 'Hoy',
+      cell: (prof) => {
+        const info = overview[prof.id];
+        return (
+          <div key={`today-${prof.id}`} className="min-w-[7rem]" data-today={info?.today_count ?? ''}>
+            <span className="block text-sm font-semibold text-slate-800">{info ? `${info.today_count} ${info.today_count === 1 ? 'cita' : 'citas'}` : ''}</span>
+            {info?.occupancy !== null && info?.occupancy !== undefined ? (
+              <>
+                <span className="block text-xs text-slate-500">Ocupación {info.occupancy} %</span>
+                <span className="block mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <span className="block h-full rounded-full" style={{ width: `${info.occupancy}%`, backgroundColor: info.color || '#3C7DC4' }} />
+                </span>
+              </>
+            ) : info ? <span className="block text-xs text-slate-400">No atiende hoy</span> : null}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Sedes y servicios',
+      cell: (prof) => {
+        const info = overview[prof.id];
+        return (
+          <div key={`where-${prof.id}`} className="text-xs text-slate-600">
+            <span className="block">{info ? (info.branches.length ? info.branches.join(' · ') : 'Sin horario') : ''}</span>
+            <span className="block text-slate-400" data-services-count={info?.services_count ?? ''}>{info ? `${info.services_count} ${info.services_count === 1 ? 'servicio' : 'servicios'}` : ''}</span>
+          </div>
+        );
+      },
     },
     {
       header: 'Documento',
@@ -370,6 +467,8 @@ export default function ProfessionalsTable() {
     { header: 'Celular', value: (p) => p.phone ?? '' },
     ...(usesLicense ? [{ header: 'Colegiatura', value: (p: Professional) => p.license_number ?? 'No registrada' }] : []),
     { header: 'Especialidades', value: (p) => (p.specialties?.length ? p.specialties.map((spec) => spec.name).join(', ') : 'Sin especialidades') },
+    { header: 'Sedes', value: (p) => (overview[p.id]?.branches ?? []).join(', ') },
+    { header: 'Servicios', type: 'number', value: (p) => overview[p.id]?.services_count ?? 0 },
     { header: 'Estado', value: (p) => p.status?.name || 'Activo' },
     { header: 'Registrado', type: 'date', value: (p) => p.created_at },
   ];
@@ -416,8 +515,9 @@ export default function ProfessionalsTable() {
 
       <FormProfessional
         isOpen={showFormModal}
-        onClose={() => { setShowFormModal(false); setEditingProfessional(null); }}
+        onClose={() => { setShowFormModal(false); setEditingProfessional(null); setDeactivating(false); }}
         initialData={editingProfessional}
+        deactivate={deactivating}
         onSubmitSuccess={handleCreationSuccess}
       />
 

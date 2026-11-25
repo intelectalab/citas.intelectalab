@@ -1,6 +1,6 @@
 import { addDays, dateOf, formatDate, timeOf } from '@/features/appointments/appointments';
 
-export type BlockKind = 'vacation' | 'leave' | 'closure' | 'other';
+export type BlockKind = 'vacation' | 'leave' | 'closure' | 'other' | 'room';
 
 export interface Block {
   id: string;
@@ -8,7 +8,11 @@ export interface Block {
   branch_id: string | null;
   professional: { id: string; display_name: string } | null;
   branch: { id: string; name: string } | null;
-  scope: 'professional' | 'branch';
+  scope: 'professional' | 'branch' | 'room';
+  room_id?: string | null;
+  room?: { id: string; name: string; kind: string } | null;
+  created_by_name?: string | null;
+  created_at?: string | null;
   kind: BlockKind;
   kind_label: string;
   overridable: boolean;
@@ -61,6 +65,7 @@ export interface BlockOptions {
   professional_kinds: { key: BlockKind; label: string }[];
   branch_kinds: { key: BlockKind; label: string }[];
   can_block_branch: boolean;
+  rooms?: { id: string; name: string; kind: 'room' | 'equipment'; branch_id: string; branch_name: string; parent_name: string | null }[];
 }
 
 export const KIND_STYLES: Record<BlockKind, string> = {
@@ -68,6 +73,7 @@ export const KIND_STYLES: Record<BlockKind, string> = {
   leave: 'bg-violet-50 text-violet-600',
   closure: 'bg-slate-100 text-slate-500',
   other: 'bg-amber-50 text-amber-700',
+  room: 'bg-teal-50 text-teal-700',
 };
 
 export const STATE_LABELS: Record<Block['state'], { label: string; badge: string }> = {

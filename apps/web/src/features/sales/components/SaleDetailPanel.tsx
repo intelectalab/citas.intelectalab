@@ -13,7 +13,7 @@ import { PagedList } from '@/app/components/common/Pager';
 import { CustomerLink } from '@/app/components/common/PersonLink';
 import { apiError } from '@/features/appointments/appointments';
 import ChargePanel from './ChargePanel';
-import { cleanAmount, money, momentOf, SALE_BADGES, SUNAT_LABELS, type RefundRequest, type SaleDetail, type SalePayment, type SaleRefund } from '../sales';
+import { cleanAmount, money, momentOf, SALE_BADGES, SALE_STAGES, SUNAT_LABELS, type RefundRequest, type SaleDetail, type SalePayment, type SaleRefund } from '../sales';
 import { useAuth } from '@/hooks/useAuth';
 import { outcomeOf } from '@/features/messages/messages';
 
@@ -54,6 +54,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
   const [charging, setCharging] = useState(false);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
+  const [restock, setRestock] = useState<Record<string, string>>({});
 
   const load = (id: string) =>
     api.get(`/sales/${id}`)
@@ -76,6 +77,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
     setReason('');
     setMethod(sale?.refund_methods.some((m) => m.value === 'gateway') ? 'gateway' : 'cash');
     setSessionId('');
+    setRestock({});
     setAmount(sale ? sale.refund_available.toFixed(2) : '');
     setAction(action === next ? '' : next);
   };
@@ -105,7 +107,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
       setError('');
       const res = action === 'void'
         ? await api.post(`/sales/${sale.id}/void`, { reason: reason.trim() })
-        : await api.post(`/sales/${sale.id}/refunds`, { amount: Number(amount || 0), method, reason: reason.trim(), cash_session_id: method === 'cash' && sessionId ? sessionId : null });
+        : await api.post(`/sales/${sale.id}/refunds`, { amount: Number(amount || 0), method, reason: reason.trim(), cash_session_id: method === 'cash' && sessionId ? sessionId : null, restock: partialRefund ? Object.entries(restock).map(([product_id, quantity]) => ({ product_id, quantity: Number(quantity || 0) })).filter((r) => r.quantity > 0) : [] });
       setSale(res.data);
       setNotice(action === 'void'
         ? 'La venta quedó anulada.'
@@ -149,6 +151,7 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
   const canCharge = can('sales.create') && Boolean(sale && !sale.deposit_outcome && (sale.status === 'pending' || sale.status === 'partial'));
   const canEdit = can('pos.view') && Boolean(sale?.can_edit);
   const codes = (sale?.appointments?.length ? sale.appointments : sale?.appointment ? [sale.appointment] : []).map((a) => a.code).filter(Boolean);
+  const partialRefund = Boolean(sale && Number(amount || 0) > 0 && Number(amount || 0) < sale.refund_available - 0.001);
   const cashClosed = Boolean(sale && action === 'refund' && method === 'cash' && sale.cash_sessions.length === 0);
 
   return (
@@ -173,6 +176,27 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
             </div>
             <Badge data-sale-status={sale.status} tone={SALE_BADGES[sale.status]} bold className="shrink-0">{sale.status_label}</Badge>
           </section>
+
+          {sale.status !== 'void' && (
+            <ol className="flex items-center gap-1.5" data-sale-stages aria-label="Etapas del cobro">
+              {SALE_STAGES.map((stage, index) => {
+                const reached = sale.status === 'pending' ? index === 0 : sale.status === 'partial' ? index <= 1 : true;
+                const current = (sale.status === 'pending' && stage.id === 'pending') || (sale.status === 'partial' && stage.id === 'partial') || (!['pending', 'partial'].includes(sale.status) && stage.id === 'paid');
+                return (
+                  <li key={stage.id} className="flex-1 min-w-0">
+                    <span className={`block h-1.5 rounded-full ${reached ? 'bg-[var(--brand-link)]' : 'bg-slate-200'}`} />
+                    <span className={`block mt-1 text-[11px] truncate ${current ? 'font-bold text-brand-ink' : 'text-slate-500'}`} aria-current={current ? 'step' : undefined}>{stage.label}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          {sale.penalty_notice && (
+            <p data-penalty-notice className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <span className="font-bold">Por qué se cobra.</span> {sale.penalty_notice}
+            </p>
+          )}
 
           {sale.deposit_outcome === 'refund_due' && sale.status !== 'void' && (
             <p data-deposit-refund-due className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -260,6 +284,9 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                   <label className={labelClass} htmlFor="refund-amount">Monto a devolver *</label>
                   <input id="refund-amount" inputMode="decimal" required className={inputClass} value={amount} onChange={(e) => setAmount(cleanAmount(e.target.value))} />
                   <p className="text-xs text-slate-500 mt-1.5">Hasta {money(sale.refund_available, sale?.currency)}. Puede ser una parte.</p>
+                  {(sale.refund_to_loyalty ?? 0) > 0 && (
+                    <p data-refund-loyalty className="text-xs text-slate-500 mt-1">{money(sale.refund_to_loyalty ?? 0, sale?.currency)} se pagaron con gift card o puntos: esa parte vuelve a la gift card o a los puntos, en proporción a lo que devuelvas. El resto sale por el medio que elijas.</p>
+                  )}
                   {(sale.refund_approval_over ?? 0) > 0 && Number(amount || 0) > (sale.refund_approval_over ?? 0) && (
                     <p data-needs-approval className="text-xs text-amber-700 mt-1">Pasa de {money(sale.refund_approval_over ?? 0, sale?.currency)}: quedará pedida hasta que otra persona la apruebe.</p>
                   )}
@@ -283,6 +310,27 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                   {method === 'cash' ? 'El efectivo sale de la caja abierta de la sede y queda como movimiento del turno.' : 'Haz la devolución por ese medio fuera del sistema; aquí queda registrada.'}
                 </p>
               </div>
+
+              {(sale.refund_stock ?? []).length > 0 && (
+                <div data-refund-stock>
+                  <span className={labelClass}>Productos que vuelven al stock</span>
+                  {partialRefund ? (
+                    <div className="space-y-2">
+                      {(sale.refund_stock ?? []).map((item) => (
+                        <div key={item.product_id} className="flex items-center justify-between gap-3">
+                          <label htmlFor={`restock-${item.product_id}`} className="flex-1 text-sm text-slate-700 min-w-0">{item.name} <span className="text-xs text-slate-500">(hasta {item.left})</span></label>
+                          <div className="w-24 shrink-0">
+                            <input id={`restock-${item.product_id}`} data-restock={item.product_id} inputMode="decimal" placeholder="0" className={`${inputClass} text-right`} value={restock[item.product_id] ?? ''} onChange={(e) => setRestock((prev) => ({ ...prev, [item.product_id]: cleanAmount(e.target.value) }))} />
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-xs text-slate-500">Escribe cuántas unidades te devolvió el cliente. Si no devolvió ninguna, déjalo vacío.</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Al devolver todo, vuelven al stock solos: {(sale.refund_stock ?? []).map((item) => `${item.left} de ${item.name}`).join(', ')}.</p>
+                  )}
+                </div>
+              )}
 
               {cashClosed && (
                 <p data-cash-closed className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -365,9 +413,16 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
                   <span className="font-semibold tabular-nums">− {money(sale.coupon.discount, sale?.currency)}</span>
                 </div>
               )}
+              {(sale.manual_discount ?? 0) > 0 && (
+                <div className="flex items-start justify-between gap-3 text-emerald-700" data-sale-manual-discount>
+                  <span className="font-medium">Descuento a mano{sale.discount_reason ? ` (${sale.discount_reason})` : ''}</span>
+                  <span className="font-semibold tabular-nums">− {money(sale.manual_discount ?? 0, sale?.currency)}</span>
+                </div>
+              )}
               <div className="pt-2 mt-2 border-t border-dashed border-slate-200 space-y-1 text-slate-500">
-                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(sale.total - sale.tax, sale?.currency)}</span></div>
+                <div className="flex justify-between"><span>Op. gravada</span><span className="tabular-nums">{money(sale.total - (sale.tip ?? 0) - sale.tax, sale?.currency)}</span></div>
                 <div className="flex justify-between"><span>IGV {sale.tax_rate}%{sale.prices_include_tax ? ' (incluido en el precio)' : ''}</span><span className="tabular-nums">{money(sale.tax, sale?.currency)}</span></div>
+                {(sale.tip ?? 0) > 0 && <div className="flex justify-between" data-sale-tip><span>Propina</span><span className="tabular-nums">{money(sale.tip ?? 0, sale?.currency)}</span></div>}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <span className="font-bold text-brand-ink">Total</span>
@@ -399,6 +454,23 @@ export default function SaleDetailPanel({ saleId, onClose, onChanged }: SaleDeta
               )}
             />
           </section>
+
+          {sale.commissions && sale.commissions.length > 0 && (
+            <section className="rounded-2xl border border-slate-200 overflow-hidden" data-sale-commissions>
+              <div className={cardHead}><span className={sectionTitle}>Comisiones de esta venta</span></div>
+              <ul className="divide-y divide-slate-100">
+                {sale.commissions.map((c) => (
+                  <li key={c.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-800">{c.professional ?? 'Profesional'}</span>
+                      <span className="block text-xs text-slate-500">{c.description} · {c.percent > 0 ? `${c.percent} % de ${money(c.base, sale?.currency)}` : ''}{c.fixed > 0 ? `${c.percent > 0 ? ' + ' : ''}${money(c.fixed, sale?.currency)} fijo` : ''} · {c.status_label}{c.source_label !== 'Venta' ? ` · ${c.source_label}` : ''}</span>
+                    </span>
+                    <span className={`text-sm font-bold tabular-nums ${c.amount < 0 ? 'text-rose-700' : 'text-slate-800'}`}>{money(c.amount, sale?.currency)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {sale.invoice && (
             <section className="rounded-2xl border border-slate-200 overflow-hidden" data-invoice={sale.invoice.number}>

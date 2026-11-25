@@ -37,7 +37,9 @@ class WhatsAppWebhookController extends Controller
         [$company, $config] = $this->config($tenant);
         $raw = $request->getContent();
 
-        if (!WhatsApp::signatureValid($config, $raw, $request->header('X-Hub-Signature-256'))) {
+        if (!WhatsApp::signatureValid($config, $raw, $request->header('X-Hub-Signature-256'), $request->header('X-Webhook-Token'))) {
+            \App\Support\IntegrationLog::write($company->id, 'whatsapp', (string) $config['provider'], 'webhook', false, 'Llegó un aviso sin la firma correcta: no se tomó en cuenta.');
+
             return response()->json(['message' => 'Firma no válida.'], 403);
         }
 

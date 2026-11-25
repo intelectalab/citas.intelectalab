@@ -1,16 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, FileText, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Calendar, FileText, Plus, Trash2 } from 'lucide-react';
+import { useVocabulary } from '@/hooks/useVocabulary';
+import { useAuth } from '@/hooks/useAuth';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Button from '@/app/components/common/Button';
 import Select from '@/app/components/common/Select';
 import Switch from '@/app/components/common/Switch';
+import DateField from '@/app/components/common/DateField';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { cleanAmount, money } from '@/features/sales/sales';
+import CustomerPicker, { type PickedCustomer } from '@/features/customers/components/CustomerPicker';
 import type { QuoteRow, QuotesBoardData } from '../quotes';
 
 interface Props {
@@ -18,6 +22,7 @@ interface Props {
   onClose: () => void;
   board: QuotesBoardData;
   editingQuote: QuoteRow | null;
+  initialCustomer?: PickedCustomer | null;
   onSaved: (data: QuotesBoardData, notice: string) => void;
 }
 
@@ -48,8 +53,14 @@ const addDaysIso = (days: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
-export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, onSaved }: Props) {
-  const [customerId, setCustomerId] = useState('');
+export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, initialCustomer = null, onSaved }: Props) {
+  const vocab = useVocabulary();
+  const { user } = useAuth();
+  const usesDependents = Boolean(user?.tenant?.dependents?.enabled);
+  const [customer, setCustomer] = useState<PickedCustomer | null>(null);
+  const customerId = customer?.id ?? '';
+  const [dependentId, setDependentId] = useState('');
+  const [dependents, setDependents] = useState<{ id: string; name: string }[]>([]);
   const [branchId, setBranchId] = useState('');
   const [professionalId, setProfessionalId] = useState('');
   const [title, setTitle] = useState('');
@@ -70,7 +81,8 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
     setError('');
 
     if (editingQuote) {
-      setCustomerId(editingQuote.customer_id);
+      setCustomer({ id: editingQuote.customer_id, code: '', first_name: editingQuote.customer_name, last_name: '', phone: editingQuote.customer_phone });
+      setDependentId(editingQuote.customer_dependent_id ?? '');
       setBranchId(editingQuote.branch_id ?? board.branches[0]?.id ?? '');
       setProfessionalId(editingQuote.professional_id ?? '');
       setTitle(editingQuote.title ?? '');
@@ -110,8 +122,10 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
     }
 
     const firstService = board.services[0];
-    setCustomerId(board.customers[0]?.id ?? '');
-    setBranchId(board.branches[0]?.id ?? '');
+    const firstBranch = board.branches[0]?.id ?? '';
+    setCustomer(initialCustomer);
+    setDependentId('');
+    setBranchId(firstBranch);
     setProfessionalId(board.professionals[0]?.id ?? '');
     setTitle('');
     setValidUntil(board.rules.validity_days > 0 ? addDaysIso(board.rules.validity_days) : '');
@@ -124,7 +138,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
         reference_id: firstService?.id ?? '',
         description: firstService?.name ?? '',
         quantity: '1',
-        unit_price: firstService ? String(firstService.price) : '0',
+        unit_price: firstService ? String(firstService.branch_prices?.[firstBranch] ?? firstService.price) : '0',
         discount: '0',
         sessions_total: '1',
         zone: '',
@@ -134,7 +148,26 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
     setUseInstallments(false);
     setInstallmentsCount('2');
     setInstallments([]);
-  }, [isOpen, editingQuote, board]);
+  }, [isOpen, editingQuote, board, initialCustomer]);
+
+  useEffect(() => {
+    if (!isOpen || !usesDependents || !customerId) {
+      setDependents([]);
+      return;
+    }
+    api.get(`/customers/${customerId}/dependents`)
+      .then((res) => setDependents((Array.isArray(res.data) ? res.data : []).map((d: { id: string; name: string }) => ({ id: d.id, name: d.name }))))
+      .catch(() => setDependents([]));
+  }, [isOpen, usesDependents, customerId]);
+
+  const limit = board.discount_limit;
+  const overLimit = limit && !limit.can_exceed
+    ? lines.filter((l) => {
+        const gross = Math.max(0, Number(l.quantity || 0)) * Math.max(0, Number(l.unit_price || 0));
+        const disc = Math.max(0, Number(l.discount || 0));
+        return disc > 0 && gross > 0 && (disc * 100) / gross > limit.max_percent + 0.001;
+      })
+    : [];
 
   const totals = useMemo(() => {
     let gross = 0;
@@ -185,6 +218,8 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
     }
   };
 
+  const servicePrice = (s: QuotesBoardData['services'][number]) => s.branch_prices?.[branchId] ?? s.price;
+
   const updateLine = (key: string, patch: Partial<DraftLine>) => {
     setLines((curr) => curr.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   };
@@ -195,7 +230,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
       updateLine(line.key, {
         reference_id: refId,
         description: s?.name ?? line.description,
-        unit_price: s ? String(s.price) : line.unit_price,
+        unit_price: s ? String(servicePrice(s)) : line.unit_price,
         sessions_total: line.sessions_total || '1',
       });
     } else if (line.item_type === 'product') {
@@ -227,7 +262,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
         reference_id: firstService?.id ?? '',
         description: firstService?.name ?? '',
         quantity: '1',
-        unit_price: firstService ? String(firstService.price) : '0',
+        unit_price: firstService ? String(servicePrice(firstService)) : '0',
         discount: '0',
         sessions_total: '1',
         zone: '',
@@ -248,6 +283,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
 
       const payload = {
         customer_id: customerId,
+        customer_dependent_id: dependentId || null,
         branch_id: branchId || null,
         professional_id: professionalId || null,
         title: title.trim(),
@@ -311,15 +347,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Select
-            label="Cliente / Paciente *"
-            value={customerId}
-            onChange={(e) => setCustomerId(String(e.target.value))}
-            options={board.customers.map((c) => ({
-              value: c.id,
-              label: `${c.name}${c.document_number ? ` · ${c.document_number}` : ''}`,
-            }))}
-          />
+          <CustomerPicker value={customer} onChange={(c) => { setCustomer(c); setDependentId(''); }} active={isOpen} />
 
           <Select
             label="Profesional tratante"
@@ -331,6 +359,15 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
             ]}
           />
         </div>
+
+        {usesDependents && dependents.length > 0 && (
+          <Select
+            label={vocab.dependent}
+            value={dependentId}
+            onChange={(e) => setDependentId(String(e.target.value))}
+            options={[{ value: '', label: `Sin ${vocab.dependent.toLowerCase()}` }, ...dependents.map((d) => ({ value: d.id, label: d.name }))]}
+          />
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {board.branches.length > 1 && (
@@ -344,13 +381,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
 
           <div>
             <label className={labelClass} htmlFor="quote-valid-until">Válido hasta</label>
-            <input
-              id="quote-valid-until"
-              type="date"
-              value={validUntil}
-              onChange={(e) => setValidUntil(e.target.value)}
-              className={inputClass}
-            />
+            <DateField id="quote-valid-until" value={validUntil} onChange={setValidUntil} clearable />
           </div>
         </div>
 
@@ -389,7 +420,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
                     const nextType = String(e.target.value) as DraftLine['item_type'];
                     if (nextType === 'service' && board.services[0]) {
                       const s = board.services[0];
-                      updateLine(line.key, { item_type: nextType, reference_id: s.id, description: s.name, unit_price: String(s.price), sessions_total: '1' });
+                      updateLine(line.key, { item_type: nextType, reference_id: s.id, description: s.name, unit_price: String(servicePrice(s)), sessions_total: '1' });
                     } else if (nextType === 'product' && board.products[0]) {
                       const p = board.products[0];
                       updateLine(line.key, { item_type: nextType, reference_id: p.id, description: p.name, unit_price: String(p.price), sessions_total: '0' });
@@ -413,7 +444,7 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
                     label="Del catálogo"
                     value={line.reference_id}
                     onChange={(e) => handleCatalogPick(line, String(e.target.value))}
-                    options={board.services.map((s) => ({ value: s.id, label: `${s.name} (${money(s.price, board.currency)})` }))}
+                    options={board.services.map((s) => ({ value: s.id, label: `${s.name} (${money(servicePrice(s), board.currency)})` }))}
                   />
                 )}
                 {line.item_type === 'product' && (
@@ -522,6 +553,15 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
           ))}
         </div>
 
+        {overLimit.length > 0 && limit && (
+          <p role="alert" data-discount-over className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            {limit.max_percent <= 0
+              ? 'Tu empresa no da descuentos sin autorización. Antes de enviarlo, pide a alguien con el permiso «Descuento alto» que revise este presupuesto.'
+              : `Hay ${overLimit.length === 1 ? 'una línea' : `${overLimit.length} líneas`} con más del ${limit.max_percent} % de descuento, que es tu tope. Antes de enviarlo, pide a alguien con el permiso «Descuento alto» que lo revise.`}
+          </p>
+        )}
+
         <div className="rounded-xl bg-brand text-white p-4 space-y-1.5 text-sm">
           <div className="flex justify-between text-slate-300 text-xs">
             <span>Subtotal</span>
@@ -590,16 +630,15 @@ export default function QuoteFormDrawer({ isOpen, onClose, board, editingQuote, 
                         <Calendar size={12} /> Cuota #{idx + 1}
                       </span>
                       <div className="col-span-5">
-                        <input
-                          type="date"
-                          required
+                        <DateField
+                          ariaLabel={`Fecha de la cuota ${idx + 1}`}
+                          size="compact"
                           value={inst.due_date}
-                          onChange={(e) =>
+                          onChange={(value) =>
                             setInstallments((curr) =>
-                              curr.map((row) => (row.key === inst.key ? { ...row, due_date: e.target.value } : row)),
+                              curr.map((row) => (row.key === inst.key ? { ...row, due_date: value } : row)),
                             )
                           }
-                          className={inputClass}
                         />
                       </div>
                       <div className="col-span-4">

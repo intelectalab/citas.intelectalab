@@ -12,7 +12,7 @@ class CareRecordRead extends Model
 
     public const UPDATED_AT = null;
 
-    public const ACTIONS = ['view', 'appointment', 'previous', 'pdf', 'emergency'];
+    public const ACTIONS = ['view', 'appointment', 'previous', 'pdf', 'emergency', 'file'];
 
     protected $table = 'care_record_reads';
 

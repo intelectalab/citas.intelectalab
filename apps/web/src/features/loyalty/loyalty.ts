@@ -6,6 +6,8 @@ export interface LoyaltyRules {
   points_validity_days: number;
   gift_cards_enabled: boolean;
   gift_card_validity_days: number;
+  vip_multiplier?: number;
+  vip_spend?: number;
 }
 
 export interface LoyaltyCustomerRow {
@@ -20,6 +22,8 @@ export interface LoyaltyCustomerRow {
   movements_count: number;
   redeemable_value: number;
   can_redeem: boolean;
+  tier?: { key: 'gold' | 'silver' | 'bronze'; label: string };
+  vip?: boolean;
   last_movement_at: string | null;
 }
 
@@ -67,8 +71,32 @@ export interface GiftCardMovementRow {
   type: 'issue' | 'redeem' | 'refund' | 'extend' | 'cancel';
   type_label: string;
   amount: number;
+  reason?: string | null;
   sale_code: string | null;
   created_at: string | null;
+}
+
+export interface LoyaltySummary {
+  points_in_circulation: number;
+  points_debt: number;
+  issued_30d: number;
+  redeemed_30d: number;
+  gift_cards_pending: number;
+  gift_cards_sold: number;
+  gift_cards_expired: number;
+}
+
+export interface ReferralRow {
+  id: string;
+  referrer_id: string;
+  referrer_name: string;
+  referred_id: string;
+  referred_name: string;
+  bonus_points: number;
+  status: 'pending' | 'rewarded' | 'void';
+  status_label: string;
+  created_at: string;
+  rewarded_at: string | null;
 }
 
 export interface LoyaltyBoardData {
@@ -79,7 +107,22 @@ export interface LoyaltyBoardData {
   point_movements: PointMovementRow[];
   gift_cards: GiftCardRow[];
   gift_card_movements: GiftCardMovementRow[];
+  summary?: LoyaltySummary;
+  referrals?: ReferralRow[];
+  tiers?: { key: string; label: string; from: number }[];
 }
+
+export const TIER_BADGES: Record<string, string> = {
+  gold: 'bg-amber-50 text-amber-800',
+  silver: 'bg-slate-100 text-slate-700',
+  bronze: 'bg-orange-50 text-orange-800',
+};
+
+export const REFERRAL_BADGES: Record<ReferralRow['status'], string> = {
+  pending: 'bg-amber-50 text-amber-800',
+  rewarded: 'bg-emerald-50 text-emerald-700',
+  void: 'bg-slate-100 text-slate-500',
+};
 
 export const POINT_TYPE_BADGES: Record<PointMovementRow['type'], string> = {
   earn: 'bg-emerald-50 text-emerald-700',

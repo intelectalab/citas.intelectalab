@@ -10,6 +10,7 @@ use App\Support\Notifier;
 use App\Support\Sales;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -95,6 +96,43 @@ class CashController extends Controller
                     : ['id' => $open[$r->id]->id, 'mine' => false, 'hidden' => true, 'opened_at' => \Illuminate\Support\Carbon::parse($open[$r->id]->opened_at)->toIso8601String(), 'opened_by' => \App\Support\Person::name(DB::table('users')->where('id', $open[$r->id]->opened_by)->first(['first_name', 'last_name']))]),
             ])->values(),
             'sessions'   => $closed->map(fn ($s) => $decorate(Cash::present($s)))->values(),
+            'online'     => $this->onlineToday($tenant, $branches->where('status', 'active'), $limit),
+        ]);
+    }
+
+    private function onlineToday(Tenant $tenant, $branches, ?string $limit): ?array
+    {
+        $from = now($tenant->zone())->startOfDay();
+        $totals = \App\Support\OnlineCash::byBranch($tenant, $limit, $from, $from->copy()->addDay());
+
+        if (!\App\Support\PaymentLinks::ready() || (!\App\Support\PaymentLinks::available($tenant) && !$totals)) {
+            return null;
+        }
+
+        return [
+            'date'     => $from->format('Y-m-d'),
+            'currency' => Currency::of($tenant),
+            'branches' => $branches->map(fn ($b) => ['branch_id' => $b->id, 'branch_name' => $b->name] + ($totals[$b->id] ?? ['received' => 0.0, 'refunded' => 0.0, 'net' => 0.0, 'count' => 0]))->values(),
+        ];
+    }
+
+    public function online(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $validated = $request->validate([
+            'date'      => 'nullable|date_format:Y-m-d',
+            'branch_id' => 'nullable|uuid',
+        ]);
+
+        $limit = Access::branchLimit($request->user());
+        $branchId = $limit ?: ($validated['branch_id'] ?? null);
+
+        if ($branchId) {
+            abort_unless(DB::table('branches')->where('tenant_id', $tenant->id)->where('id', $branchId)->exists(), 404);
+        }
+
+        return response()->json(\App\Support\OnlineCash::day($tenant, $branchId, $validated['date'] ?? now($tenant->zone())->format('Y-m-d')) + [
+            'branch_id' => $branchId,
         ]);
     }
 
@@ -261,7 +299,11 @@ class CashController extends Controller
         $validated = $request->validate([
             'counted_amount' => 'required|numeric|min:0|max:9999999',
             'notes'          => 'nullable|string|max:500',
+            'count'          => 'nullable|array|max:30',
+            'count.*.value'  => 'required|numeric|min:0.01|max:1000',
+            'count.*.quantity' => 'required|integer|min:0|max:100000',
         ], [
+            'count.*.quantity.integer' => 'Escribe cuántos billetes o monedas hay, en números enteros.',
             'counted_amount.required' => 'Escribe cuánto efectivo contaste.',
             'counted_amount.numeric'  => 'Escribe el monto como un número.',
         ]);
@@ -274,6 +316,14 @@ class CashController extends Controller
 
             $expected = Cash::present($row)['expected_amount'];
             $counted = round((float) $validated['counted_amount'], 2);
+            $count = collect($validated['count'] ?? [])
+                ->filter(fn ($c) => (int) $c['quantity'] > 0)
+                ->map(fn ($c) => ['value' => round((float) $c['value'], 2), 'quantity' => (int) $c['quantity']])
+                ->values();
+
+            if ($count->isNotEmpty() && abs($count->sum(fn ($c) => $c['value'] * $c['quantity']) - $counted) > 0.005) {
+                throw ValidationException::withMessages(['counted_amount' => 'El total no coincide con los billetes y monedas que contaste. Revisa las cantidades.']);
+            }
             $difference = round($counted - $expected, 2);
             $notes = trim((string) ($validated['notes'] ?? '')) ?: null;
             $tolerance = Sales::rules($tenant)['cash_tolerance'];
@@ -281,7 +331,7 @@ class CashController extends Controller
 
             if ($overTolerance && !$notes) {
                 throw ValidationException::withMessages([
-                    'notes' => 'Hay una diferencia de S/ ' . number_format(abs($difference), 2) . ($difference < 0 ? ' (falta)' : ' (sobra)') . ': explica a qué se debe para cerrar.',
+                    'notes' => 'Hay una diferencia de ' . \App\Support\Currency::format(abs($difference), \App\Support\Currency::of($tenant)) . ($difference < 0 ? ' (falta)' : ' (sobra)') . ': explica a qué se debe para cerrar.',
                 ]);
             }
 
@@ -291,7 +341,7 @@ class CashController extends Controller
             DB::table('cash_sessions')->where('id', $row->id)->update([
                 'status' => 'closed', 'closed_by' => $request->user()->id, 'closed_at' => now(),
                 'expected_amount' => $expected, 'closing_amount' => $counted, 'difference' => $difference, 'closing_notes' => $notes,
-            ] + ($toReview ? ['review_status' => 'pending'] : []));
+            ] + ($toReview ? ['review_status' => 'pending'] : []) + ($count->isNotEmpty() && Schema::hasColumn('cash_sessions', 'closing_count') ? ['closing_count' => json_encode($count->all())] : []));
 
             Audit::log($request, 'cash.closed', [
                 'tenant' => $tenant->id, 'entity_type' => 'cash_session', 'entity_id' => $row->id,

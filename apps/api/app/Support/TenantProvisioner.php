@@ -35,6 +35,7 @@ class TenantProvisioner
 
             TenantSetting::create(['tenant_id' => $tenantId, 'modules_off' => Tenant::startingModulesOff($tenant->businessType)]);
 
+            $tenant->applyTemplateRules();
             $installed = $tenant->installBusinessTemplate();
 
             $company = Company::create([
@@ -59,7 +60,7 @@ class TenantProvisioner
                 'position'   => 'Dueño',
             ]);
 
-            Branch::create([
+            $branch = Branch::create([
                 'id'         => (string) Str::uuid(),
                 'tenant_id'  => $tenantId,
                 'company_id' => $company->id,
@@ -67,6 +68,10 @@ class TenantProvisioner
                 'timezone'   => $timezone,
                 'status'     => 'active',
             ]);
+
+            if ($data['install_extras'] ?? true) {
+                $installed += BusinessTemplates::installExtras($tenant, $branch->id);
+            }
 
             $userId = (string) Str::uuid();
             $user = User::create([
@@ -115,6 +120,8 @@ class TenantProvisioner
                 'billing_cycle' => $cycle,
                 'starts_at'     => now(),
             ]);
+            Subscriptions::forget($tenantId);
+            SaasEvents::record($tenantId, ($data['start_trial'] ?? true) ? 'trial' : null);
 
             $year = (int) now($timezone)->format('Y');
             Holidays::loadNational($tenant, $year);

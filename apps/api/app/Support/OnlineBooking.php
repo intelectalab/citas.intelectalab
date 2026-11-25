@@ -12,6 +12,7 @@ class OnlineBooking
     public const NONE = 'none';
     public const NOTE = 'note';
     public const BLOCK = 'block';
+    public const DEPOSIT = 'deposit';
 
     public static function canForgive(): bool
     {
@@ -25,11 +26,12 @@ class OnlineBooking
         $action = (string) AppointmentFlow::rule($tenant, 'booking.miss_action');
 
         return [
-            'action'     => in_array($action, [self::NOTE, self::BLOCK], true) ? $action : self::NONE,
+            'action'     => in_array($action, [self::NOTE, self::BLOCK, self::DEPOSIT], true) ? $action : self::NONE,
             'limit'      => max(1, (int) AppointmentFlow::rule($tenant, 'booking.miss_limit')),
             'block_days' => max(0, (int) AppointmentFlow::rule($tenant, 'booking.block_days')),
             'count_late_cancel' => (bool) AppointmentFlow::rule($tenant, 'booking.count_late_cancel'),
             'window_hours' => (int) AppointmentFlow::rule($tenant, 'cancel.window_hours'),
+            'deposit_percent' => max(1, min(100, (int) AppointmentFlow::rule($tenant, 'booking.miss_deposit_percent'))),
         ];
     }
 
@@ -59,16 +61,19 @@ class OnlineBooking
 
         foreach ($rows as $row) {
             $last = Carbon::parse($row->last_miss);
-            $reached = $policy['action'] === self::BLOCK && (int) $row->misses >= $policy['limit'];
+            $limited = in_array($policy['action'], [self::BLOCK, self::DEPOSIT], true);
+            $reached = $limited && (int) $row->misses >= $policy['limit'];
             $until = $reached && $policy['block_days'] > 0 ? $last->copy()->addDays($policy['block_days']) : null;
-            $blocked = $reached && ($until === null || $until->isFuture());
+            $active = $reached && ($until === null || $until->isFuture());
+            $blocked = $active && $policy['action'] === self::BLOCK;
 
             $states[$row->customer_id] = [
                 'misses'        => (int) $row->misses,
                 'last_miss_at'  => $last->toIso8601String(),
                 'blocked'       => $blocked,
-                'blocked_until' => $blocked && $until ? $until->toIso8601String() : null,
-                'limit'         => $policy['action'] === self::BLOCK ? $policy['limit'] : null,
+                'deposit_required' => $active && !$blocked,
+                'blocked_until' => $active && $until ? $until->toIso8601String() : null,
+                'limit'         => $limited ? $policy['limit'] : null,
             ];
         }
 
@@ -91,10 +96,27 @@ class OnlineBooking
         return [
             'window_hours' => $policy['window_hours'],
             'misses'       => $misses,
-            'limit'        => $policy['action'] === self::BLOCK ? $policy['limit'] : null,
+            'limit'        => in_array($policy['action'], [self::BLOCK, self::DEPOSIT], true) ? $policy['limit'] : null,
             'block_days'   => $policy['block_days'],
             'would_block'  => $policy['action'] === self::BLOCK && $misses >= $policy['limit'],
+            'would_deposit' => $policy['action'] === self::DEPOSIT && $misses >= $policy['limit'],
         ];
+    }
+
+    public static function strikeDeposit(Tenant $tenant, ?string $customerId, object $service, ?string $branchId = null): float
+    {
+        if (!$customerId || !(self::state($tenant, $customerId)['deposit_required'] ?? false)) {
+            return 0.0;
+        }
+
+        $amount = PaymentLinks::depositAmount($service, $branchId);
+
+        return $amount > 0 ? $amount : max(0, round(PaymentLinks::priceAt($service, $branchId) * self::policy($tenant)['deposit_percent'] / 100, 2));
+    }
+
+    public static function depositMessage(Tenant $tenant, array $state): string
+    {
+        return 'Por ' . ($state['misses'] === 1 ? 'una inasistencia' : "{$state['misses']} inasistencias") . ' a citas reservadas en línea, para reservar por aquí debes pagar un adelanto. Se descuenta del total el día de tu cita.';
     }
 
     public static function state(Tenant $tenant, string $customerId): ?array

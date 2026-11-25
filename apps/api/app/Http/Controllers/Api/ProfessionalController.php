@@ -67,7 +67,7 @@ class ProfessionalController extends Controller
 
     private function planLimitReached(?\App\Models\Tenant $tenant): ?string
     {
-        $limits = $tenant?->activeSubscription?->plan?->limits ?? [];
+        $limits = $tenant?->planLimits() ?? [];
         $usage = $tenant ? $tenant->usage() : [];
 
         foreach (['professionals' => 'profesionales', 'users' => 'cuentas de usuario además de la del dueño'] as $key => $label) {
@@ -107,6 +107,38 @@ class ProfessionalController extends Controller
             : [];
     }
 
+    private function profileFields(array $validated): array
+    {
+        $fields = [];
+
+        if (array_key_exists('color_code', $validated)) {
+            $fields['color_code'] = $validated['color_code'] ? strtoupper($validated['color_code']) : '#022340';
+        }
+
+        if (array_key_exists('bio', $validated)) {
+            $fields['bio'] = trim((string) $validated['bio']) ?: null;
+        }
+
+        return $fields;
+    }
+
+    private function syncServices(Request $request, Professional $professional, array $validated): void
+    {
+        if (!array_key_exists('service_ids', $validated) || !$request->user()->allows('services.edit')) {
+            return;
+        }
+
+        $alone = \App\Support\ServiceProfessionals::lastOnes($professional, $validated['service_ids'] ?? []);
+
+        if ($alone) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'service_ids' => "Nadie más hace " . implode(', ', $alone) . ". Para quitárselo, primero marca a otra persona en ese servicio (en Servicios).",
+            ]);
+        }
+
+        \App\Support\ServiceProfessionals::syncFor($professional, $validated['service_ids'] ?? []);
+    }
+
     private function auditProfessional(Professional $professional): array
     {
         $professional->loadMissing(['user', 'status', 'specialties']);
@@ -122,6 +154,9 @@ class ProfessionalController extends Controller
             'online_booking' => PublicBooking::professionalsFlag() ? ($professional->online_booking === false ? 'No' : 'Sí') : null,
             'status'         => $professional->status?->name,
             'specialties'    => $professional->specialties->pluck('name')->sort()->values()->all(),
+            'agenda_color'   => $professional->color_code,
+            'bio'            => $professional->bio,
+            'services'       => \App\Models\Service::whereIn('id', \App\Support\ServiceProfessionals::doneBy($professional))->orderBy('name')->pluck('name')->implode(', ') ?: null,
         ];
     }
 
@@ -184,6 +219,10 @@ class ProfessionalController extends Controller
             'commission_percent' => 'nullable|numeric|min:0|max:100',
             'goal_month' => 'nullable|numeric|min:0|max:99999999',
             'online_booking' => 'sometimes|boolean',
+            'color_code' => ['sometimes', 'nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'bio' => 'sometimes|nullable|string|max:1000',
+            'service_ids' => 'sometimes|array|max:500',
+            'service_ids.*' => ['uuid', \Illuminate\Validation\Rule::exists('services', 'id')->where('tenant_id', $currentUser->tenant_id)],
         ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.', 'goal_month.min' => 'La meta no puede ser negativa.']);
         $commission = $this->commissionFields($request, $validated);
 
@@ -232,7 +271,7 @@ class ProfessionalController extends Controller
             'license_number' => $validated['license_number'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'status_id' => $statusId,
-        ] + $commission + $this->onlineField($validated));
+        ] + $commission + $this->onlineField($validated) + $this->profileFields($validated));
 
         if (isset($validated['specialties'])) {
             $syncData = [];
@@ -242,6 +281,7 @@ class ProfessionalController extends Controller
             $professional->specialties()->sync($syncData);
         }
 
+        $this->syncServices($request, $professional, $validated);
         $this->audit($request, 'professional.created', $professional, [], array_filter($this->auditProfessional($professional), fn ($value) => $value !== null && $value !== '' && $value !== []));
 
         return response()->json([
@@ -295,10 +335,33 @@ class ProfessionalController extends Controller
             'commission_percent' => 'nullable|numeric|min:0|max:100',
             'goal_month' => 'nullable|numeric|min:0|max:99999999',
             'online_booking' => 'sometimes|boolean',
+            'color_code' => ['sometimes', 'nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'bio' => 'sometimes|nullable|string|max:1000',
+            'service_ids' => 'sometimes|array|max:500',
+            'service_ids.*' => ['uuid', \Illuminate\Validation\Rule::exists('services', 'id')->where('tenant_id', $currentUser->tenant_id)],
+            'future_action' => 'sometimes|nullable|in:keep',
         ], ['commission_percent.max' => 'La comisión no puede pasar de 100 %.', 'goal_month.min' => 'La meta no puede ser negativa.']);
         $commission = $this->commissionFields($request, $validated);
 
+        $deactivating = !empty($validated['status_id'])
+            && $validated['status_id'] !== $professional->status_id
+            && \App\Models\Status::where('id', $validated['status_id'])->value('slug') === 'inactive';
+        $future = $deactivating ? \App\Support\ProfessionalHistory::future($professional)->count() : 0;
+
+        if ($future > 0 && ($validated['future_action'] ?? null) !== 'keep') {
+            return response()->json([
+                'code'         => 'HAS_FUTURE',
+                'message'      => "{$professional->display_name} tiene {$future} " . ($future === 1 ? 'cita por venir' : 'citas por venir') . '. Pásalas a otra persona o confirma que quieres desactivarlo igual.',
+                'future_count' => $future,
+                'appointments' => \App\Support\ProfessionalHistory::futureList($professional),
+            ], 422);
+        }
+
         $auditBefore = $this->auditProfessional($professional);
+
+        if (array_key_exists('service_ids', $validated) && $currentUser->allows('services.edit') && ($alone = \App\Support\ServiceProfessionals::lastOnes($professional, $validated['service_ids'] ?? []))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['service_ids' => 'Nadie más hace ' . implode(', ', $alone) . '. Para quitárselo, primero marca a otra persona en ese servicio (en Servicios).']);
+        }
 
         if ($professional->user) {
             $userData = [];
@@ -318,7 +381,7 @@ class ProfessionalController extends Controller
             'license_number' => array_key_exists('license_number', $validated) ? $validated['license_number'] : $professional->license_number,
             'phone' => array_key_exists('phone', $validated) ? $validated['phone'] : $professional->phone,
             'status_id' => $validated['status_id'] ?? $professional->status_id,
-        ] + $commission + $this->onlineField($validated));
+        ] + $commission + $this->onlineField($validated) + $this->profileFields($validated));
 
         if (isset($validated['specialties'])) {
             $syncData = [];
@@ -328,13 +391,17 @@ class ProfessionalController extends Controller
             $professional->specialties()->sync($syncData);
         }
 
+        $this->syncServices($request, $professional, $validated);
         $professional->load(['status', 'specialties', 'user', 'typeDocument']);
         [$from, $to] = Audit::changed($auditBefore, $this->auditProfessional($professional));
         if ($to) {
-            $this->audit($request, 'professional.updated', $professional, $from, $to);
+            $this->audit($request, 'professional.updated', $professional, $from, $to + ($future > 0 ? ['future_kept' => $future] : []));
         }
 
-        return response()->json($professional);
+        return response()->json($professional->toArray() + ($future > 0 ? [
+            'future_appointments' => $future,
+            'notice'              => "Quedó inactivo. Sus {$future} " . ($future === 1 ? 'cita por venir sigue agendada' : 'citas por venir siguen agendadas') . ': pásalas a otra persona desde Citas.',
+        ] : []));
     }
 
     public function destroy(Request $request, $id)
@@ -345,10 +412,21 @@ class ProfessionalController extends Controller
             ->findOrFail($id);
         $this->assertOwnBranch($currentUser, $professional->id);
 
+        if (\App\Support\ProfessionalHistory::has($professional)) {
+            $future = \App\Support\ProfessionalHistory::future($professional)->count();
+
+            return response()->json([
+                'code'           => 'HAS_HISTORY',
+                'message'        => "No se puede eliminar a {$professional->display_name} porque ya tiene citas, ventas, fichas o comisiones. Desactívalo: ya no se podrá agendar y su historia y sus comisiones se guardan.",
+                'can_deactivate' => true,
+                'future_count'   => $future,
+            ], 409);
+        }
+
         $auditBefore = array_filter($this->auditProfessional($professional), fn ($value) => $value !== null && $value !== '' && $value !== []);
-        $professional->delete();
+        \App\Support\ProfessionalHistory::forget($professional);
         $this->audit($request, 'professional.deleted', $professional, $auditBefore);
 
-        return response()->json(['message' => 'Professional deleted successfully']);
+        return response()->json(['message' => 'Se eliminó correctamente.']);
     }
 }

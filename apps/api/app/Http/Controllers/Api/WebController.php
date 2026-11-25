@@ -25,6 +25,9 @@ class WebController extends Controller
             'plans'          => WebSite::plans(),
             'business_types' => WebSite::businessTypes(),
             'posts'          => WebPosts::ready() ? WebPosts::published(3) : [],
+            'addons'         => WebSite::addons(),
+            'rubro_groups'   => collect(\App\Support\WebRubros::GROUPS)->map(fn ($slugs, $name) => ['name' => $name, 'benefits' => \App\Support\WebRubros::GROUP_BENEFITS[$name] ?? []])->values(),
+            'heard_from'     => collect(WebLeads::HEARD_FROM)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
         ]);
     }
 
@@ -35,6 +38,7 @@ class WebController extends Controller
 
         return response()->json([
             'business_type' => $type,
+            'testimonials'  => collect(WebSite::settings()['testimonials'])->where('rubro', $slug)->values(),
             'others'        => collect(WebSite::businessTypes())->where('slug', '!=', $slug)->values(),
             'posts'         => WebPosts::ready() ? WebPosts::published(3, $slug) : [],
         ]);
@@ -107,9 +111,14 @@ class WebController extends Controller
             'business_type' => 'nullable|string|max:50|alpha_dash',
             'utm_source'    => 'nullable|string|max:80',
             'referrer'      => 'nullable|string|max:500',
+            'post'          => ['nullable', 'string', 'max:90', 'regex:/^[a-z0-9-]+$/'],
         ]);
 
         WebLeads::recordVisit($values['page'], WebLeads::sourceOf($values['utm_source'] ?? null, $values['referrer'] ?? null, $request->getHost()), $values['business_type'] ?? null);
+
+        if ($values['page'] === 'post' && !empty($values['post'])) {
+            WebPosts::countView($values['post']);
+        }
 
         return response()->noContent();
     }

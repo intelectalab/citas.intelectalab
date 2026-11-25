@@ -5,7 +5,7 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CalendarClock, Eye, Mail, MailCheck, MessageCircle, RefreshCw, Send } from 'lucide-react';
+import { AlertTriangle, Bot, CalendarClock, Eye, Mail, MailCheck, MessageCircle, RefreshCw, Send } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
@@ -97,7 +97,7 @@ export default function MessagesBoard() {
   const [data, setData] = useState<Board | null>(null);
   const [view, setView] = useState<View>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<Record<string, string>>({ kind: '', status: '' });
+  const [filters, setFilters] = useState<Record<string, string>>({ kind: '', status: '', channel: '' });
   const [detail, setDetail] = useState<Message | null>(null);
   const [composing, setComposing] = useState(false);
   const [editing, setEditing] = useState<Message | null>(null);
@@ -124,6 +124,7 @@ export default function MessagesBoard() {
   const rows = all.filter((m) => inView(m)
     && (!filters.kind || m.kind === filters.kind)
     && (!filters.status || m.status === filters.status)
+    && (!filters.channel || m.channel === filters.channel)
     && (!term || `${m.subject ?? ''} ${m.to ?? ''} ${m.to_name ?? ''} ${m.kind_label}`.toLowerCase().includes(term)));
 
   const checkNow = async () => {
@@ -225,6 +226,7 @@ export default function MessagesBoard() {
   const filterConfigs: FilterConfig[] = [
     { id: 'kind', label: 'Tipo', type: 'select', options: (data?.kinds ?? []).map((k) => ({ value: k.value, label: k.label })) },
     { id: 'status', label: 'Estado', type: 'select', options: (data?.statuses ?? []).map((s) => ({ value: s.value, label: s.label })) },
+    ...(new Set(all.map((m) => m.channel)).size > 1 || filters.channel ? [{ id: 'channel', label: 'Canal', type: 'select' as const, options: ([['email', 'Correo'], ['whatsapp', 'WhatsApp'], ['call', 'Llamada']] as const).filter(([value]) => all.some((m) => m.channel === value) || filters.channel === value).map(([value, label]) => ({ value, label })) }] : []),
   ];
 
   const email = data?.email;
@@ -248,7 +250,7 @@ export default function MessagesBoard() {
 
       <DataTable<Message>
         title="Mensajes"
-        headerActions={<Link href="/messages/whatsapp" data-open-whatsapp className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50"><MessageCircle size={15} /> Conversaciones de WhatsApp</Link>}
+        headerActions={<span className="flex flex-wrap gap-2"><Link href="/messages/whatsapp" data-open-whatsapp className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50"><MessageCircle size={15} /> Conversaciones de WhatsApp</Link><Link href="/messages/assistant" data-open-assistant className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50"><Bot size={15} /> Recepcionista con IA</Link></span>}
         primaryActionLabel="Nuevo mensaje"
         onPrimaryAction={data?.can.create ? () => { setEditing(null); setComposing(true); setNotice(''); } : undefined}
         searchTerm={searchTerm}

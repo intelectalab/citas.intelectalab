@@ -90,14 +90,15 @@ class WhatsAppController extends Controller
         $config = WhatsApp::config($tenant->id);
         $iso = fn ($value) => $value ? Carbon::parse($value)->toIso8601String() : null;
         $edit = $request->user()->allows('settings.edit');
-        $provider = Assistant::provider();
+        $tenant->loadMissing('activeSubscription.plan');
+        $provider = Assistant::provider($tenant);
 
         return [
             'status'          => self::status($tenant),
             'simulate_forced' => (bool) config('services.whatsapp.simulate'),
             'webhook_url'     => rtrim((string) config('app.url'), '/') . '/api/webhooks/whatsapp/' . $tenant->id,
             'config'          => $config ? [
-                'provider'            => $config['provider'] === 'cloud' ? 'cloud' : 'simulated',
+                'provider'            => in_array($config['provider'], ['cloud', '360dialog'], true) ? $config['provider'] : 'simulated',
                 'phone_number_id'     => $config['phone_number_id'] ?? '',
                 'business_account_id' => $config['business_account_id'] ?? '',
                 'display_phone'       => $config['display_phone'] ?? '',
@@ -116,6 +117,15 @@ class WhatsAppController extends Controller
                 'provider'  => $provider->key(),
                 'connected' => $provider->key() !== 'none',
                 'stats'     => Assistant::stats($tenant),
+            ] + \App\Http\Controllers\Api\AssistantController::summary($tenant, $edit),
+            'log'             => \App\Support\IntegrationLog::recent($tenant->id, 'whatsapp', 30),
+            'media_ready'     => WhatsApp::mediaReady(),
+            'meta_templates'  => [
+                'ready'      => \App\Support\WhatsAppTemplates::ready(),
+                'verifiable' => \App\Support\WhatsAppTemplates::verifiable($config),
+                'catalog'    => \App\Support\WhatsAppTemplates::list($tenant->id),
+                'synced_at'  => \App\Support\WhatsAppTemplates::lastSync($tenant->id)?->toIso8601String(),
+                'categories' => collect(\App\Support\WhatsAppTemplates::CATEGORIES)->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values(),
             ],
             'waiting'         => DB::table('whatsapp_conversations')->where('tenant_id', $tenant->id)->where('status', 'needs_human')->count(),
         ];
@@ -128,6 +138,8 @@ class WhatsAppController extends Controller
             'consent'           => \App\Support\AppointmentFlow::rule($tenant, 'whatsapp.consent') === 'unless_revoked' ? 'unless_revoked' : 'required',
             'assistant_enabled' => Assistant::enabled($tenant),
             'blocked_words'     => (string) \App\Support\AppointmentFlow::rule($tenant, 'assistant.blocked_words'),
+            'assistant_can_book' => (bool) \App\Support\AppointmentFlow::rule($tenant, 'assistant.can_book'),
+            'assistant_handoff_minutes' => Assistant::handoffMinutes($tenant),
         ];
     }
 
@@ -146,7 +158,7 @@ class WhatsAppController extends Controller
         $kinds = array_keys(array_diff_key(Messaging::KINDS, array_flip(WhatsApp::EMAIL_ONLY_KINDS)));
 
         $validated = $request->validate([
-            'provider'                => ['required', Rule::in(['simulated', 'cloud'])],
+            'provider'                => ['required', Rule::in(['simulated', 'cloud', '360dialog'])],
             'phone_number_id'         => 'required_if:provider,cloud|nullable|string|max:60|regex:/^\d+$/',
             'business_account_id'     => 'nullable|string|max:60|regex:/^\d+$/',
             'display_phone'           => 'nullable|string|max:30',
@@ -165,10 +177,15 @@ class WhatsAppController extends Controller
             'templates.*.name.regex'      => 'El nombre de la plantilla va como en Meta: minúsculas, números y guion bajo.',
         ]);
 
-        $sameCloud = ($old['provider'] ?? null) === 'cloud';
+        $real = in_array($validated['provider'], ['cloud', '360dialog'], true);
+        $sameCloud = ($old['provider'] ?? null) === $validated['provider'];
         $token = trim((string) ($validated['token'] ?? '')) ?: ($sameCloud ? ($old['token'] ?? null) : null);
         $appSecret = trim((string) ($validated['app_secret'] ?? '')) ?: ($old['app_secret'] ?? null);
         $verify = trim((string) ($validated['verify_token'] ?? '')) ?: ($old['verify_token'] ?? Str::random(32));
+
+        if ($validated['provider'] === '360dialog' && !$token) {
+            throw ValidationException::withMessages(['token' => 'Pega la clave (API key) que te da 360dialog para tu número.']);
+        }
 
         if ($validated['provider'] === 'cloud') {
             if (!$token) {
@@ -184,9 +201,9 @@ class WhatsAppController extends Controller
             ->map(fn ($t) => ['name' => trim((string) ($t['name'] ?? '')), 'language' => trim((string) ($t['language'] ?? '')) ?: 'es'])
             ->filter(fn ($t) => $t['name'] !== '')->all();
 
-        $settings = $validated['provider'] === 'cloud'
+        $settings = $real
             ? [
-                'phone_number_id'     => trim($validated['phone_number_id']),
+                'phone_number_id'     => trim((string) ($validated['phone_number_id'] ?? '')) ?: null,
                 'business_account_id' => trim((string) ($validated['business_account_id'] ?? '')) ?: null,
                 'display_phone'       => trim((string) ($validated['display_phone'] ?? '')) ?: null,
                 'templates'           => $templates,
@@ -195,11 +212,11 @@ class WhatsAppController extends Controller
 
         $values = [
             'provider'    => $validated['provider'],
-            'mode'        => $validated['provider'] === 'cloud' ? 'production' : 'simulated',
+            'mode'        => $real ? 'production' : 'simulated',
             'status'      => 'active',
             'settings'    => json_encode($settings),
             'credentials' => Crypt::encryptString(json_encode(array_filter([
-                'token'        => $validated['provider'] === 'cloud' ? $token : null,
+                'token'        => $real ? $token : null,
                 'app_secret'   => $appSecret,
                 'verify_token' => $verify,
             ]))),
@@ -239,7 +256,7 @@ class WhatsAppController extends Controller
         }
 
         return array_filter([
-            'whatsapp_provider'  => ($config['provider'] ?? null) === 'cloud' ? 'WhatsApp de Meta' : 'Probar sin enviar',
+            'whatsapp_provider'  => ['cloud' => 'WhatsApp de Meta', '360dialog' => '360dialog'][$config['provider'] ?? ''] ?? 'Probar sin enviar',
             'whatsapp_number_id' => $config['phone_number_id'] ?? null,
             'whatsapp_account'   => $config['business_account_id'] ?? null,
             'whatsapp_phone'     => $config['display_phone'] ?? null,
@@ -278,6 +295,11 @@ class WhatsAppController extends Controller
         $provider = WhatsApp::provider($config);
         $result = $provider->check($config);
 
+        if ($result['ok'] && $provider instanceof \App\Support\WhatsApp\DialogProvider) {
+            $hook = $provider->registerWebhook($config, rtrim((string) config('app.url'), '/') . '/api/webhooks/whatsapp/' . $tenant->id);
+            $result = ['ok' => $hook['ok'], 'message' => $result['message'] . ' ' . $hook['message']] + $result;
+        }
+
         if ($result['ok'] && $to) {
             $phone = WhatsApp::phone($to);
 
@@ -292,6 +314,8 @@ class WhatsAppController extends Controller
                 $result = ['ok' => false, 'message' => $e instanceof \App\Support\WhatsApp\SendFailed ? $e->getMessage() : 'WhatsApp respondió con un error al enviar la prueba.'];
             }
         }
+
+        \App\Support\IntegrationLog::write($tenant->id, 'whatsapp', $provider->key(), 'test', (bool) $result['ok'], $result['message']);
 
         if (!WhatsApp::simulated($config)) {
             $row = WhatsApp::integration($tenant->id);
@@ -320,6 +344,11 @@ class WhatsAppController extends Controller
             'consent'           => ['required', Rule::in(WhatsApp::CONSENT_MODES)],
             'assistant_enabled' => 'required|boolean',
             'blocked_words'     => 'nullable|string|max:3000',
+            'assistant_can_book' => 'nullable|boolean',
+            'assistant_handoff_minutes' => 'nullable|integer|min:1|max:120',
+        ], [
+            'assistant_handoff_minutes.min' => 'Los minutos para pasar a una persona van de 1 a 120.',
+            'assistant_handoff_minutes.max' => 'Los minutos para pasar a una persona van de 1 a 120.',
         ]);
 
         $before = self::rules($tenant);
@@ -330,6 +359,8 @@ class WhatsAppController extends Controller
             'whatsapp.consent'        => $validated['consent'],
             'assistant.enabled'       => (bool) $validated['assistant_enabled'],
             'assistant.blocked_words' => trim((string) ($validated['blocked_words'] ?? '')),
+            'assistant.handoff_minutes' => isset($validated['assistant_handoff_minutes']) ? (int) $validated['assistant_handoff_minutes'] : (int) $before['assistant_handoff_minutes'],
+            'assistant.can_book'      => array_key_exists('assistant_can_book', $validated) && $validated['assistant_can_book'] !== null ? (bool) $validated['assistant_can_book'] : (bool) $before['assistant_can_book'],
         ]);
         $settings->save();
 
@@ -339,6 +370,8 @@ class WhatsAppController extends Controller
             'whatsapp_consent'  => self::RULE_LABELS[$r['consent']],
             'assistant_enabled' => $r['assistant_enabled'] ? 'Encendido' : 'Apagado',
             'blocked_words'     => $r['blocked_words'],
+            'assistant_can_book' => $r['assistant_can_book'] ? 'Puede reservar y cambiar citas' : 'Solo informa',
+            'assistant_handoff_minutes' => $r['assistant_handoff_minutes'] . ' minutos',
         ];
         [$from, $to] = Audit::changed($label($before), $label(self::rules($fresh)));
 
@@ -435,6 +468,119 @@ class WhatsAppController extends Controller
         return response()->json($payload);
     }
 
+    public function sendFile(Request $request, string $conversation)
+    {
+        $tenant = $this->tenant($request);
+        $row = $this->find($tenant, $conversation);
+        abort_unless(WhatsApp::mediaReady(), 503, 'Falta actualizar la base de datos para mandar archivos por WhatsApp: ejecuta php artisan migrate.');
+        $data = $request->validate([
+            'file'    => 'required|file|max:5120|mimetypes:image/jpeg,image/png,application/pdf',
+            'caption' => 'nullable|string|max:1000',
+        ], [
+            'file.required'  => 'Elige la foto o el PDF que quieres mandar.',
+            'file.max'       => 'El archivo pesa demasiado: hasta 5 MB.',
+            'file.mimetypes' => 'Por WhatsApp se pueden mandar fotos (JPG o PNG) y documentos PDF.',
+        ]);
+
+        $file = $data['file'];
+        $mime = (string) $file->getMimeType();
+        $path = $file->storeAs("whatsapp/{$tenant->id}", Str::uuid() . '.' . ($mime === 'application/pdf' ? 'pdf' : ($mime === 'image/png' ? 'png' : 'jpg')), 'local');
+
+        WhatsApp::sendFile($tenant, $row, $path, $mime, $file->getClientOriginalName() ?: basename($path), $data['caption'] ?? null, $request->user());
+
+        Audit::log($request, 'whatsapp.replied', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'whatsapp_conversation',
+            'entity_id'    => $row->id,
+            'entity_label' => $row->contact_name ?: $row->phone,
+            'after'        => ['status' => 'Archivo enviado'],
+        ]);
+
+        return response()->json($this->thread($request, $tenant, DB::table('whatsapp_conversations')->where('id', $row->id)->first()));
+    }
+
+    public function media(Request $request, string $message)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless(WhatsApp::mediaReady(), 404);
+        $row = DB::table('whatsapp_messages')->where('tenant_id', $tenant->id)->where('id', $message)->first();
+        abort_unless($row && $row->media_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($row->media_path), 404, 'Este archivo ya no está disponible.');
+        $conversation = $this->find($tenant, $row->conversation_id);
+
+        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($row->media_path), [
+            'Content-Type'        => $row->media_mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="' . addslashes($row->media_name ?: basename($row->media_path)) . '"',
+            'X-Conversation'      => $conversation->id,
+        ]);
+    }
+
+    public function templates(Request $request)
+    {
+        $this->canView($request);
+        $tenant = $this->tenant($request);
+        $config = WhatsApp::config($tenant->id);
+
+        if (!$config) {
+            return response()->json(['ok' => false, 'message' => 'Primero guarda los datos de WhatsApp.', 'templates' => []]);
+        }
+
+        if (!\App\Support\WhatsAppTemplates::ready()) {
+            $provider = WhatsApp::provider($config);
+            $result = $provider->templates($config);
+            \App\Support\IntegrationLog::write($tenant->id, 'whatsapp', $provider->key(), 'templates', $result['ok'], $result['ok'] ? count($result['templates']) . ' plantillas leídas.' : $result['message']);
+            $result['templates'] = collect($result['templates'])->filter(fn ($t) => in_array($t['status'], ['APPROVED', ''], true))->values()->all();
+
+            return response()->json($result + ['catalog' => []]);
+        }
+
+        $result = WhatsApp::simulated($config) ? ['ok' => true, 'message' => null] : \App\Support\WhatsAppTemplates::sync($tenant, $config);
+
+        return response()->json([
+            'ok'        => $result['ok'],
+            'message'   => $result['message'],
+            'templates' => \App\Support\WhatsAppTemplates::approved($tenant->id),
+            'catalog'   => \App\Support\WhatsAppTemplates::list($tenant->id),
+        ]);
+    }
+
+    public function submitTemplate(Request $request)
+    {
+        $this->canEdit($request);
+        $tenant = $this->tenant($request);
+        abort_unless(\App\Support\WhatsAppTemplates::ready(), 503, \App\Support\WhatsAppTemplates::NOT_READY);
+
+        $data = $request->validate([
+            'name'       => ['required', 'string', 'max:120', 'regex:/^[a-z0-9_]+$/'],
+            'language'   => ['nullable', 'string', 'max:10', 'regex:/^[a-zA-Z_]+$/'],
+            'category'   => ['required', Rule::in(array_keys(\App\Support\WhatsAppTemplates::CATEGORIES))],
+            'body'       => 'required|string|min:10|max:1024',
+            'examples'   => 'nullable|array|max:20',
+            'examples.*' => 'nullable|string|max:200',
+        ], [
+            'name.required'     => 'Escribe el nombre de la plantilla.',
+            'name.regex'        => 'El nombre va en minúsculas, con números y guion bajo, sin espacios (por ejemplo: recordatorio_cita).',
+            'category.required' => 'Elige para qué es la plantilla.',
+            'body.required'     => 'Escribe el texto de la plantilla.',
+            'body.min'          => 'El texto es muy corto.',
+            'body.max'          => 'El texto puede tener hasta 1024 caracteres.',
+        ]);
+
+        $row = \App\Support\WhatsAppTemplates::submit($tenant, $data, $request->user());
+
+        Audit::log($request, 'settings.changed', [
+            'tenant' => $tenant->id, 'entity_type' => 'settings', 'entity_label' => 'Plantilla de WhatsApp',
+            'after'  => ['whatsapp_template' => "{$row->name} ({$row->language}): " . (\App\Support\WhatsAppTemplates::STATUS_LABELS[$row->status] ?? $row->status)],
+        ]);
+
+        return response()->json([
+            'ok'        => true,
+            'message'   => $row->status === 'APPROVED' ? 'Plantilla guardada y lista para usar.' : 'Plantilla enviada a revisión. Meta suele responder en minutos u horas; el estado se actualiza solo.',
+            'template'  => \App\Support\WhatsAppTemplates::present($row),
+            'templates' => \App\Support\WhatsAppTemplates::approved($tenant->id),
+            'catalog'   => \App\Support\WhatsAppTemplates::list($tenant->id),
+        ]);
+    }
+
     public function resolve(Request $request, string $conversation)
     {
         $tenant = $this->tenant($request);
@@ -444,7 +590,7 @@ class WhatsAppController extends Controller
             throw ValidationException::withMessages(['conversation' => 'Esta conversación no estaba esperando a una persona.']);
         }
 
-        DB::table('whatsapp_conversations')->where('id', $row->id)->update(['status' => 'open', 'handoff_reason' => null, 'handoff_at' => null, 'unread' => 0, 'updated_at' => now()]);
+        DB::table('whatsapp_conversations')->where('id', $row->id)->update(['status' => 'open', 'handoff_reason' => null, 'handoff_at' => null, 'unread' => 0, 'updated_at' => now()] + (Assistant::episodesReady() ? ['assistant_started_at' => null, 'handoff_summary' => null] : []));
 
         Audit::log($request, 'whatsapp.handled', [
             'tenant'       => $tenant->id,

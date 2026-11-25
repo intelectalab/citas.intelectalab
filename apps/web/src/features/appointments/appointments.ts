@@ -7,6 +7,7 @@ export interface Appointment {
   next_statuses: string[];
   can_reschedule: boolean;
   can_remind?: boolean;
+  can_undo_no_show?: boolean;
   confirm_by?: string | null;
   confirmation_overdue?: boolean;
   starts_at: string;
@@ -14,6 +15,16 @@ export interface Appointment {
   duration_minutes: number;
   price: string;
   source: string;
+  source_label?: string;
+  paid?: boolean | null;
+  deposit_paid?: boolean;
+  buffers?: { before: number; after: number };
+  customer_profile?: CustomerProfileSummary | null;
+  dependent_detail?: { species: string | null; breed: string | null; sex: string | null; age: string | null; kind: string | null } | null;
+  deposit?: { status: 'paid' | 'pending'; amount: number; currency: string | null } | null;
+  messages?: AppointmentMessage[];
+  can_waive_penalty?: boolean;
+  cancel_reasons?: string[];
   late_cancel_strike?: { window_hours: number; misses: number; limit: number | null; block_days: number; would_block: boolean } | null;
   penalty_preview?: { late_cancel: number | null; late_cancel_percent: number; no_show: number | null; no_show_percent: number; window_hours: number; currency: string } | null;
   penalty?: { sale_id: string; code: string; kind: string | null; label: string; total: number; balance: number; status: string; currency: string | null } | null;
@@ -22,18 +33,45 @@ export interface Appointment {
   own_video_url?: string | null;
   is_virtual?: boolean;
   reschedule_count: number;
+  series?: { id: string; number: number | null; label?: string; total?: number; following?: number } | null;
   override_reason: string | null;
   cancel_reason: string | null;
   customer: { id: string; code: string; name: string; phone: string | null } | null;
   dependent: { id: string; name: string; species: string | null } | null;
+  dependent_alert?: string | null;
   service: { id: string; name: string } | null;
   professional: { id: string; display_name: string; color_code: string | null } | null;
   branch: { id: string; name: string } | null;
+  room?: { id: string; name: string } | null;
+  room_options?: { id: string; name: string; free: boolean }[] | null;
   timing: AppointmentTiming;
-  record: { uses: boolean; status: 'draft' | 'signed' | 'locked' | null };
+  record: { uses: boolean; status: 'draft' | 'signed' | 'locked' | null; required?: boolean };
   occupied_until: string;
   history?: AppointmentStep[];
   customer_timing?: TimingSummary;
+}
+
+export interface CustomerProfileSummary {
+  visits: number;
+  no_shows: number;
+  spend_12m: number | null;
+  balance: number | null;
+  points: number | null;
+  segments: { key: string; label: string }[];
+  tags: { id: string; name: string; color: string | null }[];
+  alert: string | null;
+  block_after: number | null;
+  document: string | null;
+}
+
+export interface AppointmentMessage {
+  id: string;
+  channel: string;
+  kind: string;
+  status: string;
+  status_label: string;
+  error: string | null;
+  at: string;
 }
 
 export interface AppointmentTiming {
@@ -66,9 +104,16 @@ export interface AppointmentStep {
 export interface AppointmentContext {
   branches: { id: string; name: string }[];
   professionals: { id: string; display_name: string; color_code: string | null; branch_ids: string[] }[];
-  services: { id: string; name: string; duration_minutes: number; price: string; professional_ids: string[]; branch_ids?: string[] }[];
+  services: {
+    id: string; name: string; duration_minutes: number; price: string; professional_ids: string[]; branch_ids?: string[];
+    category?: string | null; buffer_before?: number; buffer_after?: number; deposit?: { label: string; amount: number } | null;
+  }[];
   can_override: boolean;
   slot_interval: number;
+  respect_buffers?: boolean;
+  origins?: { value: string; label: string }[];
+  cancel_reasons?: string[];
+  rooms?: { id: string; name: string; branch_id: string }[];
 }
 
 export const STATUS_STYLES: Record<string, { badge: string; block: string; dot: string }> = {

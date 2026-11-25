@@ -16,7 +16,11 @@ import PortalClasses, { type PortalClassesData } from './PortalClasses';
 import PortalPassword from './PortalPassword';
 import PortalPackages, { type PortalPackage } from './PortalPackages';
 import PortalMemberships, { type PortalMembership } from './PortalMemberships';
-import PortalBenefits, { hasBenefits, type PortalBenefitsData } from './PortalBenefits';
+import PortalSurveys from './PortalSurveys';
+import PortalBenefits, { BenefitsSummary, hasBenefits, type PortalBenefitsData } from './PortalBenefits';
+import PortalDependents from './PortalDependents';
+import PortalProfileExtra from './PortalProfileExtra';
+import Select from '@/app/components/common/Select';
 import PortalQuotes, { type PortalQuotesData } from './PortalQuotes';
 import PortalShop, { type ShopData } from './PortalShop';
 import PortalPrivacy, { PortalContact } from './PortalPrivacy';
@@ -24,6 +28,11 @@ import { portalError, type PortalAppointment, type PortalCatalog, type PortalOve
 import { money, momentOf, type PaymentLink } from '@/features/sales/sales';
 
 type Tab = 'home' | 'book' | 'appointments' | 'classes' | 'packages' | 'memberships' | 'benefits' | 'quotes' | 'profile' | 'privacy';
+
+const usesModule = (overview: PortalOverview, m: string) => !overview.modules || overview.modules.includes(m);
+
+const OTHER_REASON = '__other';
+const CANCEL_REASONS = ['Tengo un inconveniente', 'Me siento mal', 'Estoy de viaje', 'Prefiero otra fecha'];
 
 export default function Portal() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -43,6 +52,8 @@ export default function Portal() {
   const [phone, setPhone] = useState('');
   const [editingPhone, setEditingPhone] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelOther, setCancelOther] = useState('');
 
   useEffect(() => {
     if (isStaff) window.location.replace('/home');
@@ -85,6 +96,7 @@ export default function Portal() {
   const [shop, setShop] = useState<ShopData | null>(null);
   const [classes, setClasses] = useState<PortalClassesData | null>(null);
 
+
   const loadClasses = useCallback(() => {
     api.get<PortalClassesData>('/portal/classes')
       .then((res) => setClasses(res.data))
@@ -92,7 +104,7 @@ export default function Portal() {
   }, []);
 
   useEffect(() => {
-    if (!overview || mustChangePassword) return;
+    if (!overview || mustChangePassword || !usesModule(overview, 'classes')) return;
     loadClasses();
   }, [overview, mustChangePassword, loadClasses]);
 
@@ -103,18 +115,22 @@ export default function Portal() {
   }, []);
 
   useEffect(() => {
-    if (!overview || mustChangePassword) return;
+    if (!overview || mustChangePassword || !(usesModule(overview, 'packages') || usesModule(overview, 'quotes'))) return;
     loadPackages();
   }, [overview, mustChangePassword, loadPackages]);
 
   useEffect(() => {
     if (!overview || mustChangePassword) return;
-    api.get<PortalQuotesData>('/portal/quotes')
-      .then((res) => setQuotes(res.data))
-      .catch(() => setQuotes(null));
-    api.get('/portal/memberships')
-      .then((res) => setMemberships(res.data.memberships ?? []))
-      .catch(() => setMemberships(null));
+    if (usesModule(overview, 'quotes')) {
+      api.get<PortalQuotesData>('/portal/quotes')
+        .then((res) => setQuotes(res.data))
+        .catch(() => setQuotes(null));
+    }
+    if (usesModule(overview, 'memberships')) {
+      api.get('/portal/memberships')
+        .then((res) => setMemberships(res.data.memberships ?? []))
+        .catch(() => setMemberships(null));
+    }
     api.get<PortalBenefitsData>('/portal/benefits')
       .then((res) => setBenefits(res.data))
       .catch(() => setBenefits(null));
@@ -141,7 +157,7 @@ export default function Portal() {
     if (!deposit || deposit.outcome) return '';
     const hoursLeft = (new Date(appointment.starts_at).getTime() - Date.now()) / 3600000;
     return hoursLeft >= deposit.refund_hours
-      ? ` Se te devolverá el adelanto de ${money(deposit.amount, deposit.currency)}.`
+      ? (deposit.on_cancel === 'refund' ? ` Se te devolverá el adelanto de ${money(deposit.amount, deposit.currency)}.` : ` El adelanto de ${money(deposit.amount, deposit.currency)} quedará como saldo a favor para tu próxima compra o cita.`)
       : ` Faltan menos de ${deposit.refund_hours} horas para tu cita: el adelanto de ${money(deposit.amount, deposit.currency)} no se devuelve.`;
   };
 
@@ -205,8 +221,11 @@ export default function Portal() {
   const cancel = async () => {
     if (!cancelling) return;
     const appointment = cancelling;
-    await act(() => api.post(`/portal/appointments/${appointment.id}/cancel`), 'Tu cita fue cancelada.');
+    const reason = cancelReason === OTHER_REASON ? cancelOther.trim() : cancelReason;
+    await act(() => api.post(`/portal/appointments/${appointment.id}/cancel`, { reason: reason || null }), 'Tu cita fue cancelada.');
     setCancelling(null);
+    setCancelReason('');
+    setCancelOther('');
   };
 
   const startReschedule = (appointment: PortalAppointment) => {
@@ -225,7 +244,7 @@ export default function Portal() {
 
   const savePhone = () => act(() => api.put('/portal/profile', { phone }), 'Actualizamos tu celular.').then(() => setEditingPhone(false));
 
-  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling, onMiss: policies?.confirm_on_miss, arriveMinutes: policies?.arrive_minutes };
+  const cardActions = { busy, onConfirm: confirm, onReschedule: startReschedule, onCancel: setCancelling, onMiss: policies?.confirm_on_miss, arriveMinutes: policies?.arrive_minutes, windowHours: policies?.booking_enabled ? policies?.cancel_window_hours : undefined, contactPhone: contact?.phone ?? contact?.branches?.[0]?.phone ?? null };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Inicio', icon: <Home size={16} /> },
@@ -317,6 +336,8 @@ export default function Portal() {
               <p data-portal-welcome className="text-sm text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-2xl px-4 py-3 whitespace-pre-line">{texts.welcome}</p>
             )}
 
+            <PortalSurveys />
+
             {next ? (
               <PortalAppointmentCard appointment={next} featured {...cardActions} />
             ) : (
@@ -341,9 +362,11 @@ export default function Portal() {
                     {block.blocked ? 'Por ahora no puedes reservar en línea' : `Tienes ${block.misses} ${block.misses === 1 ? 'inasistencia' : 'inasistencias'} a citas reservadas en línea`}
                   </span>
                   <span className={`block text-xs ${block.blocked ? 'text-rose-700' : 'text-amber-700'}`}>
-                    {block.blocked
+                    {block.blocked || block.deposit_required
                       ? block.message
-                      : `Al llegar a ${block.limit} ya no podrás reservar por aquí. Si no vas a poder asistir, cancela o cambia tu cita a tiempo.`}
+                      : policies?.miss?.action === 'deposit'
+                        ? `Al llegar a ${block.limit}, tus reservas por aquí llevarán un adelanto. Si no vas a poder asistir, cancela o cambia tu cita a tiempo.`
+                        : `Al llegar a ${block.limit} ya no podrás reservar por aquí. Si no vas a poder asistir, cancela o cambia tu cita a tiempo.`}
                   </span>
                 </span>
               </section>
@@ -395,6 +418,8 @@ export default function Portal() {
                 Tienes {upcoming.length - 1} {upcoming.length - 1 === 1 ? 'cita más' : 'citas más'} · Ver todas
               </button>
             )}
+
+            {benefits && <BenefitsSummary data={benefits} currency={benefits.currency} onOpen={hasBenefits(benefits) ? () => openTab('benefits') : undefined} />}
 
             {contact && <PortalContact contact={contact} />}
 
@@ -463,11 +488,11 @@ export default function Portal() {
               <section className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-3" data-card="portal-consents">
                 <h2 className="text-sm font-extrabold text-brand-ink uppercase tracking-wider">Promociones</h2>
                 <p className="text-xs text-slate-500 -mt-1.5">Los avisos de tus citas, pagos y paquetes te llegan siempre. Aquí eliges si también quieres recibir promociones de {tenant?.name}.</p>
-                {([['email', 'Recibir promociones por correo'], ['whatsapp', 'Recibir promociones por WhatsApp']] as ['email' | 'whatsapp', string][]).map(([channel, label]) => (
-                  <div key={channel} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                {([['email', 'Recibir promociones por correo'], ['whatsapp', 'Recibir promociones por WhatsApp'], ['sms', 'Recibir mensajes por SMS']] as ['email' | 'whatsapp' | 'sms', string][]).map(([channel, label]) => (
+                  <div key={channel} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3" data-consent={channel}>
                     <span className="text-sm text-slate-700">{label}</span>
                     <Switch
-                      checked={overview.consents![channel].granted}
+                      checked={Boolean(overview.consents![channel]?.granted)}
                       label={label}
                       onChange={(on) => api.put('/portal/consents', { [channel]: on })
                         .then((res) => { setOverview({ ...overview, consents: res.data.consents }); setNotice(on ? 'Listo: te avisaremos de nuestras promociones.' : 'Listo: ya no te enviaremos promociones por ese medio.'); })
@@ -549,20 +574,21 @@ export default function Portal() {
                 </div>
               </dl>
 
+              <PortalProfileExtra
+                birthDate={overview.customer.birth_date ?? null}
+                district={overview.customer.district ?? null}
+                onSaved={(values) => { setOverview({ ...overview, customer: { ...overview.customer, ...values } }); setError(''); setNotice('Guardamos tus datos.'); }}
+                onError={(message) => { setNotice(''); setError(message); }}
+              />
+
               {overview.dependents.enabled && (
                 <div className="pt-3 border-t border-slate-100 space-y-2">
                   <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider"><PawPrint size={13} /> {vocab.dependents}</span>
-                  {overview.dependents.items.length === 0 ? (
-                    <p className="text-sm text-slate-500">Aún no registras ninguno. Podrás hacerlo al reservar.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {overview.dependents.items.map((item) => (
-                        <span key={item.id} className="px-2.5 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
-                          {item.name}{item.species ? ` · ${item.species}` : ''}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <PortalDependents
+                    key={overview.dependents.items.length}
+                    canBook={canBook}
+                    onBook={() => openTab('book')}
+                  />
                 </div>
               )}
             </section>
@@ -596,7 +622,29 @@ export default function Portal() {
         type="confirm"
         variant="danger"
         title="¿Cancelar tu cita?"
-        message={cancelling ? `${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.${depositWarning(cancelling)}${lateWarning(cancelling)}` : ''}
+        message={cancelling ? (
+          <div className="space-y-3 text-left" data-cancel-form>
+            <p>{`${cancelling.service?.name} · ${cancelling.starts_at.slice(8, 10)}/${cancelling.starts_at.slice(5, 7)} a las ${cancelling.starts_at.slice(11, 16)}. El horario quedará libre para otra persona.${depositWarning(cancelling)}${lateWarning(cancelling)}`}</p>
+            <Select
+              label={overview?.policies?.cancel_reason_required ? 'Cuéntanos el motivo' : 'Cuéntanos el motivo (opcional)'}
+              placeholder="Elige un motivo"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(String(e.target.value))}
+              options={[...CANCEL_REASONS.map((r) => ({ value: r, label: r })), { value: OTHER_REASON, label: 'Otro motivo' }]}
+            />
+            {cancelReason === OTHER_REASON && (
+              <input
+                type="text"
+                maxLength={200}
+                aria-label="Escribe el motivo"
+                placeholder="Escribe el motivo"
+                value={cancelOther}
+                onChange={(e) => setCancelOther(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+              />
+            )}
+          </div>
+        ) : ''}
         confirmText="Sí, cancelar"
         cancelText="No, mantenerla"
         isLoading={busy}

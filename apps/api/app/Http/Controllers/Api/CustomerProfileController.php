@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Tenant;
 use App\Support\Audit;
 use App\Support\Currency;
+use App\Support\CustomerInsights;
 use App\Support\CustomerProfile;
 use App\Support\Loyalty;
 use App\Support\Person;
@@ -27,7 +28,9 @@ class CustomerProfileController extends Controller
 
     private function customer(Request $request, string $id): Customer
     {
-        return Customer::where('tenant_id', $this->tenant($request)->id)->findOrFail($id);
+        $this->tenant($request);
+
+        return Customer::visibleTo($request->user())->findOrFail($id);
     }
 
     public function show(Request $request, string $customer)
@@ -36,11 +39,21 @@ class CustomerProfileController extends Controller
         $row = $this->customer($request, $customer);
         $user = $request->user();
         $canMoney = $user->allows('sales.view');
+        $loyalty = Loyalty::enabled($tenant);
+        $points = $loyalty ? Loyalty::customerPoints($tenant->id, $row->id) : null;
 
         return response()->json([
             'currency'        => Currency::present(Currency::of($tenant)),
-            'money'           => $canMoney ? CustomerProfile::money($tenant, $row->id) : null,
-            'points'          => Loyalty::enabled($tenant) ? Loyalty::customerPoints($tenant->id, $row->id) : null,
+            'money'           => $canMoney ? CustomerInsights::money($tenant, $row, CustomerProfile::money($tenant, $row->id)) : null,
+            'points'          => $points,
+            'credit'          => $canMoney ? \App\Support\CustomerCredit::summary($tenant->id, $row->id) : null,
+            'points_value'    => $loyalty ? round($points * Loyalty::rules($tenant)['point_value'], 2) : null,
+            'preferences'     => CustomerInsights::preferences($tenant, $row),
+            'recalls'         => $user->allows('recalls.view') && $tenant->hasModule('agenda') ? CustomerInsights::recalls($tenant, $row) : null,
+            'memberships'     => \App\Support\Memberships::enabled($tenant) && $user->allows('memberships.view') ? CustomerInsights::memberships($tenant, $row) : null,
+            'quotes'          => \App\Support\Quotes::enabled($tenant) && $user->allows('quotes.view') ? CustomerInsights::quotes($tenant, $row, $user) : null,
+            'loyalty'         => $loyalty && $user->allows('loyalty.view') ? CustomerInsights::loyalty($tenant, $row, $user) : null,
+            'messages'        => $user->allows('messages.view') ? CustomerInsights::messages($tenant, $row) : null,
             'segments'        => CustomerProfile::segments($tenant, $row->id),
             'tags'            => CustomerProfile::tagsOf($row->id),
             'tags_ready'      => CustomerProfile::tagsReady(),

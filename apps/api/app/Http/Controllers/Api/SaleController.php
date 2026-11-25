@@ -153,6 +153,7 @@ class SaleController extends AppointmentController
             'methods'          => collect(Sales::METHODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label, 'needs_reference' => in_array($key, Sales::NEEDS_REFERENCE, true)])->values(),
             'partial_payments' => $rules['partial_payments'] || ($sale && \App\Support\Quotes::isQuoteSale($sale)),
             'loyalty'          => \App\Support\Loyalty::chargeContext($tenant, $customer, $due),
+            'credit'           => ['balance' => \App\Support\CustomerCredit::balance($tenant->id, $customer->id ?? null)],
             'cash'             => [
                 'required' => $rules['require_open_cash'],
                 'sessions' => Cash::openSessions($tenant->id, $branchId)->map(fn ($s) => ['id' => $s->id, 'register_name' => $s->register_name])->values(),
@@ -240,7 +241,7 @@ class SaleController extends AppointmentController
             'received.numeric' => 'Escribe lo recibido como un número.',
         ]);
 
-        $doc = Invoicing::validated($tenant, $validated);
+        $doc = Invoicing::validated($tenant, $validated) + ['strict' => true];
 
         $result = DB::transaction(function () use ($tenant, $appointment, $validated, $doc, $user) {
             Appointment::where('id', $appointment->id)->lockForUpdate()->first();
@@ -267,7 +268,7 @@ class SaleController extends AppointmentController
         abort_unless($sale, 404);
         abort_unless($sale->status === 'paid', 422, 'El comprobante se emite cuando la venta está pagada.');
 
-        $doc = Invoicing::validated($tenant, $request->only(['doc_type', 'ruc', 'business_name', 'address']));
+        $doc = Invoicing::validated($tenant, $request->only(['doc_type', 'ruc', 'business_name', 'address'])) + ['strict' => true];
         DB::transaction(fn () => Invoicing::issue($tenant, $sale, $doc, $request->user()));
 
         return response()->json($this->payload($tenant, $appointment));

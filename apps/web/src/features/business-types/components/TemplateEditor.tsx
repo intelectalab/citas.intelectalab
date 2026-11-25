@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Select from '@/app/components/common/Select';
 import {
   ArrowDown, ArrowUp, ChevronDown, ClipboardList, Clock, FolderOpen, Plus, Trash2,
-  Globe, HandCoins, Video, FileText, Users, CalendarClock
+  Globe, HandCoins, Video, FileText, Users, CalendarClock, Power, DoorOpen
 } from 'lucide-react';
+import TemplateExtras, { roomTypeOf } from './TemplateExtras';
 
 export interface TemplateService {
   code?: string | null;
@@ -48,9 +49,26 @@ export interface TemplateRecord {
   [key: string]: any;
 }
 
+export interface TemplateRoom {
+  name: string;
+  type?: string | null;
+  kind?: 'room' | 'equipment';
+}
+
+export interface TemplateBundle {
+  name: string;
+  price: number;
+  validity_days?: number;
+  discount_percent?: number;
+  items: { code: string; sessions: number }[];
+}
+
 export interface BusinessTemplate {
   categories: TemplateCategory[];
   record_template: TemplateRecord | null;
+  rooms?: TemplateRoom[];
+  packages?: TemplateBundle[];
+  memberships?: TemplateBundle[];
 }
 
 const FIELD_TYPES: { value: string; label: string }[] = [
@@ -164,6 +182,15 @@ export function cleanTemplate(template: BusinessTemplate): Record<string, any> {
 
   const result: Record<string, any> = {};
   if (categories.length > 0) result.categories = categories;
+  if (template.rooms) result.rooms = template.rooms.filter((room) => room.name.trim()).map((room) => ({ name: room.name.trim(), type: room.type?.trim() || room.name.trim(), kind: room.kind === 'equipment' ? 'equipment' : 'room' }));
+  const bundles = (rows: TemplateBundle[] | undefined, membership: boolean) => (rows ?? []).filter((row) => row.name.trim()).map((row) => ({
+    name: row.name.trim(),
+    price: Number(row.price) || 0,
+    ...(membership ? { discount_percent: Math.min(100, Math.max(0, Number(row.discount_percent) || 0)) } : { validity_days: Math.max(1, Number(row.validity_days) || 90) }),
+    items: row.items.filter((item) => item.code).map((item) => ({ code: item.code, sessions: Math.max(1, Number(item.sessions) || 1) })),
+  }));
+  if (template.packages) result.packages = bundles(template.packages, false);
+  if (template.memberships) result.memberships = bundles(template.memberships, true);
 
   if (template.record_template) {
     const record = template.record_template;
@@ -199,6 +226,9 @@ export function parseTemplate(raw: any): BusinessTemplate {
     record_template: raw?.record_template
       ? { ...raw.record_template, name: raw.record_template.name ?? '', fields: raw.record_template.fields ?? [] }
       : null,
+    ...(Array.isArray(raw?.rooms) ? { rooms: raw.rooms } : {}),
+    ...(Array.isArray(raw?.packages) ? { packages: raw.packages } : {}),
+    ...(Array.isArray(raw?.memberships) ? { memberships: raw.memberships } : {}),
   };
 }
 
@@ -231,6 +261,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
   const totalServices = value.categories.reduce((total, category) => total + category.services.length, 0);
   const servicesWithCode = value.categories.flatMap((category) => category.services).filter((service) => service.code?.trim());
 
+  const roomTypes = Array.from(new Set((value.rooms ?? []).map(roomTypeOf).filter(Boolean)));
   const setCategories = (categories: TemplateCategory[]) => onChange({ ...value, categories });
   const updateCategory = (index: number, patch: Partial<TemplateCategory>) =>
     setCategories(value.categories.map((category, i) => (i === index ? { ...category, ...patch } : category)));
@@ -374,6 +405,7 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                             </div>
 
                             <div className="flex flex-wrap gap-1.5">
+                              <Toggle icon={<Power size={13} />} label="Activo" checked={service.active !== false} onChange={(checked) => updateService(categoryIndex, serviceIndex, { active: checked })} />
                               <Toggle icon={<Globe size={13} />} label="Reserva en línea" checked={service.online_booking !== false} onChange={(checked) => updateService(categoryIndex, serviceIndex, { online_booking: checked })} />
                               <Toggle icon={<HandCoins size={13} />} label="Exige adelanto" checked={Boolean(service.requires_deposit)} onChange={(checked) => updateService(categoryIndex, serviceIndex, { requires_deposit: checked })} />
                               <Toggle icon={<Video size={13} />} label="Videollamada" checked={Boolean(service.is_virtual)} onChange={(checked) => updateService(categoryIndex, serviceIndex, { is_virtual: checked })} />
@@ -382,6 +414,18 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
                                 <Toggle icon={<Users size={13} />} label="Clase grupal" checked={isGroup} onChange={(checked) => updateService(categoryIndex, serviceIndex, { kind: checked ? 'group' : 'individual', capacity: checked ? Math.max(2, service.capacity ?? 10) : 1 })} />
                               )}
                             </div>
+
+                            {roomTypes.length > 0 && (
+                              <div className="space-y-1" data-service-rooms>
+                                <span className={labelClass}>Salas o equipos que usa</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {roomTypes.map((type) => {
+                                    const on = (service.rooms ?? []).includes(type);
+                                    return <Toggle key={type} icon={<DoorOpen size={13} />} label={type} checked={on} onChange={(checked) => updateService(categoryIndex, serviceIndex, { rooms: checked ? [...(service.rooms ?? []), type] : (service.rooms ?? []).filter((r: string) => r !== type) })} />;
+                                  })}
+                                </div>
+                              </div>
+                            )}
 
                             {isGroup && (
                               <div className="w-1/3">
@@ -470,6 +514,8 @@ export default function TemplateEditor({ value, onChange, allowGroupClasses }: T
           <Plus size={14} /> Agregar categoría
         </button>
       </div>
+
+      <TemplateExtras value={value} onChange={onChange} />
 
       <div className="space-y-3 pt-5 border-t border-slate-200">
         <div className="flex items-start justify-between gap-3">

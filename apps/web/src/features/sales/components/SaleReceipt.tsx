@@ -77,8 +77,10 @@ export default function SaleReceipt({ source = 'staff' }: { source?: 'staff' | '
 
         <dl className="space-y-0.5">
           {sale.coupon && <div className={row}><dt>Cupón {sale.coupon.code}</dt><dd className="tabular-nums">− {money(sale.coupon.discount, sale?.currency)}</dd></div>}
-          <div className={row}><dt>Op. gravada</dt><dd className="tabular-nums">{money(sale.total - sale.tax, sale?.currency)}</dd></div>
+          {(sale.manual_discount ?? 0) > 0 && <div className={row}><dt>Descuento</dt><dd className="tabular-nums">− {money(sale.manual_discount ?? 0, sale?.currency)}</dd></div>}
+          <div className={row}><dt>Op. gravada</dt><dd className="tabular-nums">{money(sale.total - (sale.tip ?? 0) - sale.tax, sale?.currency)}</dd></div>
           <div className={row}><dt>IGV {sale.tax_rate}%</dt><dd className="tabular-nums">{money(sale.tax, sale?.currency)}</dd></div>
+          {(sale.tip ?? 0) > 0 && <div className={row}><dt>Propina</dt><dd className="tabular-nums">{money(sale.tip ?? 0, sale?.currency)}</dd></div>}
           <div className={`${row} text-base font-extrabold pt-1`}><dt>Total</dt><dd className="tabular-nums">{money(sale.total, sale?.currency)}</dd></div>
         </dl>
 

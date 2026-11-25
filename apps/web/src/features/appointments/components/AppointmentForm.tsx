@@ -15,7 +15,10 @@ import TimeField from '@/app/components/common/TimeField';
 import FormCustomer from '@/features/customers/components/FormCustomer';
 import QuickDependent from '@/features/customers/components/QuickDependent';
 import QuickService from '@/features/services/components/QuickService';
-import { apiError, dateOf, formatDateTime, timeOf, todayISO, type Appointment, type AppointmentContext } from '../appointments';
+import RepeatFields, { REPEAT_OFF, repeatPayload, type RepeatValue, type SeriesDate } from './RepeatFields';
+import { apiError, dateOf, formatDate, formatDateTime, timeOf, todayISO, type Appointment, type AppointmentContext } from '../appointments';
+import { formatMoney } from '@/lib/currency';
+import QuickCustomer from './QuickCustomer';
 
 export interface CustomerOption {
   id: string;
@@ -28,7 +31,7 @@ export interface CustomerOption {
 }
 
 interface CustomerNote {
-  kind: 'alert' | 'debt' | 'no_show' | 'package' | 'membership';
+  kind: 'alert' | 'dependent_alert' | 'debt' | 'no_show' | 'package' | 'membership';
   tone: 'bad' | 'warn' | 'ok' | 'info';
   title: string;
   text: string;
@@ -43,6 +46,7 @@ const NOTE_STYLES: Record<CustomerNote['tone'], string> = {
 
 const NOTE_ICONS: Record<CustomerNote['kind'], typeof Info> = {
   alert: AlertTriangle,
+  dependent_alert: AlertTriangle,
   debt: Wallet,
   no_show: AlertTriangle,
   package: CircleCheck,
@@ -58,6 +62,7 @@ const newRequestKey = (): string => {
 interface SlotGroup {
   professional: { id: string; display_name: string };
   slots: string[];
+  busy?: { time: string; reason: string }[];
 }
 
 interface AppointmentFormProps {
@@ -103,12 +108,20 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   const [error, setError] = useState('');
   const [canForce, setCanForce] = useState(false);
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [customerSegments, setCustomerSegments] = useState<{ key: string; label: string }[]>([]);
+  const [nextDays, setNextDays] = useState<{ date: string; count: number }[]>([]);
+  const [busyNote, setBusyNote] = useState({ id: '', text: '' });
   const [waitlisted, setWaitlisted] = useState(false);
   const [waitlisting, setWaitlisting] = useState(false);
   const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
   const [slotsVersion, setSlotsVersion] = useState(0);
   const [slotTaken, setSlotTaken] = useState('');
   const requestKey = useRef('');
+  const [repeat, setRepeat] = useState<RepeatValue>(REPEAT_OFF);
+  const [seriesDates, setSeriesDates] = useState<SeriesDate[] | null>(null);
+  const [checkingSeries, setCheckingSeries] = useState(false);
+  const [seriesResult, setSeriesResult] = useState<{ created: number; skipped: SeriesDate[]; label: string; first: Appointment } | null>(null);
   const waitlistOn = user?.tenant?.rules?.['waitlist.enabled'] !== false;
 
   useEffect(() => {
@@ -120,6 +133,8 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     setCanForce(false);
     setWaitlisted(false);
     setCustomerFormOpen(false);
+    setQuickOpen(false);
+    setBusyNote({ id: '', text: '' });
     setOverrideReason('');
     setReason('');
     setCustomer(null);
@@ -128,6 +143,9 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     setDependentId('');
     setNotes('');
     setSlotGroups([]);
+    setRepeat(REPEAT_OFF);
+    setSeriesDates(null);
+    setSeriesResult(null);
 
     if (reschedule) {
       setServiceId(reschedule.service?.id ?? '');
@@ -166,7 +184,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
 
     setSearching(true);
     const timer = setTimeout(() => {
-      api.get('/customers', { params: { search: customerQuery.trim() } })
+      api.get('/customers', { params: { search: customerQuery.trim(), pick: 1 } })
         .then((res) => setCustomerResults(res.data?.data ?? []))
         .catch(() => setCustomerResults([]))
         .finally(() => setSearching(false));
@@ -178,16 +196,17 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
   useEffect(() => {
     if (!isOpen || isReschedule || !customer) {
       setCustomerNotes([]);
+      setCustomerSegments([]);
       return;
     }
 
     let active = true;
-    api.get('/appointments/customer-notes', { params: { customer_id: customer.id, ...(serviceId ? { service_id: serviceId } : {}) } })
-      .then((res) => { if (active) setCustomerNotes(res.data?.notes ?? []); })
-      .catch(() => { if (active) setCustomerNotes([]); });
+    api.get('/appointments/customer-notes', { params: { customer_id: customer.id, ...(serviceId ? { service_id: serviceId } : {}), ...(dependentId ? { customer_dependent_id: dependentId } : {}) } })
+      .then((res) => { if (active) { setCustomerNotes(res.data?.notes ?? []); setCustomerSegments(res.data?.segments ?? []); } })
+      .catch(() => { if (active) { setCustomerNotes([]); setCustomerSegments([]); } });
 
     return () => { active = false; };
-  }, [isOpen, isReschedule, customer, serviceId]);
+  }, [isOpen, isReschedule, customer, serviceId, dependentId]);
 
   const service = context?.services.find((s) => s.id === serviceId) ?? null;
 
@@ -213,10 +232,11 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
         date,
         ...(professionalId ? { professional_id: professionalId } : {}),
         ...(reschedule ? { ignore_id: reschedule.id } : {}),
+        with_busy: 1,
       },
     })
-      .then((res) => setSlotGroups(res.data?.professionals ?? []))
-      .catch(() => setSlotGroups([]))
+      .then((res) => { setSlotGroups(res.data?.professionals ?? []); setNextDays(res.data?.next_days ?? []); setBusyNote({ id: '', text: '' }); })
+      .catch(() => { setSlotGroups([]); setNextDays([]); })
       .finally(() => setLoadingSlots(false));
   }, [isOpen, serviceId, branchId, date, professionalId, reschedule, slotsVersion]);
 
@@ -236,6 +256,27 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     if (!serviceId) return setError('Elige un servicio.');
     if (!professionalId) return setError(`Elige ${vocab.pick('pro', 'un', 'una')} ${vocab.pro.toLowerCase()} o uno de los horarios libres.`);
     if (!time) return setError('Elige una hora.');
+
+    if (repeating) {
+      try {
+        setSaving(true);
+        const res = await api.post('/appointments/series', seriesBody());
+        const skipped: SeriesDate[] = (res.data?.skipped ?? []).map((d: { date: string; reason: string }) => ({ date: d.date, ok: false, reason: d.reason }));
+        if (skipped.length === 0) {
+          onSaved(res.data.first);
+          onClose();
+          return;
+        }
+        setSeriesResult({ created: res.data.created?.length ?? 0, skipped, label: res.data.label ?? '', first: res.data.first });
+      } catch (err: any) {
+        const skipped = err?.response?.data?.skipped;
+        if (Array.isArray(skipped)) setSeriesDates(skipped.map((d: { date: string; reason: string }) => ({ date: d.date, ok: false, reason: d.reason })));
+        setError(apiError(err, 'No se pudieron agendar las citas.'));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
     const startsAt = `${date}T${time}`;
     const force = canForce && overrideReason.trim() ? { override_reason: overrideReason.trim() } : {};
@@ -284,6 +325,31 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     }
   };
 
+  const seriesBody = () => ({
+    customer_id: customer?.id,
+    customer_dependent_id: dependentId || null,
+    service_id: serviceId,
+    professional_id: professionalId,
+    branch_id: branchId,
+    starts_at: `${date}T${time}`,
+    notes: notes.trim() || null,
+    ...repeatPayload(repeat),
+  });
+
+  const checkSeries = async () => {
+    setError('');
+    if (!customer || !serviceId || !professionalId || !time) return setError(`Elige ${vocab.client.toLowerCase()}, servicio, ${vocab.pro.toLowerCase()} y hora para revisar las fechas.`);
+    try {
+      setCheckingSeries(true);
+      const res = await api.post('/appointments/series', { ...seriesBody(), preview: true });
+      setSeriesDates(res.data?.dates ?? []);
+    } catch (err) {
+      setError(apiError(err, 'No se pudieron revisar las fechas.'));
+    } finally {
+      setCheckingSeries(false);
+    }
+  };
+
   const addToWaitlist = async () => {
     if (!customer || !serviceId || !branchId) return;
 
@@ -313,6 +379,8 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     setError('');
   };
 
+  const canRepeat = !isReschedule && !initial?.waitlist_id && !initial?.recall_id;
+  const repeating = canRepeat && repeat.on;
   const hasSlots = slotGroups.some((group) => group.slots.length > 0);
   const formId = 'appointment-form';
 
@@ -320,7 +388,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
     <>
     <FormDrawer
       isOpen={isOpen}
-      onClose={customerFormOpen ? () => {} : onClose}
+      onClose={customerFormOpen || quickOpen ? () => {} : onClose}
       title={reschedule ? `Reprogramar cita ${reschedule.code}` : 'Nueva cita'}
       subtitle={reschedule
         ? `${reschedule.customer?.name ?? ''} · ${reschedule.service?.name ?? ''} · ahora: ${formatDateTime(reschedule.starts_at)}`
@@ -337,6 +405,13 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
                   <div>
                     <span className="block text-sm font-semibold text-slate-800">{customer.first_name} {customer.last_name}</span>
                     <span className="block text-xs text-slate-500 font-mono">{customer.code}{customer.phone ? ` · ${customer.phone}` : ''}</span>
+                    {customerSegments.length > 0 && (
+                      <span className="flex flex-wrap gap-1 mt-1" data-customer-segments>
+                        {customerSegments.map((segment) => (
+                          <span key={segment.key} className="px-1.5 py-0.5 rounded-full bg-brand-soft/25 text-brand-ink text-[10px] font-bold">{segment.label}</span>
+                        ))}
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -380,7 +455,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
                       data-new-customer
                       title={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client.toLowerCase()}`}
                       aria-label={`${vocab.pick('client', 'Nuevo', 'Nueva')} ${vocab.client.toLowerCase()}`}
-                      onClick={() => setCustomerFormOpen(true)}
+                      onClick={() => setQuickOpen(true)}
                       className="shrink-0 p-2.5 bg-brand text-white rounded-lg hover:bg-brand-hover shadow-sm transition-colors"
                     >
                       <Plus size={18} className="stroke-[2.5]" />
@@ -392,7 +467,10 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
                         <p className="px-3.5 py-2.5 text-sm text-slate-400">Buscando...</p>
                       ) : customerResults.length === 0 ? (
                         <p className="px-3.5 py-2.5 text-sm text-slate-400">
-                          Sin resultados. Si es nuevo, regístralo con el botón +.
+                          Sin resultados.{' '}
+                          <button type="button" data-register-query onClick={() => setQuickOpen(true)} className="font-semibold text-brand-accent hover:text-brand-ink">
+                            Registrar «{customerQuery.trim()}»
+                          </button>
                         </p>
                       ) : (
                         customerResults.map((option) => (
@@ -448,7 +526,10 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
               placeholder="Seleccione..."
               value={serviceId}
               onChange={(e) => { setServiceId(String(e.target.value)); setTime(initial?.time ?? ''); setCanForce(false); }}
-              options={(context?.services ?? []).filter((s) => !branchId || !s.branch_ids?.length || s.branch_ids.includes(branchId) || s.id === serviceId).map((s) => ({ value: s.id, label: `${s.name} · ${s.duration_minutes} min` }))}
+              options={(context?.services ?? [])
+                .filter((s) => !branchId || !s.branch_ids?.length || s.branch_ids.includes(branchId) || s.id === serviceId)
+                .sort((a, b) => (a.category ?? '~').localeCompare(b.category ?? '~', 'es') || a.name.localeCompare(b.name, 'es'))
+                .map((s) => ({ value: s.id, label: `${s.category ? `${s.category} › ` : ''}${s.name} · ${s.duration_minutes} min · ${formatMoney(s.price)}` }))}
               onAdd={can('services.create') ? () => setServiceFormOpen(true) : undefined}
               addLabel="Nuevo servicio"
             />
@@ -491,6 +572,19 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             </div>
           </div>
 
+          {service && ((service.buffer_before ?? 0) > 0 || (service.buffer_after ?? 0) > 0) && context?.respect_buffers && (
+            <p className="text-xs text-slate-500" data-service-buffers>
+              {service.name} dura {service.duration_minutes} min y reserva además {[(service.buffer_before ?? 0) > 0 ? `${service.buffer_before} min de preparación` : '', (service.buffer_after ?? 0) > 0 ? `${service.buffer_after} min de limpieza` : ''].filter(Boolean).join(' y ')}.
+            </p>
+          )}
+
+          {service?.deposit && !isReschedule && (
+            <p data-deposit-note className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <Wallet size={14} className="mt-0.5 shrink-0" />
+              <span>Este servicio pide un adelanto de {service.deposit.label} al reservar en línea. Si agendas aquí, puedes cobrarlo desde la cita.</span>
+            </p>
+          )}
+
           <div>
             <span className={labelClass}>Horarios libres</span>
             {slotTaken && (
@@ -502,7 +596,34 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
               <p className="text-sm text-slate-400">Buscando horarios...</p>
             ) : !hasSlots ? (
               <div className="space-y-2" data-no-slots>
-                <p className="text-sm text-slate-400">No hay horarios libres ese día. Prueba con otra fecha.</p>
+                <p className="text-sm text-slate-400">No hay horarios libres ese día.{nextDays.length === 0 ? ' Prueba con otra fecha.' : ''}</p>
+                {nextDays.length > 0 && (
+                  <div data-next-days>
+                    <span className="block text-xs font-semibold text-slate-600 mb-1.5">Próximos días con horarios libres</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {nextDays.map((day) => (
+                        <button
+                          key={day.date}
+                          type="button"
+                          data-next-day={day.date}
+                          onClick={() => { setDate(day.date); setTime(''); setCanForce(false); }}
+                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:border-brand-accent hover:text-brand-ink first-letter:uppercase"
+                        >
+                          {formatDate(day.date, { weekday: 'short', day: 'numeric', month: 'short' })} · {day.count} {day.count === 1 ? 'libre' : 'libres'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {slotGroups.some((group) => (group.busy?.length ?? 0) > 0) && (
+                  <ul className="space-y-1" data-busy-reasons>
+                    {slotGroups.filter((group) => (group.busy?.length ?? 0) > 0).slice(0, 3).map((group) => (
+                      <li key={group.professional.id} className="text-xs text-slate-500">
+                        <span className="font-semibold text-slate-600">{group.professional.display_name}:</span> {Array.from(new Set(group.busy!.map((b) => b.reason))).slice(0, 2).join(' · ')}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {!isReschedule && !initial?.waitlist_id && customer && waitlistOn && (
                   waitlisted ? (
                     <p data-waitlisted className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
@@ -523,31 +644,51 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
               </div>
             ) : (
               <div className="space-y-3">
-                {slotGroups.filter((group) => group.slots.length > 0).map((group) => (
-                  <div key={group.professional.id} data-slots={group.professional.id}>
-                    <span className="block text-xs font-semibold text-slate-600 mb-1.5">{group.professional.display_name}</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {group.slots.map((slot) => {
-                        const isPicked = professionalId === group.professional.id && time === slot;
-                        return (
-                          <button
-                            key={slot}
-                            type="button"
-                            aria-pressed={isPicked}
-                            onClick={() => pickSlot(group.professional.id, slot)}
-                            className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                              isPicked
-                                ? 'bg-brand text-white border-brand'
-                                : 'bg-white text-slate-700 border-slate-200 hover:border-brand-accent hover:text-brand-ink'
-                            }`}
-                          >
-                            {slot}
-                          </button>
-                        );
-                      })}
+                {slotGroups.filter((group) => group.slots.length > 0).map((group) => {
+                  const busy = Object.fromEntries((group.busy ?? []).map((b) => [b.time, b.reason]));
+                  const times = [...group.slots, ...Object.keys(busy)].sort();
+                  return (
+                    <div key={group.professional.id} data-slots={group.professional.id}>
+                      <span className="block text-xs font-semibold text-slate-600 mb-1.5">{group.professional.display_name}</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {times.map((slot) => {
+                          if (busy[slot]) {
+                            return (
+                              <button
+                                key={slot}
+                                type="button"
+                                data-busy-slot={slot}
+                                title={busy[slot]}
+                                onClick={() => setBusyNote({ id: group.professional.id, text: `${slot}: ${busy[slot]}.` })}
+                                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-dashed border-slate-200 bg-slate-50 text-slate-400 line-through cursor-help"
+                              >
+                                {slot}
+                              </button>
+                            );
+                          }
+                          const isPicked = professionalId === group.professional.id && time === slot;
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              aria-pressed={isPicked}
+                              onClick={() => pickSlot(group.professional.id, slot)}
+                              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                                isPicked
+                                  ? 'bg-brand text-white border-brand'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-brand-accent hover:text-brand-ink'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {busyNote.id === group.professional.id && busyNote.text && <p data-busy-note className="mt-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{busyNote.text}</p>}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
+                <p className="text-xs text-slate-400">Los horarios tachados están ocupados: tócalos para ver el motivo.</p>
               </div>
             )}
           </div>
@@ -578,6 +719,29 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
             </div>
           )}
 
+          {canRepeat && (
+            <RepeatFields
+              value={repeat}
+              onChange={(next) => { setRepeat(next); setSeriesDates(null); }}
+              dates={seriesDates}
+              checking={checkingSeries}
+              canCheck={Boolean(customer && serviceId && professionalId && time)}
+              onCheck={checkSeries}
+            />
+          )}
+
+          {seriesResult && (
+            <div data-series-result className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+              <p className="text-sm font-semibold text-amber-800">Se agendaron {seriesResult.created} citas ({seriesResult.label.toLowerCase()}). Estas fechas no se pudieron agendar:</p>
+              <ul className="space-y-1">
+                {seriesResult.skipped.map((d) => (
+                  <li key={d.date} className="text-xs text-amber-800"><span className="font-semibold">{d.date.split('-').reverse().join('/')}</span> · {d.reason}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-700">Puedes agendarlas una por una en otro horario.</p>
+            </div>
+          )}
+
           <ErrorAlert message={error} />
 
           {canForce && (
@@ -598,6 +762,7 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
         </form>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-white sticky bottom-0 py-3 mt-auto">
+          {!seriesResult && (
           <button
             type="button"
             onClick={onClose}
@@ -605,13 +770,18 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
           >
             Cancelar
           </button>
+          )}
+          {seriesResult ? (
+            <Button type="button" variant="classic" onClick={() => { onSaved(seriesResult.first); onClose(); }}>Entendido</Button>
+          ) : (
           <Button
             type="submit"
             form={formId}
             disabled={saving || (canForce && !overrideReason.trim())} variant="classic"
           >
-            {saving ? 'Guardando...' : canForce ? 'Agendar de todos modos' : reschedule ? 'Reprogramar' : 'Agendar cita'}
+            {saving ? 'Guardando...' : repeating ? 'Agendar las citas' : canForce ? 'Agendar de todos modos' : reschedule ? 'Reprogramar' : 'Agendar cita'}
           </Button>
+          )}
         </div>
       </div>
     </FormDrawer>
@@ -624,6 +794,14 @@ export default function AppointmentForm({ isOpen, onClose, onSaved, initial, res
         setServiceId(service.id);
         setTime('');
       }}
+    />
+
+    <QuickCustomer
+      isOpen={isOpen && quickOpen}
+      query={customerQuery}
+      onClose={() => setQuickOpen(false)}
+      onChosen={(chosen) => { chooseCustomer(chosen); setCustomerQuery(''); }}
+      onFullForm={() => { setQuickOpen(false); setCustomerFormOpen(true); }}
     />
 
     <FormCustomer

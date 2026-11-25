@@ -14,7 +14,7 @@ import { AlertTriangle, Ban, CalendarCheck, CalendarClock, Clock, Copy, Loader2,
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { apiError } from '@/features/appointments/appointments';
-import { momentOf } from '@/features/sales/sales';
+import { money, momentOf } from '@/features/sales/sales';
 import CampaignForm from './CampaignForm';
 import { CAMPAIGN_BADGES, EMAIL_NOTICE, RECIPIENT_BADGES, type CampaignDetail as Detail, type CampaignOptions, type Recipient } from '../campaigns';
 
@@ -106,7 +106,16 @@ export default function CampaignDetail() {
     { id: 'failed', title: 'Con error', value: r?.failed ?? 0, note: 'reintentar en Mensajes', icon: <AlertTriangle size={18} />, color: 'text-rose-600' },
     { id: 'skipped', title: 'No se enviaron', value: r?.skipped ?? 0, note: 'sin permiso o sin correo', icon: <Ban size={18} />, color: 'text-slate-500' },
     { id: 'booked', title: 'Agendaron después', value: r?.booked.customers ?? 0, note: `${r?.booked.appointments ?? 0} citas en ${data.booked_days} días`, icon: <CalendarCheck size={18} />, color: 'text-brand-accent' },
+    { id: 'revenue', title: 'Ingresos', value: money(r?.revenue ?? 0), note: `lo que pagaron en ${data.booked_days} días`, icon: <Ticket size={18} />, color: 'text-brand-accent' },
   ];
+
+  const funnel = r ? [
+    { label: 'Le llegaría', value: (data.stats.eligible ?? r.sent + r.pending + r.failed) },
+    { label: simulated ? 'Simulados' : 'Enviados', value: r.sent },
+    ...(withWhatsApp ? [{ label: 'Entregados', value: r.delivered ?? 0 }, { label: 'Leídos', value: r.read ?? 0 }] : []),
+    { label: 'Agendaron', value: r.booked.customers },
+  ] : [];
+  const funnelTop = Math.max(1, ...funnel.map((f) => f.value));
 
   return (
     <div className="space-y-5 pb-8 font-sans" data-campaign-detail={data.id}>
@@ -189,6 +198,24 @@ export default function CampaignDetail() {
                 </div>
               ))}
             </div>
+          )}
+
+          {r && funnel.length > 0 && (
+            <section className={`${card} p-6 space-y-3`} data-card="funnel">
+              <SectionTitle><Users className="w-4 h-4 text-brand-accent" /> Embudo de resultados</SectionTitle>
+              <ul className="space-y-2">
+                {funnel.map((step) => (
+                  <li key={step.label} className="grid grid-cols-[6.5rem_minmax(0,1fr)_3rem] sm:grid-cols-[8rem_minmax(0,1fr)_4rem] items-center gap-3 text-sm" data-funnel-step={step.label}>
+                    <span className="text-slate-600">{step.label}</span>
+                    <span className="h-3 rounded-full bg-slate-100 overflow-hidden" aria-hidden>
+                      <span className="block h-full rounded-full bg-[var(--brand-link)]" style={{ width: `${Math.max(2, (step.value / funnelTop) * 100)}%` }} />
+                    </span>
+                    <span className="font-bold tabular-nums text-slate-800 text-right">{step.value}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-slate-500">Agendaron e ingresos cuentan a quienes recibieron la campaña y reservaron o pagaron en los {data.booked_days} días siguientes. Los clics en los enlaces todavía no se cuentan.</p>
+            </section>
           )}
 
           {withWhatsApp && data.whatsapp && (

@@ -149,13 +149,30 @@ export function CashMovementPanel({ session, registerName, onClose, onSaved }: P
   );
 }
 
+const DENOMINATIONS: Record<string, { bills: number[]; coins: number[] }> = {
+  PEN: { bills: [200, 100, 50, 20, 10], coins: [5, 2, 1, 0.5, 0.2, 0.1] },
+  USD: { bills: [100, 50, 20, 10, 5, 2, 1], coins: [0.5, 0.25, 0.1, 0.05, 0.01] },
+  EUR: { bills: [500, 200, 100, 50, 20, 10, 5], coins: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01] },
+};
+
 export function CloseCashPanel({ session, registerName, tolerance, onClose, onSaved }: PanelProps & { session: CashSession | null; registerName?: string; tolerance: number }) {
   const [counted, setCounted] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [byPieces, setByPieces] = useState(false);
+  const [pieces, setPieces] = useState<Record<string, string>>({});
+  const denominations = DENOMINATIONS[session?.currency ?? 'PEN'] ?? null;
+  const piecesTotal = Math.round(Object.entries(pieces).reduce((sum, [value, qty]) => sum + Number(value) * Number(qty || 0), 0) * 100) / 100;
 
-  useEffect(() => { if (session) { setCounted(''); setNotes(''); setError(''); } }, [session]);
+  useEffect(() => { if (session) { setCounted(''); setNotes(''); setError(''); setByPieces(false); setPieces({}); } }, [session]);
+
+  const setPiece = (value: number, qty: string) => {
+    const next = { ...pieces, [String(value)]: qty.replace(/\D/g, '').slice(0, 5) };
+    setPieces(next);
+    const total = Math.round(Object.entries(next).reduce((sum, [v, q]) => sum + Number(v) * Number(q || 0), 0) * 100) / 100;
+    setCounted(total > 0 ? total.toFixed(2) : '');
+  };
 
   const expected = session?.expected_amount ?? 0;
   const difference = counted === '' ? null : Math.round((Number(counted) - expected) * 100) / 100;
@@ -164,11 +181,19 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session) return;
+    if (needsNote && !notes.trim()) {
+      setError('Explica a qué se debe la diferencia en Observaciones.');
+      return;
+    }
 
     try {
       setSaving(true);
       setError('');
-      await api.post(`/cash/sessions/${session.id}/close`, { counted_amount: Number(counted || 0), notes: notes.trim() || null });
+      await api.post(`/cash/sessions/${session.id}/close`, {
+        counted_amount: Number(counted || 0),
+        notes: notes.trim() || null,
+        count: byPieces ? Object.entries(pieces).filter(([, qty]) => Number(qty || 0) > 0).map(([value, qty]) => ({ value: Number(value), quantity: Number(qty) })) : undefined,
+      });
       onSaved();
       onClose();
     } catch (err) {
@@ -208,7 +233,31 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
 
           <div>
             <label className={labelClass} htmlFor="close-counted">Efectivo contado *</label>
-            <input id="close-counted" inputMode="decimal" required autoFocus placeholder="0.00" className={inputClass} value={counted} onChange={(e) => setCounted(cleanAmount(e.target.value))} />
+            <input id="close-counted" inputMode="decimal" required autoFocus placeholder="0.00" className={inputClass} value={counted} readOnly={byPieces} onChange={(e) => setCounted(cleanAmount(e.target.value))} />
+            {denominations && (
+              <button type="button" data-count-pieces onClick={() => { setByPieces(!byPieces); if (byPieces) setPieces({}); }} className="mt-2 text-xs font-bold text-brand-accent hover:underline">
+                {byPieces ? 'Escribir solo el total' : 'Contar billetes y monedas'}
+              </button>
+            )}
+            {byPieces && denominations && (
+              <div className="mt-3 rounded-2xl border border-slate-200 p-4 space-y-3" data-pieces>
+                {([['Billetes', denominations.bills], ['Monedas', denominations.coins]] as [string, number[]][]).map(([title, values]) => (
+                  <div key={title}>
+                    <span className={sectionTitle}>{title}</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1.5">
+                      {values.map((value) => (
+                        <label key={value} className="flex items-center gap-2 rounded-xl border border-slate-200 px-2.5 py-1.5">
+                          <span className="text-xs font-semibold text-slate-700 w-16 shrink-0 tabular-nums">{money(value, session?.currency)}</span>
+                          <span className="text-xs text-slate-400">×</span>
+                          <input inputMode="numeric" aria-label={`Cantidad de ${money(value, session?.currency)}`} placeholder="0" className="w-full min-w-0 text-sm font-bold text-right bg-transparent outline-none tabular-nums" value={pieces[String(value)] ?? ''} onChange={(e) => setPiece(value, e.target.value)} />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <p className="flex justify-between text-sm font-bold text-brand-ink"><span>Total contado</span><span className="tabular-nums" data-pieces-total>{money(piecesTotal, session?.currency)}</span></p>
+              </div>
+            )}
             {difference !== null && (
               <p data-difference className={`flex items-center gap-1.5 text-sm font-semibold mt-2 ${difference === 0 ? 'text-emerald-700' : needsNote ? 'text-rose-700' : 'text-amber-700'}`}>
                 <Calculator size={15} />
@@ -219,7 +268,7 @@ export function CloseCashPanel({ session, registerName, tolerance, onClose, onSa
 
           <div>
             <label className={labelClass} htmlFor="close-notes">Observaciones{needsNote ? ' *' : ''}</label>
-            <textarea id="close-notes" rows={3} maxLength={500} required={needsNote} placeholder={needsNote ? 'Explica a qué se debe la diferencia' : 'Opcional'} className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <textarea id="close-notes" rows={3} maxLength={500} placeholder={needsNote ? 'Explica a qué se debe la diferencia' : 'Opcional'} className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
             {needsNote && <p className="text-xs text-slate-500 mt-1.5">Con una diferencia mayor que {money(tolerance, session?.currency)} hay que explicarla, y la administración recibe un aviso.</p>}
           </div>
 
@@ -378,6 +427,20 @@ export function CashSessionPanel({ sessionId, onClose, onChanged }: { sessionId:
             <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{session.closing_notes}</p>
           )}
 
+          {session.closing_count && session.closing_count.length > 0 && (
+            <section className="space-y-2" data-closing-count>
+              <span className={sectionTitle}>Billetes y monedas contados</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {session.closing_count.map((piece) => (
+                  <div key={piece.value} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                    <span className="font-semibold text-slate-800 tabular-nums">{piece.quantity} × {money(piece.value, session?.currency)}</span>
+                    <span className="block text-xs text-slate-500 tabular-nums">{money(piece.value * piece.quantity, session?.currency)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {session.review_status && (
             <section
               data-review={session.review_status}
@@ -424,6 +487,12 @@ export function CashSessionPanel({ sessionId, onClose, onChanged }: { sessionId:
                 ))}
               </div>
             </section>
+          )}
+
+          {(session.online?.count ?? 0) > 0 && (
+            <p data-session-online className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              Además, mientras estuvo abierto entraron {money(session.online!.total, session.currency)} en línea ({session.online!.count} {session.online!.count === 1 ? 'pago' : 'pagos'}). Se ven en la caja «En línea» de la sede y no cuentan para este cuadre.
+            </p>
           )}
 
           <section className="rounded-2xl border border-slate-200 overflow-hidden flex flex-col">

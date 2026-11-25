@@ -249,6 +249,13 @@ class Referrals
             'enabled' => $config['enabled'],
             'code'    => $config['enabled'] ? self::codeFor($tenant) : null,
             'reward'  => self::rewardText($config),
+            'stats'   => [
+                'referred'   => $rows->count(),
+                'subscribed' => $rows->where('status', 'rewarded')->count(),
+                'days'       => (int) $rows->where('status', 'rewarded')->where('reward_kind', 'days')->sum('reward_value'),
+                'discounts'  => $rows->where('status', 'rewarded')->where('reward_kind', 'discount')->count(),
+            ],
+            'share_text' => 'Te recomiendo este sistema para tu agenda de citas, ventas y clientes. Regístrate con mi enlace: ',
             'rows'    => $rows->map(fn ($r) => [
                 'id'           => $r->id,
                 'name'         => $r->name,

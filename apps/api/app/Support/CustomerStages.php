@@ -84,13 +84,22 @@ class CustomerStages
         });
     }
 
-    public static function stages(Tenant $tenant): array
+    private static function countable(Tenant $tenant, ?User $viewer)
+    {
+        $query = DB::table('customers')->where('tenant_id', $tenant->id)->whereNull('deleted_at');
+
+        if ($viewer && Access::ownProfessionalId($viewer) !== null) {
+            $query->whereIn('id', \App\Models\Customer::visibleTo($viewer)->select('customers.id'));
+        }
+
+        return $query;
+    }
+
+    public static function stages(Tenant $tenant, ?User $viewer = null): array
     {
         $boardId = self::boardId($tenant);
 
-        $counts = DB::table('customers')
-            ->where('tenant_id', $tenant->id)
-            ->whereNull('deleted_at')
+        $counts = self::countable($tenant, $viewer)
             ->whereNotNull('pipeline_stage_id')
             ->groupBy('pipeline_stage_id')
             ->selectRaw('pipeline_stage_id, count(*) AS total')
@@ -112,9 +121,7 @@ class CustomerStages
 
         $default = self::defaultId($stages);
         $known = array_column($stages, 'id');
-        $loose = DB::table('customers')
-            ->where('tenant_id', $tenant->id)
-            ->whereNull('deleted_at')
+        $loose = self::countable($tenant, $viewer)
             ->where(fn ($q) => $q->whereNull('pipeline_stage_id')->orWhereNotIn('pipeline_stage_id', $known ?: ['00000000-0000-0000-0000-000000000000']))
             ->count();
 

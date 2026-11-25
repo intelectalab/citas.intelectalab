@@ -17,6 +17,7 @@ export interface SitePayload {
   seo_description: string | null;
   texts: { rubros_title: string; rubros_text: string; pricing_title: string; pricing_text: string; cta_title: string; cta_text: string };
   contact_form: boolean;
+  chat?: { enabled: boolean; greeting: string };
   faq: SiteFaq[];
   analytics: { ga4_id: string | null; meta_pixel_id: string | null };
   cookie_banner: boolean;
@@ -36,6 +37,53 @@ export interface SitePayload {
     cards?: { icon: string; title: string; text?: string | null }[];
   } | null;
   brand: { logo_url?: string | null; short_name?: string | null; made_by?: string | null; made_by_url?: string | null } | null;
+  content?: SiteContent;
+}
+
+export interface SiteTestimonial {
+  text: string;
+  name: string;
+  business: string | null;
+  rubro: string | null;
+  result: string | null;
+}
+
+export interface SiteContent {
+  promo: { text: string; coupon: string | null } | null;
+  hero_video: string | null;
+  video: { url: string; title: string | null; chapters: { time: string; label: string }[] } | null;
+  trust_badges: { label: string; detail: string | null }[];
+  results: { value: string; label: string }[];
+  testimonials: SiteTestimonial[];
+  partners: { title: string; text: string | null; conditions: string | null } | null;
+  popup: { title: string; text: string | null; delay: number } | null;
+  demo: boolean;
+}
+
+export interface SiteAddon {
+  code: string;
+  name: string;
+  description: string | null;
+  monthly_price: number;
+  currency: string;
+  currency_symbol: string;
+}
+
+export const EMPTY_CONTENT: SiteContent = {
+  promo: null, hero_video: null, video: null, trust_badges: [], results: [], testimonials: [], partners: null, popup: null, demo: true,
+};
+
+export function videoEmbed(url: string): string | null {
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,20})/);
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d{5,12})/);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  return null;
+}
+
+export function secondsOf(time: string): number {
+  const [m, s] = time.split(':').map(Number);
+  return (m || 0) * 60 + (s || 0);
 }
 
 export interface WebPlan extends PublicPlan {
@@ -58,6 +106,16 @@ export interface WebBusinessType {
   categories?: { name: string; services: { name: string; minutes: number; price: number; virtual: boolean; kind: string }[] }[];
   modules_off?: string[];
   dependents?: Record<string, unknown>;
+  group?: string | null;
+  record?: { name: string; fields: string[] } | null;
+  content?: {
+    h1: string;
+    sub: string;
+    pains: { before: string; after: string }[];
+    feats: { title: string; text: string }[];
+    plan: string | null;
+    faq: SiteFaq[];
+  } | null;
 }
 
 export interface WebPost {
@@ -76,6 +134,8 @@ export interface WebPost {
   author: string | null;
   reading_minutes: number;
   body: string | null;
+  keyword?: string | null;
+  views?: number;
 }
 
 export interface SiteData {
@@ -83,6 +143,9 @@ export interface SiteData {
   plans: WebPlan[];
   business_types: WebBusinessType[];
   posts: WebPost[];
+  addons?: SiteAddon[];
+  rubro_groups?: { name: string; benefits: string[] }[];
+  heard_from?: { value: string; label: string }[];
 }
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';

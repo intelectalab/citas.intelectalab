@@ -19,6 +19,45 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryController extends Controller
 {
+    private const MOVEMENTS_LIMIT = 2000;
+
+    private function withReferences($movements)
+    {
+        $ids = fn (string $type) => $movements->where('reference_type', $type)->pluck('reference_id')->filter()->unique()->values()->all();
+        $codes = [
+            'sale'           => DB::table('sales')->whereIn('id', $ids('sale'))->pluck('code', 'id')->all(),
+            'purchase_order' => DB::table('purchase_orders')->whereIn('id', $ids('purchase_order'))->pluck('code', 'id')->all(),
+            'transfer'       => DB::table('stock_transfers')->whereIn('id', $ids('transfer'))->pluck('code', 'id')->all(),
+            'appointment'    => DB::table('appointments')->whereIn('id', $ids('appointment'))->pluck('code', 'id')->all(),
+        ];
+        $labels = ['sale' => 'Venta', 'purchase_order' => 'Compra', 'transfer' => 'Traslado', 'appointment' => 'Cita'];
+
+        return $movements->map(function (array $m) use ($codes, $labels) {
+            $code = $codes[$m['reference_type']][$m['reference_id']] ?? null;
+
+            return $m + ['reference_label' => $code ? ($labels[$m['reference_type']] ?? '') . ' ' . $code : null];
+        })->values();
+    }
+
+    public static function validRuc(string $ruc): bool
+    {
+        if (!preg_match('/^(10|15|17|20)\d{9}$/', $ruc)) {
+            return false;
+        }
+
+        $weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+        $sum = 0;
+
+        foreach ($weights as $i => $weight) {
+            $sum += (int) $ruc[$i] * $weight;
+        }
+
+        $check = 11 - ($sum % 11);
+        $check = $check === 10 ? 0 : ($check === 11 ? 1 : $check);
+
+        return $check === (int) $ruc[10];
+    }
+
     private function context(Request $request, string $permission = 'inventory.view'): array
     {
         $user = $request->user();
@@ -125,7 +164,7 @@ class InventoryController extends Controller
             ->where('m.tenant_id', $tenant->id)
             ->when($branchLimit, fn ($q) => $q->where('w.branch_id', $branchLimit))
             ->orderByDesc('m.created_at')
-            ->limit(300)
+            ->limit(self::MOVEMENTS_LIMIT + 1)
             ->get([
                 'm.id',
                 'm.warehouse_id',
@@ -164,6 +203,9 @@ class InventoryController extends Controller
                 'by'             => Person::name($m) ?: 'Sistema',
                 'created_at'     => Carbon::parse($m->created_at)->toIso8601String(),
             ])->values();
+
+        $movementsCut = $movements->count() > self::MOVEMENTS_LIMIT;
+        $movements = $this->withReferences($movements->take(self::MOVEMENTS_LIMIT)->values());
 
         $transfersRaw = DB::table('stock_transfers as t')
             ->join('warehouses as wf', 'wf.id', '=', 't.from_warehouse_id')
@@ -346,6 +388,7 @@ class InventoryController extends Controller
             'kinds'      => collect(ProductController::KINDS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'products'   => $products,
             'movements'  => $movements,
+            'movements_cut' => $movementsCut ? self::MOVEMENTS_LIMIT : null,
             'transfers'  => $transfers,
             'suppliers'  => $suppliers,
             'purchases'  => $purchases,
@@ -384,6 +427,14 @@ class InventoryController extends Controller
 
         if ($validated['mode'] === 'exit' && empty(trim((string) ($validated['reason'] ?? '')))) {
             throw ValidationException::withMessages(['reason' => 'Indica el motivo de la salida o ajuste.']);
+        }
+
+        if ($validated['mode'] === 'count' && empty(trim((string) ($validated['reason'] ?? '')))) {
+            $current = (float) DB::table('stock_balances')->where('warehouse_id', $warehouse->id)->where('product_id', $validated['product_id'])->value('quantity');
+
+            if (abs(round((float) $validated['quantity'], 4) - round($current, 4)) > 0.00001) {
+                throw ValidationException::withMessages(['reason' => 'El conteo no coincide con el stock del sistema: cuenta por qué (por ejemplo, «se rompió un frasco» o «faltó registrar una venta»).']);
+            }
         }
 
         $movement = DB::transaction(function () use ($tenant, $user, $validated) {
@@ -1088,6 +1139,22 @@ class InventoryController extends Controller
             'name.required' => 'Escribe el nombre o razón social del proveedor.',
             'email.email'   => 'Escribe un correo electrónico válido.',
         ]);
+
+        $document = preg_replace('/\s+/', '', (string) ($validated['document_number'] ?? ''));
+
+        if ($document !== '' && !(preg_match('/^\d{8}$/', $document) || self::validRuc($document))) {
+            throw ValidationException::withMessages([
+                'document_number' => strlen($document) === 11 && ctype_digit($document)
+                    ? 'Ese RUC no es válido: revisa los 11 dígitos.'
+                    : 'Escribe el RUC de 11 dígitos (o el DNI de 8 si es una persona).',
+            ]);
+        }
+
+        if ($document !== '' && DB::table('suppliers')->where('tenant_id', $tenantId)->where('document_number', $document)->when($ignoreId, fn ($q, $id) => $q->where('id', '!=', $id))->exists()) {
+            throw ValidationException::withMessages(['document_number' => 'Ya tienes un proveedor con ese RUC.']);
+        }
+
+        $validated['document_number'] = $document ?: null;
 
         return [
             'name'            => trim($validated['name']),

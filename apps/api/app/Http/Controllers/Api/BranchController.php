@@ -49,7 +49,7 @@ class BranchController extends Controller
             return 1;
         }
 
-        $limit = $tenant->activeSubscription?->plan?->limits['branches'] ?? null;
+        $limit = $tenant->planLimits()['branches'] ?? null;
 
         return is_numeric($limit) ? (int) $limit : null;
     }
@@ -60,7 +60,7 @@ class BranchController extends Controller
 
         $all = Branch::where('tenant_id', $tenant->id)->orderByRaw("status = 'active' desc")->orderBy('created_at')->get();
         $active = $all->where('status', 'active')->count();
-        $branches = ($limit = Access::branchLimit($request->user())) ? $all->where('id', $limit)->values() : $all;
+        $branches = ($limit = Access::ownBranchLimit($request->user())) ? $all->where('id', $limit)->values() : $all;
         $planLimit = $this->limit($tenant);
 
         return response()->json([

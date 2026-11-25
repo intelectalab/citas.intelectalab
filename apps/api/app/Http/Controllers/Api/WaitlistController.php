@@ -197,6 +197,15 @@ class WaitlistController extends Controller
         }
 
         $wasOpen = $entry->isOpen();
+        $notice = null;
+
+        if ($to === WaitlistEntry::NOTIFIED && $entry->status !== WaitlistEntry::NOTIFIED) {
+            $notice = \App\Support\Messaging::waitlistNotice($tenant, $entry, $request->user());
+
+            if (!empty($notice['blocked'])) {
+                return response()->json(['message' => $notice['message'], 'code' => 'NOT_SENT'], 422);
+            }
+        }
 
         $entry->update([
             'status'      => $to,
@@ -214,7 +223,7 @@ class WaitlistController extends Controller
             ]);
         }
 
-        return response()->json($this->present($entry->fresh(self::RELATIONS), $tenant, $this->today($tenant)));
+        return response()->json($this->present($entry->fresh(self::RELATIONS), $tenant, $this->today($tenant)) + ($notice ? ['notice' => $notice] : []));
     }
 
     public function slots(Request $request, string $entry)

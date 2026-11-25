@@ -1,0 +1,785 @@
+{
+    "salon": {
+        "rooms": [
+            {
+                "name": "Sillón 1",
+                "type": "sillon",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón 2",
+                "type": "sillon",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón 3",
+                "type": "sillon",
+                "kind": "room"
+            },
+            {
+                "name": "Mesa de uñas",
+                "type": "mesa_unas",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón de pedicure",
+                "type": "pedicure",
+                "kind": "room"
+            },
+            {
+                "name": "Cabina",
+                "type": "cabina",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "CAB-01": [
+                "sillon"
+            ],
+            "CAB-02": [
+                "sillon"
+            ],
+            "CAB-03": [
+                "sillon"
+            ],
+            "CAB-04": [
+                "sillon"
+            ],
+            "CAB-05": [
+                "sillon"
+            ],
+            "UNA-01": [
+                "mesa_unas"
+            ],
+            "UNA-02": [
+                "mesa_unas"
+            ],
+            "UNA-03": [
+                "pedicure"
+            ],
+            "FAC-01": [
+                "cabina"
+            ],
+            "MAS-01": [
+                "cabina"
+            ]
+        },
+        "packages": [
+            {
+                "name": "Pack 5 manicures",
+                "price": 130,
+                "validity_days": 90,
+                "items": [
+                    {
+                        "code": "UNA-01",
+                        "sessions": 5
+                    }
+                ]
+            }
+        ],
+        "memberships": [
+            {
+                "name": "Club mensual",
+                "price": 99,
+                "discount_percent": 10,
+                "items": [
+                    {
+                        "code": "CAB-02",
+                        "sessions": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "barber": {
+        "rooms": [
+            {
+                "name": "Sillón 1",
+                "type": "sillon_barbero",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón 2",
+                "type": "sillon_barbero",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón 3",
+                "type": "sillon_barbero",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "COR-01": [
+                "sillon_barbero"
+            ],
+            "COR-02": [
+                "sillon_barbero"
+            ],
+            "COR-03": [
+                "sillon_barbero"
+            ],
+            "BAR-01": [
+                "sillon_barbero"
+            ],
+            "BAR-02": [
+                "sillon_barbero"
+            ],
+            "BAR-03": [
+                "sillon_barbero"
+            ]
+        },
+        "packages": [
+            {
+                "name": "4 cortes",
+                "price": 110,
+                "validity_days": 60,
+                "items": [
+                    {
+                        "code": "COR-01",
+                        "sessions": 4
+                    }
+                ]
+            }
+        ],
+        "memberships": [
+            {
+                "name": "Barbería ilimitada",
+                "price": 89,
+                "discount_percent": 0,
+                "items": [
+                    {
+                        "code": "COR-01",
+                        "sessions": 4
+                    },
+                    {
+                        "code": "BAR-01",
+                        "sessions": 4
+                    }
+                ]
+            }
+        ]
+    },
+    "nails": {
+        "rooms": [
+            {
+                "name": "Mesa de uñas 1",
+                "type": "mesa_unas",
+                "kind": "room"
+            },
+            {
+                "name": "Mesa de uñas 2",
+                "type": "mesa_unas",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón de pedicure",
+                "type": "pedicure",
+                "kind": "room"
+            },
+            {
+                "name": "Camilla de pestañas",
+                "type": "camilla_pestanas",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "UNA-01": [
+                "mesa_unas"
+            ],
+            "UNA-02": [
+                "mesa_unas"
+            ],
+            "UNA-03": [
+                "mesa_unas"
+            ],
+            "UNA-04": [
+                "mesa_unas"
+            ],
+            "UNA-05": [
+                "pedicure"
+            ],
+            "PES-01": [
+                "camilla_pestanas"
+            ],
+            "PES-02": [
+                "camilla_pestanas"
+            ],
+            "PES-03": [
+                "camilla_pestanas"
+            ],
+            "PES-04": [
+                "camilla_pestanas"
+            ],
+            "CEJ-01": [
+                "camilla_pestanas"
+            ]
+        },
+        "packages": [
+            {
+                "name": "4 retoques de pestañas",
+                "price": 280,
+                "validity_days": 120,
+                "items": [
+                    {
+                        "code": "PES-03",
+                        "sessions": 4
+                    }
+                ]
+            }
+        ],
+        "memberships": [
+            {
+                "name": "Club uñas mensual",
+                "price": 89,
+                "discount_percent": 10,
+                "items": [
+                    {
+                        "code": "UNA-01",
+                        "sessions": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "aesthetics": {
+        "rooms": [
+            {
+                "name": "Cabina 1",
+                "type": "cabina",
+                "kind": "room"
+            },
+            {
+                "name": "Cabina 2",
+                "type": "cabina",
+                "kind": "room"
+            },
+            {
+                "name": "Equipo láser diodo",
+                "type": "equipo_laser",
+                "kind": "equipment"
+            },
+            {
+                "name": "Consultorio médico",
+                "type": "consultorio",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "FAC-01": [
+                "cabina"
+            ],
+            "FAC-02": [
+                "cabina"
+            ],
+            "FAC-03": [
+                "cabina"
+            ],
+            "LAS-01": [
+                "equipo_laser"
+            ],
+            "LAS-02": [
+                "equipo_laser"
+            ],
+            "MED-01": [
+                "consultorio"
+            ],
+            "MED-02": [
+                "consultorio"
+            ],
+            "MED-03": [
+                "consultorio"
+            ]
+        },
+        "packages": [
+            {
+                "name": "Láser zona pequeña x6",
+                "price": 450,
+                "validity_days": 240,
+                "items": [
+                    {
+                        "code": "LAS-01",
+                        "sessions": 6
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "tattoo": {
+        "rooms": [
+            {
+                "name": "Camilla 1",
+                "type": "camilla_tattoo",
+                "kind": "room"
+            },
+            {
+                "name": "Camilla 2",
+                "type": "camilla_tattoo",
+                "kind": "room"
+            },
+            {
+                "name": "Cabina de piercing",
+                "type": "cabina_piercing",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "TAT-01": [
+                "camilla_tattoo"
+            ],
+            "TAT-02": [
+                "camilla_tattoo"
+            ],
+            "TAT-03": [
+                "camilla_tattoo"
+            ],
+            "TAT-04": [
+                "camilla_tattoo"
+            ],
+            "TAT-05": [
+                "camilla_tattoo"
+            ],
+            "PIE-01": [
+                "cabina_piercing"
+            ],
+            "PIE-02": [
+                "cabina_piercing"
+            ],
+            "PIE-03": [
+                "cabina_piercing"
+            ]
+        },
+        "packages": [],
+        "memberships": []
+    },
+    "dental": {
+        "rooms": [
+            {
+                "name": "Consultorio 1",
+                "type": "consultorio",
+                "kind": "room"
+            },
+            {
+                "name": "Consultorio 2",
+                "type": "consultorio",
+                "kind": "room"
+            },
+            {
+                "name": "Equipo de rayos X",
+                "type": "rayos_x",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "GEN-01": [
+                "consultorio"
+            ],
+            "GEN-02": [
+                "consultorio"
+            ],
+            "GEN-03": [
+                "consultorio"
+            ],
+            "GEN-04": [
+                "consultorio"
+            ],
+            "GEN-05": [
+                "rayos_x"
+            ],
+            "ORT-01": [
+                "consultorio"
+            ],
+            "END-01": [
+                "consultorio"
+            ],
+            "EST-01": [
+                "consultorio"
+            ]
+        },
+        "packages": [
+            {
+                "name": "Ortodoncia: 12 controles",
+                "price": 1200,
+                "validity_days": 400,
+                "items": [
+                    {
+                        "code": "ORT-01",
+                        "sessions": 12
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "physio": {
+        "rooms": [
+            {
+                "name": "Camilla 1",
+                "type": "camilla",
+                "kind": "room"
+            },
+            {
+                "name": "Camilla 2",
+                "type": "camilla",
+                "kind": "room"
+            },
+            {
+                "name": "Camilla 3",
+                "type": "camilla",
+                "kind": "room"
+            },
+            {
+                "name": "Gimnasio de rehabilitación",
+                "type": "gimnasio",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "EVA-01": [
+                "camilla"
+            ],
+            "TER-01": [
+                "camilla"
+            ],
+            "TER-02": [
+                "camilla"
+            ],
+            "TER-03": [
+                "camilla"
+            ],
+            "TER-04": [
+                "gimnasio"
+            ]
+        },
+        "packages": [
+            {
+                "name": "10 sesiones de terapia física",
+                "price": 700,
+                "validity_days": 120,
+                "items": [
+                    {
+                        "code": "TER-01",
+                        "sessions": 10
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "podiatry": {
+        "rooms": [
+            {
+                "name": "Sillón podológico 1",
+                "type": "sillon_podologico",
+                "kind": "room"
+            },
+            {
+                "name": "Sillón podológico 2",
+                "type": "sillon_podologico",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "POD-01": [
+                "sillon_podologico"
+            ],
+            "POD-02": [
+                "sillon_podologico"
+            ],
+            "POD-03": [
+                "sillon_podologico"
+            ],
+            "POD-04": [
+                "sillon_podologico"
+            ],
+            "POD-05": [
+                "sillon_podologico"
+            ],
+            "POD-06": [
+                "sillon_podologico"
+            ]
+        },
+        "packages": [
+            {
+                "name": "4 quiropodias",
+                "price": 240,
+                "validity_days": 150,
+                "items": [
+                    {
+                        "code": "POD-02",
+                        "sessions": 4
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "psychology": {
+        "rooms": [
+            {
+                "name": "Consultorio A",
+                "type": "consultorio",
+                "kind": "room"
+            },
+            {
+                "name": "Consultorio B",
+                "type": "consultorio",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "PSI-01": [
+                "consultorio"
+            ],
+            "PSI-02": [
+                "consultorio"
+            ],
+            "PSI-03": [
+                "consultorio"
+            ]
+        },
+        "packages": [
+            {
+                "name": "4 sesiones",
+                "price": 440,
+                "validity_days": 60,
+                "items": [
+                    {
+                        "code": "PSI-02",
+                        "sessions": 4
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "kids_therapy": {
+        "rooms": [
+            {
+                "name": "Sala de terapia 1",
+                "type": "sala_terapia",
+                "kind": "room"
+            },
+            {
+                "name": "Sala de terapia 2",
+                "type": "sala_terapia",
+                "kind": "room"
+            },
+            {
+                "name": "Sala sensorial",
+                "type": "sala_sensorial",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "EVA-01": [
+                "sala_terapia"
+            ],
+            "EVA-02": [
+                "sala_terapia"
+            ],
+            "TER-01": [
+                "sala_terapia"
+            ],
+            "TER-02": [
+                "sala_terapia"
+            ],
+            "TER-03": [
+                "sala_terapia"
+            ],
+            "TER-04": [
+                "sala_sensorial"
+            ]
+        },
+        "packages": [
+            {
+                "name": "8 sesiones de terapia de lenguaje",
+                "price": 640,
+                "validity_days": 70,
+                "items": [
+                    {
+                        "code": "TER-01",
+                        "sessions": 8
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "nutrition": {
+        "rooms": [
+            {
+                "name": "Consultorio",
+                "type": "consultorio",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "NUT-01": [
+                "consultorio"
+            ],
+            "NUT-02": [
+                "consultorio"
+            ],
+            "NUT-04": [
+                "consultorio"
+            ],
+            "NUT-05": [
+                "consultorio"
+            ]
+        },
+        "packages": [
+            {
+                "name": "Plan 3 meses (6 controles)",
+                "price": 360,
+                "validity_days": 100,
+                "items": [
+                    {
+                        "code": "NUT-02",
+                        "sessions": 6
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "vet": {
+        "rooms": [
+            {
+                "name": "Consultorio 1",
+                "type": "consultorio",
+                "kind": "room"
+            },
+            {
+                "name": "Consultorio 2",
+                "type": "consultorio",
+                "kind": "room"
+            },
+            {
+                "name": "Quirófano",
+                "type": "quirofano",
+                "kind": "room"
+            },
+            {
+                "name": "Mesa de grooming 1",
+                "type": "mesa_grooming",
+                "kind": "room"
+            },
+            {
+                "name": "Mesa de grooming 2",
+                "type": "mesa_grooming",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "VET-01": [
+                "consultorio"
+            ],
+            "VET-02": [
+                "consultorio"
+            ],
+            "VET-03": [
+                "consultorio"
+            ],
+            "VET-04": [
+                "consultorio"
+            ],
+            "CIR-01": [
+                "quirofano"
+            ],
+            "GRO-01": [
+                "mesa_grooming"
+            ],
+            "GRO-02": [
+                "mesa_grooming"
+            ]
+        },
+        "packages": [
+            {
+                "name": "Plan cachorro (3 vacunas + 3 desparasitaciones)",
+                "price": 250,
+                "validity_days": 120,
+                "items": [
+                    {
+                        "code": "VET-02",
+                        "sessions": 3
+                    },
+                    {
+                        "code": "VET-03",
+                        "sessions": 3
+                    }
+                ]
+            }
+        ],
+        "memberships": []
+    },
+    "grooming": {
+        "rooms": [
+            {
+                "name": "Mesa de grooming 1",
+                "type": "mesa_grooming",
+                "kind": "room"
+            },
+            {
+                "name": "Mesa de grooming 2",
+                "type": "mesa_grooming",
+                "kind": "room"
+            },
+            {
+                "name": "Tina de baño",
+                "type": "tina",
+                "kind": "room"
+            }
+        ],
+        "service_rooms": {
+            "BAN-01": [
+                "mesa_grooming"
+            ],
+            "BAN-02": [
+                "mesa_grooming"
+            ],
+            "BAN-03": [
+                "mesa_grooming"
+            ],
+            "COR-01": [
+                "mesa_grooming"
+            ],
+            "COR-02": [
+                "mesa_grooming"
+            ],
+            "COR-03": [
+                "mesa_grooming"
+            ],
+            "COR-04": [
+                "mesa_grooming"
+            ]
+        },
+        "packages": [
+            {
+                "name": "4 baños (raza pequeña)",
+                "price": 160,
+                "validity_days": 120,
+                "items": [
+                    {
+                        "code": "BAN-01",
+                        "sessions": 4
+                    }
+                ]
+            }
+        ],
+        "memberships": [
+            {
+                "name": "Club baño mensual",
+                "price": 79,
+                "discount_percent": 10,
+                "items": [
+                    {
+                        "code": "BAN-01",
+                        "sessions": 2
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -111,6 +111,10 @@ class Cart
                     self::fail($field, "La cita {$code} está " . mb_strtolower(AppointmentFlow::name($tenant, $appointment->status)) . ': no se cobra.');
                 }
 
+                if ($appointment->customer_package_id && Packages::ready()) {
+                    self::fail($field, "La cita {$code} se paga con un paquete: no se cobra aparte.");
+                }
+
                 if ((float) $appointment->price <= 0) {
                     self::fail($field, "La cita {$code} no tiene un monto por cobrar: su servicio se agendó con precio cero.");
                 }
@@ -194,7 +198,7 @@ class Cart
                     'reference_id'    => $service->id,
                     'description'     => $service->name,
                     'quantity'        => $quantity,
-                    'unit_price'      => round((float) $service->price, 2),
+                    'unit_price'      => round((float) $service->priceAt($branch->id), 2),
                     'professional_id' => $professional?->id,
                     'professional'    => $professional?->display_name,
                     'appointment_id'  => null,
@@ -280,9 +284,34 @@ class Cart
             $lines[$position] = Memberships::line($tenant, $customer, $item, $field, $currency);
         }
 
+        $percents = [];
+
+        foreach ($items as $index => $item) {
+            $pct = round((float) ($item['discount_percent'] ?? 0), 2);
+
+            if ($pct <= 0) {
+                continue;
+            }
+
+            if (!in_array($item['type'] ?? null, self::LINE_DISCOUNT_TYPES, true)) {
+                self::fail("items.{$index}", 'El descuento por línea es solo para servicios, productos y citas.');
+            }
+
+            if ($pct > 100) {
+                self::fail("items.{$index}", 'El descuento de una línea va de 1 a 100 %.');
+            }
+
+            $percents[($item['type'] ?? '') . ':' . ($item['id'] ?? '')] = $pct;
+        }
+
         foreach ($lines as &$line) {
             $line['discount'] = 0.0;
             $line['total'] = round($line['unit_price'] * $line['quantity'], 2);
+
+            if (isset($percents[$line['type'] . ':' . $line['id']])) {
+                $line['discount_percent'] = $percents[$line['type'] . ':' . $line['id']];
+                $line['no_membership'] = true;
+            }
         }
         unset($line);
 
@@ -291,6 +320,18 @@ class Cart
         }
 
         $membership = Memberships::apply($tenant, $customer, $lines, $sale?->id);
+        $lineDiscount = 0.0;
+
+        foreach ($lines as &$line) {
+            if (!empty($line['discount_percent'])) {
+                $base = round($line['unit_price'] * $line['quantity'], 2);
+                $line['discount'] = round($base * $line['discount_percent'] / 100, 2);
+                $line['total'] = round($base - $line['discount'], 2);
+                $line['details'] = ($line['details'] ?? null ?: []) + ['discount_percent' => $line['discount_percent']];
+                $lineDiscount += $line['discount'];
+            }
+        }
+        unset($line);
 
         Inventory::assertStockForItems($tenant, $branch->id, $lines);
 
@@ -303,6 +344,8 @@ class Cart
         $code = trim((string) ($input['coupon_code'] ?? ''));
         $applied = $code !== '' && $gross > 0 ? Coupons::check($tenant->id, $code, $gross, $currency) : null;
         $rules = Sales::rules($tenant);
+        $manual = self::manualDiscount($tenant, $user, $input, $gross, (float) ($applied['discount'] ?? 0), $currency, round($lineDiscount, 2));
+        $tip = self::tip($tenant, $input, $gross, $currency);
 
         return [
             'branch'   => $branch,
@@ -312,12 +355,86 @@ class Cart
             'gross'    => $gross,
             'applied'  => $applied,
             'membership' => $membership,
-            'totals'   => Sales::totals($rules, $gross, $applied['discount'] ?? 0) + [
+            'manual'   => $manual,
+            'line_discount' => round($lineDiscount, 2),
+            'totals'   => Sales::totals($rules, $gross, ($applied['discount'] ?? 0) + $manual['amount'], $tip) + [
+                'manual_discount'    => $manual['amount'],
                 'tax_rate'           => $rules['tax_rate'],
                 'prices_include_tax' => $rules['prices_include_tax'],
                 'currency'           => $currency,
             ],
         ];
+    }
+
+    public const LINE_DISCOUNT_TYPES = ['service', 'product', 'appointment'];
+
+    public const APPROVAL_MINUTES = 10;
+
+    public static function approval(Tenant $tenant, ?string $token): ?array
+    {
+        if (!$token || !preg_match('/^[A-Za-z0-9]{40}$/', $token)) {
+            return null;
+        }
+
+        $approval = \Illuminate\Support\Facades\Cache::get('pos-discount-approval:' . $token);
+
+        return is_array($approval) && ($approval['tenant_id'] ?? null) === $tenant->id ? $approval : null;
+    }
+
+    private static function manualDiscount(Tenant $tenant, User $user, array $input, float $gross, float $coupon, string $currency, float $lineDiscount = 0.0): array
+    {
+        $amount = round(max(0, (float) ($input['manual_discount'] ?? 0)), 2);
+        $reason = trim((string) ($input['discount_reason'] ?? '')) ?: null;
+
+        if ($amount <= 0 && $lineDiscount <= 0) {
+            return ['amount' => 0.0, 'reason' => null];
+        }
+
+        if (!Sales::discountReady()) {
+            self::fail('manual_discount', 'Falta actualizar la base de datos para dar descuentos a mano: ejecuta php artisan migrate.');
+        }
+
+        $room = round(max(0, $gross - $coupon), 2);
+
+        if ($amount > $room + 0.001) {
+            self::fail('manual_discount', 'El descuento no puede pasar de ' . Currency::format($room, $currency) . ', que es lo que queda por cobrar.');
+        }
+
+        $limit = Sales::discountRules($tenant)['max_discount'];
+        $before = $gross + $lineDiscount;
+        $percent = $before > 0 ? ($amount + $lineDiscount) * 100 / $before : 100;
+        $approval = self::approval($tenant, $input['discount_approval'] ?? null);
+
+        if ($percent > $limit + 0.001 && !$user->allows('pos.discount') && !$approval) {
+            self::fail('manual_discount', $limit <= 0
+                ? 'Tu empresa no permite descuentos a mano sin autorización. Pide a alguien con el permiso "Descuento alto" que lo autorice con su clave.'
+                : 'El descuento es de ' . rtrim(rtrim(number_format($percent, 1), '0'), '.') . ' % y tu tope es de ' . rtrim(rtrim(number_format($limit, 1), '0'), '.') . ' %. Para dar más, pide a alguien con el permiso "Descuento alto" que lo autorice con su clave.');
+        }
+
+        if ($amount <= 0) {
+            return ['amount' => 0.0, 'reason' => null, 'approved_by' => $approval['name'] ?? null, 'approved_id' => $approval['user_id'] ?? null];
+        }
+
+        return ['amount' => $amount, 'reason' => $reason ? mb_substr($reason, 0, 255) : null, 'approved_by' => $approval['name'] ?? null, 'approved_id' => $approval['user_id'] ?? null];
+    }
+
+    private static function tip(Tenant $tenant, array $input, float $gross, string $currency): float
+    {
+        $tip = round(max(0, (float) ($input['tip'] ?? 0)), 2);
+
+        if ($tip <= 0) {
+            return 0.0;
+        }
+
+        if (!Sales::discountRules($tenant)['tips_enabled']) {
+            self::fail('tip', 'Tu empresa no recibe propinas en el cobro. Se encienden en Configuración → Ventas y caja.');
+        }
+
+        if ($tip > max($gross, 0)) {
+            self::fail('tip', 'La propina no puede ser mayor que ' . Currency::format($gross, $currency) . ', el valor de la venta.');
+        }
+
+        return $tip;
     }
 
     private static function packageLine(Tenant $tenant, array $item, string $field, string $currency): array
@@ -428,6 +545,7 @@ class Cart
                 'quantity'     => $line['quantity'],
                 'unit_price'   => $line['unit_price'],
                 'discount'     => $line['discount'] ?? 0,
+                'discount_percent' => $line['discount_percent'] ?? null,
                 'total'        => $line['total'],
                 'membership'   => isset($line['membership']) ? ['code' => $line['membership']['code'], 'included' => $line['membership']['included'], 'label' => $line['membership']['label']] : null,
                 'membership_plan' => $line['membership_plan'] ?? null,
@@ -439,6 +557,7 @@ class Cart
             ], $resolved['lines']),
             'totals'    => $resolved['totals'],
             'membership' => $resolved['membership'] ?? null,
+            'manual'    => $resolved['manual'] ?? ['amount' => 0.0, 'reason' => null],
             'coupon'    => $resolved['applied'] ? Coupons::summary($resolved['applied']['coupon'], $resolved['applied']['discount'], $resolved['currency']) : null,
         ];
     }
@@ -488,8 +607,13 @@ class Cart
                 'balance'            => $totals['total'],
                 'tax_rate'           => $totals['tax_rate'],
                 'prices_include_tax' => $totals['prices_include_tax'],
+                'tip'                => $totals['tip'],
                 'updated_at'         => now(),
-            ] + Currency::column($resolved['currency']);
+            ] + Currency::column($resolved['currency']) + (Sales::discountReady() ? [
+                'manual_discount' => $resolved['manual']['amount'],
+                'discount_reason' => $resolved['manual']['reason'],
+                'discount_by'     => $resolved['manual']['amount'] > 0 ? ($resolved['manual']['approved_id'] ?? $user->id) : null,
+            ] : []);
 
             if ($sale) {
                 PaymentLinks::cancelForSale($sale->id, 'La venta cambió: genera un link nuevo.');
@@ -552,7 +676,7 @@ class Cart
             if ((float) $totals['total'] <= 0 && Memberships::covered($resolved['lines'])) {
                 DB::table('sales')->where('id', $id)->update(['status' => 'paid', 'balance' => 0, 'paid_at' => now(), 'updated_at' => now()]);
                 $paid = DB::table('sales')->where('id', $id)->first();
-                Inventory::deductForSale($tenant, $paid, $user);
+                Inventory::deductForSale($tenant, $paid, $user, strict: true, errorField: 'items');
                 Commissions::forSale($tenant, $paid);
                 Webhooks::salePaid($tenant->id, $paid);
             }
@@ -590,6 +714,9 @@ class Cart
             'branch_id'    => $sale->branch_id,
             'customer'     => $customer ? self::customer($customer) : null,
             'coupon_code'  => $coupon,
+            'manual_discount' => round((float) ($sale->manual_discount ?? 0), 2),
+            'discount_reason' => $sale->discount_reason ?? null,
+            'tip'          => round((float) ($sale->tip ?? 0), 2),
             'edit_blocked' => self::editBlocked($sale),
             'items'        => DB::table('sale_items')->where('sale_id', $sale->id)->when(Schema::hasColumn('sale_items', 'position'), fn ($q) => $q->orderBy('position'))->get()->map(fn ($i) => [
                 'type'            => $i->appointment_id ? 'appointment' : $i->item_type,
@@ -597,6 +724,7 @@ class Cart
                 'quantity'        => (int) round((float) $i->quantity),
                 'professional_id' => $i->appointment_id ? null : $i->professional_id,
                 'no_membership'   => (bool) ((json_decode((string) ($i->details ?? ''), true) ?: [])['no_membership'] ?? false),
+                'discount_percent' => (float) ((json_decode((string) ($i->details ?? ''), true) ?: [])['discount_percent'] ?? 0) ?: null,
                 'details'         => self::shownDetails($i->details ?? null),
             ])->values(),
         ];

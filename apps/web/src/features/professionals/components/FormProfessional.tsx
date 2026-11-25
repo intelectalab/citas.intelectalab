@@ -2,7 +2,7 @@
 
 import Button from '@/app/components/common/Button';
 import { ErrorAlert } from '@/app/components/common/Alert';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, UserPlus } from 'lucide-react';
@@ -11,6 +11,20 @@ import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
 import Switch from '@/app/components/common/Switch';
 import SignatureField, { saveSignature, type SignatureChange } from './SignatureField';
+import Link from 'next/link';
+import { ColorPicker } from '@/features/customers/components/TagChip';
+import { CATEGORY_COLORS } from '@/features/services/services';
+
+const AGENDA_COLORS = ['#022340', ...CATEGORY_COLORS];
+
+interface FutureAppointment {
+  id: string;
+  code: string;
+  starts_at: string;
+  customer: string | null;
+  service: string | null;
+  branch: string | null;
+}
 
 interface Professional {
   id: string;
@@ -23,6 +37,8 @@ interface Professional {
   commission_percent?: string | number | null;
   goal_month?: string | number | null;
   online_booking?: boolean;
+  color_code?: string | null;
+  bio?: string | null;
   status_id?: string;
   first_name?: string;
   last_name?: string;
@@ -47,10 +63,11 @@ interface FormProfessionalProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: Professional | null;
-  onSubmitSuccess: (credentials?: { email: string; tempPassword?: string }) => void;
+  onSubmitSuccess: (credentials?: { email?: string; tempPassword?: string; notice?: string }) => void;
+  deactivate?: boolean;
 }
 
-export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, initialData }: FormProfessionalProps) {
+export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, initialData, deactivate = false }: FormProfessionalProps) {
   const vocab = useVocabulary();
   const { user, hasModule, can } = useAuth();
   const usesCommission = hasModule('commissions') && can('commissions.rules');
@@ -69,7 +86,13 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     online_booking: true,
     status_id: '',
     specialties: [] as string[],
+    color_code: AGENDA_COLORS[0],
+    bio: '',
   });
+  const [catalog, setCatalog] = useState<{ id: string; name: string; professional_ids: string[]; inactive: boolean }[]>([]);
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [servicesTouched, setServicesTouched] = useState(false);
+  const canPickServices = can('services.edit');
 
   const [typeDocuments, setTypeDocuments] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<any[]>([]);
@@ -79,6 +102,13 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
   const [signature, setSignature] = useState<SignatureChange>(undefined);
   const [newSpecialty, setNewSpecialty] = useState('');
   const [addingSpecialty, setAddingSpecialty] = useState(false);
+  const [future, setFuture] = useState<{ count: number; message: string; appointments: FutureAppointment[] } | null>(null);
+  const futureRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (future) setTimeout(() => futureRef.current?.scrollIntoView({ block: 'center' }), 0);
+  }, [future]);
+  const [keepFuture, setKeepFuture] = useState(false);
 
   const addSpecialty = async () => {
     const name = newSpecialty.trim();
@@ -118,7 +148,25 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
     }
   }, [isOpen]);
 
-  useEffect(() => { if (isOpen) { setError(''); setSignature(undefined); } }, [isOpen]);
+  useEffect(() => { if (isOpen) { setError(''); setSignature(undefined); setFuture(null); setKeepFuture(false); } }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !canPickServices) return;
+    setServicesTouched(false);
+    api.get('/services')
+      .then((res) => {
+        const list = (Array.isArray(res.data) ? res.data : []).map((s: any) => ({ id: s.id, name: s.name, professional_ids: s.professional_ids ?? [], inactive: s.status?.slug === 'inactive' }));
+        setCatalog(list.sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)));
+        setServiceIds(list.filter((s: { professional_ids: string[] }) => s.professional_ids.length === 0 || (initialData?.id ? s.professional_ids.includes(initialData.id) : false)).map((s: { id: string }) => s.id));
+      })
+      .catch(() => setCatalog([]));
+  }, [isOpen, canPickServices, initialData?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !deactivate || !initialData) return;
+    const inactive = statuses.find((st) => st.slug === 'inactive');
+    if (inactive) setForm((current) => ({ ...current, status_id: String(inactive.id) }));
+  }, [isOpen, deactivate, initialData, statuses]);
 
   useEffect(() => {
     if (initialData) {
@@ -136,6 +184,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         online_booking: initialData.online_booking !== false,
         status_id: initialData.status_id || '',
         specialties: initialData.specialties ? initialData.specialties.map((s: any) => s.id) : [],
+        color_code: initialData.color_code || AGENDA_COLORS[0],
+        bio: initialData.bio || '',
       });
     } else {
       setForm({
@@ -152,6 +202,8 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         online_booking: true,
         status_id: '',
         specialties: [],
+        color_code: AGENDA_COLORS[0],
+        bio: '',
       });
     }
   }, [initialData, isOpen]);
@@ -175,13 +227,17 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         ...(hasModule('booking') ? { online_booking: form.online_booking } : {}),
         status_id: form.status_id || null,
         specialties: form.specialties,
+        color_code: form.color_code,
+        bio: form.bio.trim() || null,
+        ...(canPickServices && servicesTouched ? { service_ids: serviceIds } : {}),
+        ...(future && keepFuture ? { future_action: 'keep' } : {}),
       };
 
       if (initialData) {
-        await api.put(`/professionals/${initialData.id}`, payload);
+        const res = await api.put(`/professionals/${initialData.id}`, payload);
         await saveSignature(initialData.id, signature);
         onClose();
-        onSubmitSuccess();
+        onSubmitSuccess(res.data?.notice ? { notice: res.data.notice } : undefined);
       } else {
         const res = await api.post('/professionals', payload);
 
@@ -197,6 +253,11 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
         onSubmitSuccess({ email: userEmail, tempPassword });
       }
     } catch (err: any) {
+      if (err?.response?.data?.code === 'HAS_FUTURE') {
+        setFuture({ count: err.response.data.future_count, message: err.response.data.message, appointments: err.response.data.appointments ?? [] });
+        setKeepFuture(false);
+        return;
+      }
       console.error('Error al guardar profesional:', err);
       const first = Object.values(err?.response?.data?.errors ?? {})[0] as string[] | undefined;
       setError(first?.[0] || err?.response?.data?.message || 'No se pudo guardar.');
@@ -360,6 +421,47 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
             />
           </div>
 
+          <div data-field="color_code">
+            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Color en la agenda</span>
+            <ColorPicker colors={AGENDA_COLORS} value={form.color_code} onChange={(color) => setForm({ ...form, color_code: color })} />
+            <span className="text-[10px] text-slate-400 mt-1 block">Sus citas se pintan con este color en la agenda.</span>
+          </div>
+
+          <div>
+            <label htmlFor="pro-bio" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Presentación</label>
+            <textarea
+              id="pro-bio"
+              rows={3}
+              maxLength={1000}
+              placeholder="Ej. Cosmetóloga con 10 años de experiencia en tratamientos faciales."
+              className="w-full text-sm border border-slate-200 rounded-lg px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 resize-y"
+              value={form.bio}
+              onChange={(e) => setForm({ ...form, bio: e.target.value })}
+            />
+            <span className="text-[10px] text-slate-400 mt-1 block">Se muestra en la reserva en línea, junto a su nombre.</span>
+          </div>
+
+          {canPickServices && catalog.length > 0 && (
+            <div data-field="service_ids">
+              <span className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">Servicios que realiza</span>
+              <div className="border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-1 bg-white">
+                {catalog.filter((s) => !s.inactive || serviceIds.includes(s.id)).map((service) => (
+                  <label key={service.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 hover:bg-slate-50 p-1.5 rounded transition-colors" data-pro-service={service.id}>
+                    <input
+                      type="checkbox"
+                      checked={serviceIds.includes(service.id)}
+                      onChange={(e) => { setServicesTouched(true); setServiceIds(e.target.checked ? [...serviceIds, service.id] : serviceIds.filter((id) => id !== service.id)); }}
+                      className="rounded border-slate-300 text-brand-ink focus:ring-brand"
+                    />
+                    <span>{service.name}</span>
+                    {service.inactive && <span className="text-xs text-amber-700">Inactivo</span>}
+                  </label>
+                ))}
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">Solo se le puede agendar lo que marques. Es lo mismo que «{vocab.pros} que lo hacen» en cada servicio.</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
               Especialidades (Puedes seleccionar varias)
@@ -420,13 +522,39 @@ export default function FormProfessional({ isOpen, onClose, onSubmitSuccess, ini
           <Select
             label="Estado"
             placeholder="Seleccione estado..."
-            value={form.status_id}
-            onChange={(e) => setForm({ ...form, status_id: String(e.target.value) })}
+            value={form.status_id || (initialData ? String(statuses.find((st) => st.slug === 'active')?.id ?? '') : '')}
+            onChange={(e) => { setForm({ ...form, status_id: String(e.target.value) }); setFuture(null); setKeepFuture(false); }}
             options={statuses.map(st => ({
               value: st.id,
               label: st.name,
             }))}
           />
+
+          {future && (
+            <div ref={futureRef} data-professional-future className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 space-y-2">
+              <p className="font-semibold">{future.message}</p>
+              <ul className="text-xs space-y-0.5">
+                {future.appointments.slice(0, 10).map((a) => (
+                  <li key={a.id}>
+                    <span className="font-semibold">{a.code}</span> · {a.starts_at.slice(0, 10).split('-').reverse().join('/')} {a.starts_at.slice(11, 16)}
+                    {a.customer ? ` · ${a.customer}` : ''}{a.service ? ` · ${a.service}` : ''}
+                  </li>
+                ))}
+                {future.count > 10 && <li>y {future.count - 10} más</li>}
+              </ul>
+              <Link href="/appointments" className="inline-block text-xs font-semibold text-brand-ink underline">Ir a Citas para pasarlas a otra persona</Link>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  data-keep-future
+                  checked={keepFuture}
+                  onChange={(e) => setKeepFuture(e.target.checked)}
+                  className="mt-0.5 rounded border-amber-300 text-brand-ink focus:ring-brand"
+                />
+                <span className="text-xs">Desactivar igual. Las citas siguen agendadas a su nombre hasta que las pases a otra persona o las canceles.</span>
+              </label>
+            </div>
+          )}
 
           <ErrorAlert message={error} />
         </form>

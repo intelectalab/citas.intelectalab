@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/axios';
 import Select from '@/app/components/common/Select';
+import Switch from '@/app/components/common/Switch';
 import { usePlatform } from '@/hooks/usePlatform';
 import { X, ArrowRight, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
@@ -32,7 +33,25 @@ declare global {
   }
 }
 
-const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const HEARD_FROM = [
+  { value: 'google', label: 'Buscando en Google' },
+  { value: 'facebook', label: 'Facebook o Instagram' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'referido', label: 'Me lo recomendaron' },
+  { value: 'evento', label: 'En una feria o evento' },
+  { value: 'blog', label: 'Leyendo el blog' },
+  { value: 'otro', label: 'Otro' },
+];
+
+const rucCheck = (ruc: string) => {
+  const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const sum = weights.reduce((total, weight, index) => total + weight * Number(ruc[index]), 0);
+  const digit = (11 - (sum % 11)) % 10;
+  return digit === Number(ruc[10]);
+};
+
+const TURNSTILE_SRC ='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
 function loadTurnstile(): Promise<void> {
   if (window.turnstile) return Promise.resolve();
@@ -79,12 +98,16 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
     email: '',
     password: '',
     coupon: '',
+    heard_from: '',
+    sample_data: false,
+    accept_terms: false,
   });
   const [couponText, setCouponText] = useState('');
   const [couponError, setCouponError] = useState('');
   const [formToken, setFormToken] = useState('');
   const [siteKey, setSiteKey] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileDown, setTurnstileDown] = useState(false);
   const [trap, setTrap] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const turnstileBox = useRef<HTMLDivElement | null>(null);
@@ -114,10 +137,13 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
           language: 'es',
           callback: (token: string) => setTurnstileToken(token),
           'expired-callback': () => setTurnstileToken(''),
-          'error-callback': () => setTurnstileToken(''),
+          'error-callback': () => {
+            setTurnstileToken('');
+            setTurnstileDown(true);
+          },
         });
       })
-      .catch(() => setErrorMessage('No pudimos cargar la verificación. Revisa tu conexión y recarga la página.'));
+      .catch(() => setTurnstileDown(true));
     return () => {
       cancelled = true;
       if (turnstileId.current && window.turnstile) window.turnstile.remove(turnstileId.current);
@@ -164,13 +190,29 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
       setErrorMessage('Elige el rubro de tu negocio.');
       return;
     }
+    const ruc = formData.ruc.replace(/\D/g, '');
+    const phone = formData.phone.replace(/[\s-]/g, '').replace(/^\+?51/, '');
+    const problems: Record<string, string> = {};
+    if (!/^(10|15|17|20)\d{9}$/.test(ruc)) problems.ruc = 'El RUC tiene 11 números y empieza con 10, 15, 17 o 20.';
+    else if (!rucCheck(ruc)) problems.ruc = 'Revisa el RUC: el último número no coincide con los demás. Puede que se haya escrito mal un número.';
+    if (formData.phone.trim() && !/^9\d{8}$/.test(phone)) problems.phone = 'Escribe un celular de 9 dígitos que empiece con 9.';
+    setFieldErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      setErrorMessage(null);
+      return;
+    }
+    setFormData((current) => ({ ...current, ruc }));
     setErrorMessage(null);
     setModalStep(2);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (siteKey && !turnstileToken) {
+    if (!formData.accept_terms) {
+      setFieldErrors({ accept_terms: 'Para crear tu cuenta acepta los términos y la política de privacidad.' });
+      return;
+    }
+    if (siteKey && !turnstileToken && !turnstileDown) {
       setFieldErrors({ turnstile_token: 'Confirma que no eres un robot antes de continuar.' });
       return;
     }
@@ -182,12 +224,13 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
       const ref = new URLSearchParams(window.location.search).get('ref');
       let utm: Record<string, string> = {};
       try { utm = JSON.parse(localStorage.getItem('site_utm') ?? '{}') ?? {}; } catch {}
-      const { coupon, ...rest } = formData;
+      const { coupon, heard_from, ...rest } = formData;
       const response = await api.post('/register-tenant', {
         ...rest,
         plan_id: selectedPlan.id,
         ...(ref ? { ref } : {}),
         ...(coupon.trim() ? { coupon: coupon.trim() } : {}),
+        ...(heard_from ? { heard_from } : {}),
         utm,
         form_token: formToken,
         website: trap,
@@ -211,7 +254,7 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
       const data = err.response?.data ?? {};
       const errors: Record<string, string[]> = data.errors ?? {};
       const firstErrors: Record<string, string> = Object.fromEntries(Object.entries(errors).map(([field, list]) => [field, list?.[0] ?? '']));
-      const shownHere = ['email', 'turnstile_token'];
+      const shownHere = ['email', 'turnstile_token', 'accept_terms'];
       const other = Object.entries(firstErrors).find(([field]) => !shownHere.includes(field));
       setFieldErrors(firstErrors);
       if (Object.keys(firstErrors).length > 0) {
@@ -292,12 +335,16 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
                 <label className="text-[11px] font-bold text-brand-ink uppercase">RUC</label>
                 <input
                   type="text"
-                  placeholder="20123456789"
+                  placeholder="20123456786"
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium"
                   value={formData.ruc}
-                  onChange={(e) => setFormData({ ...formData, ruc: e.target.value })}
+                  inputMode="numeric"
+                  maxLength={11}
+                  aria-invalid={fieldErrors.ruc ? true : undefined}
+                  onChange={(e) => { setFormData({ ...formData, ruc: e.target.value.replace(/\D/g, '') }); setFieldErrors(({ ruc: _r, ...others }) => others); }}
                   required
                 />
+                {fieldErrors.ruc && <p className="text-[11px] font-semibold text-rose-600" data-ruc-error>{fieldErrors.ruc}</p>}
               </div>
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-brand-ink uppercase">Razón Social</label>
@@ -324,14 +371,17 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-brand-ink uppercase">Teléfono</label>
+                <label className="text-[11px] font-bold text-brand-ink uppercase">Celular</label>
                 <input
-                  type="text"
-                  placeholder="+51 999 999 999"
+                  type="tel"
+                  inputMode="tel"
+                  aria-invalid={fieldErrors.phone ? true : undefined}
+                  placeholder="999 999 999"
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-brand-accent focus:bg-white font-medium"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setFieldErrors(({ phone: _p, ...others }) => others); }}
                 />
+                {fieldErrors.phone && <p className="text-[11px] font-semibold text-rose-600" data-phone-error>{fieldErrors.phone}</p>}
               </div>
             </div>
 
@@ -493,6 +543,30 @@ export function RegisterModal({ isOpen, onClose, selectedPlan }: RegisterModalPr
               </div>
               {couponText && <p className="text-[11px] font-semibold text-emerald-700" data-coupon-ok>{couponText}</p>}
               {couponError && <p className="text-[11px] font-semibold text-rose-600" data-coupon-error>{couponError}</p>}
+            </div>
+
+            <div className="space-y-1" data-register-heard>
+              <label className="text-[11px] font-bold text-brand-ink uppercase">¿Cómo nos conociste? (opcional)</label>
+              <Select
+                ariaLabel="¿Cómo nos conociste?"
+                placeholder="Elige una opción"
+                value={formData.heard_from}
+                onChange={(e) => setFormData({ ...formData, heard_from: String(e.target.value) })}
+                options={HEARD_FROM}
+              />
+            </div>
+
+            <div className="flex items-start gap-2.5 text-xs text-slate-600" data-register-sample>
+              <Switch checked={formData.sample_data} onChange={(value) => setFormData({ ...formData, sample_data: value })} label="Cargar datos de ejemplo" />
+              <span><span className="font-semibold text-slate-700">Cargar datos de ejemplo</span><span className="block text-[11px] text-slate-500">Clientes y citas de prueba para ver cómo funciona. Los borras con un clic desde Primeros pasos.</span></span>
+            </div>
+
+            <div className="space-y-1" data-register-terms>
+              <div className="flex items-start gap-2.5 text-xs text-slate-600">
+                <Switch checked={formData.accept_terms} onChange={(value) => { setFormData({ ...formData, accept_terms: value }); setFieldErrors(({ accept_terms: _t, ...others }) => others); }} label="Acepto los términos y la política de privacidad" />
+                <span>Acepto los <a href="/legal/terminos" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-accent hover:text-brand-ink">términos y condiciones</a> y la <a href="/legal/privacidad" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-accent hover:text-brand-ink">política de privacidad</a>.</span>
+              </div>
+              {fieldErrors.accept_terms && <p className="text-[11px] font-semibold text-rose-600" data-terms-error>{fieldErrors.accept_terms}</p>}
             </div>
 
             <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden">

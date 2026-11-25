@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, CalendarCheck, CheckCircle2, Clock, CreditCard, Loader2, ShieldCheck, XCircle } from 'lucide-react';
@@ -8,8 +8,10 @@ import { api } from '@/lib/axios';
 import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
 import { apiError, formatDate } from '@/features/appointments/appointments';
 import { money, momentOf } from '@/features/sales/sales';
-import { CulqiClosed, openCulqi, type CulqiCheckoutConfig } from '@/features/billing/culqi';
+import { CulqiClosed, openCulqi, runCulqi3ds, type CulqiCheckoutConfig } from '@/features/billing/culqi';
 import TransferPanel, { type TransferOptions } from './TransferPanel';
+import { TrackingConsent } from '@/features/booking/components/BookingExtras';
+import { loadTrackers, purchaseAlreadySent, readConsent, trackDepositPurchase, type DepositConversion } from '@/features/booking/tracking';
 
 interface PublicLink {
   status: 'pending' | 'review' | 'paid' | 'expired' | 'cancelled' | 'failed';
@@ -21,6 +23,7 @@ interface PublicLink {
   currency_info: CurrencyInfo;
   description: string;
   expires_at: string;
+  held_until?: string | null;
   paid_at: string | null;
   reason: string | null;
   rejected: boolean;
@@ -34,6 +37,7 @@ interface PublicLink {
   culqi?: CulqiCheckoutConfig | null;
   transfer?: TransferOptions | null;
   voucher?: { status: 'review' | 'approved' | 'rejected'; reason: string | null; method: string | null; sent_at: string; held_until: string | null } | null;
+  conversion?: DepositConversion | null;
 }
 
 const minutesLeft = (iso: string) => Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
@@ -50,6 +54,8 @@ export default function PayPage() {
   const [way, setWay] = useState<'gateway' | 'transfer'>('gateway');
   const [sent, setSent] = useState('');
   const [, setTick] = useState(0);
+  const [consent, setConsent] = useState<'all' | 'necessary' | null>(null);
+  const conversionDone = useRef(false);
 
   const apply = (data: PublicLink) => {
     setCurrencies([data.currency_info], data.currency);
@@ -94,7 +100,20 @@ export default function PayPage() {
     }
     try {
       setNotice('');
-      const res = await api.post(`/pay/${params.token}/culqi`, { token });
+      let res = await api.post(`/pay/${params.token}/culqi`, { token });
+      if (res.data.result?.status === 'needs_3ds' && res.data.result.three_ds) {
+        setNotice(res.data.result.message);
+        let verified;
+        try {
+          verified = await runCulqi3ds(res.data.result.three_ds);
+        } catch (err) {
+          if (!(err instanceof CulqiClosed)) setError(err instanceof Error ? err.message : 'Tu banco no confirmó el pago.');
+          setNotice('');
+          return;
+        }
+        setNotice('');
+        res = await api.post(`/pay/${params.token}/culqi`, { token, authentication_3ds: verified.parameters, device: verified.device });
+      }
       if (res.data.result?.checkout_url) {
         window.location.href = res.data.result.checkout_url;
         return;
@@ -125,6 +144,21 @@ export default function PayPage() {
       load();
     }
   };
+
+  useEffect(() => {
+    setConsent(readConsent());
+  }, []);
+
+  useEffect(() => {
+    const conversion = link?.conversion;
+    if (!conversion || link?.status !== 'paid' || conversion.sent || consent !== 'all' || conversionDone.current) return;
+    if (purchaseAlreadySent(conversion.transaction_id)) return;
+    conversionDone.current = true;
+    loadTrackers(conversion.tracking);
+    api.post(`/pay/${params.token}/conversion`)
+      .then((res) => { if (res.data?.send) trackDepositPurchase(conversion); })
+      .catch(() => { conversionDone.current = false; });
+  }, [link, consent, params.token]);
 
   useEffect(() => {
     const timer = setInterval(() => setTick((t) => t + 1), 30000);
@@ -219,7 +253,9 @@ export default function PayPage() {
                 {isDeposit && (
                   <p className="flex items-start gap-2 text-xs text-brand-ink bg-brand-soft/15 border border-brand-soft/50 rounded-xl px-4 py-3" data-hold-warning>
                     <Clock size={15} className="shrink-0 mt-0.5" />
-                    <span>Tu horario se reserva recién al pagar el adelanto. Si demoras, otra persona puede tomarlo: en ese caso este link se anula y no se te cobra nada.</span>
+                    <span>{link.held_until && minutesLeft(link.held_until) > 0
+                      ? `Te apartamos este horario por ${minutesLeft(link.held_until)} ${minutesLeft(link.held_until) === 1 ? 'minuto' : 'minutos'} mientras pagas. Si demoras más, otra persona puede tomarlo: en ese caso este link se anula y no se te cobra nada.`
+                      : 'Ya pasaron los 10 minutos en que te apartamos el horario. Si sigue libre, al pagar te lo volvemos a apartar; si otra persona lo tomó, este link se anula y no se te cobra nada.'}</span>
                   </p>
                 )}
                 <p className="text-xs text-slate-500" data-expires>
@@ -335,6 +371,7 @@ export default function PayPage() {
           <ShieldCheck size={13} /> {link.simulated ? 'Simulación de pasarela' : onlyTransfer ? 'Pago con comprobante revisado por la empresa' : `Pago procesado por ${link.provider}`}
         </p>
       </div>
+      {link.conversion && <TrackingConsent tracking={link.conversion.tracking} onChoose={setConsent} />}
     </div>
   );
 }

@@ -23,6 +23,54 @@ const readDevice = (email?: string) => {
   }
 };
 
+const RULES = [
+  { label: 'Al menos 8 caracteres', test: (value: string) => value.length >= 8 },
+  { label: 'Una mayúscula', test: (value: string) => /[A-Z]/.test(value) },
+  { label: 'Una minúscula', test: (value: string) => /[a-z]/.test(value) },
+  { label: 'Un número', test: (value: string) => /[0-9]/.test(value) },
+];
+
+const strong = (value: string) => RULES.every((rule) => rule.test(value));
+
+type Profile = { name: string; email: string; phone: string | null; company: string | null; role: string; scope: string | null; branch: string | null; code_required: boolean; last_login_at: string | null };
+
+function ProfileCard() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    api.get<Profile>('/account/profile').then((res) => setProfile(res.data)).catch(() => setProfile(null));
+  }, []);
+
+  if (!profile) return null;
+
+  const rows: [string, string | null][] = [
+    ['Nombre', profile.name],
+    ['Correo', profile.email],
+    ['Celular', profile.phone],
+    ['Empresa', profile.company],
+    ['Rol', profile.role],
+    ['Qué ve', profile.scope],
+    ['Sede', profile.branch ?? (profile.scope === 'Solo su sede' ? 'Sin sede asignada' : 'Todas')],
+    ['Código al entrar', profile.code_required ? 'Sí: te pedimos un código por correo' : 'No'],
+    ['Último acceso', profile.last_login_at ? new Date(profile.last_login_at).toLocaleString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : null],
+  ];
+
+  return (
+    <section className={`${cardClass} p-6 space-y-3 lg:col-span-2`} data-card="profile">
+      <h2 className="flex items-center gap-2 text-base font-bold text-brand-ink"><UserRound size={18} className="text-brand-accent" /> Mis datos</h2>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+        {rows.filter(([, value]) => value !== null && value !== '').map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{label}</dt>
+            <dd className="text-sm font-semibold text-slate-800 break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-slate-500">Tu nombre, rol y sede los cambia quien administra Usuarios y roles en tu empresa.</p>
+    </section>
+  );
+}
+
 function PasswordCard({ onChanged }: { onChanged: () => void }) {
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
@@ -37,6 +85,10 @@ function PasswordCard({ onChanged }: { onChanged: () => void }) {
     setNotice('');
     if (password !== confirm) {
       setError('Las dos contraseñas nuevas no coinciden.');
+      return;
+    }
+    if (!strong(password)) {
+      setError('La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.');
       return;
     }
     try {
@@ -65,7 +117,7 @@ function PasswordCard({ onChanged }: { onChanged: () => void }) {
     <form onSubmit={submit} className={`${cardClass} p-6 space-y-4`} data-card="password">
       <div>
         <h2 className="flex items-center gap-2 text-base font-bold text-brand-ink"><KeyRound size={18} className="text-brand-accent" /> Cambiar contraseña</h2>
-        <p className="text-sm text-slate-500 mt-1">Al menos 8 caracteres. Al cambiarla se cierran tus sesiones en otros equipos; en este sigues dentro.</p>
+        <p className="text-sm text-slate-500 mt-1">Al menos 8 caracteres, con una mayúscula, una minúscula y un número. Al cambiarla se cierran tus sesiones en otros equipos; en este sigues dentro.</p>
       </div>
       <ErrorAlert message={error} />
       <SuccessAlert message={notice} />
@@ -81,6 +133,13 @@ function PasswordCard({ onChanged }: { onChanged: () => void }) {
           </div>
         </div>
       ))}
+      {password && (
+        <ul className="grid grid-cols-2 gap-1 text-xs" data-password-rules>
+          {RULES.map((rule) => (
+            <li key={rule.label} className={rule.test(password) ? 'text-emerald-700 font-semibold' : 'text-slate-500'}>{rule.test(password) ? '✓' : '·'} {rule.label}</li>
+          ))}
+        </ul>
+      )}
       <div className="flex justify-end">
         <button type="submit" disabled={busy} className="px-5 py-2.5 text-sm font-bold text-white bg-brand hover:bg-brand-hover rounded-xl transition-colors disabled:opacity-70">
           {busy ? 'Guardando…' : 'Cambiar contraseña'}
@@ -201,6 +260,7 @@ export default function AccountPage() {
         <p className="text-sm text-slate-500 mt-1">{name || 'Tu cuenta'} · {user?.email}</p>
       </div>
       <div className="grid gap-5 lg:grid-cols-2 items-start">
+        <ProfileCard />
         <PasswordCard onChanged={() => setReload((n) => n + 1)} />
         <DevicesCard email={user?.email} reload={reload} />
       </div>

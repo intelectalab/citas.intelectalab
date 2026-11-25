@@ -17,7 +17,7 @@ import FormMembershipPlan from './FormMembershipPlan';
 import { STATUS_BADGES, daysLeftLabel, includedLeftText, shortDate, type CustomerMembership, type MembershipPlan, type MembershipsBoardData } from '../memberships';
 
 type Tab = 'members' | 'plans';
-type View = 'all' | 'active' | 'expiring' | 'expired';
+type View = 'all' | 'active' | 'expiring' | 'grace' | 'expired';
 
 const iconButton = 'p-1.5 text-slate-400 rounded-lg transition-colors';
 
@@ -50,10 +50,11 @@ export default function MembershipsBoard() {
   const active = memberships.filter((m) => m.status === 'active' || m.status === 'grace');
   const expiring = memberships.filter((m) => m.status === 'active' && m.days_left <= 7);
   const expired = memberships.filter((m) => m.status === 'expired');
+  const grace = memberships.filter((m) => m.status === 'grace');
   const monthly = active.reduce((sum, m) => sum + m.price / Math.max(1, m.months), 0);
 
   const memberRows = memberships.filter((m) =>
-    (view === 'all' || (view === 'active' && (m.status === 'active' || m.status === 'grace')) || (view === 'expiring' && m.status === 'active' && m.days_left <= 7) || (view === 'expired' && m.status === 'expired')) &&
+    (view === 'all' || (view === 'active' && (m.status === 'active' || m.status === 'grace')) || (view === 'expiring' && m.status === 'active' && m.days_left <= 7) || (view === 'grace' && m.status === 'grace') || (view === 'expired' && m.status === 'expired')) &&
     (!filters.status || m.status === filters.status) &&
     (!filters.plan || m.name === filters.plan) &&
     (!term || `${m.code} ${m.name} ${m.customer?.name ?? ''}`.toLowerCase().includes(term)),
@@ -100,6 +101,7 @@ export default function MembershipsBoard() {
     card('Socios vigentes', active.length, <Users size={18} />, 'active', 'text-brand-accent', 'border-brand-accent ring-2 ring-brand-accent/20'),
     card('Ingreso recurrente al mes', money(monthly, currency).replace(' ', ' '), <Wallet size={18} />, null, 'text-emerald-600', 'border-emerald-500 ring-2 ring-emerald-500/20'),
     card('Vencen en 7 días', expiring.length, <Hourglass size={18} />, 'expiring', 'text-amber-600', 'border-amber-500 ring-2 ring-amber-500/20'),
+    card('En periodo de gracia', grace.length, <Hourglass size={18} />, 'grace', grace.length ? 'text-rose-600' : 'text-slate-500', 'border-rose-500 ring-2 ring-rose-500/20'),
     card('Vencidas', expired.length, <CalendarX size={18} />, 'expired', 'text-slate-500', 'border-slate-400 ring-2 ring-slate-400/20'),
   ] : [];
 
@@ -112,6 +114,7 @@ export default function MembershipsBoard() {
     { header: 'Inicio', type: 'date', value: (m) => m.starts_at },
     { header: 'Vence', type: 'date', value: (m) => m.ends_at },
     { header: 'Usos', type: 'number', value: (m) => m.uses },
+    { header: 'Renovación', value: (m) => (m.auto_renew ? 'Se renueva sola' : 'A mano, en caja') },
     { header: 'Precio', type: 'money', total: true, value: (m) => m.price },
     { header: 'Estado', value: (m) => m.status_label },
   ];
@@ -155,6 +158,14 @@ export default function MembershipsBoard() {
           <span className={`block font-medium ${(m.status === 'active' && m.days_left <= 7) || m.status === 'grace' ? 'text-amber-700' : 'text-slate-700'}`}>{daysLeftLabel(m)}</span>
           <span className="block text-xs text-slate-400">Desde el {shortDate(m.starts_at)}</span>
         </div>
+      ),
+    },
+    {
+      header: 'Renovación',
+      cell: (m) => (
+        <span key={`renew-${m.id}`} className="text-xs text-slate-600" data-renew={m.auto_renew ? 'auto' : 'manual'}>
+          {m.auto_renew ? 'Se renueva sola' : 'A mano, en caja'}
+        </span>
       ),
     },
     { header: 'Precio', cell: (m) => <span key={`price-${m.id}`} className="text-sm font-semibold text-slate-800 tabular-nums whitespace-nowrap">{money(m.price, m.currency)} <span className="block text-xs font-normal text-slate-400">{m.period_label}</span></span> },
@@ -230,7 +241,7 @@ export default function MembershipsBoard() {
           data={memberRows}
           exportTitle="Membresías"
           exportScreen="memberships"
-          exportFilters={view === 'all' ? [] : [`Tarjeta: ${{ active: 'Socios vigentes', expiring: 'Vencen en 7 días', expired: 'Vencidas' }[view]}`]}
+          exportFilters={view === 'all' ? [] : [`Tarjeta: ${{ active: 'Socios vigentes', expiring: 'Vencen en 7 días', grace: 'En periodo de gracia', expired: 'Vencidas' }[view]}`]}
           exportColumns={memberExport}
           getItemKey={(m) => m.id}
           entityLabel={memberRows.length === 1 ? 'membresía' : 'membresías'}

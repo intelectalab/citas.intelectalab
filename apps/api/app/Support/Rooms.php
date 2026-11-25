@@ -35,7 +35,7 @@ class Rooms
             ->where('tenant_id', $tenant->id)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
-            ->get(self::hasParent() ? [...$columns, 'parent_id'] : $columns);
+            ->get([...$columns, ...(self::hasParent() ? ['parent_id'] : []), ...(\App\Support\CatalogExtras::roomFields() ? ['capacity', 'maintenance_reason', 'maintenance_since'] : [])]);
 
         $mode = self::mode($tenant);
         $branchNames = DB::table('branches')->where('tenant_id', $tenant->id)->pluck('name', 'id');
@@ -62,6 +62,9 @@ class Rooms
                 'parent_id'        => $room->parent_id ?? null,
                 'parent_name'      => !empty($room->parent_id ?? null) ? ($roomNames[$room->parent_id] ?? null) : null,
                 'created_at'       => $room->created_at,
+                'capacity'         => (int) ($room->capacity ?? 1),
+                'maintenance_reason' => $room->maintenance_reason ?? null,
+                'maintenance_since' => $room->maintenance_since ?? null,
             ];
         })->values();
     }

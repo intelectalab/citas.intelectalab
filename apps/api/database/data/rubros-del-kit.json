@@ -1,0 +1,1285 @@
+[
+    {
+        "slug": "nails",
+        "name": "Uñas, pestañas y cejas",
+        "short_name": "Uñas y pestañas",
+        "description": "Manicure, uñas acrílicas y en gel, extensiones y lifting de pestañas, diseño de cejas. Retoques recordados solos y ficha con técnica, tamaño y color.",
+        "icon": "brush",
+        "color": "#B03A6F",
+        "vocabulary": {
+            "client": "Clienta",
+            "clients": "Clientas",
+            "pro": "Técnica",
+            "pros": "Técnicas"
+        },
+        "modules_off": [
+            "quotes",
+            "walkin",
+            "classes"
+        ],
+        "default_rules": {
+            "booking.deposit_percent": 30,
+            "noshow.fee_percent": 50,
+            "pos.tips_enabled": true,
+            "cancel.window_hours": 12
+        },
+        "dependents": {},
+        "sort_order": 11,
+        "template": {
+            "categories": [
+                {
+                    "name": "Uñas",
+                    "services": [
+                        {
+                            "code": "UNA-01",
+                            "name": "Manicure semipermanente",
+                            "duration_minutes": 60,
+                            "price": 50,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Retoque de manicure",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "UNA-02",
+                            "name": "Uñas acrílicas",
+                            "duration_minutes": 120,
+                            "price": 120,
+                            "buffer_after_minutes": 10,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Relleno de acrílicas",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "UNA-03",
+                            "name": "Uñas en gel",
+                            "duration_minutes": 90,
+                            "price": 100,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Relleno de gel",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "UNA-04",
+                            "name": "Relleno de acrílicas o gel",
+                            "duration_minutes": 75,
+                            "price": 70,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próximo relleno",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "UNA-05",
+                            "name": "Pedicure spa",
+                            "duration_minutes": 60,
+                            "price": 55,
+                            "buffer_after_minutes": 10,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                },
+                {
+                    "name": "Pestañas y cejas",
+                    "services": [
+                        {
+                            "code": "PES-01",
+                            "name": "Extensiones de pestañas clásicas",
+                            "duration_minutes": 120,
+                            "price": 150,
+                            "buffer_after_minutes": 10,
+                            "uses_record": true,
+                            "requires_deposit": true,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Retoque de pestañas",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "PES-02",
+                            "name": "Extensiones volumen ruso",
+                            "duration_minutes": 150,
+                            "price": 200,
+                            "buffer_after_minutes": 10,
+                            "uses_record": true,
+                            "requires_deposit": true,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Retoque de pestañas",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "PES-03",
+                            "name": "Retoque de extensiones",
+                            "duration_minutes": 60,
+                            "price": 80,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Retoque de pestañas",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "PES-04",
+                            "name": "Lifting de pestañas",
+                            "duration_minutes": 60,
+                            "price": 90,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Siguiente lifting",
+                                "days": 45
+                            }
+                        },
+                        {
+                            "code": "CEJ-01",
+                            "name": "Diseño y laminado de cejas",
+                            "duration_minutes": 45,
+                            "price": 60,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Mantenimiento de cejas",
+                                "days": 30
+                            }
+                        }
+                    ]
+                }
+            ],
+            "record_template": {
+                "name": "Ficha de uñas y pestañas",
+                "consent_text": "Declaro que informé alergias o sensibilidad a adhesivos y productos, y que recibí los cuidados posteriores.",
+                "require_consent": false,
+                "fields": [
+                    {
+                        "key": "tech",
+                        "label": "Técnica",
+                        "type": "select",
+                        "required": true,
+                        "options": [
+                            "Acrílico",
+                            "Gel",
+                            "Semipermanente",
+                            "Pestaña clásica",
+                            "Volumen ruso",
+                            "Lifting"
+                        ]
+                    },
+                    {
+                        "key": "size",
+                        "label": "Forma, largo o curvatura",
+                        "type": "text",
+                        "required": false,
+                        "placeholder": "Ej.: almendra M / curva C 11 mm"
+                    },
+                    {
+                        "key": "color",
+                        "label": "Color o código",
+                        "type": "text",
+                        "required": false
+                    },
+                    {
+                        "key": "allergy",
+                        "label": "Sensibilidad a adhesivos",
+                        "type": "select",
+                        "required": false,
+                        "options": [
+                            "Ninguna",
+                            "Leve",
+                            "Alergia confirmada"
+                        ]
+                    },
+                    {
+                        "key": "obs",
+                        "label": "Observaciones",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "next",
+                        "label": "Próximo retoque",
+                        "type": "next_control",
+                        "required": false,
+                        "days": 21
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "slug": "tattoo",
+        "name": "Estudio de tatuajes y piercing",
+        "short_name": "Tatuajes y piercing",
+        "description": "Cotización de diseño, sesiones largas con adelanto obligatorio, consentimiento firmado (mayores de edad o con autorización) y retoque recordado.",
+        "icon": "pen",
+        "color": "#3A3F4B",
+        "vocabulary": {
+            "client": "Cliente",
+            "clients": "Clientes",
+            "pro": "Artista",
+            "pros": "Artistas"
+        },
+        "modules_off": [
+            "walkin",
+            "classes",
+            "memberships",
+            "loyalty"
+        ],
+        "default_rules": {
+            "booking.require_deposit": true,
+            "booking.deposit_percent": 30,
+            "noshow.keep_deposit": true,
+            "noshow.fee_percent": 100,
+            "cancel.window_hours": 48,
+            "records.require_on_complete": true,
+            "pos.tips_enabled": true
+        },
+        "dependents": {},
+        "sort_order": 12,
+        "template": {
+            "categories": [
+                {
+                    "name": "Tatuajes",
+                    "services": [
+                        {
+                            "code": "TAT-01",
+                            "name": "Cita de diseño y cotización",
+                            "duration_minutes": 30,
+                            "price": 0,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        },
+                        {
+                            "code": "TAT-02",
+                            "name": "Tatuaje pequeño (hasta 8 cm)",
+                            "duration_minutes": 90,
+                            "price": 250,
+                            "buffer_after_minutes": 15,
+                            "uses_record": true,
+                            "requires_deposit": true,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Retoque sin costo",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "TAT-03",
+                            "name": "Tatuaje mediano",
+                            "duration_minutes": 180,
+                            "price": 600,
+                            "buffer_after_minutes": 15,
+                            "uses_record": true,
+                            "requires_deposit": true,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Retoque sin costo",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "TAT-04",
+                            "name": "Sesión de tatuaje grande (4 h)",
+                            "duration_minutes": 240,
+                            "price": 900,
+                            "buffer_after_minutes": 20,
+                            "uses_record": true,
+                            "requires_deposit": true,
+                            "online_booking": false,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Siguiente sesión",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "TAT-05",
+                            "name": "Retoque",
+                            "duration_minutes": 45,
+                            "price": 0,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                },
+                {
+                    "name": "Piercing",
+                    "services": [
+                        {
+                            "code": "PIE-01",
+                            "name": "Piercing de oreja",
+                            "duration_minutes": 20,
+                            "price": 60,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Control de cicatrización",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "PIE-02",
+                            "name": "Piercing de nariz",
+                            "duration_minutes": 20,
+                            "price": 80,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Control de cicatrización",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "PIE-03",
+                            "name": "Cambio de joya",
+                            "duration_minutes": 15,
+                            "price": 30,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                }
+            ],
+            "record_template": {
+                "name": "Ficha y consentimiento",
+                "consent_text": "Declaro ser mayor de edad (o contar con la autorización firmada de mi padre, madre o tutor), que informé enfermedades, alergias y medicamentos, y que recibí las indicaciones de cuidado. Autorizo el procedimiento y el registro fotográfico del trabajo.",
+                "require_consent": true,
+                "fields": [
+                    {
+                        "key": "zone",
+                        "label": "Zona del cuerpo",
+                        "type": "text",
+                        "required": true
+                    },
+                    {
+                        "key": "size",
+                        "label": "Tamaño (cm)",
+                        "type": "text",
+                        "required": false
+                    },
+                    {
+                        "key": "style",
+                        "label": "Estilo",
+                        "type": "select",
+                        "required": false,
+                        "options": [
+                            "Fine line",
+                            "Blackwork",
+                            "Realismo",
+                            "Tradicional",
+                            "Color",
+                            "Lettering",
+                            "Piercing"
+                        ]
+                    },
+                    {
+                        "key": "ink",
+                        "label": "Tintas, agujas o joya (lote)",
+                        "type": "text",
+                        "required": false
+                    },
+                    {
+                        "key": "health",
+                        "label": "Salud: enfermedades, alergias y medicamentos",
+                        "type": "textarea",
+                        "required": true
+                    },
+                    {
+                        "key": "minor",
+                        "label": "Menor de edad con autorización",
+                        "type": "boolean",
+                        "required": false
+                    },
+                    {
+                        "key": "obs",
+                        "label": "Observaciones",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "next",
+                        "label": "Retoque",
+                        "type": "next_control",
+                        "required": false,
+                        "days": 30
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "slug": "podiatry",
+        "name": "Podología",
+        "short_name": "Podología",
+        "description": "Evaluación del pie, quiropodia, uña encarnada y hongos con controles, alerta para pacientes con diabetes y plantillas a medida.",
+        "icon": "foot",
+        "color": "#2F6F8F",
+        "vocabulary": {
+            "client": "Paciente",
+            "clients": "Pacientes",
+            "pro": "Podólogo",
+            "pros": "Podólogos"
+        },
+        "modules_off": [
+            "walkin",
+            "classes",
+            "memberships",
+            "commissions"
+        ],
+        "default_rules": {
+            "pos.tips_enabled": false,
+            "loyalty.enabled": false,
+            "records.require_on_complete": true,
+            "cancel.window_hours": 12
+        },
+        "dependents": {},
+        "sort_order": 13,
+        "template": {
+            "categories": [
+                {
+                    "name": "Podología",
+                    "services": [
+                        {
+                            "code": "POD-01",
+                            "name": "Evaluación podológica",
+                            "duration_minutes": 30,
+                            "price": 60,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        },
+                        {
+                            "code": "POD-02",
+                            "name": "Quiropodia (corte y limpieza)",
+                            "duration_minutes": 45,
+                            "price": 70,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próxima quiropodia",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "POD-03",
+                            "name": "Tratamiento de uña encarnada",
+                            "duration_minutes": 45,
+                            "price": 120,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Curación de control",
+                                "days": 7
+                            }
+                        },
+                        {
+                            "code": "POD-04",
+                            "name": "Tratamiento de hongos (onicomicosis)",
+                            "duration_minutes": 30,
+                            "price": 80,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Siguiente sesión",
+                                "days": 15
+                            }
+                        },
+                        {
+                            "code": "POD-05",
+                            "name": "Curación de control",
+                            "duration_minutes": 20,
+                            "price": 40,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        },
+                        {
+                            "code": "POD-06",
+                            "name": "Plantillas a medida (toma de molde)",
+                            "duration_minutes": 45,
+                            "price": 250,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": true,
+                            "online_booking": false,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                }
+            ],
+            "record_template": {
+                "name": "Ficha podológica",
+                "consent_text": null,
+                "require_consent": false,
+                "fields": [
+                    {
+                        "key": "reason",
+                        "label": "Motivo de consulta",
+                        "type": "textarea",
+                        "required": true
+                    },
+                    {
+                        "key": "diabetes",
+                        "label": "Paciente con diabetes",
+                        "type": "boolean",
+                        "required": false
+                    },
+                    {
+                        "key": "find",
+                        "label": "Hallazgos",
+                        "type": "multiselect",
+                        "required": false,
+                        "options": [
+                            "Uña encarnada",
+                            "Onicomicosis",
+                            "Callosidades",
+                            "Hiperqueratosis",
+                            "Fisuras",
+                            "Pie plano",
+                            "Juanete"
+                        ]
+                    },
+                    {
+                        "key": "tx",
+                        "label": "Tratamiento realizado",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "obs",
+                        "label": "Indicaciones",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "next",
+                        "label": "Próximo control",
+                        "type": "next_control",
+                        "required": false,
+                        "days": 30
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "slug": "kids_therapy",
+        "name": "Terapia infantil (lenguaje, ocupacional y aprendizaje)",
+        "short_name": "Terapia infantil",
+        "description": "La familia reserva para su hijo o hija; cada niño tiene su ficha y su evolución. Planes de sesiones semanales, informe a los padres y recordatorios.",
+        "icon": "smile",
+        "color": "#C2571A",
+        "vocabulary": {
+            "client": "Apoderado",
+            "clients": "Familias",
+            "pro": "Terapeuta",
+            "pros": "Terapeutas",
+            "dependent": "Niño o niña",
+            "dependents": "Niños"
+        },
+        "modules_off": [
+            "walkin",
+            "classes",
+            "inventory",
+            "memberships",
+            "commissions"
+        ],
+        "default_rules": {
+            "dependents.enabled": true,
+            "dependents.required": true,
+            "pos.tips_enabled": false,
+            "loyalty.enabled": false,
+            "records.require_on_complete": true,
+            "cancel.window_hours": 24,
+            "noshow.fee_percent": 50
+        },
+        "dependents": {
+            "enabled": true,
+            "kind": "child",
+            "required": true
+        },
+        "sort_order": 14,
+        "template": {
+            "categories": [
+                {
+                    "name": "Evaluación",
+                    "services": [
+                        {
+                            "code": "EVA-01",
+                            "name": "Evaluación inicial",
+                            "duration_minutes": 60,
+                            "price": 150,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Inicio de terapia",
+                                "days": 7
+                            }
+                        },
+                        {
+                            "code": "EVA-02",
+                            "name": "Orientación a padres",
+                            "duration_minutes": 45,
+                            "price": 100,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                },
+                {
+                    "name": "Terapias",
+                    "services": [
+                        {
+                            "code": "TER-01",
+                            "name": "Terapia de lenguaje",
+                            "duration_minutes": 45,
+                            "price": 90,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próxima sesión",
+                                "days": 7
+                            }
+                        },
+                        {
+                            "code": "TER-02",
+                            "name": "Terapia ocupacional",
+                            "duration_minutes": 45,
+                            "price": 90,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próxima sesión",
+                                "days": 7
+                            }
+                        },
+                        {
+                            "code": "TER-03",
+                            "name": "Terapia de aprendizaje",
+                            "duration_minutes": 45,
+                            "price": 85,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próxima sesión",
+                                "days": 7
+                            }
+                        },
+                        {
+                            "code": "TER-04",
+                            "name": "Integración sensorial",
+                            "duration_minutes": 45,
+                            "price": 95,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próxima sesión",
+                                "days": 7
+                            }
+                        }
+                    ]
+                }
+            ],
+            "record_template": {
+                "name": "Evolución de terapia",
+                "consent_text": "Como padre, madre o apoderado autorizo la evaluación y la terapia del menor y el registro de su evolución.",
+                "require_consent": true,
+                "fields": [
+                    {
+                        "key": "area",
+                        "label": "Área",
+                        "type": "select",
+                        "required": true,
+                        "options": [
+                            "Lenguaje",
+                            "Ocupacional",
+                            "Aprendizaje",
+                            "Integración sensorial"
+                        ]
+                    },
+                    {
+                        "key": "goal",
+                        "label": "Objetivo de la sesión",
+                        "type": "text",
+                        "required": false
+                    },
+                    {
+                        "key": "acts",
+                        "label": "Actividades realizadas",
+                        "type": "textarea",
+                        "required": true
+                    },
+                    {
+                        "key": "progress",
+                        "label": "Avance (0 a 10)",
+                        "type": "scale",
+                        "required": false
+                    },
+                    {
+                        "key": "home",
+                        "label": "Indicaciones para casa",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "next",
+                        "label": "Próxima sesión",
+                        "type": "next_control",
+                        "required": false,
+                        "days": 7
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "slug": "nutrition",
+        "name": "Consultorio de nutrición",
+        "short_name": "Nutrición",
+        "description": "Primera consulta y controles con peso, medidas e IMC, consulta en línea, planes por meses y recordatorio del siguiente control.",
+        "icon": "leaf",
+        "color": "#4E8A2E",
+        "vocabulary": {
+            "client": "Paciente",
+            "clients": "Pacientes",
+            "pro": "Nutricionista",
+            "pros": "Nutricionistas"
+        },
+        "modules_off": [
+            "walkin",
+            "classes",
+            "inventory",
+            "commissions"
+        ],
+        "default_rules": {
+            "pos.tips_enabled": false,
+            "loyalty.enabled": false,
+            "cancel.window_hours": 12,
+            "noshow.fee_percent": 50,
+            "records.require_on_complete": true
+        },
+        "dependents": {},
+        "sort_order": 15,
+        "template": {
+            "categories": [
+                {
+                    "name": "Consultas",
+                    "services": [
+                        {
+                            "code": "NUT-01",
+                            "name": "Primera consulta nutricional",
+                            "duration_minutes": 60,
+                            "price": 120,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Control nutricional",
+                                "days": 15
+                            }
+                        },
+                        {
+                            "code": "NUT-02",
+                            "name": "Control nutricional",
+                            "duration_minutes": 30,
+                            "price": 70,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Control nutricional",
+                                "days": 15
+                            }
+                        },
+                        {
+                            "code": "NUT-03",
+                            "name": "Consulta en línea",
+                            "duration_minutes": 45,
+                            "price": 90,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Control nutricional",
+                                "days": 15
+                            }
+                        },
+                        {
+                            "code": "NUT-04",
+                            "name": "Nutrición deportiva",
+                            "duration_minutes": 60,
+                            "price": 150,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Control deportivo",
+                                "days": 21
+                            }
+                        },
+                        {
+                            "code": "NUT-05",
+                            "name": "Medición de composición corporal",
+                            "duration_minutes": 20,
+                            "price": 40,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                }
+            ],
+            "record_template": {
+                "name": "Control nutricional",
+                "consent_text": null,
+                "require_consent": false,
+                "fields": [
+                    {
+                        "key": "goal",
+                        "label": "Objetivo",
+                        "type": "select",
+                        "required": true,
+                        "options": [
+                            "Bajar de peso",
+                            "Subir masa muscular",
+                            "Control de diabetes",
+                            "Embarazo",
+                            "Rendimiento deportivo",
+                            "Alimentación saludable"
+                        ]
+                    },
+                    {
+                        "key": "weight",
+                        "label": "Peso (kg)",
+                        "type": "number",
+                        "required": true,
+                        "step": 0.1
+                    },
+                    {
+                        "key": "height",
+                        "label": "Talla (cm)",
+                        "type": "number",
+                        "required": false
+                    },
+                    {
+                        "key": "bmi",
+                        "label": "IMC",
+                        "type": "number",
+                        "required": false,
+                        "step": 0.1
+                    },
+                    {
+                        "key": "fat",
+                        "label": "% de grasa",
+                        "type": "number",
+                        "required": false,
+                        "step": 0.1
+                    },
+                    {
+                        "key": "waist",
+                        "label": "Cintura (cm)",
+                        "type": "number",
+                        "required": false
+                    },
+                    {
+                        "key": "plan",
+                        "label": "Plan e indicaciones",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "next",
+                        "label": "Próximo control",
+                        "type": "next_control",
+                        "required": false,
+                        "days": 15
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "slug": "grooming",
+        "name": "Baño y peluquería canina",
+        "short_name": "Peluquería canina",
+        "description": "El tutor reserva para su mascota; precio por tamaño, ficha con temperamento y corte, recojo a domicilio opcional y aviso del próximo baño.",
+        "icon": "droplet",
+        "color": "#2E8B74",
+        "vocabulary": {
+            "client": "Tutor",
+            "clients": "Tutores",
+            "pro": "Groomer",
+            "pros": "Groomers",
+            "dependent": "Mascota",
+            "dependents": "Mascotas"
+        },
+        "modules_off": [
+            "walkin",
+            "classes",
+            "quotes"
+        ],
+        "default_rules": {
+            "dependents.enabled": true,
+            "dependents.required": true,
+            "pos.tips_enabled": true,
+            "recalls.notify_days": 3
+        },
+        "dependents": {
+            "enabled": true,
+            "kind": "pet",
+            "required": true
+        },
+        "sort_order": 16,
+        "template": {
+            "categories": [
+                {
+                    "name": "Baño",
+                    "services": [
+                        {
+                            "code": "BAN-01",
+                            "name": "Baño (raza pequeña)",
+                            "duration_minutes": 60,
+                            "price": 45,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próximo baño",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "BAN-02",
+                            "name": "Baño (raza grande)",
+                            "duration_minutes": 90,
+                            "price": 70,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próximo baño",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "BAN-03",
+                            "name": "Baño medicado",
+                            "duration_minutes": 60,
+                            "price": 60,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próximo baño medicado",
+                                "days": 15
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Corte y estética",
+                    "services": [
+                        {
+                            "code": "COR-01",
+                            "name": "Baño y corte (raza pequeña)",
+                            "duration_minutes": 90,
+                            "price": 70,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próximo baño y corte",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "COR-02",
+                            "name": "Baño y corte (raza grande)",
+                            "duration_minutes": 120,
+                            "price": 110,
+                            "buffer_after_minutes": 0,
+                            "uses_record": true,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1,
+                            "recall": {
+                                "label": "Próximo baño y corte",
+                                "days": 30
+                            }
+                        },
+                        {
+                            "code": "COR-03",
+                            "name": "Deslanado",
+                            "duration_minutes": 90,
+                            "price": 80,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        },
+                        {
+                            "code": "COR-04",
+                            "name": "Corte de uñas y limpieza de oídos",
+                            "duration_minutes": 15,
+                            "price": 20,
+                            "buffer_after_minutes": 0,
+                            "uses_record": false,
+                            "requires_deposit": false,
+                            "online_booking": true,
+                            "is_virtual": false,
+                            "kind": "individual",
+                            "capacity": 1
+                        }
+                    ]
+                }
+            ],
+            "record_template": {
+                "name": "Ficha de grooming",
+                "consent_text": null,
+                "require_consent": false,
+                "fields": [
+                    {
+                        "key": "weight",
+                        "label": "Peso (kg)",
+                        "type": "number",
+                        "required": false,
+                        "step": 0.1
+                    },
+                    {
+                        "key": "temper",
+                        "label": "Temperamento",
+                        "type": "select",
+                        "required": false,
+                        "options": [
+                            "Tranquilo",
+                            "Nervioso",
+                            "Muerde",
+                            "Necesita bozal"
+                        ]
+                    },
+                    {
+                        "key": "cut",
+                        "label": "Corte o estilo",
+                        "type": "text",
+                        "required": false,
+                        "placeholder": "Ej.: corte cachorro, máquina 7"
+                    },
+                    {
+                        "key": "skin",
+                        "label": "Piel y pelaje",
+                        "type": "multiselect",
+                        "required": false,
+                        "options": [
+                            "Sin hallazgos",
+                            "Pulgas",
+                            "Garrapatas",
+                            "Nudos",
+                            "Dermatitis",
+                            "Heridas"
+                        ]
+                    },
+                    {
+                        "key": "obs",
+                        "label": "Observaciones para el tutor",
+                        "type": "textarea",
+                        "required": false
+                    },
+                    {
+                        "key": "next",
+                        "label": "Próximo baño",
+                        "type": "next_control",
+                        "required": false,
+                        "days": 30
+                    }
+                ]
+            }
+        }
+    }
+]

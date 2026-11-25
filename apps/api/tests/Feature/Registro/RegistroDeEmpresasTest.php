@@ -11,7 +11,7 @@ use Tests\TestCase;
 function registroDatos(array $extra = []): array
 {
     return $extra + [
-        'ruc' => '20123456789', 'company_name' => 'Spa Registro ' . Str::upper(Str::random(4)), 'department' => 'Lima',
+        'ruc' => '20123456786', 'company_name' => 'Spa Registro ' . Str::upper(Str::random(4)), 'department' => 'Lima',
         'first_name' => 'Lucía', 'last_name' => 'Flores', 'email' => 'lucia.' . Str::lower(Str::random(6)) . '@correo.test',
         'password' => 'clave-segura-123', 'plan_id' => TestCase::PLAN_PROFESIONAL,
         'form_token' => SignupGuard::token(now()->subMinute()),
@@ -171,6 +171,8 @@ describe('CAPTCHA de Cloudflare (opcional)', function () {
     });
 
     it('con llaves, pide confirmar que no es un robot', function () {
+        Http::fake(['turnstile.test/*' => Http::response(['success' => false, 'error-codes' => ['missing-input-response']])]);
+
         $res = registrar($this)->assertStatus(422);
 
         expect($res->json('errors.turnstile_token.0'))->toContain('no eres un robot');
@@ -190,9 +192,9 @@ describe('CAPTCHA de Cloudflare (opcional)', function () {
         Http::assertSent(fn (HttpRequest $request) => $request['secret'] === 'llave-secreta-prueba' && $request['response'] === 'respuesta-buena');
     });
 
-    it('si Cloudflare no responde, no deja pasar', function () {
+    it('si Cloudflare no responde, deja pasar y lo anota', function () {
         Http::fake(['turnstile.test/*' => Http::response('caído', 500)]);
 
-        registrar($this, ['turnstile_token' => 'respuesta'])->assertStatus(422)->assertJsonValidationErrors('turnstile_token');
+        registrar($this, ['turnstile_token' => 'respuesta'])->assertCreated();
     });
 });

@@ -25,6 +25,8 @@ class Access
         'export'    => 'Exportar',
         'others'    => 'Turnos de otros',
         'review'    => 'Revisar comprobantes',
+        'discount'  => 'Descuento alto',
+        'all'       => 'Todas las fichas',
     ];
 
     public const CATALOG = [
@@ -84,11 +86,13 @@ class Access
             'forgive' => 'Perdonar las inasistencias de quien reservó en línea, para que pueda volver a reservar',
             'notes'   => 'Ver y escribir las notas privadas de {clients}',
             'import'  => 'Importar {clients} desde un Excel o CSV',
+            'export'  => 'Descargar la lista de {clients} en Excel o CSV. Cada vez que alguien la descarga, le llega un aviso al dueño',
         ]],
         'records' => ['label' => 'Fichas de atención', 'module' => 'records', 'actions' => [
             'view' => 'Ver fichas de atención',
             'edit' => 'Llenar, firmar y corregir fichas de atención',
             'emergency' => 'Abrir por una emergencia una ficha privada que escribió otra persona. Queda registrado quién la abrió y por qué',
+            'all' => 'Ver las fichas de las citas de todos los {pros}, no solo las propias. Las fichas privadas las sigue viendo solo quien las escribió',
         ]],
         'record_templates' => ['label' => 'Plantillas de ficha', 'module' => 'records', 'actions' => [
             'create' => 'Crear plantillas de ficha',
@@ -127,6 +131,7 @@ class Access
             'view'   => 'Abrir el punto de venta y ver lo que falta cobrar',
             'create' => 'Armar ventas en el carrito con citas, servicios y productos, y dejarlas por cobrar',
             'edit'   => 'Cambiar una venta que se dejó por cobrar, mientras no tenga pagos',
+            'discount' => 'Dar descuentos a mano más altos que el tope que puso la empresa en Configuración',
         ]],
         'sales' => ['label' => 'Ventas', 'module' => 'pos', 'actions' => [
             'view'   => 'Ver las ventas, su detalle y sus pagos',
@@ -203,6 +208,10 @@ class Access
             'view' => 'Ver las automatizaciones y sus resultados',
             'edit' => 'Encender o apagar automatizaciones y cambiar su texto, cupón y horario',
         ]],
+        'surveys' => ['label' => 'Encuestas y reseñas', 'module' => null, 'actions' => [
+            'view' => 'Ver las encuestas de satisfacción, sus notas y comentarios, y las reseñas',
+            'edit' => 'Registrar el contacto con un cliente insatisfecho, publicar u ocultar reseñas, responderlas y cambiar cómo se envían las encuestas',
+        ]],
         'branches' => ['label' => 'Sucursales', 'module' => null, 'actions' => [
             'view'   => 'Ver las sucursales',
             'create' => 'Crear sucursales',
@@ -211,6 +220,9 @@ class Access
         'company' => ['label' => 'Empresa', 'module' => null, 'actions' => [
             'view' => 'Ver los datos de la empresa',
             'edit' => 'Cambiar los datos de la empresa',
+        ]],
+        'admin' => ['label' => 'Plan y pagos de la empresa', 'module' => null, 'actions' => [
+            'plan' => 'Ver el plan con sus montos y pagos, pagarlo, cambiarlo, contratar o quitar complementos, dar de baja la empresa y descargar todos sus datos',
         ]],
         'complaints' => ['label' => 'Libro de Reclamaciones', 'module' => null, 'actions' => [
             'view'   => 'Ver los reclamos y quejas que dejan los {clients} en el Libro de Reclamaciones, y recibir el aviso cuando llega uno o está por vencer',
@@ -275,10 +287,12 @@ class Access
         'loyalty'          => ['section' => 'loyalty', 'screens' => ['Puntos', 'Gift cards'], 'short' => ['view' => 'Ver', 'create' => 'Emitir y acreditar', 'edit' => 'Ajustar y canjear', 'delete' => 'Anular']],
         'campaigns'        => ['section' => 'marketing', 'screens' => ['Campañas'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar o cancelar']],
         'automations'      => ['section' => 'marketing', 'screens' => ['Automatizaciones'], 'short' => ['view' => 'Ver', 'edit' => 'Encender y cambiar']],
+        'surveys'          => ['section' => 'marketing', 'screens' => ['Encuestas y reseñas'], 'short' => ['view' => 'Ver', 'edit' => 'Gestionar y publicar']],
         'messages'         => ['section' => 'marketing', 'screens' => ['Mensajes'], 'short' => ['view' => 'Ver', 'create' => 'Escribir', 'edit' => 'Cambiar, cancelar y reintentar', 'reply' => 'Responder WhatsApp']],
         'coupons'          => ['section' => 'marketing', 'screens' => ['Cupones'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar', 'delete' => 'Eliminar']],
         'branches'         => ['section' => 'company', 'screens' => ['Sucursales'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar']],
         'company'          => ['section' => 'company', 'screens' => ['Empresa'], 'short' => ['view' => 'Ver', 'edit' => 'Cambiar']],
+        'admin'            => ['section' => 'company', 'screens' => ['Mi empresa → Plan'], 'short' => ['plan' => 'Ver y pagar el plan']],
         'complaints'       => ['section' => 'company', 'screens' => ['Libro de Reclamaciones'], 'short' => ['view' => 'Ver', 'answer' => 'Responder']],
         'users'            => ['section' => 'company', 'screens' => ['Usuarios y roles'], 'short' => ['view' => 'Ver', 'create' => 'Crear', 'edit' => 'Cambiar y dar permisos', 'delete' => 'Eliminar roles']],
         'audit'            => ['section' => 'company', 'screens' => ['Auditoría'], 'short' => ['view' => 'Ver']],
@@ -307,12 +321,12 @@ class Access
             'permissions' => [
                 'agenda' => ['view', 'create', 'edit', ...self::APPOINTMENT_STEPS, 'override'], 'walkin' => ['view', 'create', 'edit'], 'classes' => ['view', 'create', 'edit', 'cancel'],'waitlist' => self::EVERYTHING, 'recalls' => self::EVERYTHING,
                 'blocks' => self::EVERYTHING, 'holidays' => self::EVERYTHING, 'attention' => ['view'],
-                'customers' => ['view', 'create', 'edit', 'delete', 'forgive', 'notes', 'import'], 'records' => ['view'], 'record_templates' => self::EVERYTHING,
+                'customers' => ['view', 'create', 'edit', 'delete', 'forgive', 'notes', 'import', 'export'], 'records' => ['view', 'all'], 'record_templates' => self::EVERYTHING,
                 'services' => self::EVERYTHING, 'professionals' => self::EVERYTHING, 'schedules' => ['view', 'edit'], 'rooms' => self::EVERYTHING,
-                'quotes' => self::EVERYTHING, 'pos' => ['view', 'create', 'edit'], 'products' => self::EVERYTHING, 'inventory' => self::EVERYTHING,
+                'quotes' => self::EVERYTHING, 'pos' => ['view', 'create', 'edit', 'discount'], 'products' => self::EVERYTHING, 'inventory' => self::EVERYTHING,
                 'sales' => [...self::EVERYTHING, 'approve'], 'payments' => ['view', 'review'], 'cash' => [...self::EVERYTHING, 'others', 'approve'], 'coupons' => self::EVERYTHING,
                 'packages' => ['view', 'create', 'edit', 'delete', 'use'], 'memberships' => self::EVERYTHING, 'loyalty' => self::EVERYTHING, 'messages' => ['view', 'create', 'edit', 'reply'],
-                'campaigns' => ['view', 'create', 'edit'], 'automations' => ['view'], 'reports' => ['view', 'money'], 'commissions' => ['view', 'approve'],
+                'campaigns' => ['view', 'create', 'edit'], 'automations' => ['view'], 'surveys' => ['view', 'edit'], 'reports' => ['view', 'money'], 'commissions' => ['view', 'approve'],
                 'branches' => ['view'], 'complaints' => ['view'],
                 'users' => ['view', 'create', 'edit'],
                 'data' => ['export'],
@@ -330,6 +344,7 @@ class Access
                 'quotes' => ['view', 'create', 'edit'], 'pos' => ['view', 'create', 'edit'], 'products' => ['view'], 'inventory' => ['view', 'create'],
                 'sales' => ['view', 'create'], 'payments' => ['view'], 'cash' => ['view', 'edit'], 'coupons' => ['view'],
                 'packages' => ['view', 'use'], 'memberships' => ['view'], 'loyalty' => ['view', 'create', 'edit'], 'messages' => ['view', 'create', 'edit', 'reply'],
+                'surveys' => ['view'],
             ],
         ],
         'cashier' => [
@@ -374,6 +389,21 @@ class Access
         return self::$scoped ??= Schema::hasColumn('roles', 'scope');
     }
 
+    public static function ownProfessionalId(User $user): ?string
+    {
+        if (!$user->tenant_id || $user->isTenantAdmin()) {
+            return null;
+        }
+
+        $restricted = self::scopeOf($user) === 'own' || $user->roles()->where('slug', 'professional')->exists();
+
+        if (!$restricted) {
+            return null;
+        }
+
+        return \App\Models\Professional::where('tenant_id', $user->tenant_id)->where('user_id', $user->id)->value('id') ?? 'none';
+    }
+
     public static function scopeOf(User $user): string
     {
         if (!$user->tenant_id) {
@@ -396,6 +426,11 @@ class Access
 
     public static function branchLimit(mixed $user): ?string
     {
+        return self::ownBranchLimit($user) ?? self::focusedBranch($user);
+    }
+
+    public static function ownBranchLimit(mixed $user): ?string
+    {
         if (!$user instanceof User || self::scopeOf($user) !== 'branch') {
             return null;
         }
@@ -403,9 +438,33 @@ class Access
         return $user->branch_id ?: self::NO_BRANCH;
     }
 
+    private static array $focus = [];
+
+    public static function focusedBranch(mixed $user): ?string
+    {
+        if (!$user instanceof User || !$user->tenant_id || !app()->bound('request')) {
+            return null;
+        }
+
+        $request = request();
+        $id = $request->header('X-Branch-Id');
+
+        if (!$request->isMethod('GET') || !is_string($id) || !\Illuminate\Support\Str::isUuid($id)) {
+            return null;
+        }
+
+        $key = $user->tenant_id . '|' . $id;
+
+        if (!array_key_exists($key, self::$focus)) {
+            self::$focus[$key] = DB::table('branches')->where('tenant_id', $user->tenant_id)->where('id', $id)->exists() ? $id : null;
+        }
+
+        return self::$focus[$key];
+    }
+
     public static function assertBranch(mixed $user, ?string $branchId, bool $changing = false): void
     {
-        $limit = self::branchLimit($user);
+        $limit = self::ownBranchLimit($user);
 
         if ($limit === null || $branchId === $limit) {
             return;
@@ -437,6 +496,12 @@ class Access
 
     public static function otherBranch(User $user, bool $wholeCompany = false): string
     {
+        if (self::ownBranchLimit($user) === null && ($focused = self::focusedBranch($user))) {
+            $name = DB::table('branches')->where('id', $focused)->value('name');
+
+            return "Estás viendo solo la sede {$name}. Elige «Todas las sedes» arriba para verlo.";
+        }
+
         if (!$user->branch_id) {
             return 'Tu cuenta trabaja solo con su sede, pero aún no tiene una asignada. Pídele a quien administra tu empresa que te asigne tu sede.';
         }

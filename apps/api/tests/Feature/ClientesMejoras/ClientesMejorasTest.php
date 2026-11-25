@@ -95,7 +95,9 @@ describe('ficha 360', function () {
 
     it('quien no puede ver ventas no ve montos', function () {
         $clienta = $this->customer($this->co->tenant, 'Carla', 'Paz');
-        $profesional = $this->staff($this->co, 'professional', $this->co->branch, 'Pro Sin Ventas');
+        $pro = $this->professional($this->co, 'Pro Sin Ventas');
+        $this->book($this->co, $clienta, $this->servicePriced($this->co->tenant, 40), $pro, $this->at($this->co->tenant, '10:00'))->assertCreated();
+        $profesional = $pro->user;
 
         $perfil = $this->as($profesional)->getJson("/api/customers/{$clienta->id}/profile")->assertOk()->json();
         expect($perfil['money'])->toBeNull()->and($perfil['purchases'])->toBeNull();
@@ -110,6 +112,8 @@ describe('etiquetas', function () {
         $tag = $this->as($this->co->owner)->postJson('/api/customer-tags', ['name' => 'VIP de verano', 'color' => '#3F768C'])->assertCreated()->json('tag.id');
         $this->as($this->co->owner)->postJson('/api/customer-tags', ['name' => 'VIP de verano'])->assertStatus(422);
         $this->as($this->co->owner)->putJson("/api/customers/{$una->id}/tags", ['tag_ids' => [$tag]])->assertOk()->assertJsonPath('tags.0.name', 'VIP de verano');
+
+        $this->as($this->co->owner)->getJson('/api/customer-tags')->assertOk()->assertJsonPath('tags.0.customers', 1);
 
         $lista = collect($this->as($this->co->owner)->getJson("/api/customers?tag_id={$tag}")->json('data'))->pluck('id');
         expect($lista->all())->toBe([$una->id]);

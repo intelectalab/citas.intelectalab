@@ -4,7 +4,7 @@ import Button from '@/app/components/common/Button';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { labelClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Building2, CalendarOff, UserRound } from 'lucide-react';
+import { AlertTriangle, Building2, CalendarOff, DoorOpen, UserRound } from 'lucide-react';
 import { api } from '@/lib/axios';
 import FormDrawer from '@/app/components/ui/forms/FormDrawer';
 import Select from '@/app/components/common/Select';
@@ -21,6 +21,7 @@ interface FormBlockProps {
   initialData: Block | null;
   options: BlockOptions | null;
   onSaved: () => void;
+  preset?: { date?: string; time?: string; professional_id?: string; branch_id?: string; room_id?: string } | null;
 }
 
 const ALL_BRANCHES = 'all';
@@ -29,8 +30,9 @@ const inputClass =
   'w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand text-slate-800 bg-white';
 
 const emptyForm = () => ({
-  scope: 'professional' as 'professional' | 'branch',
+  scope: 'professional' as 'professional' | 'branch' | 'room',
   professional_id: '',
+  room_id: '',
   branch_id: '',
   kind: 'vacation' as BlockKind,
   allDay: true,
@@ -41,7 +43,7 @@ const emptyForm = () => ({
   reason: '',
 });
 
-export default function FormBlock({ isOpen, onClose, initialData, options, onSaved }: FormBlockProps) {
+export default function FormBlock({ isOpen, onClose, initialData, options, onSaved, preset = null }: FormBlockProps) {
   const vocab = useVocabulary();
   const [form, setForm] = useState(emptyForm);
   const [affected, setAffected] = useState<AffectedAppointment[]>([]);
@@ -51,6 +53,8 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
   const branches = options?.branches ?? [];
   const professionals = options?.professionals ?? [];
   const canBlockBranch = Boolean(options?.can_block_branch);
+  const rooms = options?.rooms ?? [];
+  const canBlockRoom = canBlockBranch && rooms.length > 0;
   const kinds = (form.scope === 'professional' ? options?.professional_kinds : options?.branch_kinds) ?? [];
 
   useEffect(() => {
@@ -64,6 +68,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
       setForm({
         scope: initialData.scope,
         professional_id: initialData.professional_id ?? '',
+        room_id: initialData.room_id ?? '',
         branch_id: initialData.branch_id ?? '',
         kind: initialData.kind,
         allDay,
@@ -76,19 +81,24 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
       return;
     }
 
+    const start = preset?.time && preset.time < '23:00' ? preset.time : '09:00';
+    const end = `${String(Math.min(23, Number(start.slice(0, 2)) + 1)).padStart(2, '0')}:${start.slice(3, 5)}`;
     setForm({
       ...emptyForm(),
-      professional_id: professionals.length === 1 ? professionals[0].id : '',
-      branch_id: branches.length === 1 ? branches[0].id : '',
+      ...(preset?.room_id ? { scope: 'room' as const, kind: 'room' as BlockKind } : {}),
+      professional_id: preset?.professional_id ?? (professionals.length === 1 ? professionals[0].id : ''),
+      room_id: preset?.room_id ?? '',
+      branch_id: preset?.branch_id ?? (branches.length === 1 ? branches[0].id : ''),
+      ...(preset?.date ? { startDate: preset.date, endDate: preset.date, allDay: !preset.time, startTime: start, endTime: end, ...(preset.room_id ? {} : { kind: 'other' as BlockKind }) } : {}),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialData]);
 
   const set = (changes: Partial<ReturnType<typeof emptyForm>>) => setForm((current) => ({ ...current, ...changes }));
 
-  const changeScope = (scope: 'professional' | 'branch') => {
+  const changeScope = (scope: 'professional' | 'branch' | 'room') => {
     if (scope === form.scope) return;
-    set({ scope, kind: scope === 'professional' ? 'vacation' : 'closure' });
+    set({ scope, kind: scope === 'professional' ? 'vacation' : scope === 'room' ? 'room' : 'closure' });
   };
 
   const startsAt = form.allDay ? `${form.startDate}T00:00` : `${form.startDate}T${form.startTime}`;
@@ -97,8 +107,8 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
   const rangeValid = datesReady && endsAt > startsAt;
 
   const targetBranches = form.branch_id === ALL_BRANCHES ? branches.map((b) => b.id) : form.branch_id ? [form.branch_id] : [];
-  const targetReady = form.scope === 'professional' ? Boolean(form.professional_id) : targetBranches.length > 0;
-  const targetKey = form.scope === 'professional' ? form.professional_id : targetBranches.join(',');
+  const targetReady = form.scope === 'professional' ? Boolean(form.professional_id) : form.scope === 'room' ? Boolean(form.room_id) : targetBranches.length > 0;
+  const targetKey = form.scope === 'professional' ? form.professional_id : form.scope === 'room' ? form.room_id : targetBranches.join(',');
 
   useEffect(() => {
     if (!isOpen || !targetReady || !rangeValid) {
@@ -110,7 +120,9 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
     const timer = setTimeout(() => {
       const targets = form.scope === 'professional'
         ? [{ professional_id: form.professional_id }]
-        : targetKey.split(',').map((branch_id) => ({ branch_id }));
+        : form.scope === 'room'
+          ? [{ room_id: form.room_id }]
+          : targetKey.split(',').map((branch_id) => ({ branch_id }));
 
       Promise.all(targets.map((target) => api.get('/availability-blocks/affected', { params: { ...target, starts_at: startsAt, ends_at: endsAt } })))
         .then((responses) => {
@@ -128,7 +140,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
     e.preventDefault();
 
     if (!targetReady) {
-      setError(form.scope === 'professional' ? 'Elige a quién se bloquea la agenda.' : 'Elige la sede.');
+      setError(form.scope === 'professional' ? 'Elige a quién se bloquea la agenda.' : form.scope === 'room' ? 'Elige la sala o el equipo.' : 'Elige la sede.');
       return;
     }
     if (!rangeValid) {
@@ -136,7 +148,9 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
       return;
     }
 
-    const base = { starts_at: startsAt, ends_at: endsAt, kind: form.kind, reason: form.reason.trim() };
+    const base = form.scope === 'room'
+      ? { starts_at: startsAt, ends_at: endsAt, reason: form.reason.trim() }
+      : { starts_at: startsAt, ends_at: endsAt, kind: form.kind, reason: form.reason.trim() };
 
     try {
       setSaving(true);
@@ -145,10 +159,12 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
       if (initialData) {
         await api.put(`/availability-blocks/${initialData.id}`, {
           ...base,
-          ...(form.scope === 'professional' ? { professional_id: form.professional_id } : { branch_id: targetBranches[0] }),
+          ...(form.scope === 'professional' ? { professional_id: form.professional_id } : form.scope === 'room' ? { room_id: form.room_id } : { branch_id: targetBranches[0] }),
         });
       } else if (form.scope === 'professional') {
         await api.post('/availability-blocks', { ...base, professional_id: form.professional_id });
+      } else if (form.scope === 'room') {
+        await api.post('/availability-blocks', { ...base, room_id: form.room_id });
       } else {
         await Promise.all(targetBranches.map((branch_id) => api.post('/availability-blocks', { ...base, branch_id })));
       }
@@ -163,9 +179,9 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
   };
 
   const formId = 'block-form';
-  const who = initialData?.professional?.display_name ?? initialData?.branch?.name ?? '';
+  const who = initialData?.professional?.display_name ?? initialData?.room?.name ?? initialData?.branch?.name ?? '';
 
-  const scopeButton = (scope: 'professional' | 'branch', label: string, hint: string, icon: React.ReactNode) => {
+  const scopeButton = (scope: 'professional' | 'branch' | 'room', label: string, hint: string, icon: React.ReactNode) => {
     const isOn = form.scope === scope;
 
     return (
@@ -203,11 +219,12 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
               <p className="text-sm font-semibold text-slate-800" data-target>
                 {form.scope === 'professional'
                   ? professionals.find((p) => p.id === form.professional_id)?.display_name ?? who
-                  : `Toda la sede · ${who}`}
+                  : form.scope === 'room' ? who : `Toda la sede · ${who}`}
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid grid-cols-1 gap-3 ${canBlockRoom ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                 {scopeButton('professional', vocab.pro, 'Vacaciones, permisos, reuniones', <UserRound size={18} />)}
+                {canBlockRoom && scopeButton('room', 'Una sala o equipo', 'Mantenimiento o avería', <DoorOpen size={18} />)}
                 {scopeButton('branch', 'Toda la sede', 'Cierres y mantenimiento', <Building2 size={18} />)}
               </div>
             )}
@@ -223,6 +240,16 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
             />
           )}
 
+          {form.scope === 'room' && (
+            <Select
+              label="Sala o equipo"
+              placeholder="Elige cuál..."
+              value={form.room_id}
+              onChange={(e) => set({ room_id: String(e.target.value) })}
+              options={rooms.map((r) => ({ value: r.id, label: `${r.kind === 'equipment' ? `Equipo: ${r.name}${r.parent_name ? ` (en ${r.parent_name})` : ''}` : `Sala: ${r.name}`}${branches.length > 1 ? ` · ${r.branch_name}` : ''}` }))}
+            />
+          )}
+
           {!initialData && form.scope === 'branch' && branches.length > 1 && (
             <Select
               label="Sede"
@@ -233,6 +260,9 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
             />
           )}
 
+          {form.scope === 'room' ? (
+            <p className="text-xs text-slate-500" data-kind-hint>Mientras dure, nadie puede agendar en esa sala. Si es un equipo, se bloquea la sala donde está.</p>
+          ) : (
           <div>
             <span className={labelClass}>Tipo</span>
             <div className="flex flex-wrap gap-2">
@@ -259,6 +289,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
                 : 'Nadie puede agendar dentro de este rango.'}
             </p>
           </div>
+          )}
 
           <div className="space-y-3">
             <label className="flex items-center justify-between gap-3 px-4 py-3 border border-slate-200 rounded-xl cursor-pointer">
@@ -313,7 +344,7 @@ export default function FormBlock({ isOpen, onClose, initialData, options, onSav
               type="text"
               required
               maxLength={255}
-              placeholder={form.scope === 'branch' ? 'Ej. Fumigación' : 'Ej. Vacaciones de verano'}
+              placeholder={form.scope === 'branch' ? 'Ej. Fumigación' : form.scope === 'room' ? 'Ej. Cambio del sillón' : 'Ej. Vacaciones de verano'}
               className={inputClass}
               value={form.reason}
               onChange={(e) => set({ reason: e.target.value })}

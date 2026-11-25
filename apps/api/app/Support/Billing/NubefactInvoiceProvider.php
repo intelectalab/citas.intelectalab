@@ -101,15 +101,19 @@ class NubefactInvoiceProvider implements InvoiceProvider
     {
         $accepted = filter_var($body['aceptada_por_sunat'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $code = trim((string) ($body['sunat_responsecode'] ?? ''));
-        $rejected = !$accepted && $code !== '' && $code !== '0' && (int) $code >= 2000;
+        $rejected = !$accepted && $code !== '' && $code !== '0' && (int) $code >= 2000 && (int) $code < 4000;
         $description = trim((string) ($body['sunat_description'] ?? '')) ?: trim((string) ($body['sunat_soap_error'] ?? ''));
+        $note = trim((string) ($body['sunat_note'] ?? ''));
+        $observed = $accepted && ((int) $code >= 4000 || $note !== '');
 
         return [
-            'status'      => $accepted ? 'accepted' : ($rejected ? 'rejected' : 'pending'),
+            'status'      => $observed ? 'observed' : ($accepted ? 'accepted' : ($rejected ? 'rejected' : 'pending')),
             'received'    => true,
-            'message'     => $accepted
+            'message'     => $observed
+                ? 'SUNAT lo aceptó con observaciones: ' . ($note ?: $description ?: 'revisa el detalle en Nubefact.')
+                : ($accepted
                 ? ($description ?: 'SUNAT aceptó el comprobante.')
-                : ($rejected ? 'SUNAT lo rechazó: ' . $description : 'Nubefact lo recibió. SUNAT aún no lo confirma' . ($description ? ': ' . $description : '.')),
+                : ($rejected ? 'SUNAT lo rechazó: ' . $description : 'Nubefact lo recibió. SUNAT aún no lo confirma' . ($description ? ': ' . $description : '.'))),
             'external_id' => isset($body['enlace']) ? mb_substr((string) $body['enlace'], 0, 190) : (isset($body['serie'], $body['numero']) ? $body['serie'] . '-' . $body['numero'] : null),
             'simulated'   => false,
             'pdf_url'     => $body['enlace_del_pdf'] ?? null,

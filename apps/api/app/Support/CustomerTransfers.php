@@ -32,7 +32,7 @@ class CustomerTransfers
 
     public static function held(string $tenantId, string $branchId, Carbon $from, Carbon $to, ?string $professionalId = null): \Illuminate\Support\Collection
     {
-        if (!self::ready()) {
+        if (!PaymentLinks::holdReady()) {
             return collect();
         }
 
@@ -40,7 +40,8 @@ class CustomerTransfers
             ->where('tenant_id', $tenantId)
             ->where('branch_id', $branchId)
             ->where('purpose', 'deposit')
-            ->where('status', 'review')
+            ->where(fn ($q) => $q->where('status', 'review')
+                ->orWhere(fn ($q) => $q->where('status', 'pending')->where('expires_at', '>', now())))
             ->where('held_until', '>', now())
             ->whereNotNull('professional_id')
             ->when($professionalId, fn ($q, $id) => $q->where('professional_id', $id))

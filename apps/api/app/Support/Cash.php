@@ -73,8 +73,11 @@ class Cash
             ->where(fn ($q) => $q->where('method', '!=', 'cash')->orWhere('cash_session_id', $session->id))
             ->groupBy('method')
             ->selectRaw('method, sum(amount) as total, count(*) as count')
-            ->get()
-            ->map(fn ($row) => ['method' => $row->method, 'label' => Sales::METHODS[$row->method] ?? $row->method, 'total' => round((float) $row->total, 2), 'count' => (int) $row->count])
+            ->get();
+
+        $online = $byMethod->whereIn('method', OnlineCash::METHODS);
+        $byMethod = $byMethod->whereNotIn('method', OnlineCash::METHODS)
+            ->map(fn ($row) => ['method' => $row->method, 'label' => Sales::METHODS[$row->method] ?? Sales::OTHER_METHODS[$row->method] ?? $row->method, 'total' => round((float) $row->total, 2), 'count' => (int) $row->count])
             ->values();
 
         $names = DB::table('users')
@@ -104,8 +107,10 @@ class Cash
             'closing_amount'  => $session->closing_amount !== null ? round((float) $session->closing_amount, 2) : null,
             'difference'      => $session->difference !== null ? round((float) $session->difference, 2) : null,
             'closing_notes'   => $session->closing_notes,
+            'closing_count'   => isset($session->closing_count) && $session->closing_count ? (json_decode($session->closing_count, true) ?: null) : null,
             'movement_count'  => $movements->count(),
             'by_method'       => $byMethod,
+            'online'          => ['total' => round((float) $online->sum('total'), 2), 'count' => (int) $online->where('method', '!=', 'gateway')->sum('count')],
             'review_status'   => $session->review_status ?? null,
             'review_label'    => isset($session->review_status) ? (self::REVIEW_LABELS[$session->review_status] ?? null) : null,
             'reviewed_by'     => !empty($session->reviewed_by) ? ($names[$session->reviewed_by] ?? null) : null,

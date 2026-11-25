@@ -265,7 +265,9 @@ class PlatformBillingController extends Controller
     {
         $this->ready();
 
-        return response()->json(['overdue' => Dunning::overdueList(), 'dunning' => Dunning::config(), 'ready' => Dunning::ready()]);
+        $list = Dunning::overdueList();
+
+        return response()->json(['overdue' => $list, 'summary' => Dunning::summary($list), 'dunning' => Dunning::config(), 'ready' => Dunning::ready()]);
     }
 
     public function overdueAction(Request $request, string $subscription, string $action)
@@ -283,7 +285,9 @@ class PlatformBillingController extends Controller
         $labels = ['retry' => 'Reintentar cobro', 'remind' => 'Recordar pago', 'extend' => 'Prórroga de ' . Dunning::EXTEND_DAYS . ' días'];
         AuditEvent::record($request, 'subscription.dunning_action', \App\Models\Tenant::find($subscription->tenant_id), [], ['accion' => $labels[$action], 'resultado' => $result['message']]);
 
-        return response()->json($result + ['overdue' => Dunning::overdueList()], $result['ok'] ? 200 : 422);
+        $list = Dunning::overdueList();
+
+        return response()->json($result + ['overdue' => $list, 'summary' => Dunning::summary($list)], $result['ok'] ? 200 : 422);
     }
 
     public function methods(Request $request)

@@ -167,3 +167,29 @@ html .menu-preview[data-menu-tone='light'] .text-white { color: #0f172a; }
 .rich-text a { color: var(--brand-link); text-decoration: underline; }
 :is(html[data-theme='dark'] .theme-scope, .theme-scope.force-dark) .rich-text a { color: var(--brand-link); }
 .rich-text.ProseMirror { min-height: inherit; }
+
+@keyframes site-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes site-pop { 0% { opacity: 0; transform: scale(.94); } 100% { opacity: 1; transform: none; } }
+@keyframes site-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes site-flash { 0% { box-shadow: 0 0 0 0 rgb(132 208 217 / .7); } 100% { box-shadow: 0 0 0 10px rgb(132 208 217 / 0); } }
+@keyframes site-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+
+.site-hours { background-image: repeating-linear-gradient(to bottom, rgb(63 118 140 / .10) 0 1px, transparent 1px 56px); }
+.site-underline { position: relative; display: inline-block; }
+.site-underline::after { content: ''; position: absolute; left: 0; right: 0; bottom: .02em; height: .14em; border-radius: 9999px; background: linear-gradient(90deg, var(--brand-link), var(--brand-soft)); transform-origin: left; }
+.site-lift { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease, background-color .25s ease; }
+.site-lift:hover { transform: translateY(-4px); box-shadow: 0 14px 30px -14px rgb(2 35 64 / .28); }
+.site-now { transition: top 1s ease-in-out; }
+.site-step-line { transform-origin: left; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-ready [data-reveal]:not([data-shown]) { opacity: 0; }
+  .motion-ready [data-reveal][data-shown] { animation: site-rise .7s cubic-bezier(.2,.7,.2,1) both; animation-delay: var(--d, 0ms); }
+  .site-underline::after { animation: site-fill 1s .5s cubic-bezier(.2,.7,.2,1) both; }
+  .site-pop { animation: site-pop .45s cubic-bezier(.2,.7,.2,1) both; }
+  .site-flash { animation: site-flash 1.6s ease-out 2; }
+  .site-breathe { animation: site-breathe 2.4s ease-in-out infinite; }
+  .motion-ready [data-shown] .site-step-line { animation: site-fill 1.4s .2s cubic-bezier(.2,.7,.2,1) both; }
+  .motion-ready [data-reveal]:not([data-shown]) .site-step-line { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) { .site-now { transition: none; } }

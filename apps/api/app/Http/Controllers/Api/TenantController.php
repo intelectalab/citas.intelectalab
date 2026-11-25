@@ -10,6 +10,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Support\TenantProvisioner;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -20,7 +21,7 @@ class TenantController extends Controller
 
     public function index(Request $request)
     {
-        $query = Tenant::with(['subscription.plan', 'businessType', 'users']);
+        $query = Tenant::with(['subscription.plan', 'businessType', 'users'])->whereNull('deleted_at');
 
         if ($request->has('search') && !empty($request->input('search'))) {
             $search = $request->input('search');
@@ -37,7 +38,17 @@ class TenantController extends Controller
         }
 
         $tenants = $query->latest()->get();
-        $tenants->each(fn ($tenant) => $tenant->setAttribute('billing_state', \App\Support\Subscriptions::state($tenant)['state']));
+        $ids = $tenants->pluck('id')->all();
+        $appointments = $ids ? DB::table('appointments')->whereIn('tenant_id', $ids)->where('starts_at', '>=', now()->subDays(30))->where('starts_at', '<', now())->groupBy('tenant_id')->selectRaw('tenant_id, count(*) as total')->pluck('total', 'tenant_id') : collect();
+        $tenants->each(function ($tenant) use ($appointments) {
+            $state = \App\Support\Subscriptions::state($tenant);
+            $subscription = \App\Support\Subscriptions::latest($tenant->id);
+            $tenant->setAttribute('billing_state', $state['state']);
+            $tenant->setAttribute('mrr', \App\Support\Subscriptions::mrr($subscription, $state));
+            $tenant->setAttribute('active_users', $tenant->users->where('status', 'active')->count());
+            $tenant->setAttribute('appointments_30d', (int) ($appointments[$tenant->id] ?? 0));
+            $tenant->setAttribute('trial_ends_on', $state['state'] === 'trial' && $state['ends_at'] ? Carbon::parse($state['ends_at'])->setTimezone($tenant->zone())->format('Y-m-d') : null);
+        });
 
         return response()->json($tenants);
     }
@@ -53,7 +64,7 @@ class TenantController extends Controller
             'start_trial'      => 'sometimes|boolean',
             'billing_cycle'    => 'sometimes|in:monthly,yearly',
             'legal_name'       => 'required|string|max:200',
-            'tax_id'           => 'required|string|max:30',
+            'tax_id'           => ['required', 'string', 'regex:/^(10|20)\d{9}$/'],
             'phone'            => 'nullable|string|max:30',
             'address'          => 'nullable|string|max:255',
             'department'       => 'nullable|string|max:100',
@@ -63,7 +74,30 @@ class TenantController extends Controller
             'admin_last_name'  => 'required|string|max:100',
             'admin_email'      => 'required|email|max:190',
             'payment_method'   => 'nullable|in:card,manual',
+            'load_sample'      => 'sometimes|boolean',
+            'confirm_duplicates' => 'sometimes|boolean',
+        ], [
+            'tax_id.regex' => 'El RUC tiene 11 dígitos y empieza con 10 (persona) o 20 (empresa).',
         ]);
+
+        $duplicates = [];
+        $sameTax = DB::table('companies as c')->join('tenants as t', 't.id', '=', 'c.tenant_id')->whereNull('t.deleted_at')->where('c.tax_id', $validated['tax_id'])->value('t.name');
+        $sameEmail = DB::table('users as u')->leftJoin('tenants as t', 't.id', '=', 'u.tenant_id')->whereRaw('lower(u.email) = ?', [mb_strtolower($validated['admin_email'])])->value('t.name');
+        $sameName = DB::table('tenants')->whereNull('deleted_at')->whereRaw('lower(name) = ?', [mb_strtolower(trim($validated['name']))])->value('name');
+
+        if ($sameTax) {
+            $duplicates[] = "El RUC {$validated['tax_id']} ya lo usa «{$sameTax}».";
+        }
+        if ($sameEmail !== null || DB::table('users')->whereRaw('lower(email) = ?', [mb_strtolower($validated['admin_email'])])->exists()) {
+            $duplicates[] = 'El correo ' . $validated['admin_email'] . ' ya tiene una cuenta' . ($sameEmail ? " en «{$sameEmail}»" : '') . '.';
+        }
+        if ($sameName) {
+            $duplicates[] = "Ya hay una empresa llamada «{$sameName}».";
+        }
+
+        if ($duplicates && empty($validated['confirm_duplicates'])) {
+            return response()->json(['message' => 'Revisa antes de crear: ' . implode(' ', $duplicates) . ' Si es correcto, marca «Crear igual».', 'code' => 'DUPLICATES', 'duplicates' => $duplicates], 409);
+        }
 
         $password = Str::password(12, symbols: false);
 
@@ -89,6 +123,16 @@ class TenantController extends Controller
             'password'         => $password,
         ]);
 
+        $sample = null;
+
+        if (!empty($validated['load_sample']) && \App\Support\SampleData::ready()) {
+            try {
+                $sample = \App\Support\SampleData::create($result['tenant']->fresh(), $result['user']);
+            } catch (\Throwable $e) {
+                $sample = ['error' => $e->getMessage()];
+            }
+        }
+
         $invited = \App\Support\AccountSecurity::invite($result['user'], $result['tenant'], false);
 
         if (!$invited && \Illuminate\Support\Facades\Schema::hasColumn('users', 'must_change_password')) {
@@ -106,6 +150,7 @@ class TenantController extends Controller
             'message' => 'Tenant creado correctamente',
             'data' => $result['tenant'],
             'installed' => $result['installed'],
+            'sample'    => $sample,
             'owner' => ['email' => $validated['admin_email'], 'invited' => $invited, 'temporary_password' => $invited ? null : $password],
         ], 201);
     }
@@ -127,6 +172,10 @@ class TenantController extends Controller
         ]);
 
         $previousStatus = $tenant->status;
+
+        if (($validated['status'] ?? null) === 'active' && $previousStatus !== 'active' && $tenant->delete_on) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['status' => 'Esta empresa tiene el borrado programado: primero anula el borrado desde su página.']);
+        }
 
         if (isset($validated['status']) && $validated['status'] !== 'active' && $validated['status'] !== $previousStatus) {
             $reason = trim((string) $request->input('reason'));
@@ -158,12 +207,21 @@ class TenantController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $tenant = Tenant::findOrFail($id);
-        $tenant->delete();
-        \App\Support\Audit::log($request, 'tenant.deleted', ['entity_type' => 'tenant', 'entity_id' => $tenant->id, 'entity_label' => $tenant->name]);
+        $tenant = \App\Support\TenantDeletion::schedule($request, Tenant::findOrFail($id));
+        $deletion = \App\Support\TenantDeletion::present($tenant);
+        $day = \Carbon\Carbon::parse($deletion['delete_on'])->locale('es')->isoFormat('D [de] MMMM [de] YYYY');
 
-        return response()->json([
-            'message' => 'Tenant eliminado correctamente'
+        return response()->json($this->detail($tenant) + [
+            'message' => "La empresa quedó desactivada y sus datos se borran el {$day}. Hasta entonces puedes anular el borrado desde su página.",
+        ]);
+    }
+
+    public function cancelDeletion(Request $request, $id)
+    {
+        $tenant = \App\Support\TenantDeletion::cancel($request, Tenant::findOrFail($id));
+
+        return response()->json($this->detail($tenant) + [
+            'message' => 'Se anuló el borrado. La empresa sigue desactivada y con el plan cancelado: reactívala y registra su pago cuando corresponda.',
         ]);
     }
 
@@ -185,10 +243,18 @@ class TenantController extends Controller
     public function reactivate(Request $request, $id)
     {
         $tenant = Tenant::findOrFail($id);
+        $validated = $request->validate(['reason' => 'required|string|min:5|max:255'], [
+            'reason.required' => 'Escribe por qué reactivas la empresa.',
+            'reason.min'      => 'Explica un poco más por qué la reactivas.',
+        ]);
+
+        if ($tenant->delete_on) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['reason' => 'Esta empresa tiene el borrado programado: primero anula el borrado y después reactívala.']);
+        }
 
         $previousStatus = $tenant->status;
         $tenant->update(['status' => 'active', 'suspension_reason' => null]);
-        $this->afterStatusChange($request, $tenant, $previousStatus);
+        $this->afterStatusChange($request, $tenant, $previousStatus, $validated['reason']);
 
         return response()->json($this->detail($tenant));
     }
@@ -200,12 +266,43 @@ class TenantController extends Controller
         $validated = $request->validate([
             'plan_id' => ['required', 'uuid', Rule::exists('saas_plans', 'id')->where('status', 'active')],
             'billing_cycle' => 'nullable|in:monthly,yearly',
+            'reactivate' => 'sometimes|boolean',
+            'reason' => 'nullable|string|max:255',
         ]);
 
-        $subscription = Subscription::where('tenant_id', $tenant->id)->latest('starts_at')->first();
-        $before = ['plan_id' => $subscription?->plan_id, 'status' => $subscription?->status];
+        if ($tenant->delete_on) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['plan_id' => 'Esta empresa tiene el borrado programado: primero anula el borrado.']);
+        }
 
-        if ($subscription?->isCurrent()) {
+        $plan = SaaSPlan::findOrFail($validated['plan_id']);
+        $exceeded = \App\Support\PlanChanges::exceeded($tenant, $plan);
+
+        if ($exceeded) {
+            $message = "No cabe en el plan {$plan->name}: " . implode('; ', array_map(fn ($row) => "{$row['label']}: usa {$row['used']} y el plan permite {$row['limit']}", $exceeded)) . '. La empresa primero tiene que ajustar lo que usa.';
+
+            return response()->json(['message' => $message, 'code' => 'PLAN_LIMIT', 'errors' => ['plan_id' => [$message]], 'limits' => $exceeded], 422);
+        }
+
+        $subscription = Subscription::where('tenant_id', $tenant->id)->latest('starts_at')->first();
+        $before = ['plan_id' => $subscription?->plan_id, 'status' => $subscription?->status, 'ends_at' => $subscription?->ends_at?->toIso8601String()];
+        $reactivated = false;
+        $reason = trim((string) ($validated['reason'] ?? ''));
+
+        if (!$subscription?->isCurrent()) {
+            if (!$request->boolean('reactivate')) {
+                $message = 'La suscripción de esta empresa no está vigente (venció o se canceló). Cambiar el plan no la reactiva sola: registra su pago en «Cobro del plan», o elige «Reactivar sin cobrar» y escribe el motivo.';
+
+                return response()->json(['message' => $message, 'code' => 'NEEDS_REACTIVATION', 'errors' => ['reactivate' => [$message]]], 422);
+            }
+
+            if (mb_strlen($reason) < 10) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['reason' => 'Escribe por qué la reactivas sin cobrar (al menos 10 letras). Queda en la bitácora de la plataforma.']);
+            }
+
+            $reactivated = true;
+        }
+
+        if (!$reactivated) {
             $subscription->update(array_filter([
                 'plan_id' => $validated['plan_id'],
                 'billing_cycle' => $validated['billing_cycle'] ?? null,
@@ -220,7 +317,7 @@ class TenantController extends Controller
                 'ends_at' => $cycle === 'yearly' ? now()->addYear() : now()->addMonth(),
                 'trial_ends_at' => null,
                 'canceled_at' => null,
-            ];
+            ] + (\App\Support\Cancellations::ready() ? ['cancel_at' => null] : []);
 
             if ($subscription) {
                 $subscription->update($data);
@@ -231,7 +328,15 @@ class TenantController extends Controller
             }
         }
 
-        AuditEvent::record($request, 'tenant.plan_changed', $tenant, $before, ['plan_id' => $validated['plan_id'], 'status' => $subscription->status]);
+        AuditEvent::record($request, 'tenant.plan_changed', $tenant, $before, array_filter([
+            'plan_id' => $validated['plan_id'],
+            'status' => $subscription->status,
+            'reactivated_without_payment' => $reactivated ?: null,
+            'ends_at' => $reactivated ? $subscription->ends_at?->toIso8601String() : null,
+            'reason' => $reactivated ? mb_substr($reason, 0, 255) : null,
+        ], fn ($value) => $value !== null));
+        \App\Support\Subscriptions::forget($tenant->id);
+        \App\Support\SaasEvents::record($tenant->id);
 
         return response()->json($this->detail($tenant));
     }
@@ -253,7 +358,7 @@ class TenantController extends Controller
         $tenant->unsetRelation('settings');
 
         $installed = !empty($validated['install_template'])
-            ? DB::transaction(fn () => $tenant->installBusinessTemplate())
+            ? DB::transaction(fn () => $tenant->installBusinessTemplate() + \App\Support\BusinessTemplates::installExtras($tenant))
             : null;
 
         AuditEvent::record($request, 'tenant.business_type_changed', $tenant, $before, ['business_type_id' => $tenant->business_type_id, 'installed' => $installed]);
@@ -281,7 +386,7 @@ class TenantController extends Controller
         return response()->json($this->detail($tenant));
     }
 
-    private function afterStatusChange(Request $request, Tenant $tenant, string $previousStatus): void
+    private function afterStatusChange(Request $request, Tenant $tenant, string $previousStatus, ?string $reason = null): void
     {
         if (!$tenant->isActive()) {
             DB::table('personal_access_tokens')
@@ -296,7 +401,7 @@ class TenantController extends Controller
             $tenant->isActive() ? 'tenant.reactivated' : 'tenant.suspended',
             $tenant,
             ['status' => $previousStatus],
-            ['status' => $tenant->status, 'reason' => $tenant->suspension_reason],
+            ['status' => $tenant->status, 'reason' => $reason ?? $tenant->suspension_reason],
         );
     }
 
@@ -414,7 +519,7 @@ class TenantController extends Controller
             ];
         });
 
-        $limits = $plan?->limits ?? [];
+        $limits = \App\Support\Addons::extend($tenant->id, $plan?->limits);
         $usage = collect($tenant->usage())->map(fn ($used, $key) => [
             'key'   => $key,
             'used'  => $used,
@@ -450,7 +555,11 @@ class TenantController extends Controller
                 'trial_ends_at' => $subscription->trial_ends_at,
                 'canceled_at'   => $subscription->canceled_at,
                 'plan'          => $plan?->only(['id', 'name', 'slug', 'price_monthly', 'price_yearly', 'currency', 'is_public_catalog']),
+                'list_price'    => \App\Support\Subscriptions::price($plan, $subscription->billing_cycle ?: 'monthly'),
+                'charge'        => \App\Support\Subscriptions::charge($subscription),
+                'mrr'           => \App\Support\Subscriptions::mrr($subscription),
             ] : null,
+            'deletion'          => \App\Support\TenantDeletion::present($tenant),
             'invoices' => $invoices->map(fn ($invoice) => [
                 'id'           => $invoice->id,
                 'amount'       => $invoice->amount,

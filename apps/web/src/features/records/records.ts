@@ -20,6 +20,8 @@ export interface RecordTemplate {
   version: number;
   service_ids: string[];
   records_count: number;
+  is_confidential?: boolean;
+  active?: boolean;
 }
 
 export interface TemplateService {
@@ -59,13 +61,16 @@ export interface CareRecord {
   fields?: RecordField[];
   data?: RecordData;
   addenda?: { note: string; by: string | null; at: string }[];
+  files_ready?: boolean;
+  can_attach?: boolean;
+  files?: RecordFile[];
   can_see_reads?: boolean;
   reads?: RecordRead[];
 }
 
 export interface RecordRead {
   by: string;
-  action: 'view' | 'appointment' | 'previous' | 'pdf' | 'emergency';
+  action: 'view' | 'appointment' | 'previous' | 'pdf' | 'emergency' | 'file';
   by_emergency: boolean;
   at: string;
 }
@@ -76,6 +81,7 @@ export const READ_ACTIONS: Record<RecordRead['action'], string> = {
   previous: 'La vio como ficha anterior al atender otra cita',
   pdf: 'Descargó el PDF',
   emergency: 'Pidió acceso de emergencia',
+  file: 'Abrió un archivo adjunto',
 };
 
 export interface AppointmentRecord {
@@ -86,6 +92,7 @@ export interface AppointmentRecord {
     starts_at: string;
     customer: string | null;
     dependent: string | null;
+    dependent_alert?: string | null;
     service: string | null;
     professional: string | null;
   };
@@ -130,7 +137,7 @@ export const TEETH_ROWS: string[][] = [
 export const RECORD_STATUS: Record<string, { label: string; badge: string }> = {
   draft: { label: 'Borrador', badge: 'bg-amber-50 text-amber-700' },
   signed: { label: 'Firmada', badge: 'bg-emerald-50 text-emerald-700' },
-  locked: { label: 'Bloqueada', badge: 'bg-slate-100 text-slate-600' },
+  locked: { label: 'Firmada', badge: 'bg-emerald-50 text-emerald-700' },
 };
 
 export const isEmptyValue = (value: RecordValue): boolean =>
@@ -139,3 +146,15 @@ export const isEmptyValue = (value: RecordValue): boolean =>
   (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0);
 
 export const NEW_FIELD: RecordField = { key: '', label: '', type: 'text', required: false };
+
+export interface RecordFile {
+  id: string;
+  name: string;
+  size: number;
+  mime: string;
+  by: string | null;
+  at: string;
+  can_delete: boolean;
+}
+
+export const fileSize = (bytes: number): string => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);

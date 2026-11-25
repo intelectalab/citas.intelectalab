@@ -17,6 +17,8 @@ class AppServiceProvider extends ServiceProvider
     {
         \App\Support\Webhooks::listen();
 
+        \Illuminate\Support\Facades\Mail::extend('mailapi', fn (array $config) => new \App\Support\Mail\ApiTransport($config));
+
         \Laravel\Sanctum\Sanctum::authenticateAccessTokensUsing(fn ($token, bool $valid) => \App\Support\Sessions::check($token, $valid));
 
         \Illuminate\Support\Facades\Event::listen(\Illuminate\Database\Events\ConnectionEstablished::class, fn ($event) => \App\Support\Rls::apply($event->connection));

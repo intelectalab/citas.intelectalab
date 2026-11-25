@@ -3,7 +3,8 @@
 import Badge from '@/app/components/common/Badge';
 import SectionTitle from '@/app/components/common/SectionTitle';
 import { useCallback, useEffect, useState } from 'react';
-import { Mail, Plus } from 'lucide-react';
+import { Mail, PhoneCall, Plus } from 'lucide-react';
+import CallLogDrawer from './CallLogDrawer';
 import { api } from '@/lib/axios';
 import Switch from '@/app/components/common/Switch';
 import { PagedList } from '@/app/components/common/Pager';
@@ -28,6 +29,7 @@ export default function CustomerMessages({ customer, consents: initial, canView,
   const [board, setBoard] = useState<MessagesBoard | null>(null);
   const [consents, setConsents] = useState<Consents | null>(initial);
   const [composing, setComposing] = useState(false);
+  const [calling, setCalling] = useState(false);
   const [editing, setEditing] = useState<Message | null>(null);
   const [detail, setDetail] = useState<Message | null>(null);
   const [error, setError] = useState('');
@@ -58,9 +60,14 @@ export default function CustomerMessages({ customer, consents: initial, canView,
           <p className="text-xs text-slate-500 font-medium mt-1">{customer.email ? `Correo: ${customer.email}` : 'No tiene correo registrado: agrégalo en su ficha para escribirle.'}</p>
         </div>
         {board?.can.create && (
-          <button type="button" data-action="new-message" onClick={() => { setEditing(null); setComposing(true); setNotice(''); }} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover shrink-0">
-            <Plus size={14} /> Nuevo mensaje
-          </button>
+          <div className="flex flex-wrap justify-end gap-1.5 shrink-0">
+            <button type="button" data-action="log-call" onClick={() => { setCalling(true); setNotice(''); }} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-brand-ink bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+              <PhoneCall size={14} className="text-brand-accent" /> Registrar llamada
+            </button>
+            <button type="button" data-action="new-message" onClick={() => { setEditing(null); setComposing(true); setNotice(''); }} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-brand text-white rounded-lg hover:bg-brand-hover">
+              <Plus size={14} /> Nuevo mensaje
+            </button>
+          </div>
         )}
       </div>
 
@@ -92,9 +99,9 @@ export default function CustomerMessages({ customer, consents: initial, canView,
                 <button type="button" data-customer-message={m.id} onClick={() => setDetail(m)} className="w-full flex items-center gap-3 px-6 py-2.5 text-left hover:bg-slate-50 transition-colors">
                   <div className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-slate-800 truncate">{m.subject}</span>
-                    <span className="block text-xs text-slate-500">{m.kind_label} · {momentOf(m.status === 'scheduled' && m.scheduled_at ? m.scheduled_at : m.sent_at ?? m.created_at)}</span>
+                    <span className="block text-xs text-slate-500">{m.channel === 'call' ? 'Llamada' : m.channel === 'whatsapp' ? `WhatsApp · ${m.kind_label}` : m.kind_label} · {momentOf(m.status === 'scheduled' && m.scheduled_at ? m.scheduled_at : m.sent_at ?? m.created_at)}</span>
                   </div>
-                  <Badge tone={MESSAGE_BADGES[m.status]} nowrap>{m.status_label}</Badge>
+                  {m.channel !== 'call' && <Badge tone={MESSAGE_BADGES[m.status]} nowrap>{m.status_label}</Badge>}
                 </button>
               </li>
             )}
@@ -103,6 +110,8 @@ export default function CustomerMessages({ customer, consents: initial, canView,
       )}
 
       <MessageDetail message={detail} can={board?.can ?? null} onClose={() => setDetail(null)} onChanged={(m, text) => { setDetail(m); setNotice(text); load(); }} onEdit={(m) => { setDetail(null); setEditing(m); setComposing(true); }} />
+
+      <CallLogDrawer isOpen={calling} customer={customer} onClose={() => setCalling(false)} onSaved={() => { setNotice('Llamada registrada.'); load(); }} />
 
       <ComposePanel
         isOpen={composing}

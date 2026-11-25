@@ -77,3 +77,64 @@ export async function openCulqi(config: CulqiCheckoutConfig): Promise<string> {
     instance.open();
   });
 }
+
+export interface Culqi3dsConfig {
+  script: string;
+  public_key: string;
+  amount: number;
+  currency: string;
+  email?: string | null;
+  return_url: string;
+  token: string;
+}
+
+export interface Culqi3dsResult {
+  parameters: Record<string, string>;
+  device: string | null;
+}
+
+interface Culqi3dsApi {
+  publicKey: string;
+  settings: object;
+  options: object;
+  generateDevice: () => Promise<string>;
+  initAuthentication: (tokenId: string) => void;
+  reset?: () => void;
+}
+
+export async function runCulqi3ds(config: Culqi3dsConfig): Promise<Culqi3dsResult> {
+  if (!config.script.startsWith('https://')) throw new Error('No se pudo cargar la verificación de tu banco.');
+  await new Promise<void>((resolve, reject) => {
+    if ((window as unknown as { Culqi3DS?: Culqi3dsApi }).Culqi3DS) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = config.script;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('No se pudo cargar la verificación de tu banco. Revisa tu conexión e inténtalo de nuevo.'));
+    document.head.appendChild(script);
+  });
+  const three = (window as unknown as { Culqi3DS?: Culqi3dsApi }).Culqi3DS;
+  if (!three) throw new Error('No se pudo abrir la verificación de tu banco.');
+
+  return new Promise<Culqi3dsResult>((resolve, reject) => {
+    let device: string | null = null;
+    const listener = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || !event.data || typeof event.data !== 'object') return;
+      const data = event.data as { parameters3DS?: Record<string, string>; error?: string };
+      if (data.parameters3DS) {
+        window.removeEventListener('message', listener);
+        resolve({ parameters: data.parameters3DS, device });
+      } else if (data.error) {
+        window.removeEventListener('message', listener);
+        reject(new Error('Tu banco no confirmó el pago. Inténtalo de nuevo o usa otra tarjeta.'));
+      }
+    };
+    window.addEventListener('message', listener);
+    three.publicKey = config.public_key;
+    three.settings = { charge: { totalAmount: config.amount, returnUrl: config.return_url, currency: config.currency }, card: { email: config.email ?? '' } };
+    three.options = { showModal: true, showLoading: true, showIcon: true, closeModalAction: () => { window.removeEventListener('message', listener); reject(new CulqiClosed()); } };
+    three.generateDevice()
+      .then((id) => { device = id; three.initAuthentication(config.token); })
+      .catch(() => { window.removeEventListener('message', listener); reject(new Error('No se pudo iniciar la verificación de tu banco.')); });
+  });
+}

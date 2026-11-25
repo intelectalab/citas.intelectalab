@@ -175,9 +175,17 @@ class MessageController extends Controller
     {
         $tenant = $this->tenant($request);
         $data = $this->input($request, $tenant, true);
-        $customer = Customer::where('tenant_id', $tenant->id)->findOrFail($data['customer_id']);
+        $customer = Customer::visibleTo($request->user())->findOrFail($data['customer_id']);
+        $channel = $request->validate(['channel' => 'nullable|in:email,whatsapp'])['channel'] ?? 'email';
+        $vars = self::variablesFor($tenant, $customer);
+        $data['subject'] = strtr($data['subject'], $vars);
+        $data['body'] = strtr($data['body'], $vars);
 
-        $message = Messaging::store($tenant, [
+        if ($channel === 'whatsapp' && ($blocker = \App\Support\WhatsApp::blocker($tenant, $customer, 'manual'))) {
+            throw ValidationException::withMessages(['channel' => $blocker]);
+        }
+
+        $payload = [
             'kind'         => 'manual',
             'customer'     => $customer,
             'subject'      => trim($data['subject']),
@@ -188,7 +196,11 @@ class MessageController extends Controller
             'entity_id'    => $customer->id,
             'dedupe_key'   => null,
             'user'         => $request->user(),
-        ]);
+        ];
+
+        $message = $channel === 'whatsapp'
+            ? \App\Support\WhatsApp::store($tenant, ['body' => RichText::toText($payload['body'])] + $payload)
+            : Messaging::store($tenant, $payload);
 
         Audit::log($request, $data['at'] ? 'message.scheduled' : 'message.sent', [
             'tenant'       => $tenant->id,
@@ -324,25 +336,27 @@ class MessageController extends Controller
         $tenant = $this->tenant($request);
 
         $validated = $request->validate([
-            'provider'     => ['required', Rule::in(['smtp', 'simulated'])],
+            'provider'     => ['required', Rule::in(['smtp', 'simulated', 'api'])],
+            'service'      => ['required_if:provider,api', 'nullable', Rule::in(array_keys(\App\Support\Mail\ApiTransport::SERVICES))],
+            'region'       => ['nullable', 'string', 'max:30', 'regex:/^[a-z]{2}(-[a-z]+)+-\d$/'],
             'preset'       => ['nullable', Rule::in(array_keys(Messaging::PRESETS))],
             'host'         => 'required_if:provider,smtp|nullable|string|max:190',
             'port'         => 'required_if:provider,smtp|nullable|integer|min:1|max:65535',
             'security'     => ['nullable', Rule::in(['tls', 'ssl'])],
             'username'     => 'nullable|string|max:190',
             'password'     => 'nullable|string|max:255',
-            'from_address' => 'required_if:provider,smtp|nullable|email|max:190',
+            'from_address' => 'required_unless:provider,simulated|nullable|email|max:190',
             'from_name'    => 'nullable|string|max:120',
             'reply_to'     => 'nullable|email|max:190',
         ], [
             'host.required_if'         => 'Escribe el servidor de correo (por ejemplo, smtp.gmail.com).',
             'port.required_if'         => 'Escribe el puerto (normalmente 587).',
-            'from_address.required_if' => 'Escribe el correo desde el que se envía.',
+            'from_address.required_unless' => 'Escribe el correo desde el que se envía.',
             'from_address.email'       => 'El correo remitente no es válido.',
             'reply_to.email'           => 'El correo para respuestas no es válido.',
         ]);
 
-        abort_if($validated['provider'] === 'smtp' && !config('app.own_email_enabled'), 422, 'Enviar desde el correo de tu empresa está en construcción. Por ahora puedes usar "Probar sin enviar".');
+        abort_if($validated['provider'] !== 'simulated' && !config('app.own_email_enabled'), 422, 'Enviar desde el correo de tu empresa está en construcción. Por ahora puedes usar "Probar sin enviar".');
 
         $current = Messaging::integration($tenant->id);
         $old = Messaging::emailConfig($tenant->id) ?? [];
@@ -350,11 +364,20 @@ class MessageController extends Controller
         if ($validated['provider'] === 'simulated') {
             $values = ['provider' => 'simulated', 'mode' => 'simulated', 'status' => 'active', 'settings' => json_encode(['provider' => 'simulated']), 'credentials' => null];
         } else {
-            $password = trim((string) ($validated['password'] ?? '')) ?: (($old['provider'] ?? null) === 'smtp' ? ($old['password'] ?? null) : null);
+            $api = $validated['provider'] === 'api';
+            $password = trim((string) ($validated['password'] ?? '')) ?: (($old['provider'] ?? null) === $validated['provider'] ? ($old['password'] ?? null) : null);
+
+            if ($api && !$password) {
+                throw ValidationException::withMessages(['password' => 'Pega la clave (API key) del servicio de correo.']);
+            }
+
             $settings = [
+                'transport'    => $api ? 'api' : 'smtp',
+                'service'      => $api ? $validated['service'] : null,
+                'region'       => $api ? ($validated['region'] ?? null) : null,
                 'preset'       => $validated['preset'] ?? null,
-                'host'         => trim($validated['host']),
-                'port'         => (int) $validated['port'],
+                'host'         => $api ? null : trim($validated['host']),
+                'port'         => $api ? null : (int) $validated['port'],
                 'security'     => $validated['security'] ?? 'tls',
                 'username'     => trim((string) ($validated['username'] ?? '')) ?: null,
                 'from_address' => trim($validated['from_address']),
@@ -363,7 +386,7 @@ class MessageController extends Controller
             ];
 
             $values = [
-                'provider'    => 'smtp',
+                'provider'    => $api ? 'api' : 'smtp',
                 'mode'        => 'production',
                 'status'      => 'active',
                 'settings'    => json_encode($settings),
@@ -726,7 +749,7 @@ class MessageController extends Controller
     {
         $tenant = $request->user()->tenant;
         abort_unless($tenant, 403);
-        $row = Customer::where('tenant_id', $tenant->id)->findOrFail($customer);
+        $row = Customer::visibleTo($request->user())->findOrFail($customer);
         $validated = $request->validate(['email' => 'nullable|boolean', 'whatsapp' => 'nullable|boolean']);
         $before = self::consentsOf($row->id);
         $after = self::saveConsents($tenant->id, $row->id, $validated, 'staff');
@@ -745,5 +768,97 @@ class MessageController extends Controller
         }
 
         return response()->json(['consents' => $after, 'history' => \App\Support\CustomerProfile::consentHistory($tenant, $row->id)]);
+    }
+
+    public const VARIABLES = [
+        '[Nombre]'       => 'Nombre',
+        '[Apellido]'     => 'Apellido',
+        '[Empresa]'      => 'Tu empresa',
+        '[Próxima cita]' => 'Su próxima cita',
+        '[Sede]'         => 'Su sede',
+    ];
+
+    public static function variablesFor(Tenant $tenant, Customer $customer): array
+    {
+        $next = DB::table('appointments as a')
+            ->leftJoin('branches as b', 'b.id', '=', 'a.branch_id')
+            ->where('a.tenant_id', $tenant->id)
+            ->where('a.customer_id', $customer->id)
+            ->whereIn('a.status', ['pending', 'confirmed'])
+            ->where('a.starts_at', '>', now()->toIso8601String())
+            ->orderBy('a.starts_at')
+            ->first(['a.starts_at', 'b.name as branch']);
+        $home = \App\Support\CustomerProfile::fieldsReady() && $customer->home_branch_id ? DB::table('branches')->where('id', $customer->home_branch_id)->value('name') : null;
+
+        return [
+            '[Nombre]'       => (string) $customer->first_name,
+            '[Apellido]'     => (string) $customer->last_name,
+            '[Empresa]'      => (string) $tenant->name,
+            '[Próxima cita]' => $next ? Carbon::parse($next->starts_at)->setTimezone($tenant->zone())->locale('es')->isoFormat('dddd D [de] MMMM, HH:mm') : 'sin cita agendada',
+            '[Sede]'         => (string) ($next->branch ?? $home ?? ''),
+        ];
+    }
+
+    public function channels(Request $request, string $customer)
+    {
+        $tenant = $this->tenant($request);
+        $row = Customer::visibleTo($request->user())->findOrFail($customer);
+        $email = trim((string) $row->email);
+        $whatsapp = \App\Support\WhatsApp::ready() ? \App\Support\WhatsApp::blocker($tenant, $row, 'manual') : 'Tu empresa aún no conecta WhatsApp.';
+
+        return response()->json([
+            'email'     => ['available' => $email !== '', 'to' => $email ?: null, 'reason' => $email === '' ? 'No tiene un correo registrado.' : null],
+            'whatsapp'  => ['available' => $whatsapp === null, 'to' => $row->phone, 'reason' => $whatsapp],
+            'variables' => collect(self::VARIABLES)->map(fn ($label, $token) => ['token' => $token, 'label' => $label])->values(),
+        ]);
+    }
+
+    public function logCall(Request $request, string $customer)
+    {
+        $tenant = $this->tenant($request);
+        $row = Customer::visibleTo($request->user())->findOrFail($customer);
+        $validated = $request->validate([
+            'note'    => 'required|string|max:2000',
+            'outcome' => 'required|in:answered,no_answer,voicemail,callback',
+        ], [
+            'note.required'    => 'Escribe de qué hablaron.',
+            'note.max'         => 'La nota es muy larga: hasta 2000 letras.',
+            'outcome.required' => 'Elige cómo terminó la llamada.',
+        ]);
+
+        abort_unless(\App\Support\CustomerInsights::callsReady(), 503, 'Falta actualizar la base de datos para registrar llamadas: ejecuta php artisan migrate.');
+
+        $outcome = \App\Support\CustomerInsights::CALL_OUTCOMES[$validated['outcome']];
+        $id = (string) Str::uuid();
+
+        DB::table('messages')->insert([
+            'id'          => $id,
+            'tenant_id'   => $tenant->id,
+            'customer_id' => $row->id,
+            'branch_id'   => $request->user()->branch_id,
+            'channel'     => 'call',
+            'kind'        => 'manual',
+            'status'      => 'sent',
+            'to_address'  => $row->phone,
+            'to_name'     => \App\Support\Person::name($row),
+            'subject'     => 'Llamada: ' . $outcome,
+            'body'        => trim($validated['note']),
+            'sent_at'     => now(),
+            'entity_type' => 'customer',
+            'entity_id'   => $row->id,
+            'created_by'  => $request->user()->id,
+            'created_at'  => now(),
+            'updated_at'  => now(),
+        ]);
+
+        Audit::log($request, 'customer.call_logged', [
+            'tenant'       => $tenant->id,
+            'entity_type'  => 'customer',
+            'entity_id'    => $row->id,
+            'entity_label' => \App\Support\Person::name($row),
+            'after'        => ['Resultado' => $outcome],
+        ]);
+
+        return response()->json($this->one($id), 201);
     }
 }

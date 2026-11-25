@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Schema;
 
 class DueNotices
 {
-    public const RECALL_DAYS = 3;
     public const DRAFT_HOURS = 24;
     public const PLAN_LEVELS = [80, 100];
     public const SUBSCRIPTION_DAYS = [7, 3, 1];
@@ -64,7 +63,7 @@ class DueNotices
             ->leftJoin('appointments as a', 'a.id', '=', 'r.source_appointment_id')
             ->where('r.tenant_id', $tenant->id)
             ->whereIn('r.status', ['pending', 'notified'])
-            ->where('r.due_date', '<=', $today->copy()->addDays(self::RECALL_DAYS)->toDateString())
+            ->where('r.due_date', '<=', $today->copy()->addDays(Recalls::noticeDays($tenant))->toDateString())
             ->where('r.due_date', '>=', $today->copy()->subDays(60)->toDateString())
             ->get(['r.id', 'r.due_date', 'r.professional_id', 'a.branch_id']);
 
@@ -83,7 +82,7 @@ class DueNotices
         foreach ($byUser as $userId => $count) {
             $parts = array_filter([
                 $count['late'] ? self::plural($count['late'], 'control vencido', 'controles vencidos') : null,
-                $count['soon'] ? self::plural($count['soon'], 'control que vence', 'controles que vencen') . ' en los próximos ' . self::RECALL_DAYS . ' días' : null,
+                $count['soon'] ? self::plural($count['soon'], 'control que vence', 'controles que vencen') . ' en los próximos ' . Recalls::noticeDays($tenant) . ' días' : null,
             ]);
 
             Notifier::send($tenant->id, $userId, 'recall.due', 'Hay controles por atender', 'Hay ' . implode(' y ', $parts) . '. Llama al cliente para agendarle su cita.', '/recalls', 'recall', null, "recalls:{$today->toDateString()}");
@@ -118,7 +117,7 @@ class DueNotices
 
     public static function planLimits(Tenant $tenant): void
     {
-        $limits = $tenant->activeSubscription?->plan?->limits ?? [];
+        $limits = $tenant->planLimits();
         $usage = $tenant->usage();
         $labels = ['appointments_month' => 'citas de este mes', 'users' => 'cuentas de usuario', 'professionals' => 'profesionales', 'branches' => 'sedes'];
         $month = Carbon::now($tenant->zone())->format('Y-m');

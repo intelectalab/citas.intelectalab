@@ -20,6 +20,11 @@ interface PageData {
   open: boolean;
   module: boolean;
   enabled: boolean;
+  published?: boolean;
+  widget?: string;
+  button?: string;
+  policies?: string[];
+  message?: string;
   page: {
     title: string;
     description: string | null;
@@ -45,6 +50,11 @@ export default function BookingPageSettings() {
   const [form, setForm] = useState({ title: '', description: '', show_policies: true, socials: { instagram: '', facebook: '', tiktok: '', whatsapp: '' } as Record<Social, string> });
   const [qr, setQr] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState('');
+  const [slug, setSlug] = useState('');
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [slugError, setSlugError] = useState('');
+  const [busy, setBusy] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -53,6 +63,7 @@ export default function BookingPageSettings() {
 
   const fill = (value: PageData) => {
     setData(value);
+    setSlug(value.slug);
     setForm({
       title: value.page.title === user?.tenant?.name ? '' : value.page.title,
       description: value.page.description ?? '',
@@ -88,6 +99,49 @@ export default function BookingPageSettings() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setError('No se pudo copiar. Selecciona el enlace y cópialo a mano.');
+    }
+  };
+
+  const copyCode = async (key: 'widget' | 'button') => {
+    const text = data?.[key];
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedCode(key);
+      setTimeout(() => setCopiedCode(''), 2000);
+    } catch {
+      setError('No se pudo copiar. Selecciona el código y cópialo a mano.');
+    }
+  };
+
+  const togglePublished = async (published: boolean) => {
+    try {
+      setBusy('publish');
+      setError('');
+      setMessage('');
+      const res = await api.put<PageData>('/booking-page/publish', { published });
+      fill(res.data);
+      setMessage(res.data.message ?? '');
+    } catch (err) {
+      setError(apiError(err, 'No se pudo cambiar.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const saveSlug = async () => {
+    try {
+      setBusy('slug');
+      setSlugError('');
+      setMessage('');
+      const res = await api.put<PageData>('/booking-page/slug', { slug });
+      fill(res.data);
+      setEditingSlug(false);
+      setMessage(res.data.message ?? '');
+    } catch (err) {
+      setSlugError(apiError(err, 'No se pudo guardar la dirección.'));
+    } finally {
+      setBusy('');
     }
   };
 
@@ -170,6 +224,14 @@ export default function BookingPageSettings() {
 
       {status && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3" data-booking-status>{status}</p>}
 
+      <div className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 p-4" data-booking-published>
+        <div>
+          <p className="text-sm font-bold text-brand-ink">{data.published === false ? 'Página despublicada' : 'Página publicada'}</p>
+          <p className="text-xs text-slate-500">{data.published === false ? 'Quien entre al enlace verá que la reserva en línea no está disponible. Tu portal de clientes sigue igual.' : 'Cualquiera con el enlace o el código QR puede reservar.'}</p>
+        </div>
+        <Switch checked={data.published !== false} disabled={!canEdit || busy !== ''} onChange={togglePublished} label="Página publicada" />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 items-start">
         <div className="space-y-2 min-w-0">
           <span className={labelClass}>Enlace</span>
@@ -192,6 +254,58 @@ export default function BookingPageSettings() {
           </div>
         )}
       </div>
+
+      {canEdit && (
+        <div className="space-y-2" data-booking-slug>
+          <span className={labelClass}>Dirección de la página</span>
+          {editingSlug ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-500 break-all">{data.url.slice(0, data.url.length - data.slug.length)}</span>
+                <input aria-label="Dirección de la página" maxLength={60} value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))} className={`${inputClass} flex-1 min-w-[10rem]`} />
+              </div>
+              <p className="text-xs text-amber-800">Si la cambias, el enlace y el código QR que ya compartiste dejan de funcionar. También cambia tu enlace para redes.</p>
+              {slugError && <ErrorAlert message={slugError} />}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="primary" type="button" disabled={busy !== '' || slug.trim().length < 3 || slug === data.slug} onClick={saveSlug} data-action="save-slug">
+                  {busy === 'slug' ? 'Guardando...' : 'Guardar dirección'}
+                </Button>
+                <Button variant="secondary" type="button" onClick={() => { setEditingSlug(false); setSlug(data.slug); setSlugError(''); }}>Cancelar</Button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setEditingSlug(true)} data-action="edit-slug" className="text-sm font-semibold text-brand-accent hover:text-brand-ink">Cambiar la dirección ({data.slug})</button>
+          )}
+        </div>
+      )}
+
+      {(data.widget || data.button) && (
+        <div className="space-y-2" data-booking-widget>
+          <span className={labelClass}>Para tu sitio web</span>
+          <p className="text-xs text-slate-500">Pega uno de estos códigos en tu web: el primero muestra la reserva dentro de tu página; el segundo, un botón que la abre.</p>
+          {([['widget', 'Reserva dentro de tu web'], ['button', 'Botón «Reservar cita»']] as const).map(([key, label]) => data[key] ? (
+            <div key={key} className="space-y-1">
+              <span className="block text-xs font-semibold text-slate-700">{label}</span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <code className="flex-1 min-w-0 text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 break-all">{data[key]}</code>
+                <Button variant="secondary" type="button" onClick={() => copyCode(key)} data-action={`copy-${key}`} className="inline-flex items-center gap-1.5 shrink-0">
+                  {copiedCode === key ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />} {copiedCode === key ? 'Copiado' : 'Copiar'}
+                </Button>
+              </div>
+            </div>
+          ) : null)}
+        </div>
+      )}
+
+      {(data.policies ?? []).length > 0 && (
+        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-2" data-booking-policies>
+          <span className="block text-sm font-bold text-brand-ink">Así reservan tus clientes hoy</span>
+          <ul className="list-disc pl-5 space-y-0.5 text-xs text-slate-600">
+            {(data.policies ?? []).map((line) => <li key={line}>{line}</li>)}
+          </ul>
+          <a href="/settings#reservas" className="inline-block text-xs font-semibold text-brand-accent hover:text-brand-ink">Cambiar las reglas de reserva</a>
+        </div>
+      )}
 
       <div className="border-t border-slate-100 pt-4 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

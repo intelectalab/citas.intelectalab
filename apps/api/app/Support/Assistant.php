@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Support\Assistant\FakeProvider;
 use App\Support\Assistant\NoneProvider;
 use App\Support\Assistant\Provider;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -22,6 +23,7 @@ class Assistant
         'handoff' => 'Pasó a una persona',
         'blocked' => 'Consulta de salud: pasó a una persona',
         'booking' => 'Reservó una cita',
+        'acted'   => 'Cambió o confirmó una cita',
         'none'    => 'Sin proveedor: no respondió',
         'error'   => 'Tuvo un problema',
     ];
@@ -35,16 +37,80 @@ class Assistant
         return self::$ready ??= Schema::hasTable('assistant_logs');
     }
 
-    public static function provider(): Provider
+    public const AI_PROVIDERS = [
+        'anthropic' => ['label' => 'Claude (Anthropic)', 'class' => \App\Support\Assistant\AnthropicProvider::class, 'model' => 'services.assistant.anthropic_model'],
+        'openai'    => ['label' => 'OpenAI', 'class' => \App\Support\Assistant\OpenAiProvider::class, 'model' => 'services.assistant.openai_model'],
+    ];
+
+    public const QUOTA_LIMIT = 'assistant_month';
+
+    public static function decode(?object $row): ?array
+    {
+        if (!$row || !isset(self::AI_PROVIDERS[$row->provider])) {
+            return null;
+        }
+
+        $settings = is_string($row->settings) ? (json_decode($row->settings, true) ?: []) : (array) $row->settings;
+
+        try {
+            $secret = $row->credentials ? (json_decode(Crypt::decryptString($row->credentials), true) ?: []) : [];
+        } catch (\Throwable $e) {
+            $secret = [];
+        }
+
+        return empty($secret['api_key']) ? null : $settings + ['provider' => $row->provider, 'api_key' => $secret['api_key'], 'updated_at' => $row->updated_at];
+    }
+
+    public static function tenantConfig(string $tenantId): ?array
+    {
+        return self::decode(Schema::hasTable('tenant_integrations') ? DB::table('tenant_integrations')->where('tenant_id', $tenantId)->where('kind', 'ai')->first() : null);
+    }
+
+    public static function platformConfig(): ?array
+    {
+        return self::decode(Schema::hasTable('platform_integrations') ? DB::table('platform_integrations')->where('kind', 'ai')->first() : null);
+    }
+
+    public static function configFor(?Tenant $tenant): ?array
+    {
+        $own = $tenant ? self::tenantConfig($tenant->id) : null;
+
+        return $own ? $own + ['source' => 'company'] : (($platform = self::platformConfig()) ? $platform + ['source' => 'platform'] : null);
+    }
+
+    public static function build(array $config): Provider
+    {
+        $def = self::AI_PROVIDERS[$config['provider']];
+        $model = trim((string) ($config['model'] ?? '')) ?: (string) config($def['model']);
+
+        return new $def['class']((string) $config['api_key'], $model);
+    }
+
+    public static function provider(?Tenant $tenant = null): Provider
     {
         if (self::$provider) {
             return self::$provider;
+        }
+
+        if ($config = self::configFor($tenant)) {
+            return self::build($config);
         }
 
         return match (config('services.assistant.provider')) {
             'fake'  => app()->environment('production') ? new NoneProvider() : new FakeProvider(),
             default => new NoneProvider(),
         };
+    }
+
+    public static function quota(Tenant $tenant): array
+    {
+        $value = $tenant->activeSubscription?->plan?->limits[self::QUOTA_LIMIT] ?? null;
+        $limit = is_numeric($value) && (int) $value >= 0 ? (int) $value : null;
+        $used = self::ready() ? DB::table('assistant_logs')->where('tenant_id', $tenant->id)
+            ->where('action', 'reply')->whereIn('provider', array_keys(self::AI_PROVIDERS))
+            ->where('created_at', '>=', MessageQuota::monthStart($tenant)->toIso8601String())->count() : 0;
+
+        return ['limit' => $limit, 'used' => $used, 'reached' => $limit !== null && $used >= $limit];
     }
 
     public static function enabled(Tenant $tenant): bool
@@ -83,7 +149,8 @@ class Assistant
             return null;
         }
 
-        $provider = self::provider();
+        $tenant->loadMissing('activeSubscription.plan');
+        $provider = self::provider($tenant);
         $text = (string) $inbound->body;
 
         if ($word = self::clinicalWord($tenant, $text)) {
@@ -93,17 +160,54 @@ class Assistant
             return 'blocked';
         }
 
+        if (isset(self::AI_PROVIDERS[$provider->key()]) && self::quota($tenant)['reached']) {
+            self::handoff($tenant, $conversation, 'El asistente llegó al tope de respuestas del mes de tu plan: responde una persona.', true);
+            self::log($tenant, $conversation, $inbound, $provider->key(), 'handoff', null, 'Tope del plan alcanzado');
+
+            return 'handoff';
+        }
+
+        $started = self::episode($conversation, $inbound, self::handoffMinutes($tenant));
+
+        if ($started && $started->lt(now()->subMinutes(self::handoffMinutes($tenant)))) {
+            $reason = 'Pasaron más de ' . self::handoffMinutes($tenant) . ' minutos sin resolver la conversación: sigue una persona.';
+            self::handoff($tenant, $conversation, $reason, true);
+            self::log($tenant, $conversation, $inbound, $provider->key(), 'handoff', null, $reason);
+
+            return 'handoff';
+        }
+
+        $customer = $conversation->customer_id ? Customer::where('tenant_id', $tenant->id)->find($conversation->customer_id) : null;
+        $tools = new \App\Support\Assistant\Tools($tenant, $customer, $conversation);
+
         try {
-            $answer = $provider->answer(self::context($tenant, $conversation, $inbound));
+            $answer = $provider->answer(self::context($tenant, $conversation, $inbound) + ['tools' => $tools]);
         } catch (\Throwable $e) {
             report($e);
             self::handoff($tenant, $conversation, 'El asistente tuvo un problema al responder.', true);
             self::log($tenant, $conversation, $inbound, $provider->key(), 'error', null, mb_substr($e->getMessage(), 0, 250));
+            IntegrationLog::write($tenant->id, 'ai', $provider->key(), 'answer', false, $e->getMessage());
 
             return 'error';
         }
 
+        if (!empty($answer['done'])) {
+            self::resolved($conversation);
+        }
+
+        foreach ((array) ($answer['done'] ?? []) as $done) {
+            self::log($tenant, $conversation, $inbound, $provider->key(), $done['action'] === 'booking' || !WhatsApp::mediaReady() ? 'booking' : 'acted', null, mb_substr((['booking' => 'Reservó la cita ', 'move' => 'Reprogramó la cita ', 'cancel' => 'Canceló la cita ', 'confirm' => 'Confirmó la cita '][$done['action']] ?? '') . ($done['code'] ?? ''), 0, 255));
+        }
+
         $action = (string) ($answer['action'] ?? 'none');
+
+        if ($action === 'handoff' && !empty($answer['text']) && WhatsApp::windowOpen($conversation) && !self::clinicalWord($tenant, (string) $answer['text'])) {
+            WhatsApp::reply($tenant, $conversation, (string) $answer['text'], null, true);
+            self::handoff($tenant, $conversation, (string) ($answer['reason'] ?? 'El asistente pidió ayuda de una persona.'), false);
+            self::log($tenant, $conversation, $inbound, $provider->key(), 'handoff', $answer['text'], $answer['reason'] ?? null);
+
+            return 'handoff';
+        }
 
         if ($action === 'reply' && trim((string) ($answer['text'] ?? '')) !== '') {
             if (self::clinicalWord($tenant, (string) $answer['text'])) {
@@ -177,6 +281,7 @@ class Assistant
             return 'handoff';
         }
 
+        self::resolved($conversation);
         $sent = $text ? WhatsApp::reply($tenant, $conversation, $text, null, true) : null;
         self::log($tenant, $conversation, $inbound, $provider, 'booking', $sent?->body, 'Cita ' . ($data['code'] ?? $data['id'] ?? ''), $sent?->id);
 
@@ -188,7 +293,7 @@ class Assistant
         $at = now();
         DB::table('whatsapp_conversations')->where('id', $conversation->id)->update([
             'status' => 'needs_human', 'handoff_reason' => mb_substr($reason, 0, 255), 'handoff_at' => $at, 'updated_at' => $at,
-        ]);
+        ] + (self::episodesReady() ? ['handoff_summary' => self::summary($conversation), 'assistant_started_at' => null] : []));
 
         $name = $conversation->contact_name ?: $conversation->phone;
 
@@ -224,6 +329,101 @@ class Assistant
             'reason'          => $reason ? mb_substr($reason, 0, 255) : null,
             'created_at'      => now(),
         ]);
+    }
+
+    private static ?bool $episodes = null;
+
+    public static function episodesReady(): bool
+    {
+        return self::$episodes ??= Schema::hasColumn('whatsapp_conversations', 'assistant_started_at');
+    }
+
+    public static function handoffMinutes(Tenant $tenant): int
+    {
+        $value = AppointmentFlow::rule($tenant, 'assistant.handoff_minutes');
+
+        return is_numeric($value) ? max(1, min(120, (int) $value)) : 10;
+    }
+
+    public static function episode(object $conversation, object $inbound, int $minutes): ?\Illuminate\Support\Carbon
+    {
+        if (!self::episodesReady()) {
+            return null;
+        }
+
+        $previous = DB::table('whatsapp_messages')->where('conversation_id', $conversation->id)->where('id', '!=', $inbound->id)->orderByDesc('created_at')->value('created_at');
+        $gap = max(30, $minutes);
+        $started = $conversation->assistant_started_at ?? null;
+
+        if (!$started || !$previous || \Illuminate\Support\Carbon::parse($previous)->lt(now()->subMinutes($gap))) {
+            DB::table('whatsapp_conversations')->where('id', $conversation->id)->update(['assistant_started_at' => now()]);
+
+            return now();
+        }
+
+        return \Illuminate\Support\Carbon::parse($started);
+    }
+
+    public static function resolved(object $conversation): void
+    {
+        if (self::episodesReady()) {
+            DB::table('whatsapp_conversations')->where('id', $conversation->id)->update(['assistant_started_at' => null]);
+        }
+    }
+
+    public static function summary(object $conversation): string
+    {
+        $messages = DB::table('whatsapp_messages')->where('conversation_id', $conversation->id)->orderByDesc('created_at')->limit(8)->get(['direction', 'body', 'by_assistant'])->reverse();
+        $said = $messages->where('direction', 'in')->pluck('body')->map(fn ($b) => '«' . mb_substr(trim((string) $b), 0, 120) . '»')->filter(fn ($b) => $b !== '«»')->take(-4)->implode(' ');
+        $answered = $messages->where('direction', 'out')->pluck('body')->last();
+        $text = 'El cliente escribió: ' . ($said ?: '(sin texto)') . '.';
+
+        if ($answered) {
+            $text .= ' Lo último que se le respondió: «' . mb_substr(trim((string) $answered), 0, 160) . '».';
+        }
+
+        return mb_substr($text, 0, 1000);
+    }
+
+    public static function sweep(): int
+    {
+        if (!self::ready() || !self::episodesReady() || !WhatsApp::ready()) {
+            return 0;
+        }
+
+        $done = 0;
+        $rows = Rls::bypass(fn () => DB::table('whatsapp_conversations as c')
+            ->where('c.status', 'open')
+            ->whereNotNull('c.last_inbound_at')
+            ->where('c.last_inbound_at', '<', now()->subMinute())
+            ->where('c.last_inbound_at', '>', now()->subDay())
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('whatsapp_messages as m')->whereColumn('m.conversation_id', 'c.id')->where('m.direction', 'out')->whereColumn('m.created_at', '>=', 'c.last_inbound_at'))
+            ->limit(500)->get(['c.*']));
+
+        foreach ($rows->groupBy('tenant_id') as $tenantId => $conversations) {
+            $tenant = Tenant::with('settings')->find($tenantId);
+
+            if (!$tenant || !self::enabled($tenant)) {
+                continue;
+            }
+
+            $minutes = self::handoffMinutes($tenant);
+
+            foreach ($conversations as $conversation) {
+                if (\Illuminate\Support\Carbon::parse($conversation->last_inbound_at)->gt(now()->subMinutes($minutes))) {
+                    continue;
+                }
+
+                Rls::asTenant($tenant->id, function () use ($tenant, $conversation, $minutes) {
+                    $reason = "Nadie respondió al cliente en {$minutes} minutos: sigue una persona.";
+                    self::handoff($tenant, $conversation, $reason, true);
+                    self::log($tenant, $conversation, null, 'system', 'handoff', null, $reason);
+                });
+                $done++;
+            }
+        }
+
+        return $done;
     }
 
     public static function stats(Tenant $tenant, int $days = 30): array

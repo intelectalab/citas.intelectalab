@@ -46,12 +46,13 @@ class AppointmentEvents
 
         if (!in_array('messaging', $skip, true)) {
             Messaging::appointmentChanged($tenant, $appointment, $from, $to);
+            Surveys::appointmentChanged($tenant, $appointment, $from, $to);
         }
     }
 
     public static function monthLimit(Tenant $tenant, Carbon $start): ?array
     {
-        $limit = $tenant->activeSubscription?->plan?->limits['appointments_month'] ?? null;
+        $limit = $tenant->planLimits()['appointments_month'] ?? null;
 
         if (!is_numeric($limit)) {
             return null;

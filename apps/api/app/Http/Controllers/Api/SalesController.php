@@ -64,8 +64,24 @@ class SalesController extends Controller
         $invoices = DB::table('invoices')->whereIn('sale_id', $ids)->where('status', 'issued')->where('doc_type', '!=', Invoicing::CREDIT_NOTE)->get()->keyBy('sale_id');
         $refunds = DB::table('sale_refunds')->whereIn('sale_id', $ids)->groupBy('sale_id')->selectRaw('sale_id, sum(amount) as total')->pluck('total', 'sale_id');
 
+        $refunded30 = (float) DB::table('sale_refunds as r')
+            ->join('sales as s', 's.id', '=', 'r.sale_id')
+            ->where('r.tenant_id', $tenant->id)
+            ->where('r.created_at', '>=', now()->subDays(30))
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('s.branch_id', $id))
+            ->where('s.currency', Currency::of($tenant))
+            ->sum('r.amount');
+        $refundedCount = (int) DB::table('sale_refunds as r')
+            ->join('sales as s', 's.id', '=', 'r.sale_id')
+            ->where('r.tenant_id', $tenant->id)
+            ->where('r.created_at', '>=', now()->subDays(30))
+            ->when(Access::branchLimit($request->user()), fn ($q, $id) => $q->where('s.branch_id', $id))
+            ->where('s.currency', Currency::of($tenant))
+            ->count();
+
         return response()->json([
             'can_manage' => $request->user()->allows('sales.delete'),
+            'refunded_30d' => ['total' => round($refunded30, 2), 'count' => $refundedCount],
             'unbilled'   => Sales::mustPayFirst($tenant) ? null : $this->unbilled($tenant),
             'sales'      => $sales->map(fn ($s) => [
                 'id'               => $s->id,
@@ -161,9 +177,67 @@ class SalesController extends Controller
             'void_blocked'     => Refunds::voidBlocked($sale),
             'refund_available' => $refund['available'],
             'refund_blocked'   => $refund['blocked'],
+            'refund_stock'     => collect(\App\Support\Inventory::returnable($tenant->id, $sale->id))->map(fn ($r) => ['product_id' => $r['product_id'], 'name' => $r['name'], 'left' => $r['left']])->values()->all(),
+            'refund_to_loyalty' => min($refund['available'], \App\Support\Loyalty::paidWithLoyalty($tenant->id, $sale->id)['total']),
             'refund_methods'   => collect(Sales::METHODS)->map(fn ($label, $key) => ['value' => $key, 'label' => $label])->values()->when(\App\Support\PaymentLinks::ready() && \App\Support\PaymentLinks::gatewayPaid($sale->id) > 0, fn ($list) => $list->prepend(['value' => 'gateway', 'label' => 'Por la pasarela'])),
             'cash_sessions'    => Cash::openSessions($tenant->id, $sale->branch_id)->map(fn ($s) => ['id' => $s->id, 'register_name' => $s->register_name])->values(),
+            'penalty_notice'   => $this->penaltyNotice($tenant, $sale),
+            'commissions'      => $this->saleCommissions($tenant, $sale, $user),
         ];
+    }
+
+    private function penaltyNotice(Tenant $tenant, object $sale): ?string
+    {
+        $item = DB::table('sale_items')->where('sale_id', $sale->id)->where('item_type', 'penalty')->first(['details', 'appointment_id']);
+
+        if (!$item) {
+            return null;
+        }
+
+        $details = $item->details ? (json_decode($item->details, true) ?: []) : [];
+        $appointment = $item->appointment_id ? DB::table('appointments')->where('id', $item->appointment_id)->first(['code', 'starts_at', 'price']) : null;
+        $percent = rtrim(rtrim(number_format((float) ($details['percent'] ?? 0), 2, '.', ''), '0'), '.');
+        $currency = $sale->currency ?? Currency::of($tenant);
+        $when = $appointment ? Carbon::parse($appointment->starts_at)->setTimezone($tenant->zone())->locale('es')->isoFormat('dddd D [de] MMMM [a las] HH:mm') : null;
+        $code = $appointment ? "la cita {$appointment->code}" . ($when ? " del {$when}" : '') : 'la cita';
+
+        $text = ($details['penalty'] ?? null) === \App\Support\Penalties::LATE_CANCEL
+            ? 'Se cobra porque se canceló ' . $code . ' con menos de ' . \App\Support\Penalties::rules($tenant)['window_hours'] . ' horas de anticipación.'
+            : 'Se cobra porque el cliente no asistió a ' . $code . ' y no avisó.';
+
+        $text .= " Según las reglas de tu empresa, es el {$percent} % del precio" . ($appointment ? ' (' . Currency::format((float) $appointment->price, $currency) . ')' : '') . '.';
+
+        if ((float) ($details['deposit_retained'] ?? 0) > 0) {
+            $text .= ' Ya se descontó el adelanto de ' . Currency::format((float) $details['deposit_retained'], $currency) . ' que pagó.';
+        }
+
+        return $text . ' Si corresponde perdonarla, anula esta venta y escribe el motivo.';
+    }
+
+    private function saleCommissions(Tenant $tenant, object $sale, User $user): ?array
+    {
+        if (!\App\Support\Commissions::enabled($tenant) || !$user->allows('commissions.view')) {
+            return null;
+        }
+
+        return \App\Support\Commissions::scoped($user)
+            ->leftJoin('professionals as p', 'p.id', '=', 'e.professional_id')
+            ->where('e.sale_id', $sale->id)
+            ->orderBy('e.created_at')
+            ->get(['e.id', 'e.description', 'e.base', 'e.percent', 'e.fixed', 'e.amount', 'e.status', 'e.source', 'e.currency', 'p.display_name'])
+            ->map(fn ($e) => [
+                'id'           => $e->id,
+                'professional' => $e->display_name,
+                'description'  => $e->description,
+                'base'         => round((float) $e->base, 2),
+                'percent'      => round((float) $e->percent, 2),
+                'fixed'        => round((float) $e->fixed, 2),
+                'amount'       => round((float) $e->amount, 2),
+                'status_label' => \App\Support\Commissions::STATUSES[$e->status] ?? $e->status,
+                'source_label' => \App\Support\Commissions::SOURCES[$e->source] ?? $e->source,
+            ])
+            ->values()
+            ->all();
     }
 
     private function customerName(object $sale): ?string
@@ -215,6 +289,9 @@ class SalesController extends Controller
             'method'          => ['required', Rule::in([...array_keys(Sales::METHODS), 'gateway'])],
             'reason'          => 'required|string|max:255',
             'cash_session_id' => 'nullable|uuid',
+            'restock'         => 'nullable|array|max:100',
+            'restock.*.product_id' => 'required|uuid',
+            'restock.*.quantity'   => 'required|numeric|min:0|max:999999',
         ], [
             'amount.required' => 'Escribe cuánto se devuelve.',
             'amount.numeric'  => 'Escribe el monto como un número.',
@@ -286,6 +363,7 @@ class SalesController extends Controller
             $row = $this->pendingRequest($tenant, $refundRequest);
             $fresh = Refunds::refund($tenant, $row->sale_id, [
                 'amount' => (float) $row->amount, 'method' => $row->method, 'reason' => $row->reason, 'cash_session_id' => $row->cash_session_id,
+                'restock' => isset($row->restock) && $row->restock ? json_decode($row->restock, true) : null,
             ], $user);
             $refundId = DB::table('sale_refunds')->where('sale_id', $row->sale_id)->orderByDesc('created_at')->value('id');
 

@@ -426,7 +426,7 @@ class Inventory
         );
     }
 
-    public static function deductForSale(Tenant $tenant, object $sale, ?User $actor = null): void
+    public static function deductForSale(Tenant $tenant, object $sale, ?User $actor = null, bool $strict = false, string $errorField = 'amount'): void
     {
         if (!self::enabled($tenant) || ($sale->status ?? null) !== 'paid' || empty($sale->branch_id)) {
             return;
@@ -476,63 +476,75 @@ class Inventory
                 unitCost: $cost,
                 referenceType: 'sale',
                 referenceId: $sale->id,
-                checkNegative: false,
+                checkNegative: $strict,
+                errorField: $errorField,
             );
         }
     }
 
-    public static function returnForSale(Tenant $tenant, object $sale, ?User $actor = null, ?string $reason = null): void
+    public static function returnable(string $tenantId, string $saleId): array
+    {
+        if (!self::ready()) {
+            return [];
+        }
+
+        return DB::table('inventory_movements as m')
+            ->join('products as p', 'p.id', '=', 'm.product_id')
+            ->where('m.tenant_id', $tenantId)
+            ->where('m.reference_type', 'sale')
+            ->where('m.reference_id', $saleId)
+            ->whereIn('m.type', ['sale', 'return'])
+            ->groupBy('m.product_id', 'm.warehouse_id', 'p.name')
+            ->selectRaw("m.product_id, m.warehouse_id, p.name, sum(case when m.type = 'sale' then -m.quantity else 0 end) as sold, sum(case when m.type = 'return' then m.quantity else 0 end) as returned, max(case when m.type = 'sale' then m.unit_cost else 0 end) as unit_cost")
+            ->get()
+            ->map(fn ($r) => [
+                'product_id'   => $r->product_id,
+                'warehouse_id' => $r->warehouse_id,
+                'name'         => $r->name,
+                'sold'         => self::qty($r->sold),
+                'left'         => self::qty(max(0, (float) $r->sold - (float) $r->returned)),
+                'unit_cost'    => (float) $r->unit_cost,
+            ])
+            ->filter(fn ($r) => $r['left'] > 0)
+            ->values()
+            ->all();
+    }
+
+    public static function returnForSale(Tenant $tenant, object $sale, ?User $actor = null, ?string $reason = null, ?array $only = null): void
     {
         if (!self::ready()) {
             return;
         }
 
-        $alreadyReturned = DB::table('inventory_movements')
-            ->where('tenant_id', $tenant->id)
-            ->where('reference_type', 'sale')
-            ->where('reference_id', $sale->id)
-            ->where('type', 'return')
-            ->exists();
-
-        if ($alreadyReturned) {
-            return;
-        }
-
-        $deductions = DB::table('inventory_movements')
-            ->where('tenant_id', $tenant->id)
-            ->where('reference_type', 'sale')
-            ->where('reference_id', $sale->id)
-            ->where('type', 'sale')
-            ->get();
-
-        if ($deductions->isEmpty()) {
-            return;
-        }
-
         $label = $reason ? "Devolución {$sale->code}: {$reason}" : "Devolución de venta {$sale->code}";
+        $wanted = $only === null ? null : collect($only)->groupBy('product_id')->map(fn ($rows) => round((float) $rows->sum('quantity'), 4))->filter(fn ($q) => $q > 0)->all();
 
-        foreach ($deductions as $m) {
-            $qty = abs((float) $m->quantity);
+        foreach (self::returnable($tenant->id, $sale->id) as $row) {
+            $qty = $wanted === null ? $row['left'] : min($row['left'], (float) ($wanted[$row['product_id']] ?? 0));
+
+            if ($wanted !== null && isset($wanted[$row['product_id']])) {
+                $wanted[$row['product_id']] = round($wanted[$row['product_id']] - $qty, 4);
+            }
+
             if ($qty <= 0) {
                 continue;
             }
 
             self::recordMovement(
                 tenant: $tenant,
-                warehouseId: $m->warehouse_id,
-                productId: $m->product_id,
+                warehouseId: $row['warehouse_id'],
+                productId: $row['product_id'],
                 type: 'return',
                 quantity: $qty,
                 actor: $actor,
                 reason: $label,
-                unitCost: (float) $m->unit_cost,
+                unitCost: $row['unit_cost'],
                 referenceType: 'sale',
                 referenceId: $sale->id,
                 checkNegative: false,
             );
         }
     }
-
     public static function consumeForAppointment(Tenant $tenant, Appointment $appointment, ?User $actor = null): void
     {
         if (

@@ -7,9 +7,12 @@ import { previewStyle, resolveColors } from '@/lib/brand';
 import { setCurrencies, type CurrencyInfo } from '@/lib/currency';
 import BookingFlow from '@/features/portal/components/BookingFlow';
 import PublicClasses from './PublicClasses';
+import { ReviewsSection, TrackingConsent, type PublicReviews } from './BookingExtras';
+import { channelFromUrl, trackBooking, type Tracking } from '../tracking';
 import { portalError, type PortalCatalog, type PortalOverview, type PortalPolicies } from '@/features/portal/portal';
 
 interface PublicInfo {
+  captcha_site_key?: string | null;
   name: string;
   code: string;
   open: boolean;
@@ -32,7 +35,25 @@ interface PublicInfo {
   policies: PortalPolicies;
   dependents: { enabled: boolean; required: boolean; items: [] };
   classes?: boolean;
+  reviews?: PublicReviews | null;
+  tracking?: Tracking;
+  business_type?: string | null;
+  initials?: string;
+  services_online?: number;
+  branches?: PublicBranch[];
 }
+
+export interface PublicBranch {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  map_url: string | null;
+  hours: Record<string, { opens: string; closes: string }[]>;
+  state: { open: boolean; text: string } | null;
+}
+
+const telOf = (value: string) => `tel:${value.replace(/[^\d+]/g, '')}`;
 
 const socialLink = (key: string, value: string) => {
   if (/^https?:\/\//i.test(value)) return value;
@@ -53,6 +74,9 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
   const [catalog, setCatalog] = useState<PortalCatalog | null>(null);
   const [error, setError] = useState('');
   const [round, setRound] = useState(0);
+  const [channel, setChannel] = useState<string | null>(null);
+
+  useEffect(() => { setChannel(channelFromUrl()); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -104,6 +128,19 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
 
   const socials = (Object.entries(info.page.socials) as [keyof typeof SOCIAL_ICONS, string | null][]).filter(([, value]) => value);
   const policies = info.policies;
+  const branches = info.branches ?? [];
+  const firstBranch = branches.find((b) => b.address) ?? branches[0] ?? null;
+  const openBranch = branches.find((b) => b.state?.open);
+  const hoursState = openBranch?.state ?? branches.find((b) => b.state)?.state ?? null;
+  const callNumber = firstBranch?.phone ?? info.contact?.phone ?? null;
+  const whatsappNumber = info.page.socials.whatsapp;
+  const trust = [
+    policies.auto_confirm ? 'Confirmación al instante' : 'Te avisamos cuando se confirme',
+    policies.cancel_allowed ? `Cambias o cancelas hasta ${policies.cancel_window_hours} h antes` : null,
+    info.open && (info.services_online ?? 0) > 0 ? `${info.services_online} ${info.services_online === 1 ? 'servicio' : 'servicios'} en línea` : null,
+    'Tus datos protegidos (Ley 29733)',
+  ].filter(Boolean) as string[];
+  const actionClass = 'inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-bold text-brand-ink bg-white border border-slate-200 rounded-xl hover:border-brand-accent transition-colors';
 
   return (
     <main className="theme-scope min-h-screen bg-[#F2F2F2] text-slate-800" style={style} data-public-booking={slug}>
@@ -121,14 +158,56 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
               {info.brand.logo ? (
                 <img src={info.brand.logo} alt={info.name} className="w-14 h-14 rounded-2xl object-contain bg-white border border-slate-100 shrink-0" />
               ) : (
-                <span className="w-14 h-14 rounded-2xl bg-brand text-white flex items-center justify-center shrink-0"><CalendarClock size={24} /></span>
+                <span data-booking-initials aria-hidden="true" className="w-14 h-14 rounded-2xl bg-brand text-white flex items-center justify-center shrink-0 text-lg font-black tracking-tight">
+                  {info.initials || <CalendarClock size={24} />}
+                </span>
               )}
               <div className="min-w-0">
+                {info.business_type && (
+                  <span data-booking-rubro className="inline-block mb-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-accent bg-brand-soft/20 rounded-md">{info.business_type}</span>
+                )}
                 <h1 className="text-xl sm:text-2xl font-black text-brand-ink tracking-tight leading-tight">{info.page.title}</h1>
                 {info.page.title !== info.name && <p className="text-xs font-semibold text-slate-500">{info.name}</p>}
               </div>
             </div>
             {info.page.description && <p className="text-sm text-slate-600 whitespace-pre-line">{info.page.description}</p>}
+            {(hoursState || firstBranch?.address) && (
+              <ul className="space-y-1 text-sm" data-booking-hours>
+                {hoursState && (
+                  <li className={`flex items-center gap-2 font-semibold ${hoursState.open ? 'text-emerald-700' : 'text-slate-600'}`}>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${hoursState.open ? 'bg-emerald-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                    {hoursState.text}
+                  </li>
+                )}
+                {firstBranch?.address && (
+                  <li className="flex items-start gap-2 text-slate-600">
+                    <MapPin size={14} className="text-brand-accent mt-0.5 shrink-0" />
+                    <span>{firstBranch.address}{branches.length > 1 ? ` · y ${branches.length - 1} ${branches.length === 2 ? 'sede más' : 'sedes más'}` : ''}</span>
+                  </li>
+                )}
+              </ul>
+            )}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2" data-booking-actions>
+              {info.open && (
+                <a href="#reservar" className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-brand text-white rounded-xl hover:bg-brand-hover transition-colors">
+                  <CalendarClock size={16} /> Reservar ahora
+                </a>
+              )}
+              {whatsappNumber && (
+                <a href={socialLink('whatsapp', whatsappNumber)} target="_blank" rel="noopener noreferrer" className={actionClass} data-action="whatsapp"><MessageCircle size={15} className="text-brand-accent" /> WhatsApp</a>
+              )}
+              {callNumber && (
+                <a href={telOf(callNumber)} className={actionClass} data-action="call"><Phone size={15} className="text-brand-accent" /> Llamar</a>
+              )}
+              {firstBranch?.map_url && (
+                <a href={firstBranch.map_url} target="_blank" rel="noopener noreferrer" className={actionClass} data-action="directions"><MapPin size={15} className="text-brand-accent" /> Cómo llegar</a>
+              )}
+            </div>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-xs text-slate-500" data-booking-trust>
+              {trust.map((item) => (
+                <li key={item} className="flex items-center gap-1.5"><ShieldCheck size={13} className="text-brand-accent shrink-0" /> {item}</li>
+              ))}
+            </ul>
             {socials.length > 0 && (
               <div className="flex flex-wrap gap-2" data-socials>
                 {socials.map(([key, value]) => {
@@ -145,7 +224,7 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+      <div id="reservar" className="max-w-2xl mx-auto px-4 sm:px-6 py-5 space-y-4 scroll-mt-4">
         {!info.open ? (
           <section className="bg-white rounded-3xl border border-slate-200/80 p-6 text-center text-sm text-slate-600" data-booking-closed>
             {info.message}
@@ -163,6 +242,14 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
               documentTypes: info.document_types,
               privacyHtml: info.privacy?.html ?? null,
               portalSignup: info.portal_signup,
+              channel,
+              captchaSiteKey: info.captcha_site_key ?? null,
+              onStart: () => trackBooking('start', { currency: info.currency?.code ?? null }),
+              onBooked: (detail) => {
+                trackBooking('complete', { ...detail, currency: info.currency?.code ?? null });
+                if (channel === 'link') api.post(`/public/link/${slug}/visit`, { kind: 'booking' }).catch(() => undefined);
+              },
+              branches: info.branches ?? [],
             }}
             onDone={() => { setRound((value) => value + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             onExit={() => setRound((value) => value + 1)}
@@ -191,6 +278,8 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
           </section>
         )}
 
+        <ReviewsSection reviews={info.reviews} company={info.name} />
+
         {info.contact && (
           <section className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 space-y-3" data-contact>
             <h2 className="text-sm font-black text-brand-ink">Contacto</h2>
@@ -210,6 +299,7 @@ export default function PublicBookingPage({ slug }: { slug: string }) {
           <a href={`/reclamaciones/${info.code}`} className="font-semibold hover:text-brand-ink">Libro de Reclamaciones</a>
         </footer>
       </div>
+      <TrackingConsent tracking={info.tracking} />
     </main>
   );
 }

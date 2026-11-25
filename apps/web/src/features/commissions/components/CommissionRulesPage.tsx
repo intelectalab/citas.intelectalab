@@ -81,6 +81,7 @@ export default function CommissionRulesPage() {
 
   const rules = data?.rules ?? [];
   const services = rules.filter((r) => r.type === 'service');
+  const categories = rules.filter((r) => r.type === 'category');
   const exceptions = rules.filter((r) => r.type === 'exception');
   const products = rules.filter((r) => r.type === 'product');
   const canEdit = Boolean(data?.can_edit);
@@ -140,7 +141,7 @@ export default function CommissionRulesPage() {
       <div>
         <h1 className="text-2xl font-black text-brand-ink tracking-tight">Reglas de comisión</h1>
         <p className="text-sm text-slate-500 font-medium mt-1 max-w-3xl">
-          Para cada servicio se mira de abajo hacia arriba: si la persona tiene una <b>excepción</b> (3), se usa esa; si no, la <b>comisión del servicio</b> (2); si no, <b>su porcentaje</b> (1). No puede haber dos comisiones para el mismo caso.
+          Para cada servicio se mira de abajo hacia arriba: si la persona tiene una <b>excepción</b> (4), se usa esa; si no, la <b>comisión del servicio</b> (3); si no, la <b>comisión de su categoría</b> (2); si no, <b>su porcentaje</b> (1). No puede haber dos comisiones para el mismo caso.
         </p>
       </div>
 
@@ -164,7 +165,7 @@ export default function CommissionRulesPage() {
 
       {data && (
         <section className={card} data-section="percents">
-          <SectionHead number={1} title={`Lo que gana cada ${pro}`} hint="Su porcentaje en todos sus servicios, salvo los que estén en las listas 2 y 3. Vacío, no gana nada por ellos. También se cambia en su ficha." />
+          <SectionHead number={1} title={`Lo que gana cada ${pro}`} hint="Su porcentaje en todos sus servicios, salvo los que estén en las listas 2, 3 y 4. Vacío, no gana nada por ellos. También se cambia en su ficha." />
           <table className="w-full text-sm">
             <thead><tr className={th}><th className="px-6 py-2.5">{vocab.pro}</th><th className="px-4 py-2.5 w-48">Su porcentaje</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
@@ -197,12 +198,44 @@ export default function CommissionRulesPage() {
       )}
 
       {data && (
+        <section className={card} data-section="categories">
+          <SectionHead number={2} title="Categorías con otra comisión" hint={`Para todos los servicios de esa categoría. Reemplaza el porcentaje de cada ${pro} (lista 1). Si un servicio de la categoría tiene su propia comisión (lista 3), manda la del servicio.`} action={addButton('category', 'Agregar categoría')} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className={th}><th className="px-6 py-2.5">Categoría</th><th className="px-4 py-2.5">Comisión</th><th className="px-4 py-2.5">Estado</th><th className="px-4 py-2.5 w-24" /></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {categories.length === 0 && empty((data.categories ?? []).length === 0 ? 'Aún no hay categorías de servicios. Se crean en Servicios o con el + al agregar.' : 'Ninguna categoría tiene otra comisión.', 4)}
+                {categories.map((r) => {
+                  const info = (data.categories ?? []).find((c) => c.id === r.category_id);
+                  const count = data.services.filter((s) => s.category_id === r.category_id).length;
+                  return (
+                    <tr key={r.id} data-rule-row={r.category ?? ''}>
+                      <td className="px-6 py-3">
+                        <span className="flex items-center gap-2 font-semibold text-slate-800">
+                          {info?.color && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: info.color }} />}
+                          {r.category}
+                        </span>
+                        <span className="block text-xs text-slate-500 mt-0.5">{count === 1 ? '1 servicio' : `${count} servicios`}</span>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">{amount(r)}</td>
+                      <td className="px-4 py-3">{state(r)}</td>
+                      <td className="px-4 py-3 text-right">{editCell(r)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {data && (
         <section className={card} data-section="services">
-          <SectionHead number={2} title="Servicios con otra comisión" hint={`Para todos los que atienden ese servicio. Reemplaza el porcentaje de cada ${pro} (lista 1). Puede ser un porcentaje o un monto fijo por atención.`} action={addButton('service', 'Agregar servicio')} />
+          <SectionHead number={3} title="Servicios con otra comisión" hint={`Para todos los que atienden ese servicio. Reemplaza la comisión de su categoría (lista 2) y el porcentaje de cada ${pro} (lista 1). Puede ser un porcentaje o un monto fijo por atención.`} action={addButton('service', 'Agregar servicio')} />
           <table className="w-full text-sm">
             <thead><tr className={th}><th className="px-6 py-2.5">Servicio</th><th className="px-4 py-2.5">Comisión</th><th className="px-4 py-2.5">Estado</th><th className="px-4 py-2.5 w-24" /></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {services.length === 0 && empty(`Ningún servicio tiene otra comisión: en todos vale el porcentaje de cada ${pro}.`, 4)}
+              {services.length === 0 && empty(`Ningún servicio tiene otra comisión: vale la de su categoría o el porcentaje de cada ${pro}.`, 4)}
               {services.map((r) => (
                 <tr key={r.id} data-rule-row={r.service ?? ''}>
                   <td className="px-6 py-3 font-semibold text-slate-800">{r.service}</td>
@@ -218,7 +251,7 @@ export default function CommissionRulesPage() {
 
       {data && (
         <section className={card} data-section="exceptions">
-          <SectionHead number={3} title="Excepciones de una persona" hint={`Solo para un ${pro} en un servicio. Reemplaza la comisión del servicio (lista 2) y su porcentaje (lista 1). Sirve, por ejemplo, para quien gana más en un servicio que domina.`} action={addButton('exception', 'Agregar excepción')} />
+          <SectionHead number={4} title="Excepciones de una persona" hint={`Solo para un ${pro} en un servicio. Reemplaza todo lo demás: la comisión del servicio (lista 3), la de su categoría (lista 2) y su porcentaje (lista 1). Sirve, por ejemplo, para quien gana más en un servicio que domina.`} action={addButton('exception', 'Agregar excepción')} />
           <table className="w-full text-sm">
             <thead><tr className={th}><th className="px-6 py-2.5">{vocab.pro}</th><th className="px-4 py-2.5">Servicio</th><th className="px-4 py-2.5">Comisión</th><th className="px-4 py-2.5">Estado</th><th className="px-4 py-2.5 w-24" /></tr></thead>
             <tbody className="divide-y divide-slate-100">

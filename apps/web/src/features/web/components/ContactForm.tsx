@@ -34,7 +34,7 @@ export default function ContactForm({ businessType }: { businessType?: string })
   }
 
   return (
-    <form onSubmit={send} className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-3" data-contact-form>
+    <form onSubmit={send} className="w-full bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-3" data-contact-form>
       <div className="flex items-center gap-2 text-brand-ink font-bold"><PhoneCall size={18} className="text-brand-accent" /> ¿Prefieres que te llamemos?</div>
       <p className="text-xs text-slate-500">Déjanos tu nombre y celular, y una persona del equipo te explica todo sin compromiso.</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

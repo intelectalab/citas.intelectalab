@@ -5,8 +5,9 @@ import { ErrorAlert } from '@/app/components/common/Alert';
 import { inputClass } from '@/app/components/ui/forms/styles';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BellRing, Boxes, CalendarCheck, CalendarClock, CalendarX, Check, ChevronRight, ClipboardList, MoreHorizontal, Timer, Undo2, UserRound, UserX, Wallet } from 'lucide-react';
+import { AlertTriangle, BellRing, Boxes, CalendarCheck, CalendarClock, CalendarX, Check, ChevronRight, ClipboardList, MoreHorizontal, Timer, Undo2, UserRound, UserX, Wallet } from 'lucide-react';
 import Floating from '@/app/components/common/Floating';
+import Select from '@/app/components/common/Select';
 import { api } from '@/lib/axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
@@ -15,6 +16,7 @@ import Stopwatch from './Stopwatch';
 import { actionLabel, apiError, dateOf, formatDate, formatDateTime, formatMinutes, statusStyle, timeOf, type Appointment } from '../appointments';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 import ChargePanel from '@/features/sales/components/ChargePanel';
+import DependentAlert from '@/features/customers/components/DependentAlert';
 import { money, SALE_BADGES, type ChargeContext } from '@/features/sales/sales';
 
 interface AppointmentDetailProps {
@@ -27,6 +29,10 @@ interface AppointmentDetailProps {
 }
 
 const FLOW = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed'];
+
+const OTHER = '__other__';
+
+const waiveReasons = (client: string) => ['Primera vez', 'Causa justificada (salud, emergencia)', `${client} frecuente`, 'Error de la empresa'];
 
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
 
@@ -45,16 +51,47 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const [notes, setNotes] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [markingNoShow, setMarkingNoShow] = useState(false);
+  const [undoingNoShow, setUndoingNoShow] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [seriesScope, setSeriesScope] = useState<'one' | 'following' | 'all'>('one');
   const [byCustomer, setByCustomer] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [cancelChoice, setCancelChoice] = useState('');
+  const [waiving, setWaiving] = useState(false);
+  const [waiveChoice, setWaiveChoice] = useState('');
+  const [waiveOther, setWaiveOther] = useState('');
   const moreRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
+
+  const changeRoom = async (roomId: string) => {
+    if (!appointment || !roomId || roomId === appointment.room?.id) return;
+    try {
+      setBusy('room');
+      setError('');
+      const res = await api.post(`/appointments/${appointment.id}/room`, { room_id: roomId });
+      apply(res.data);
+      onChanged(res.data);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo cambiar la sala.'));
+    } finally {
+      setBusy('');
+    }
+  };
 
   const statusNames = Object.fromEntries((user?.tenant?.appointment_statuses ?? []).map((s) => [s.key, s.name]));
 
   const apply = (data: Appointment) => {
-    setAppointment((current) => ({ ...data, customer_timing: data.customer_timing ?? current?.customer_timing }));
+    setAppointment((current) => ({
+      ...data,
+      customer_timing: data.customer_timing ?? current?.customer_timing,
+      customer_profile: data.customer_profile ?? current?.customer_profile,
+      dependent_detail: data.dependent_detail ?? current?.dependent_detail,
+      deposit: data.deposit !== undefined ? data.deposit : current?.deposit,
+      messages: data.messages ?? current?.messages,
+      cancel_reasons: data.cancel_reasons ?? current?.cancel_reasons,
+      can_waive_penalty: data.can_waive_penalty ?? current?.can_waive_penalty,
+    }));
     setNotes(data.notes ?? '');
     setVideoUrl(data.own_video_url ?? '');
   };
@@ -67,6 +104,9 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     setNotice('');
     setCancelling(false);
     setCancelReason('');
+    setCancelChoice('');
+    setWaiving(false);
+    setSeriesScope('one');
     setMoreOpen(false);
     setLoading(true);
 
@@ -84,7 +124,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
     api.get(`/appointments/${appointmentId}/sale`)
       .then((res) => setCharge(res.data))
       .catch((err) => setChargeNote(apiError(err, 'No se pudo cargar el cobro de esta cita.')));
-  }, [appointmentId, reloadKey, canCharge]);
+  }, [appointmentId, reloadKey, canCharge, appointment?.status]);
 
   const changeStatus = async (status: string, reason?: string) => {
     if (!appointment) return;
@@ -93,13 +133,17 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       setBusy(status);
       setError('');
       setNotice('');
-      const res = await api.post(`/appointments/${appointment.id}/status`, { status, reason: reason || null, ...(status === 'cancelled' && byCustomer ? { by_customer: true } : {}) });
+      const res = await api.post(`/appointments/${appointment.id}/status`, { status, reason: reason || null, ...(status === 'cancelled' && byCustomer ? { by_customer: true } : {}), ...(status === 'cancelled' && seriesScope !== 'one' ? { series_scope: seriesScope } : {}) });
       apply(res.data);
       setCancelling(false);
+      setMarkingNoShow(false);
       setCancelReason('');
+      setCancelChoice('');
       setByCustomer(false);
       const waiting = Number(res.data.waitlist_matches ?? 0);
+      const seriesCancelled = Number(res.data.series_cancelled ?? 0);
       const notices = [
+        seriesCancelled > 0 ? `También se cancelaron ${seriesCancelled === 1 ? '1 cita' : `${seriesCancelled} citas`} de la serie.` : '',
         res.data.late_cancel && !res.data.penalty ? 'Se canceló fuera del plazo sin costo de tu empresa.' : '',
         res.data.penalty && (status === 'no_show' || status === 'cancelled')
           ? `Se generó una ${res.data.penalty.label.toLowerCase()} de ${money(res.data.penalty.total, res.data.penalty.currency)} por cobrar (venta ${res.data.penalty.code}).`
@@ -113,7 +157,56 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       }
       onChanged(res.data);
     } catch (err) {
+      if ((err as { response?: { data?: { code?: string } } })?.response?.data?.code === 'RECORD_REQUIRED' && can('records.view')) {
+        onOpenRecord(appointment);
+        return;
+      }
       setError(apiError(err, 'No se pudo cambiar la fase de la cita.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const undoNoShow = async () => {
+    if (!appointment) return;
+
+    try {
+      setBusy('undo-no-show');
+      setError('');
+      setNotice('');
+      const res = await api.post(`/appointments/${appointment.id}/undo-no-show`);
+      apply(res.data);
+      setUndoingNoShow(false);
+      const waived = res.data.penalty_waived;
+      setNotice(waived
+        ? `Listo: la cita volvió a «${res.data.status_name}» y se perdonó la penalidad de ${money(waived.total, waived.currency)} (venta ${waived.code}).`
+        : `Listo: la cita volvió a «${res.data.status_name}».`);
+      onChanged(res.data);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo deshacer.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const waivePenalty = async () => {
+    if (!appointment) return;
+    const reason = (waiveChoice === OTHER ? waiveOther : waiveChoice).trim();
+    if (!reason) return setError('Elige o escribe por qué se perdona la penalidad.');
+
+    try {
+      setBusy('waive');
+      setError('');
+      setNotice('');
+      const res = await api.post(`/appointments/${appointment.id}/waive-penalty`, { reason });
+      apply(res.data);
+      setWaiving(false);
+      setWaiveChoice('');
+      setWaiveOther('');
+      setNotice(`Listo: se perdonó la penalidad. La cita sigue como «${res.data.status_name}».`);
+      onChanged(res.data);
+    } catch (err) {
+      setError(apiError(err, 'No se pudo perdonar la penalidad.'));
     } finally {
       setBusy('');
     }
@@ -160,13 +253,14 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
   const moreItems: { key: string; label: string; icon: React.ReactNode; danger?: boolean; onClick: () => void }[] = appointment ? [
     ...(appointment.can_reschedule ? [{ key: 'reschedule', label: 'Reprogramar', icon: <CalendarClock size={15} />, onClick: () => onReschedule(appointment) }] : []),
     ...backward.map((status) => ({ key: status, label: actionLabel(status, appointment.status), icon: <Undo2 size={15} />, onClick: () => changeStatus(status) })),
+    ...(appointment.can_undo_no_show ? [{ key: 'undo-no-show', label: `Deshacer «${appointment.status_name}»`, icon: <Undo2 size={15} />, onClick: () => { setError(''); setNotice(''); setUndoingNoShow(true); } }] : []),
     ...(appointment.customer && can('customers.view') ? [{ key: 'customer', label: `Ver ${vocab.pick('client', 'el', 'la')} ${vocab.client.toLowerCase()}`, icon: <UserRound size={15} />, onClick: () => router.push(`/customers/${appointment.customer!.id}`) }] : []),
     ...exits.map((status) => ({
       key: status,
       label: actionLabel(status, appointment.status),
       icon: status === 'cancelled' ? <CalendarX size={15} /> : <UserX size={15} />,
       danger: true,
-      onClick: () => (status === 'cancelled' ? setCancelling(true) : changeStatus(status)),
+      onClick: () => (status === 'cancelled' ? setCancelling(true) : status === 'no_show' ? setMarkingNoShow(true) : changeStatus(status)),
     })),
   ] : [];
 
@@ -182,18 +276,60 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       ? <><CustomerLink id={appointment.customer.id}>{appointment.customer.name}</CustomerLink> · {appointment.customer.code}</>
       : null],
     ['Celular', appointment.customer?.phone],
-    [vocab.dependent, appointment.dependent ? `${appointment.dependent.name}${appointment.dependent.species ? ` (${appointment.dependent.species})` : ''}` : null],
+    [vocab.dependent, appointment.dependent
+      ? <span data-dependent-detail>
+          {appointment.dependent.name}
+          {(() => {
+            const d = appointment.dependent_detail;
+            const parts = d ? [d.species, d.breed, d.sex, d.age].filter(Boolean) : [appointment.dependent.species].filter(Boolean);
+            return parts.length ? <span className="block text-xs font-medium text-slate-500">{parts.join(' · ')}</span> : null;
+          })()}
+        </span>
+      : null],
     ['Servicio', appointment.service?.name],
     [vocab.pro, appointment.professional
       ? <ProfessionalLink id={appointment.professional.id}>{appointment.professional.display_name}</ProfessionalLink>
       : null],
     ['Sede', appointment.branch?.name],
+    ['Sala', appointment.room_options?.length
+      ? <div className="w-56 max-w-full" data-appointment-room>
+          <Select
+            ariaLabel="Sala"
+            clearable={false}
+            placeholder="Sin sala"
+            disabled={busy === 'room'}
+            value={appointment.room?.id ?? ''}
+            onChange={(e) => changeRoom(String(e.target.value))}
+            options={appointment.room_options.map((room) => ({ value: room.id, label: room.free ? room.name : `${room.name} · ocupada a esa hora` }))}
+          />
+        </div>
+      : appointment.room?.name],
     ['Fecha', formatDate(dateOf(appointment.starts_at))],
-    ['Hora', `${timeOf(appointment.starts_at)} a ${timeOf(appointment.ends_at)} · ${appointment.duration_minutes} min`],
-    ['Precio', money(appointment.price, appointment.currency)],
+    ['Hora', <span data-duration>
+      {timeOf(appointment.starts_at)} a {timeOf(appointment.ends_at)} · {appointment.duration_minutes} min
+      {((appointment.buffers?.before ?? 0) > 0 || (appointment.buffers?.after ?? 0) > 0) && (
+        <span className="block text-xs font-medium text-slate-500">
+          {[appointment.buffers!.before > 0 ? `+${appointment.buffers!.before} min de preparación` : '', appointment.buffers!.after > 0 ? `+${appointment.buffers!.after} min de limpieza` : ''].filter(Boolean).join(' · ')}
+        </span>
+      )}
+    </span>],
+    ['Precio', <span data-price>
+      {money(appointment.price, appointment.currency)}
+      {appointment.deposit && (
+        <span data-deposit={appointment.deposit.status} className={`block text-xs font-semibold ${appointment.deposit.status === 'paid' ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {appointment.deposit.status === 'paid' ? `Adelanto pagado: ${money(appointment.deposit.amount, appointment.deposit.currency ?? appointment.currency)}` : `Adelanto pendiente: ${money(appointment.deposit.amount, appointment.deposit.currency ?? appointment.currency)}`}
+        </span>
+      )}
+    </span>],
+    ['Origen', appointment.source_label ?? null],
     ['Penalidad', appointment.penalty
       ? <span data-penalty className={appointment.penalty.status === 'pending' || appointment.penalty.status === 'partial' ? 'text-rose-600' : undefined}>
           {money(appointment.penalty.total, appointment.penalty.currency)} · {appointment.penalty.status === 'paid' ? 'cobrada' : appointment.penalty.status === 'void' ? 'perdonada' : `por cobrar ${money(appointment.penalty.balance, appointment.penalty.currency)}`} · venta {appointment.penalty.code}
+          {appointment.can_waive_penalty && appointment.penalty.status === 'pending' && !waiving && (
+            <button type="button" data-action="waive-penalty" onClick={() => { setError(''); setNotice(''); setWaiving(true); }} className="block mt-1 text-xs font-semibold text-brand-accent hover:text-brand-ink">
+              Perdonar la penalidad
+            </button>
+          )}
         </span>
       : null],
     ['Confirmación', appointment.status === 'pending' && appointment.confirm_by
@@ -204,6 +340,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
       : null],
     ['Agendada fuera de horario', appointment.override_reason],
     ['Motivo de cancelación', appointment.cancel_reason],
+    ['Se repite', appointment.series?.label ? `${appointment.series.label} · cita ${appointment.series.number ?? ''} de ${appointment.series.total ?? ''}` : null],
     ['Reprogramada', appointment.reschedule_count > 0 ? `${appointment.reschedule_count} ${appointment.reschedule_count === 1 ? 'vez' : 'veces'}` : null],
   ] : [];
 
@@ -219,6 +356,67 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
         <p className="text-sm text-slate-500">{error || 'Cargando cita...'}</p>
       ) : (
         <div className="space-y-6 pb-4">
+          <DependentAlert name={appointment.dependent?.name} alert={appointment.dependent_alert} />
+          {(() => {
+            const p = appointment.customer_profile;
+            if (!p) return null;
+            const blockAfter = p.block_after;
+            return (
+              <section className="space-y-2" data-customer-summary>
+                {(p.segments.length > 0 || p.tags.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5" data-customer-chips>
+                    {p.segments.map((segment) => (
+                      <Badge key={segment.key} tone="bg-brand-soft/25 text-brand-ink" nowrap>{segment.label}</Badge>
+                    ))}
+                    {p.tags.map((tag) => (
+                      <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-600">
+                        <span className="w-2 h-2 rounded-full" style={{ background: tag.color ?? '#94a3b8' }} />{tag.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <dl className="grid grid-cols-3 gap-2" data-customer-stats>
+                  <div className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-2">
+                    <dt className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Visitas</dt>
+                    <dd className="text-sm font-extrabold text-slate-800">{p.visits}</dd>
+                  </div>
+                  {p.spend_12m !== null && (
+                    <div className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-2">
+                      <dt className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gastó en 12 meses</dt>
+                      <dd className="text-sm font-extrabold text-slate-800">{money(p.spend_12m, appointment.currency)}</dd>
+                    </div>
+                  )}
+                  {p.points !== null && (
+                    <div className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-2">
+                      <dt className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Puntos</dt>
+                      <dd className="text-sm font-extrabold text-slate-800">{p.points}</dd>
+                    </div>
+                  )}
+                </dl>
+                {p.alert && (
+                  <p data-customer-alert className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0" /><span>{p.alert}</span>
+                  </p>
+                )}
+                {p.no_shows >= 2 && (
+                  <p data-no-show-warning className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                    No asistió a {p.no_shows} citas.{blockAfter && p.no_shows >= blockAfter ? ' Al reservar en línea se le pide adelanto.' : ''}
+                  </p>
+                )}
+                {(p.balance ?? 0) > 0 && (
+                  <p data-customer-balance className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Tiene un saldo pendiente de ventas anteriores: <strong>{money(p.balance!, appointment.currency)}</strong>.
+                  </p>
+                )}
+              </section>
+            );
+          })()}
+          {appointment.record.required && (appointment.status === 'checked_in' || appointment.status === 'in_progress') && appointment.record.status !== 'signed' && appointment.record.status !== 'locked' && (
+            <p data-record-required className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <ClipboardList size={15} className="mt-0.5 shrink-0" />
+              <span>Este servicio pide la <strong>ficha de atención firmada</strong> antes de darla por atendida.</span>
+            </p>
+          )}
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className={sectionTitle}>Fase</span>
@@ -319,15 +517,32 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
             {cancelling && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg space-y-2">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-rose-700">Motivo de la cancelación</label>
-                <input
-                  type="text"
-                  maxLength={255}
-                  aria-label="Motivo de la cancelación"
-                  placeholder="Ej. El cliente no podrá asistir"
-                  className={inputClass}
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                />
+                {(appointment.cancel_reasons?.length ?? 0) > 0 && (
+                  <div data-cancel-reasons>
+                    <Select
+                      ariaLabel="Elige el motivo"
+                      placeholder="Elige el motivo..."
+                      value={cancelChoice}
+                      onChange={(e) => {
+                        const value = String(e.target.value);
+                        setCancelChoice(value);
+                        setCancelReason(value === OTHER ? '' : value);
+                      }}
+                      options={[...(appointment.cancel_reasons ?? []).map((reason) => ({ value: reason, label: reason })), { value: OTHER, label: 'Otro motivo' }]}
+                    />
+                  </div>
+                )}
+                {((appointment.cancel_reasons?.length ?? 0) === 0 || cancelChoice === OTHER) && (
+                  <input
+                    type="text"
+                    maxLength={255}
+                    aria-label="Motivo de la cancelación"
+                    placeholder={`Ej. ${vocab.pick('client', 'El', 'La')} ${vocab.client.toLowerCase()} no podrá asistir`}
+                    className={inputClass}
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                  />
+                )}
                 {appointment.late_cancel_strike && (() => {
                   const strike = appointment.late_cancel_strike;
                   const name = appointment.customer?.name ?? `${vocab.pick('client', 'el', 'la')} ${vocab.client.toLowerCase()}`;
@@ -358,6 +573,21 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     <p className="text-xs text-slate-500">Faltan menos de {appointment.penalty_preview.window_hours} horas: si la cancelación es a pedido suyo, se genera una penalidad.</p>
                   </div>
                 )}
+                {(appointment.series?.following ?? 0) > 0 && (
+                  <div data-series-scope>
+                    <Select
+                      label="Esta cita se repite"
+                      clearable={false}
+                      value={seriesScope}
+                      onChange={(e) => setSeriesScope(String(e.target.value) as 'one' | 'following' | 'all')}
+                      options={[
+                        { value: 'one', label: 'Cancelar solo esta' },
+                        { value: 'following', label: `Esta y las siguientes (${(appointment.series?.following ?? 0) + 1})` },
+                        { value: 'all', label: 'Toda la serie que falta' },
+                      ]}
+                    />
+                  </div>
+                )}
                 {byCustomer && appointment.penalty_preview?.late_cancel && (
                   <p className="text-xs font-semibold text-rose-700" data-penalty-warning>
                     Se generará una penalidad de {money(appointment.penalty_preview.late_cancel, appointment.penalty_preview.currency)} ({appointment.penalty_preview.late_cancel_percent} %) por cobrar.
@@ -366,7 +596,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => { setCancelling(false); setCancelReason(''); setByCustomer(false); }}
+                    onClick={() => { setCancelling(false); setCancelReason(''); setCancelChoice(''); setByCustomer(false); }}
                     className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
                   >
                     No cancelar
@@ -379,6 +609,94 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     className="px-3 py-2 text-sm font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
                   >
                     {busy === 'cancelled' ? 'Cancelando...' : 'Cancelar la cita'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {markingNoShow && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg space-y-2" data-no-show-confirm>
+                <p className="text-sm font-semibold text-rose-800">¿Marcar que {appointment.customer?.name ?? `${vocab.pick('client', 'el', 'la')} ${vocab.client.toLowerCase()}`} no asistió?</p>
+                <p className="text-xs text-slate-600">Queda en su historial como una falta y el horario se libera.</p>
+                {appointment.penalty_preview?.no_show ? (
+                  <p className="text-xs font-semibold text-rose-700" data-no-show-penalty>
+                    Se generará una penalidad de {money(appointment.penalty_preview.no_show, appointment.penalty_preview.currency)} ({appointment.penalty_preview.no_show_percent} %) por cobrar.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500" data-no-show-free>No se genera ninguna penalidad.</p>
+                )}
+                <p className="text-xs text-slate-500">Si te equivocas, puedes deshacerlo desde «Más acciones».</p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarkingNoShow(false)}
+                    className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    data-action="confirm-no-show"
+                    disabled={busy !== ''}
+                    onClick={() => changeStatus('no_show')}
+                    className="px-3 py-2 text-sm font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
+                  >
+                    {busy === 'no_show' ? 'Guardando...' : 'Sí, no asistió'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {undoingNoShow && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2" data-undo-no-show-confirm>
+                <p className="text-sm font-semibold text-slate-800">¿Deshacer «{appointment.status_name}»?</p>
+                <p className="text-xs text-slate-600">
+                  La cita vuelve a la fase que tenía antes.
+                  {appointment.penalty && (appointment.penalty.status === 'pending' || appointment.penalty.status === 'partial')
+                    ? ` También se perdona la penalidad de ${money(appointment.penalty.total, appointment.penalty.currency)} (venta ${appointment.penalty.code}).`
+                    : ''}
+                </p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUndoingNoShow(false)}
+                    className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    data-action="confirm-undo-no-show"
+                    disabled={busy !== ''}
+                    onClick={undoNoShow}
+                    className="px-3 py-2 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50"
+                  >
+                    {busy === 'undo-no-show' ? 'Deshaciendo...' : 'Sí, deshacer'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {waiving && appointment.penalty && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2" data-waive-form>
+                <p className="text-sm font-semibold text-slate-800">¿Perdonar la penalidad de {money(appointment.penalty.total, appointment.penalty.currency)}?</p>
+                <p className="text-xs text-slate-600">Se anula el cobro pendiente (venta {appointment.penalty.code}). La cita sigue como «{appointment.status_name}» y queda en su historial. Queda registrado quién lo hizo y por qué.</p>
+                <Select
+                  ariaLabel="Motivo para perdonar"
+                  placeholder="Elige el motivo..."
+                  value={waiveChoice}
+                  onChange={(e) => setWaiveChoice(String(e.target.value))}
+                  options={[...waiveReasons(vocab.client).map((reason) => ({ value: reason, label: reason })), { value: OTHER, label: 'Otro motivo' }]}
+                />
+                {waiveChoice === OTHER && (
+                  <input type="text" maxLength={200} aria-label="Otro motivo para perdonar" placeholder="Escribe el motivo" className={inputClass} value={waiveOther} onChange={(e) => setWaiveOther(e.target.value)} />
+                )}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => setWaiving(false)} className="px-3 py-2 text-sm font-medium border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
+                    Volver
+                  </button>
+                  <button type="button" data-action="confirm-waive" disabled={busy !== '' || !(waiveChoice === OTHER ? waiveOther.trim() : waiveChoice)} onClick={waivePenalty} className="px-3 py-2 text-sm font-medium bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors disabled:opacity-50">
+                    {busy === 'waive' ? 'Guardando...' : 'Sí, perdonar'}
                   </button>
                 </div>
               </div>
@@ -447,7 +765,7 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                     {appointment.record.status === null && 'Sin llenar. Ábrela para registrar la atención.'}
                     {appointment.record.status === 'draft' && 'Hay un borrador guardado. Falta firmarla.'}
                     {appointment.record.status === 'signed' && 'Firmada. Aún se puede corregir.'}
-                    {appointment.record.status === 'locked' && 'Firmada y bloqueada. Admite notas.'}
+                    {appointment.record.status === 'locked' && 'Firmada. Ya no se cambia: admite notas y archivos.'}
                   </span>
                 </span>
                 <Badge
@@ -591,6 +909,30 @@ export default function AppointmentDetail({ appointmentId, onClose, onChanged, o
                   </li>
                 ))}
               </ol>
+            </section>
+          )}
+
+          {appointment.messages && (
+            <section className="pt-5 border-t border-slate-100 space-y-3" data-appointment-messages>
+              <span className={sectionTitle}>Mensajes {vocab.pick('client', 'al', 'a la')} {vocab.client.toLowerCase()}</span>
+              {appointment.messages.length === 0 ? (
+                <p className="text-sm text-slate-500">Aún no se le envió ningún mensaje sobre esta cita.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {appointment.messages.map((message) => (
+                    <li key={message.id} className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-800">{message.kind}</span>
+                        <span className="block text-xs text-slate-500">{message.channel} · {formatDateTime(message.at)}</span>
+                        {message.error && <span className="block text-xs text-rose-700">{message.error}</span>}
+                      </span>
+                      <Badge tone={message.status === 'failed' || message.status === 'not_sent' ? 'bg-rose-50 text-rose-700' : message.status === 'sent' || message.status === 'delivered' || message.status === 'read' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} nowrap className="shrink-0">
+                        {message.status_label}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
         </div>

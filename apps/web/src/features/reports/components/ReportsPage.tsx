@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Percent, BadgePercent, CalendarCheck, CalendarX2, Clock, Globe, Lock, Receipt, RotateCcw, Sparkles, TrendingUp, UserCheck, UserPlus, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Scale, Percent, BadgePercent, CalendarCheck, CalendarX2, Clock, Globe, Lock, Receipt, RotateCcw, Sparkles, TrendingUp, UserCheck, UserPlus, Users, Wallet } from 'lucide-react';
 import Select from '@/app/components/common/Select';
 import DateField from '@/app/components/common/DateField';
-import { ErrorAlert } from '@/app/components/common/Alert';
+import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { CustomerLink, ProfessionalLink } from '@/app/components/common/PersonLink';
 import ExportMenu from '@/app/components/ui/table/ExportMenu';
 import type { ExportColumn } from '@/app/components/ui/table/DataTable';
@@ -13,8 +13,9 @@ import { formatMoney } from '@/lib/currency';
 import { useAuth } from '@/hooks/useAuth';
 import { useVocabulary } from '@/hooks/useVocabulary';
 import { addDays, apiError, formatDate, formatMinutes, todayISO } from '@/features/appointments/appointments';
-import { delta, type AppointmentsSummary, type CatalogRow, type CustomersSummary, type MineSummary, type MyCustomer, type ProRow, type ReportPayload, type ReportTab, type SalesSummary, type Serie, type TopCustomer } from '../reports';
+import { delta, type CashDifferenceRow, type CashRegisterRow, type CashSummary, type InventorySummary, type LowStockRow, type MovedProduct, type AppointmentsSummary, type CatalogRow, type CustomersSummary, type MineSummary, type MyCustomer, type ProRow, type ReportPayload, type ReportTab, type SalesSummary, type Serie, type TopCustomer } from '../reports';
 import { Donut, DayBars, Heatmap, Kpi, ListBars, Section, Table, cardClass, isWeekly } from './ReportParts';
+import { ReportDownloadButton, ReportDownloads, useReportDownloads } from './ReportDownloads';
 
 export default function ReportsPage() {
   const { can, hasModule } = useAuth();
@@ -50,6 +51,7 @@ export default function ReportsPage() {
   const prevText = data ? `del ${formatDate(data.range.prev_from, { day: 'numeric', month: 'short' })} al ${formatDate(data.range.prev_to, { day: 'numeric', month: 'short' })}` : '';
   const filters = useMemo(() => [rangeText, data?.branch_id ? `Sede: ${data.branches.find((b) => b.id === data.branch_id)?.name ?? ''}` : 'Todas las sedes'].filter(Boolean), [rangeText, data]);
   const canExport = can('data.export');
+  const downloads = useReportDownloads(canExport);
   const content = data && data.tab === tab ? data.data : null;
   const previous = content?.previous ?? null;
   const change = (key: string) => (previous ? delta((content?.summary as unknown as Record<string, number | null>)?.[key], (previous as unknown as Record<string, number | null>)[key]) : undefined);
@@ -116,8 +118,16 @@ export default function ReportsPage() {
           <Kpi id="occupancy" title="Ocupación" value={percent(s.occupancy)} note="Parte del horario del equipo con citas" change={change('occupancy')} icon={<TrendingUp size={18} />} color="text-sky-600" />
           <Kpi id="cancelled" title="Cancelaciones" value={percent(s.cancelled)} change={change('cancelled')} lowerIsBetter icon={<CalendarX2 size={18} />} color="text-rose-700" />
           <Kpi id="no_show" title="No asistieron" value={percent(s.no_show)} change={change('no_show')} lowerIsBetter icon={<CalendarX2 size={18} />} color="text-amber-600" />
-          <Kpi id="online" title="Reservas por el portal" value={String(s.online)} change={change('online')} icon={<Globe size={18} />} color="text-violet-600" />
+          <Kpi id="online" title="Reservas en línea" value={s.online_percent !== undefined ? `${s.online_percent} %` : String(s.online)} note={`${s.online} ${s.online === 1 ? 'cita reservada' : 'citas reservadas'} por la página o el portal`} change={change('online')} icon={<Globe size={18} />} color="text-violet-600" />
+          {s.class_attendees !== null && s.class_attendees !== undefined && (
+            <Kpi id="class_attendees" title="Asistentes a clases" value={String(s.class_attendees)} note="Marcados como asistieron" change={change('class_attendees')} icon={<UserCheck size={18} />} color="text-emerald-600" />
+          )}
         </div>
+        {s.no_show_alert && (
+          <p data-no-show-alert className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <span className="font-bold">Muchas inasistencias.</span> En este periodo no asistió el {s.no_show} % de las citas, más del {s.no_show_alert} %. Puede ayudar pedir un adelanto al reservar o confirmar las citas un día antes.
+          </p>
+        )}
         {d && (
           <>
             <Section dataKey="occupancy-by-day" title={isWeekly(d.occupancy_by_day ?? []) ? 'Ocupación por semana' : 'Ocupación por día'} hint={`Qué parte del horario de trabajo del equipo estuvo con citas${isWeekly(d.occupancy_by_day ?? []) ? ', en promedio cada semana' : ''}. Donde no hay barra no había horario o no hubo citas.`}>
@@ -139,6 +149,11 @@ export default function ReportsPage() {
                 )}
               </div>
             </div>
+            {d.by_channel && (
+              <Section dataKey="by-channel" title="Reservas en línea por canal" hint="De qué red o enlace llegó cada reserva hecha por la página de reservas o el portal. Los enlaces por canal están en Configuración → Página de reservas.">
+                <ListBars items={d.by_channel} format={(v) => String(v)} empty="Aún no hay reservas en línea en este periodo." />
+              </Section>
+            )}
           </>
         )}
       </>
@@ -150,11 +165,14 @@ export default function ReportsPage() {
     const top = content?.top ?? null;
     return (
       <>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           <Kpi id="attended" title={`${vocab.clients} atendidos`} value={String(s.attended)} change={change('attended')} icon={<Users size={18} />} color="text-slate-500" />
           <Kpi id="new" title="Nuevos registrados" value={String(s.new)} change={change('new')} icon={<UserPlus size={18} />} color="text-sky-600" />
           <Kpi id="returning" title="Volvieron" value={String(s.returning)} note="Ya se habían atendido antes" change={change('returning')} icon={<RotateCcw size={18} />} color="text-emerald-600" />
-          <Kpi id="rebooked" title="Volvieron a reservar" value={`${s.rebooked} %`} note="Reservaron otra cita después de atenderse" change={change('rebooked')} icon={<CalendarCheck size={18} />} color="text-violet-600" />
+          <Kpi id="rebooked" title="Volvieron a reservar" value={`${s.rebooked} %`} note={`Reservaron otra cita en los ${s.rebook_days ?? 60} días siguientes`} change={change('rebooked')} icon={<CalendarCheck size={18} />} color="text-violet-600" />
+          {s.avg_spend !== undefined && (
+            <Kpi id="avg_spend" title="Gasto promedio" value={money(s.avg_spend)} note={`Lo que ha pagado cada ${vocab.client.toLowerCase()}, en promedio`} change={change('avg_spend')} icon={<Wallet size={18} />} color="text-brand-accent" />
+          )}
         </div>
         <Section dataKey="first-vs-returning" title="Primera vez y los que volvieron" hint={`De los ${vocab.clients.toLowerCase()} atendidos en el periodo, cuántos venían por primera vez.`}>
           <Donut items={[{ key: 'first', label: 'Primera vez', value: Math.max(0, s.attended - s.returning) }, { key: 'returning', label: 'Volvieron', value: s.returning }]} format={(v) => String(v)} unit="Atendidos" empty="Aún no hay atenciones en este periodo." />
@@ -279,6 +297,141 @@ export default function ReportsPage() {
     );
   };
 
+  const noMoney = (
+    <p className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">No tienes permiso para ver los montos. Pídeselo al administrador (Usuarios y roles → Reportes → Ver montos).</p>
+  );
+
+  const renderCash = () => {
+    const s = content?.summary as CashSummary;
+    const registers = content?.registers ?? [];
+    const differences = content?.differences ?? [];
+    const signed = (v: number) => (v > 0 ? `+${money(v)}` : money(v));
+    return (
+      <>
+        <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
+          <Kpi id="cash-sessions" title="Turnos de caja" value={String(s.sessions)} note={`${s.closed} cerrados`} change={change('sessions')} icon={<Receipt size={18} />} color="text-slate-500" />
+          <Kpi id="cash-sales" title="Cobrado en caja" value={money(s.sales)} note={s.online ? `Más ${money(s.online)} cobrados en línea` : 'Ventas pagadas con dinero de la caja'} change={change('sales')} icon={<Wallet size={18} />} color="text-emerald-600" />
+          <Kpi id="cash-income" title="Otros ingresos" value={money(s.income)} change={change('income')} icon={<ArrowDownToLine size={18} />} color="text-sky-600" />
+          <Kpi id="cash-out" title="Gastos y retiros" value={s.expense === null || s.withdrawal === null ? '—' : money(s.expense + s.withdrawal)} note={s.refund ? `Más ${money(s.refund)} devueltos` : undefined} lowerIsBetter icon={<ArrowUpFromLine size={18} />} color="text-rose-700" />
+          <Kpi id="cash-short" title="Faltantes" value={money(s.short === null ? null : Math.abs(s.short))} note="Al cerrar, faltó dinero" lowerIsBetter icon={<Scale size={18} />} color="text-amber-600" />
+          <Kpi id="cash-over" title="Sobrantes" value={money(s.over)} note={`${s.with_difference} ${s.with_difference === 1 ? 'cierre' : 'cierres'} con diferencia`} lowerIsBetter icon={<Scale size={18} />} color="text-violet-600" />
+        </div>
+        {!data?.money ? noMoney : (
+          <>
+            <Section dataKey="cash-by-day" title={isWeekly(content?.by_day ?? []) ? 'Movimiento de caja por semana' : 'Movimiento de caja por día'} hint="Lo que entró a las cajas menos lo que salió (gastos, retiros y devoluciones). Pasa el cursor sobre una barra para ver el monto.">
+              <DayBars points={(content?.by_day ?? []).map((p) => ({ day: p.day, value: p.value ?? 0 }))} format={(v) => money(v)} axis={(v) => formatMoney(v, data?.currency, 0)} empty="Aún no hay movimientos de caja en este periodo." />
+            </Section>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Section dataKey="cash-registers" title="Por caja" actions={exportMenu('Caja por caja', [
+                { header: 'Caja', value: (r: CashRegisterRow) => r.name },
+                { header: 'Sede', value: (r: CashRegisterRow) => r.branch ?? '' },
+                { header: 'Turnos', type: 'number', value: (r: CashRegisterRow) => r.sessions },
+                { header: 'Cobrado', type: 'money', value: (r: CashRegisterRow) => r.sales },
+                { header: 'Neto', type: 'money', value: (r: CashRegisterRow) => r.net },
+                { header: 'Diferencia', type: 'money', value: (r: CashRegisterRow) => r.difference },
+              ], registers)}>
+                <Table<CashRegisterRow>
+                  rowKey={(r) => r.id}
+                  rows={registers}
+                  empty="Aún no se abrió ninguna caja en este periodo."
+                  columns={[
+                    { header: 'Caja', cell: (r) => (<span><span className="font-semibold text-slate-800">{r.name}</span>{r.branch && <span className="block text-xs text-slate-400">{r.branch}</span>}</span>) },
+                    { header: 'Turnos', align: 'right', cell: (r) => (r.online ? <span title="Los pagos en línea no tienen turno: entran solos, sin efectivo.">—</span> : r.sessions) },
+                    { header: 'Cobrado', align: 'right', cell: (r) => money(r.sales) },
+                    { header: 'Neto', align: 'right', cell: (r) => money(r.net) },
+                    { header: 'Diferencia', align: 'right', cell: (r) => <span className={r.difference < 0 ? 'text-rose-700 font-semibold' : r.difference > 0 ? 'text-amber-700 font-semibold' : ''}>{signed(r.difference)}</span> },
+                  ]}
+                />
+              </Section>
+              <Section dataKey="cash-differences" title="Cierres con diferencia" hint="Los cierres en que el dinero contado no coincidió con lo esperado, de mayor a menor." actions={exportMenu('Cierres de caja con diferencia', [
+                { header: 'Caja', value: (r: CashDifferenceRow) => r.register },
+                { header: 'Cerrada', type: 'datetime', value: (r: CashDifferenceRow) => r.closed_at },
+                { header: 'Cerró', value: (r: CashDifferenceRow) => r.closed_by ?? '' },
+                { header: 'Diferencia', type: 'money', value: (r: CashDifferenceRow) => r.difference },
+                { header: 'Nota', value: (r: CashDifferenceRow) => r.notes ?? '' },
+              ], differences)}>
+                <Table<CashDifferenceRow>
+                  rowKey={(r) => r.id}
+                  rows={differences}
+                  empty="Todos los cierres cuadraron."
+                  columns={[
+                    { header: 'Caja', cell: (r) => (<span><span className="font-semibold text-slate-800">{r.register}</span>{r.notes && <span className="block text-xs text-slate-400 line-clamp-1" title={r.notes}>{r.notes}</span>}</span>) },
+                    { header: 'Cerrada', cell: (r) => (r.closed_at ? formatDate(r.closed_at.slice(0, 10), { day: 'numeric', month: 'short' }) : '—') },
+                    { header: 'Cerró', cell: (r) => r.closed_by ?? '—' },
+                    { header: 'Diferencia', align: 'right', cell: (r) => <span className={r.difference < 0 ? 'text-rose-700 font-semibold' : 'text-amber-700 font-semibold'}>{signed(r.difference)}</span> },
+                  ]}
+                />
+              </Section>
+            </div>
+          </>
+        )}
+      </>
+    );
+  };
+
+  const renderInventory = () => {
+    const s = content?.summary as InventorySummary;
+    const moved = content?.moved ?? [];
+    const low = content?.low ?? [];
+    const qty = (v: number) => v.toLocaleString('es-PE', { maximumFractionDigits: 2 });
+    return (
+      <>
+        <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
+          <Kpi id="inv-products" title="Productos con stock" value={String(s.products)} note="Los que llevan control de stock" icon={<Boxes size={18} />} color="text-slate-500" />
+          {data?.money && <Kpi id="inv-value" title="Valor del stock" value={money(s.value)} note="Stock de hoy por su costo" icon={<Wallet size={18} />} color="text-emerald-600" />}
+          <Kpi id="inv-low" title="Bajo el mínimo" value={String(s.low)} note="Hoy, con stock mínimo definido" lowerIsBetter icon={<AlertTriangle size={18} />} color="text-amber-600" />
+          <Kpi id="inv-empty" title="Sin stock" value={String(s.empty)} note="Hoy" lowerIsBetter icon={<AlertTriangle size={18} />} color="text-rose-700" />
+          {data?.money && <Kpi id="inv-in" title="Entró" value={money(s.in_value)} note="Compras y devoluciones, a costo" change={change('in_value')} icon={<ArrowDownToLine size={18} />} color="text-sky-600" />}
+          {data?.money && <Kpi id="inv-out" title="Salió" value={money(s.out_value)} note="Ventas y consumo en atenciones, a costo" change={change('out_value')} icon={<ArrowUpFromLine size={18} />} color="text-violet-600" />}
+          {!data?.money && <Kpi id="inv-adjust" title="Ajustes" value={String(s.adjust)} note="Mermas y correcciones del periodo" lowerIsBetter icon={<Scale size={18} />} color="text-violet-600" />}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Section dataKey="inv-by-type" title="Movimientos del periodo" hint="Unidades que entraron o salieron por cada motivo. No cuenta los traslados entre almacenes.">
+            <ListBars items={content?.by_type ?? []} format={(v) => `${qty(v)} u.`} empty="Sin movimientos en este periodo." />
+          </Section>
+          <div className="lg:col-span-2">
+            <Section dataKey="inv-moved" title="Productos que más salen" hint="Vendidos y usados en atenciones durante el periodo." actions={exportMenu('Productos que más salen', [
+              { header: 'Producto', value: (r: MovedProduct) => r.name },
+              { header: 'Código', value: (r: MovedProduct) => r.sku },
+              { header: 'Vendidos', type: 'number', value: (r: MovedProduct) => r.sold },
+              { header: 'Usados en atenciones', type: 'number', value: (r: MovedProduct) => r.used },
+              ...(data?.money ? [{ header: 'Costo', type: 'money' as const, value: (r: MovedProduct) => r.value }] : []),
+            ], moved)}>
+              <Table<MovedProduct>
+                rowKey={(r) => r.id}
+                rows={moved}
+                empty="Aún no sale ningún producto en este periodo."
+                columns={[
+                  { header: 'Producto', cell: (r) => (<span><span className="font-semibold text-slate-800">{r.name}</span><span className="block text-xs text-slate-400 font-mono">{r.sku}</span></span>) },
+                  { header: 'Vendidos', align: 'right', cell: (r) => qty(r.sold) },
+                  { header: 'Usados', align: 'right', cell: (r) => qty(r.used) },
+                  ...(data?.money ? [{ header: 'Costo', align: 'right' as const, cell: (r: MovedProduct) => money(r.value) }] : []),
+                ]}
+              />
+            </Section>
+          </div>
+        </div>
+        <Section dataKey="inv-low" title="Por reponer" hint="Productos sin stock o bajo su stock mínimo hoy, empezando por los que más faltan." actions={exportMenu('Productos por reponer', [
+          { header: 'Producto', value: (r: LowStockRow) => r.name },
+          { header: 'Código', value: (r: LowStockRow) => r.sku },
+          { header: 'Stock', type: 'number', value: (r: LowStockRow) => r.quantity },
+          { header: 'Mínimo', type: 'number', value: (r: LowStockRow) => r.min_stock },
+        ], low)}>
+          <Table<LowStockRow>
+            rowKey={(r) => r.id}
+            rows={low}
+            empty="Ningún producto está por debajo de su mínimo."
+            columns={[
+              { header: 'Producto', cell: (r) => (<span><span className="font-semibold text-slate-800">{r.name}</span><span className="block text-xs text-slate-400 font-mono">{r.sku}</span></span>) },
+              { header: 'Stock', align: 'right', cell: (r) => <span className={r.quantity <= 0 ? 'text-rose-700 font-semibold' : 'text-amber-700 font-semibold'}>{qty(r.quantity)}</span> },
+              { header: 'Mínimo', align: 'right', cell: (r) => qty(r.min_stock) },
+            ]}
+          />
+        </Section>
+      </>
+    );
+  };
+
   const renderCatalog = () => (
     <>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -326,6 +479,9 @@ export default function ReportsPage() {
               <Select ariaLabel="Sede" placeholder="Todas las sedes" value={branchId} onChange={(e) => setBranchId(String(e.target.value))} options={data.branches.map((b) => ({ value: b.id, label: b.name }))} />
             </div>
           )}
+          {canExport && data && !data.locked && content && (
+            <ReportDownloadButton busy={downloads.busy} onClick={() => downloads.request({ tab: data.tab, period, ...(period === 'custom' ? { from, to } : {}), branch_id: data.branch_id })} />
+          )}
         </div>
       </div>
 
@@ -349,6 +505,8 @@ export default function ReportsPage() {
       )}
 
       <ErrorAlert message={error} />
+      <ErrorAlert message={downloads.error} />
+      <SuccessAlert message={downloads.message} />
 
       {loading && !content ? (
         <p className="text-sm text-slate-500">Cargando el reporte...</p>
@@ -357,7 +515,7 @@ export default function ReportsPage() {
           <Lock size={18} className="text-slate-400 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-brand-ink">Esta pestaña viene con el módulo Analítica avanzada.</p>
-            <p className="text-sm text-slate-500 mt-1">Ventas y Citas están en todos los planes. Clientes, {vocab.pros}, Servicios y productos, la comparación con el periodo anterior y el mapa de días y horas vienen con Analítica avanzada. Si tu plan la incluye, enciéndela en Configuración → Módulos.</p>
+            <p className="text-sm text-slate-500 mt-1">Ventas y Citas están en todos los planes. {vocab.clients}, {vocab.pros}, Servicios y productos, Caja, Inventario, la comparación con el periodo anterior y el mapa de días y horas vienen con Analítica avanzada. Si tu plan la incluye, enciéndela en Configuración → Módulos.</p>
           </div>
         </div>
       ) : content && (
@@ -367,12 +525,16 @@ export default function ReportsPage() {
           {tab === 'customers' && renderCustomers()}
           {tab === 'pros' && renderPros()}
           {tab === 'catalog' && renderCatalog()}
+          {tab === 'cash' && renderCash()}
+          {tab === 'inventory' && renderInventory()}
           {tab === 'mine' && renderMine()}
           {!data?.advanced && (tab === 'sales' || tab === 'appointments') && (
             <p className="text-xs text-slate-500">Con el módulo Analítica avanzada cada número se compara con el periodo anterior.</p>
           )}
         </div>
       )}
+
+      {canExport && <ReportDownloads items={downloads.items} />}
     </div>
   );
 }

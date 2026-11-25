@@ -38,6 +38,7 @@ export interface IncludedLeft {
 }
 
 export interface CustomerMembership {
+  auto_renew?: boolean;
   id: string;
   code: string;
   name: string;

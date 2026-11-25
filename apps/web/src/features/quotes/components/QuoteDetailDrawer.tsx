@@ -4,6 +4,8 @@ import { useState } from 'react';
 import {
   Ban,
   Boxes,
+  CalendarPlus,
+  Check,
   CheckCircle2,
   Download,
   Edit2,
@@ -21,6 +23,23 @@ import { inputClass } from '@/app/components/ui/forms/styles';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { money, momentOf, SALE_BADGES } from '@/features/sales/sales';
+import { TEETH_ROWS } from '@/features/records/records';
+import { useAuth } from '@/hooks/useAuth';
+
+const STEPS = ['Borrador', 'Enviado', 'Aprobado', 'En tratamiento', 'Terminado'];
+
+const stepOf = (quote: { status: string; sessions_total: number; sessions_used: number }): number => {
+  if (quote.status === 'draft') return 0;
+  if (quote.status === 'sent') return 1;
+  if (quote.status !== 'accepted') return -1;
+  if (quote.sessions_total > 0 && quote.sessions_used >= quote.sessions_total) return 4;
+  if (quote.sessions_used > 0) return 3;
+  return 2;
+};
+
+const ALL_TEETH = new Set(TEETH_ROWS.flat());
+
+const teethOf = (zone: string | null): string[] => (zone ?? '').match(/\d{2}/g)?.filter((tooth) => ALL_TEETH.has(tooth)) ?? [];
 
 const dayOf = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, '') : '—';
@@ -40,6 +59,7 @@ interface Props {
   onOpenCharge: (saleId: string, amount?: number) => void;
   onCancelAccepted: (quote: QuoteRow) => void;
   onUpdated: (data: QuotesBoardData, notice: string) => void;
+  onSchedule?: (quote: QuoteRow, serviceId: string | null) => void;
 }
 
 const sectionTitle = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider';
@@ -53,11 +73,14 @@ export default function QuoteDetailDrawer({
   onOpenCharge,
   onCancelAccepted,
   onUpdated,
+  onSchedule,
 }: Props) {
+  const { user, can: allowed, hasModule } = useAuth();
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [manual, setManual] = useState<{ itemId: string; note: string } | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
 
   if (!quote) {
     return (
@@ -67,11 +90,12 @@ export default function QuoteDetailDrawer({
     );
   }
 
-  const changeStatus = async (status: QuoteRow['status'], label: string) => {
+  const changeStatus = async (status: QuoteRow['status'], label: string, note?: string) => {
     try {
       setBusy(true);
       setError('');
-      const res = await api.post<QuotesBoardData>(`/quotes/${quote.id}/status`, { status });
+      const res = await api.post<QuotesBoardData>(`/quotes/${quote.id}/status`, { status, ...(note ? { note } : {}) });
+      setRejecting(null);
       onUpdated(res.data, label);
     } catch (err) {
       setError(apiError(err, 'No se pudo cambiar el estado del presupuesto.'));
@@ -142,17 +166,39 @@ export default function QuoteDetailDrawer({
   };
 
   const canModifyLines = quote.status === 'draft' || quote.status === 'sent';
+  const step = stepOf(quote);
+  const nextItem = quote.items.find((item) => item.item_type === 'service' && item.sessions_total > item.sessions_used) ?? quote.items.find((item) => item.sessions_total > item.sessions_used) ?? null;
+  const canSchedule = Boolean(onSchedule) && quote.status === 'accepted' && nextItem !== null && hasModule('agenda') && allowed('agenda.create');
+  const teethByLine = user?.tenant?.business_type !== 'dental' ? [] : quote.items.map((item) => ({ item, teeth: teethOf(item.zone) })).filter((line) => line.teeth.length > 0);
+  const marked = new Map<string, string[]>();
+  teethByLine.forEach(({ item, teeth }) => teeth.forEach((tooth) => marked.set(tooth, [...(marked.get(tooth) ?? []), item.description])));
 
   return (
     <FormDrawer
       isOpen={Boolean(quote)}
       onClose={onClose}
       title={`${quote.code} · ${quote.title || 'Plan de tratamiento'}`}
-      subtitle={[quote.customer_name, quote.professional_name ? `Atiende: ${quote.professional_name}` : null, quote.branch_name].filter(Boolean).join(' · ')}
+      subtitle={[quote.customer_name, quote.dependent_name, quote.professional_name ? `Atiende: ${quote.professional_name}` : null, quote.branch_name].filter(Boolean).join(' · ')}
       icon={<FileText size={20} />}
     >
       <div className="space-y-5 pb-4">
         <ErrorAlert message={error} />
+
+        {step >= 0 ? (
+          <ol className="flex items-start" data-quote-steps aria-label="Pasos del presupuesto">
+            {STEPS.map((label, index) => (
+              <li key={label} className="flex-1 flex flex-col items-center gap-1 relative" aria-current={index === step ? 'step' : undefined}>
+                {index > 0 && <span className={`absolute top-3 right-1/2 w-full h-0.5 ${index <= step ? 'bg-brand-accent' : 'bg-slate-200'}`} />}
+                <span className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${index < step ? 'bg-brand-accent border-brand-accent text-white' : index === step ? 'bg-white border-brand-accent text-brand-ink' : 'bg-white border-slate-200 text-slate-400'}`}>
+                  {index < step ? <Check size={12} /> : index + 1}
+                </span>
+                <span className={`text-[10px] sm:text-[11px] text-center leading-tight ${index === step ? 'font-bold text-brand-ink' : 'text-slate-500'}`}>{label}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" data-quote-steps="closed">Este presupuesto quedó {quote.status_label.toLowerCase()}: ya no avanza.</p>
+        )}
 
         <section className="rounded-2xl border border-slate-200 p-4 space-y-3 bg-slate-50/60">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -232,12 +278,41 @@ export default function QuoteDetailDrawer({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => changeStatus('rejected', 'Presupuesto marcado como rechazado.')}
+                    onClick={() => setRejecting('')}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50"
                   >
                     <XCircle size={13} /> Rechazar
                   </button>
+                  {rejecting !== null && (
+                    <div className="w-full space-y-2" data-reject-reason>
+                      <input
+                        autoFocus
+                        maxLength={255}
+                        aria-label="Motivo del rechazo"
+                        placeholder="¿Por qué lo rechaza? Por ejemplo: le pareció caro"
+                        className={inputClass}
+                        value={rejecting}
+                        onChange={(e) => setRejecting(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <button type="button" disabled={busy || !rejecting.trim()} onClick={() => changeStatus('rejected', 'Presupuesto marcado como rechazado.', rejecting.trim())} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-50">Confirmar rechazo</button>
+                        <button type="button" onClick={() => setRejecting(null)} className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-50">Volver</button>
+                      </div>
+                    </div>
+                  )}
                 </>
+              )}
+
+              {canSchedule && (
+                <button
+                  type="button"
+                  data-action="schedule-next-session"
+                  disabled={busy}
+                  onClick={() => onSchedule!(quote, nextItem!.item_type === 'service' ? nextItem!.reference_id : null)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg border border-brand-soft bg-white text-brand-ink hover:bg-brand-soft/10 transition-colors disabled:opacity-50"
+                >
+                  <CalendarPlus size={14} className="text-brand-accent" /> Agendar la siguiente sesión
+                </button>
               )}
 
               {can.charge && quote.status === 'accepted' && (
@@ -390,6 +465,39 @@ export default function QuoteDetailDrawer({
             ))}
           </div>
         </section>
+
+        {teethByLine.length > 0 && (
+          <section className="rounded-2xl border border-slate-200 p-4 space-y-3" data-quote-teeth>
+            <span className={sectionTitle}>Piezas del tratamiento</span>
+            <div>
+              <div className="max-w-md mx-auto space-y-2">
+                {TEETH_ROWS.map((row, rowIndex) => (
+                  <div key={rowIndex} className="flex gap-0.5 sm:gap-1">
+                    {row.map((tooth, index) => {
+                      const lines = marked.get(tooth);
+                      return (
+                        <span
+                          key={tooth}
+                          data-tooth={tooth}
+                          data-marked={lines ? 'yes' : 'no'}
+                          title={lines ? `Pieza ${tooth}: ${lines.join(', ')}` : `Pieza ${tooth}`}
+                          className={`flex-1 min-w-0 h-8 rounded-md border text-[9px] sm:text-[10px] font-bold flex items-center justify-center ${index === 8 ? 'ml-1.5' : ''} ${lines ? 'bg-brand text-white border-brand' : 'bg-white border-slate-200 text-slate-400'}`}
+                        >
+                          {tooth}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <ul className="space-y-1 text-xs text-slate-600">
+              {teethByLine.map(({ item, teeth }) => (
+                <li key={item.id}><span className="font-semibold text-slate-800">{item.description}:</span> piezas {teeth.join(', ')}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {quote.installments.length > 0 && (
           <section className="rounded-2xl border border-slate-200 overflow-hidden">

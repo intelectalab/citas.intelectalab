@@ -46,7 +46,7 @@ class CulqiPaymentProvider implements PaymentProvider
         return ['external_id' => $link->external_id ?? null, 'checkout_url' => \App\Support\PaymentLinks::url($link->token)];
     }
 
-    public function charge(object $link, string $token, ?string $email): array
+    public function charge(object $link, string $token, ?string $email, ?array $authentication = null, ?string $device = null): array
     {
         return $this->client()->charge(
             (float) $link->amount,
@@ -55,6 +55,8 @@ class CulqiPaymentProvider implements PaymentProvider
             $token,
             (string) ($link->description ?? 'Pago'),
             ['link' => (string) $link->token],
+            $authentication,
+            $device,
         );
     }
 

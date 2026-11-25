@@ -1,6 +1,7 @@
 'use client';
 
 import { Lightbulb, ListChecks, MousePointerClick, SlidersHorizontal } from 'lucide-react';
+import RichTextView from '@/app/components/common/RichTextView';
 import type { HelpScreen } from '../useHelp';
 
 const blockTitle = 'flex items-center gap-2 text-sm font-bold text-brand-ink';
@@ -18,10 +19,14 @@ export default function HelpTopicView({ screen, wide = false }: { screen: HelpSc
 
   return (
     <div className="space-y-6" data-help-topic={screen.href}>
-      <div className="p-4 rounded-2xl bg-brand-soft/15 border border-brand-soft/40">
-        <p className={blockTitle}><Lightbulb size={16} className="text-brand-accent" /> ¿Para qué sirve {screen.name}?</p>
-        <p className="mt-1.5 text-sm text-slate-700 leading-relaxed">{topic.summary}</p>
-      </div>
+      {topic.article ? (
+        <RichTextView body={topic.article} className="text-sm text-slate-700 leading-relaxed" data-help-article />
+      ) : (
+        <div className="p-4 rounded-2xl bg-brand-soft/15 border border-brand-soft/40">
+          <p className={blockTitle}><Lightbulb size={16} className="text-brand-accent" /> ¿Para qué sirve {screen.name}?</p>
+          <p className="mt-1.5 text-sm text-slate-700 leading-relaxed">{topic.summary}</p>
+        </div>
+      )}
 
       {topic.points.length > 0 && (
         <section className="space-y-3" data-help-block="points">

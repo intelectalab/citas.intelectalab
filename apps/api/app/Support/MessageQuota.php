@@ -19,7 +19,7 @@ class MessageQuota
 
     public static function limit(Tenant $tenant, string $kind): ?int
     {
-        $value = $tenant->activeSubscription?->plan?->limits[self::KINDS[$kind]['limit']] ?? null;
+        $value = $tenant->planLimits()[self::KINDS[$kind]['limit']] ?? null;
 
         return is_numeric($value) && (int) $value >= 0 ? (int) $value : null;
     }

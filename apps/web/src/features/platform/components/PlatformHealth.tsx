@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, HeartPulse, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react';
+import { AlertTriangle, HeartPulse, ShieldAlert, ShieldCheck, ShieldQuestion, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/axios';
 import Badge from '@/app/components/common/Badge';
 import { ErrorAlert } from '@/app/components/common/Alert';
@@ -25,11 +25,16 @@ interface Row {
   appointments: number;
   customers: number;
   failed: number;
+  whatsapp_percent?: number | null;
+  upsell?: boolean;
+  top?: { key: string; label: string; used: number; limit: number | null; percent: number | null } | null;
 }
 
 interface Payload {
   summary: { high: number; medium: number; low: number; alerts: number };
   alerts: Row[];
+  upsell?: Row[];
+  whatsapp_alert?: number;
   rows: Row[];
   signals: { key: string; label: string }[];
   idle_days: number;
@@ -53,6 +58,7 @@ const SIGNAL_TONE: Record<string, string> = {
   low_use: 'bg-slate-100 text-slate-700',
   failed: 'bg-slate-100 text-slate-700',
   near: 'bg-sky-50 text-sky-700',
+  whatsapp: 'bg-sky-50 text-sky-700',
 };
 
 export default function PlatformHealth() {
@@ -111,6 +117,23 @@ export default function PlatformHealth() {
             ))}
             . Aún no registran clientes ni citas: conviene escribirles para ayudarles a empezar.
           </p>
+        </section>
+      )}
+
+      {data && (data.upsell ?? []).length > 0 && (
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 space-y-2" data-health-upsell>
+          <p className="flex items-center gap-2 text-sm font-bold text-sky-900"><TrendingUp size={16} /> Para vender más</p>
+          <p className="text-xs text-sky-900">Empresas al día que ya usan casi todo su plan (80 % de un tope o más de {data.whatsapp_alert ?? 85} % de WhatsApp). Es buen momento para ofrecerles un plan mayor o un complemento.</p>
+          <ul className="flex flex-wrap gap-2">
+            {(data.upsell ?? []).map((r) => (
+              <li key={r.id}>
+                <Link href={`/admin/tenants/${r.id}`} className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-sky-200 text-xs font-semibold text-brand-ink hover:border-brand-accent">
+                  {r.name}
+                  <span className="text-slate-500 font-normal">{[r.top?.percent ? `${r.top.label} ${r.top.percent} %` : null, r.whatsapp_percent && r.whatsapp_percent >= (data.whatsapp_alert ?? 85) ? `WhatsApp ${r.whatsapp_percent} %` : null].filter(Boolean).join(' · ')}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

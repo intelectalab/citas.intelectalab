@@ -4,13 +4,21 @@ import Badge from '@/app/components/common/Badge';
 import { ErrorAlert } from '@/app/components/common/Alert';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeftRight, CheckCircle2, ClipboardCheck, Edit2, Eye, Lock, Plus, Unlock, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CheckCircle2, ClipboardCheck, Edit2, Eye, Globe, Lock, Plus, Unlock, Wallet } from 'lucide-react';
 import { DataTable, type Column, type ExportColumn, type FilterConfig, type MetricCardItem } from '@/app/components/ui/table/DataTable';
 import styles from '@/app/components/ui/table/DataTable.module.css';
 import { api } from '@/lib/axios';
 import { apiError } from '@/features/appointments/appointments';
 import { money, momentOf, type CashBoardData, type CashRegister, type CashSession } from '@/features/sales/sales';
 import { CashMovementPanel, CashSessionPanel, CloseCashPanel, OpenCashPanel, RegisterPanel } from './CashPanels';
+import OnlineCashPanel from './OnlineCashPanel';
+
+const staleShift = (openedAt: string | null | undefined) => {
+  if (!openedAt) return false;
+  const opened = new Date(openedAt);
+  const today = new Date();
+  return new Date(opened.getFullYear(), opened.getMonth(), opened.getDate()) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+};
 
 const ghostButton = 'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors';
 const iconButton = 'p-1.5 text-slate-400 rounded-lg hover:text-brand-ink hover:bg-slate-100 transition-colors';
@@ -30,6 +38,7 @@ export default function CashBoard() {
   const [viewing, setViewing] = useState<string | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [editing, setEditing] = useState<CashRegister | null>(null);
+  const [onlineBranch, setOnlineBranch] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(() => {
     api.get('/cash')
@@ -259,6 +268,11 @@ export default function CashBoard() {
                     <span className="block text-[11px] font-bold text-brand-soft uppercase tracking-wider">Debe haber en efectivo</span>
                     <span className="block text-3xl font-black tabular-nums" data-expected>{money(session.expected_amount, session?.currency)}</span>
                     <span className="block text-xs text-slate-300 mt-1">Abrió {session.opened_by ?? '—'} · {momentOf(session.opened_at)}</span>
+                    {staleShift(session.opened_at) && (
+                      <span data-stale-shift className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-300/20 px-2.5 py-1.5 text-xs font-semibold text-amber-100">
+                        <AlertTriangle size={14} className="shrink-0 mt-px" /> Este turno es de un día anterior. Ciérralo con el conteo y abre uno nuevo para hoy.
+                      </span>
+                    )}
                   </div>
 
                   <dl className="grid grid-cols-3 gap-2 text-xs">
@@ -297,6 +311,36 @@ export default function CashBoard() {
             </article>
           );
         })}
+        {(data?.online?.branches ?? []).map((online) => (
+          <article
+            key={`online-${online.branch_id}`}
+            data-online-register={online.branch_name}
+            className="rounded-2xl rounded-tr-[2rem] border border-slate-200/80 bg-white p-5 flex flex-col gap-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="p-2.5 rounded-xl shrink-0 bg-sky-50 text-sky-700"><Globe size={18} /></span>
+                <div className="min-w-0">
+                  <span className="block text-sm font-bold truncate text-brand-ink">En línea</span>
+                  <Link href={`/branches/${online.branch_id}`} className="block text-xs truncate text-slate-500 hover:text-brand-accent hover:underline underline-offset-2">
+                    {online.branch_name}
+                  </Link>
+                </div>
+              </div>
+              <Badge tone="bg-sky-50 text-sky-700" bold>Siempre abierta</Badge>
+            </div>
+            <div>
+              <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">Cobrado hoy en línea</span>
+              <span className="block text-3xl font-black tabular-nums text-brand-ink" data-online-net>{money(online.net, data?.online?.currency)}</span>
+              <span className="block text-xs text-slate-500 mt-1">
+                {online.count} {online.count === 1 ? 'pago' : 'pagos'} con link o adelanto{online.refunded ? ` · ${money(online.refunded, data?.online?.currency)} devueltos` : ''}. No se suma al efectivo de los turnos.
+              </span>
+            </div>
+            <button type="button" data-action="view-online" onClick={() => setOnlineBranch({ id: online.branch_id, name: online.branch_name })} className={`${ghostButton} self-start mt-auto`}>
+              <Eye size={15} /> Ver pagos
+            </button>
+          </article>
+        ))}
       </div>
 
       {data && registers.length === 0 && (
@@ -340,6 +384,7 @@ export default function CashBoard() {
       <CloseCashPanel session={closing?.session ?? null} registerName={closing?.name} tolerance={data?.tolerance ?? 0} onClose={() => setClosing(null)} onSaved={load} />
       <RegisterPanel isOpen={registerOpen} register={editing} branches={data?.branches ?? []} onClose={() => setRegisterOpen(false)} onSaved={load} />
       <CashSessionPanel sessionId={viewing} onClose={() => setViewing(null)} onChanged={load} />
+      <OnlineCashPanel branch={onlineBranch} date={data?.online?.date ?? ''} onClose={() => setOnlineBranch(null)} />
     </div>
   );
 }

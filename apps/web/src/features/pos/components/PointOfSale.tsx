@@ -4,6 +4,8 @@ import { ErrorAlert, SuccessAlert } from '@/app/components/common/Alert';
 import { inputClass, labelClass } from '@/app/components/ui/forms/styles';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import CustomerSummaryChip from './CustomerSummaryChip';
+import DiscountApprovalDrawer from './DiscountApprovalDrawer';
 import { BadgeCheck, Boxes, CalendarClock, CalendarPlus, Gift, Minus, Package, Plus, Receipt, Search, ShoppingCart, Sparkles, TicketPercent, Trash2, X } from 'lucide-react';
 import SchedulePanel, { type ScheduleSource } from '@/features/packages/components/SchedulePanel';
 import { sessionsLabel, type ScheduleDetails } from '@/features/packages/packages';
@@ -36,7 +38,14 @@ const nextVisitUrl = (visit: NextVisit) => `/agenda?${new URLSearchParams({
   sede: visit.branch_id,
   ...(visit.professional_id ? { profesional: visit.professional_id } : {}),
   ...(visit.dependent_id ? { dependiente: visit.dependent_id } : {}),
+  ...(visit.suggested_date ? { fecha: visit.suggested_date } : {}),
 }).toString()}`;
+
+const suggestedText = (visit: NextVisit) => {
+  if (!visit.suggested_date || !visit.suggested_days) return '';
+  const day = new Date(`${visit.suggested_date}T12:00:00`).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+  return ` Lo ideal es que vuelva el ${day} (en ${visit.suggested_days} días).`;
+};
 
 type PendingEntry = { kind: 'sale'; sale: PendingSale } | { kind: 'appointment'; appointment: PendingAppointment };
 
@@ -46,10 +55,24 @@ const tileClass = 'rounded-2xl border border-slate-200/80 bg-white p-4 flex flex
 const addButton = 'mt-auto self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-brand text-white hover:bg-brand-hover transition-colors disabled:bg-slate-100 disabled:text-slate-400';
 const stepButton = 'p-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40';
 
+const cartOwner = (): string => {
+  try {
+    return String(JSON.parse(localStorage.getItem('user') ?? 'null')?.id ?? '');
+  } catch {
+    return '';
+  }
+};
+
 const readStored = (): Cart | null => {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw ? { ...emptyCart(), ...JSON.parse(raw) } : null;
+    if (!raw) return null;
+    const { owner, ...saved } = JSON.parse(raw);
+    if (owner !== cartOwner()) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return { ...emptyCart(), ...saved };
   } catch {
     return null;
   }
@@ -57,7 +80,7 @@ const readStored = (): Cart | null => {
 
 const store = (cart: Cart) => {
   try {
-    if (cart.items.length || cart.saleId) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+    if (cart.items.length || cart.saleId) sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...cart, owner: cartOwner() }));
     else sessionStorage.removeItem(STORAGE_KEY);
   } catch {
   }
@@ -65,7 +88,7 @@ const store = (cart: Cart) => {
 
 const fullName = (customer: PickedCustomer | null) => (customer ? `${customer.first_name} ${customer.last_name}` : '');
 
-const toLine = ({ type, id, quantity, professional_id, details, gift, no_membership }: CartItem) => ({
+const toLine = ({ type, id, quantity, professional_id, details, gift, no_membership, discount_percent }: CartItem) => ({
   type,
   id,
   quantity,
@@ -73,7 +96,10 @@ const toLine = ({ type, id, quantity, professional_id, details, gift, no_members
   ...(type === 'package' && details ? { details } : {}),
   ...(type === 'gift_card' && gift ? { details: gift } : {}),
   ...(no_membership ? { no_membership: true } : {}),
+  ...(discount_percent && discount_percent > 0 ? { discount_percent } : {}),
 });
+
+const LINE_DISCOUNT_TYPES = ['service', 'product', 'appointment'];
 
 export default function PointOfSale() {
   const { hasModule } = useAuth();
@@ -100,6 +126,9 @@ export default function PointOfSale() {
   const [giftForm, setGiftForm] = useState({ amount: '', name: '', email: '' });
   const [giftError, setGiftError] = useState('');
   const [nextVisit, setNextVisit] = useState<NextVisit | null>(null);
+  const [approval, setApproval] = useState<{ token: string; name: string } | null>(null);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [limitError, setLimitError] = useState('');
   const restored = useRef(false);
   const wantedAppointment = useRef<string | null>(null);
   const wantedRenewal = useRef<string | null>(null);
@@ -115,16 +144,23 @@ export default function PointOfSale() {
       .catch((err) => setError(apiError(err, 'No se pudo cargar el punto de venta.')));
   }, []);
 
-  const loadSale = useCallback(async (saleId: string) => {
+  const loadSale = useCallback(async (saleId: string, onlyOpen = false) => {
     try {
       const res = await api.get(`/pos/sales/${saleId}`);
       const data: LoadedCart = res.data;
+      if (onlyOpen && ['paid', 'void', 'refunded'].includes(data.status)) {
+        setCart(emptyCart());
+        return;
+      }
       setCart({
         saleId: data.sale_id,
         code: data.code,
         editBlocked: data.edit_blocked,
         customer: data.customer,
         coupon: data.coupon_code ?? '',
+        discount: data.manual_discount ? String(data.manual_discount) : '',
+        discountReason: data.discount_reason ?? '',
+        tip: data.tip ? String(data.tip) : '',
         items: data.items.map((item) => (item.type === 'gift_card'
           ? { ...item, label: 'Gift card', unit_price: Number(item.details?.amount ?? 0), details: null, gift: { amount: Number(item.details?.amount ?? 0), recipient_name: item.details?.recipient_name ?? null, recipient_email: item.details?.recipient_email ?? null } }
           : { ...item, label: '', unit_price: 0, details: item.details ?? null })),
@@ -169,8 +205,9 @@ export default function PointOfSale() {
       return;
     }
 
-    if (saved) setCart(saved);
     load(undefined);
+    if (saved?.saleId) loadSale(saved.saleId, true).catch(() => setCart(emptyCart()));
+    else if (saved) setCart(saved);
   }, [load, loadSale]);
 
   useEffect(() => { store(cart); }, [cart]);
@@ -221,12 +258,16 @@ export default function PointOfSale() {
         sale_id: cart.saleId,
         customer_id: cart.customer?.id ?? null,
         coupon_code: cart.coupon || null,
+        manual_discount: Number(cart.discount || 0) || null,
+        tip: Number(cart.tip || 0) || null,
+        discount_approval: approval?.token ?? null,
         items: cart.items.map(toLine),
       })
         .then((res) => {
           const data: CartPreview = res.data;
           setPreview(data);
           setPreviewError('');
+          setLimitError('');
           if (!cart.customer && data.customer) setCart((current) => ({ ...current, customer: data.customer }));
         })
         .catch((err) => {
@@ -236,13 +277,14 @@ export default function PointOfSale() {
             setCart((current) => ({ ...current, coupon: '' }));
             return;
           }
+          setLimitError(errors.manual_discount && /tope|autorizaci/i.test(String(errors.manual_discount[0])) ? String(errors.manual_discount[0]) : '');
           setPreviewError(apiError(err, 'No se pudo calcular el total.'));
         })
         .finally(() => setPreviewing(false));
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [branchId, cart.items, cart.customer, cart.coupon, cart.saleId]);
+  }, [branchId, cart.items, cart.customer, cart.coupon, cart.saleId, cart.discount, cart.tip, approval]);
 
   const can = board?.can;
   const currency = board?.currency;
@@ -290,13 +332,15 @@ export default function PointOfSale() {
     setCouponError('');
     setNotice(message);
     setNextVisit(null);
+    setApproval(null);
+    setLimitError('');
   };
 
   const addGiftCard = () => {
     const amount = Number(giftForm.amount || 0);
     const email = giftForm.email.trim();
-    if (amount < 1) {
-      setGiftError('Escribe el monto de la gift card (desde 1).');
+    if (amount < 10) {
+      setGiftError(`La gift card se vende desde ${money(10, board?.currency)}.`);
       return;
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -407,6 +451,10 @@ export default function PointOfSale() {
     branch_id: branchId,
     customer_id: cart.customer?.id ?? null,
     coupon_code: cart.coupon || null,
+    manual_discount: Number(cart.discount || 0) || null,
+    discount_reason: cart.discountReason.trim() || null,
+    tip: Number(cart.tip || 0) || null,
+    discount_approval: approval?.token ?? null,
     items: cart.items.map(toLine),
   });
 
@@ -488,7 +536,9 @@ export default function PointOfSale() {
     return { item, index, line };
   });
   const totals = preview?.totals;
-  const membershipSaving = (preview?.lines ?? []).reduce((sum, l) => sum + (l.discount ?? 0), 0);
+  const membershipSaving = (preview?.lines ?? []).filter((l) => !l.discount_percent).reduce((sum, l) => sum + (l.discount ?? 0), 0);
+  const lineSaving = (preview?.lines ?? []).filter((l) => l.discount_percent).reduce((sum, l) => sum + (l.discount ?? 0), 0);
+  const discountsOn = Boolean(board?.discounts?.ready);
   const coveredFree = Boolean(totals && totals.total <= 0 && membershipSaving > 0);
   const lineCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
   const canSave = cart.saleId ? Boolean(can?.edit) : Boolean(can?.create);
@@ -539,7 +589,7 @@ export default function PointOfSale() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-soft bg-brand-soft/10 px-4 py-3" data-next-visit>
           <span className="flex items-center gap-2 text-sm text-brand-ink">
             <CalendarPlus size={16} className="text-brand-accent shrink-0" />
-            <span>¿Quiere volver? Agenda su próxima cita de <strong>{nextVisit.service_name}</strong> sin volver a buscar sus datos.</span>
+            <span>¿Quiere volver? Agenda su próxima cita de <strong>{nextVisit.service_name}</strong> sin volver a buscar sus datos.{suggestedText(nextVisit)}</span>
           </span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setNextVisit(null)} className="px-3 py-2 text-sm font-medium text-slate-600 rounded-lg hover:bg-white transition-colors">Ahora no</button>
@@ -804,7 +854,19 @@ export default function PointOfSale() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass} htmlFor="gift-amount">Monto *</label>
-                  <input id="gift-amount" inputMode="decimal" className={inputClass} placeholder="Ej. 100" value={giftForm.amount} onChange={(e) => { setGiftForm({ ...giftForm, amount: e.target.value.replace(/[^\d.]/g, '').slice(0, 9) }); setGiftError(''); }} />
+                  <input id="gift-amount" inputMode="decimal" className={inputClass} placeholder="Desde 10" value={giftForm.amount} onChange={(e) => { setGiftForm({ ...giftForm, amount: e.target.value.replace(/[^\d.]/g, '').slice(0, 9) }); setGiftError(''); }} />
+                  <div className="flex flex-wrap gap-1.5 mt-2" data-gift-quick>
+                    {[50, 100, 150, 200, 300].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => { setGiftForm({ ...giftForm, amount: String(value) }); setGiftError(''); }}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${Number(giftForm.amount) === value ? 'border-brand bg-brand text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        {money(value, board?.currency)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="gift-name">Para quién (opcional)</label>
@@ -861,6 +923,7 @@ export default function PointOfSale() {
             lockedHint={hasAppointment ? 'Es el cliente de la cita' : undefined}
           />
           {!cart.customer && <p className="-mt-3 text-xs text-slate-400">Opcional: sin cliente, la boleta sale a nombre de &quot;Cliente varios&quot;.</p>}
+          <CustomerSummaryChip customerId={cart.customer?.id} />
 
           {preview?.membership && cart.customer && (
             <div className="-mt-2 rounded-xl border border-brand-soft bg-brand-soft/10 px-3.5 py-2.5 text-xs text-brand-ink space-y-0.5" data-cart-membership>
@@ -948,6 +1011,24 @@ export default function PointOfSale() {
                       />
                     </div>
                   )}
+                  {discountsOn && LINE_DISCOUNT_TYPES.includes(item.type) && (!cart.editBlocked || (item.discount_percent ?? 0) > 0) && (
+                    <label className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600" data-line-discount>
+                      <span>Desc.</span>
+                      <input
+                        inputMode="decimal"
+                        aria-label="Descuento de la línea en porcentaje"
+                        placeholder="0"
+                        disabled={!!cart.editBlocked}
+                        className="w-10 bg-transparent text-right font-semibold tabular-nums outline-none"
+                        value={item.discount_percent ? String(item.discount_percent) : ''}
+                        onChange={(e) => {
+                          const value = Math.min(100, Number(e.target.value.replace(/[^\d.]/g, '').slice(0, 5) || 0));
+                          changeItem(index, { discount_percent: value > 0 ? value : null });
+                        }}
+                      />
+                      <span>%</span>
+                    </label>
+                  )}
                   {!cart.editBlocked && (
                     <button type="button" title="Quitar del carrito" data-remove-line onClick={() => removeItem(index)} className="ml-auto p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                       <Trash2 size={15} />
@@ -994,19 +1075,89 @@ export default function PointOfSale() {
             </div>
           )}
 
+          {limitError && !approval && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900" data-discount-over>
+              <span>El descuento pasa de tu tope.</span>
+              <button type="button" data-ask-approval onClick={() => setApprovalOpen(true)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-brand text-white hover:bg-brand-hover">Pedir autorización</button>
+            </div>
+          )}
+          {approval && (
+            <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2" data-discount-approved>Descuento autorizado por {approval.name}.</p>
+          )}
+
+          {cart.items.length > 0 && !cart.editBlocked && board?.discounts && (board.discounts.can_exceed || board.discounts.max_discount > 0 || board.discounts.ready) && (
+            <div data-cart-discount>
+              <label className={labelClass} htmlFor="pos-discount">Descuento a mano</label>
+              {!board.discounts.ready ? (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Falta actualizar la base de datos para dar descuentos a mano (php artisan migrate).</p>
+              ) : (
+                <div className="grid grid-cols-[8rem_1fr] gap-2">
+                  <input
+                    id="pos-discount"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    className={`${inputClass} tabular-nums`}
+                    value={cart.discount}
+                    onChange={(e) => setCart((current) => ({ ...current, discount: e.target.value }))}
+                  />
+                  <input
+                    maxLength={255}
+                    placeholder="Motivo, por ejemplo: cliente frecuente"
+                    className={inputClass}
+                    value={cart.discountReason}
+                    onChange={(e) => setCart((current) => ({ ...current, discountReason: e.target.value }))}
+                  />
+                </div>
+              )}
+              {board.discounts.ready && !board.discounts.can_exceed && (
+                <p className="text-xs text-slate-500 mt-1.5" data-discount-limit>{board.discounts.max_discount > 0 ? `Puedes descontar hasta el ${board.discounts.max_discount} % de la venta, sumando los descuentos por línea.` : 'Tu empresa no permite descuentos sin autorización.'} Para más, quien tiene el permiso «Descuento alto» lo autoriza con su clave.</p>
+              )}
+            </div>
+          )}
+
+          {cart.items.length > 0 && !cart.editBlocked && board?.discounts?.tips_enabled && (
+            <div data-cart-tip>
+              <label className={labelClass} htmlFor="pos-tip">Propina</label>
+              <input
+                id="pos-tip"
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
+                className={`${inputClass} tabular-nums`}
+                value={cart.tip}
+                onChange={(e) => setCart((current) => ({ ...current, tip: e.target.value }))}
+              />
+              <p className="text-xs text-slate-500 mt-1.5">Se suma al total que paga el cliente. No lleva IGV ni va en la boleta.</p>
+            </div>
+          )}
+
           {cart.items.length > 0 && (
             <div className="space-y-1.5 text-sm border-t border-dashed border-slate-200 pt-4" data-cart-totals>
               <div className="flex justify-between text-slate-500"><span>{lineCount} {lineCount === 1 ? 'ítem' : 'ítems'}</span><span className="tabular-nums">{totals ? money(totals.subtotal, totals.currency) : '—'}</span></div>
+              {lineSaving > 0 && (
+                <div className="flex justify-between text-emerald-700" data-line-saving><span>Ya descontado por línea</span><span className="tabular-nums">{money(lineSaving, totals?.currency ?? currency)}</span></div>
+              )}
               {membershipSaving > 0 && (
                 <div className="flex justify-between text-emerald-700" data-membership-saving><span>Ya descontado por membresía</span><span className="tabular-nums">{money(membershipSaving, totals?.currency ?? currency)}</span></div>
               )}
-              {totals && totals.discount > 0 && (
-                <div className="flex justify-between text-emerald-700"><span>Cupón {cart.coupon}</span><span className="tabular-nums">− {money(totals.discount, totals.currency)}</span></div>
+              {totals && totals.discount - (totals.manual_discount ?? 0) > 0.001 && (
+                <div className="flex justify-between text-emerald-700"><span>Cupón {cart.coupon}</span><span className="tabular-nums">− {money(totals.discount - (totals.manual_discount ?? 0), totals.currency)}</span></div>
+              )}
+              {totals && (totals.manual_discount ?? 0) > 0 && (
+                <div className="flex justify-between text-emerald-700" data-manual-discount><span>Descuento a mano</span><span className="tabular-nums">− {money(totals.manual_discount ?? 0, totals.currency)}</span></div>
               )}
               {totals && (
                 <>
-                  <div className="flex justify-between text-slate-500"><span>Op. gravada</span><span className="tabular-nums">{money(totals.total - totals.tax, totals.currency)}</span></div>
+                  <div className="flex justify-between text-slate-500"><span>Op. gravada</span><span className="tabular-nums">{money(totals.total - (totals.tip ?? 0) - totals.tax, totals.currency)}</span></div>
                   <div className="flex justify-between text-slate-500"><span>IGV {totals.tax_rate}%{totals.prices_include_tax ? ' (incluido en el precio)' : ''}</span><span className="tabular-nums">{money(totals.tax, totals.currency)}</span></div>
+                  {(totals.tip ?? 0) > 0 && (
+                    <div className="flex justify-between text-slate-500" data-cart-tip-total><span>Propina</span><span className="tabular-nums">{money(totals.tip ?? 0, totals.currency)}</span></div>
+                  )}
                 </>
               )}
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
@@ -1070,6 +1221,13 @@ export default function PointOfSale() {
         cancelText="No, dejarlo así"
         onConfirm={() => { const run = pendingSwitch?.run; setPendingSwitch(null); run?.(); }}
         onClose={() => setPendingSwitch(null)}
+      />
+
+      <DiscountApprovalDrawer
+        isOpen={approvalOpen}
+        reason={limitError}
+        onClose={() => setApprovalOpen(false)}
+        onApproved={(granted) => { setApproval({ token: granted.token, name: granted.name }); setLimitError(''); }}
       />
     </div>
   );

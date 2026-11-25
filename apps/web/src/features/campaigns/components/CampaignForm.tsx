@@ -15,6 +15,7 @@ import { CalendarClock, Loader2, Mail, Megaphone, MessageCircle, Plus, Send, Use
 import { api } from '@/lib/axios';
 import { apiError, todayISO } from '@/features/appointments/appointments';
 import MessageFields from '@/features/messages/components/MessageFields';
+import EmailPreview from '@/features/messages/components/EmailPreview';
 import { CHANNEL_LABELS, COUPON_TOKEN, EMAIL_NOTICE, EMAIL_REASON_LABELS, WA_REASON_LABELS, channelsOf, copyName, type Audience, type Campaign, type CampaignChannel, type CampaignOptions, type QuotaState } from '../campaigns';
 
 interface CampaignFormProps {
@@ -156,7 +157,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
     return () => window.clearTimeout(timer);
   }, [isOpen, group, serviceId, branchId, tagId, segmentReady, onlyBranch, channel]);
 
-  const send = async () => {
+  const send = async (draft = false) => {
     setConfirmBig(false);
     try {
       setSaving(true);
@@ -175,8 +176,8 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
         wa_language: withWhatsApp ? waLanguage.trim() || 'es' : null,
         wa_params: withWhatsApp ? waParams : null,
         coupon_id: couponId || null,
-        send: when === 'now' ? 'now' : 'scheduled',
-        scheduled_at: when === 'later' ? `${date}T${time}` : null,
+        send: draft ? 'draft' : when === 'now' ? 'now' : 'scheduled',
+        scheduled_at: when === 'later' && date && time ? `${date}T${time}` : null,
       };
       const res = editing ? await api.put(`/campaigns/${editing.id}`, payload) : await api.post('/campaigns', payload);
       const campaign: Campaign = res.data;
@@ -185,7 +186,9 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
       const whatsapps = counts.channels?.whatsapp?.eligible ?? 0;
       const parts = [withEmail ? plural(emails, 'correo', 'correos') : '', withWhatsApp ? plural(whatsapps, 'WhatsApp', 'WhatsApp') : ''].filter(Boolean).join(' y ');
       const simulated = (withEmail && options?.email.state === 'simulated') || (withWhatsApp && options?.whatsapp?.state === 'simulated');
-      const notice = campaign.status === 'scheduled'
+      const notice = campaign.status === 'draft'
+        ? 'Borrador guardado. Está en la lista de campañas para terminarlo y enviarlo cuando quieras.'
+        : campaign.status === 'scheduled'
         ? `Campaña programada para el ${new Date(campaign.scheduled_at!).toLocaleString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false })}. Puedes cambiarla o cancelarla mientras no salga.`
         : campaign.status === 'blocked'
           ? `La campaña no salió: ${campaign.blocked ?? 'se pasa del tope de tu plan.'}`
@@ -209,6 +212,10 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
     }
     send();
   };
+
+  const fillSample = (text: string) => text
+    .split('[Nombre]').join(audience?.sample?.first_name ?? '[Nombre]')
+    .split(COUPON_TOKEN).join(options?.coupons.find((c) => c.id === couponId)?.code ?? COUPON_TOKEN);
 
   const formId = 'campaign-form';
   const coupon = options?.coupons.find((c) => c.id === couponId) ?? null;
@@ -397,6 +404,14 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
               hint="Cada dato se cambia por el de cada cliente. Al final de cada correo se agrega solo un enlace para dejar de recibir promociones." />
           )}
 
+          {withEmail && body.trim() && (
+            <EmailPreview
+              subject={fillSample(subject)}
+              body={fillSample(body)}
+              title={audience?.sample ? `Así le llega a ${audience.sample.name}, del grupo elegido` : 'Así le llega (con datos de ejemplo)'}
+            />
+          )}
+
           {shortage && !laterMonth && (
             <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2" data-quota-shortage>
               {quotaText(shortage)} La campaña no sale: elige un grupo más chico, espera al próximo mes o cambia de plan.
@@ -442,6 +457,9 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
           <Button type="button" onClick={onClose} variant="secondary">Cancelar</Button>
+          {(!editing || editing.status === 'draft') && (
+            <Button type="button" data-save-draft variant="secondary" disabled={saving || !name.trim() || !segmentReady} onClick={() => send(true)}>Guardar borrador</Button>
+          )}
           <Button type="submit" form={formId} data-submit disabled={saving || !ready} variant="primary">
             {saving ? 'Guardando...' : editing ? (when === 'now' ? 'Enviar ahora' : 'Guardar cambios') : when === 'later' ? 'Programar campaña' : 'Enviar ahora'}
           </Button>
@@ -454,7 +472,7 @@ export default function CampaignForm({ isOpen, onClose, options, editing = null,
         message={`Es un envío grande. Algunos servicios de correo limitan cuántos mensajes salen por día (Gmail, unos 500): si tu correo llega a ese límite, el resto quedará con error y podrás reintentarlo después. ¿Quieres continuar?`}
         confirmText="Sí, enviar"
         cancelText="Revisar"
-        onConfirm={send}
+        onConfirm={() => send()}
         onClose={() => setConfirmBig(false)}
       />
     </FormDrawer>
