@@ -68,7 +68,7 @@ function portBusy(port) {
 
 function killPort(port, pattern) {
   if (process.platform !== 'win32') {
-    run('sh', ['-c', `lsof -ti tcp:${port} | xargs -r kill -9`], { quiet: true, allowFail: true });
+    run('sh', ['-c', `lsof -ti tcp:${port} -sTCP:LISTEN | xargs -r kill -9`], { quiet: true, allowFail: true });
     return;
   }
 
