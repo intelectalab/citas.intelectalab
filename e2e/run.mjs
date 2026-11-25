@@ -138,7 +138,12 @@ function startServers() {
 
   const webEnv = { ...process.env, NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}/api`, NEXT_PUBLIC_SITE_URL: `http://localhost:${WEB_PORT}`, NEXT_TELEMETRY_DISABLED: '1' };
   const nextBin = join(web, 'node_modules', 'next', 'dist', 'bin', 'next');
-  const webProc = spawn(process.execPath, [nextBin, 'dev', '-p', String(WEB_PORT)], { cwd: web, env: webEnv, detached: true, stdio: 'ignore', windowsHide: true });
+  if (process.env.CI) {
+    console.log('   Compilando la web (una sola vez)...');
+    const build = spawnSync(process.execPath, [nextBin, 'build'], { cwd: web, env: webEnv, stdio: 'inherit' });
+    if (build.status !== 0) throw new Error('La web no se pudo compilar.');
+  }
+  const webProc = spawn(process.execPath, [nextBin, process.env.CI ? 'start' : 'dev', '-p', String(WEB_PORT)], { cwd: web, env: webEnv, detached: true, stdio: 'ignore', windowsHide: true });
   webProc.unref();
 
   writeFileSync(join(cache, 'pids.json'), JSON.stringify({ api: apiProc.pid, web: webProc.pid }));
