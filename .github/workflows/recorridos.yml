@@ -37,7 +37,6 @@ jobs:
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
       E2E_DB: erp_saas_e2e_test
-      E2E_PG_CONTAINER: ${{ job.services.postgres.id }}
       E2E_API_PORT: 8001
       E2E_WEB_PORT: 3005
     steps:
@@ -81,6 +80,8 @@ jobs:
 
       - name: Correr los recorridos
         working-directory: e2e
+        env:
+          E2E_PG_CONTAINER: ${{ job.services.postgres.id }}
         run: node run.mjs
 
       - name: Informe de Playwright
