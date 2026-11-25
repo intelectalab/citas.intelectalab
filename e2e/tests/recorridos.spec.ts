@@ -68,9 +68,9 @@ test('2. Agendar una cita desde la agenda', async ({ page }, info) => {
   await page.getByRole('textbox', { name: 'Buscar cliente' }).fill(who.name);
   await page.getByRole('button', { name: new RegExp(`^${who.name}`) }).click();
   await page.getByRole('combobox', { name: 'Servicio *' }).click();
-  await page.getByRole('option', { name: /^Corte de dama/ }).click();
+  await page.getByRole('option', { name: /(^|› )Corte de dama ·/ }).click();
 
-  const slot = page.locator('form').last().getByRole('button', { name: /^\d{2}:\d{2}$/ }).first();
+  const slot = page.locator('form').last().locator('[data-slots] button[aria-pressed]').first();
   await expect(slot).toBeVisible();
   const time = (await slot.textContent())!.trim();
   await slot.click();
@@ -132,11 +132,11 @@ test('4. Reserva pública desde la página de la empresa', async ({ page }) => {
   await page.getByRole('button', { name: 'Continuar' }).click();
 
   await expect(page.getByRole('heading', { name: '¿Cuándo?' })).toBeVisible();
-  const days = page.getByRole('button', { name: /^(lun|mar|mié|jue|vie|sáb|dom) \d+/ });
+  const days = page.locator('[data-days] button[data-day]:enabled');
   const slot = page.locator('main').getByRole('button', { name: /^\d{2}:\d{2}$/ }).first();
 
   for (let i = 1; i < 7; i++) {
-    const dd = ((await days.nth(i).textContent()) ?? '').match(/\d+/)![0].padStart(2, '0');
+    const dd = ((await days.nth(i).getAttribute('data-day')) ?? '').slice(8, 10);
     const loaded = page.waitForResponse((r) => r.url().includes(`/public/booking/${data.tenant.slug}/availability`) && new RegExp(`date=\\d{4}-\\d{2}-${dd}`).test(r.url()));
     await days.nth(i).click();
     await loaded;

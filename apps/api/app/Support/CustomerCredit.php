@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Appointment;
+use App\Models\Service;
 use App\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -96,7 +97,7 @@ class CustomerCredit
             'sale_id'         => $sale->id,
             'item_type'       => 'deposit',
             'reference_id'    => $appointment->service_id,
-            'description'     => mb_substr('Saldo a favor: adelanto de ' . ($appointment->service?->name ?? 'servicio') . " (cita {$appointment->code}, canceló a tiempo)", 0, 255),
+            'description'     => mb_substr('Saldo a favor: adelanto de ' . ($appointment->service instanceof Service ? $appointment->service->name : 'servicio') . " (cita {$appointment->code}, canceló a tiempo)", 0, 255),
             'quantity'        => 1,
             'unit_price'      => $deposit,
             'discount'        => 0,

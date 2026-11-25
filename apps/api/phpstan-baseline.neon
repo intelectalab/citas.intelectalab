@@ -553,12 +553,6 @@ parameters:
 			path: app/Http/Controllers/Api/BillingController.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:vocabulary\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/Api/BillingController.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:zone\(\)\.$#'
 			identifier: method.notFound
 			count: 1

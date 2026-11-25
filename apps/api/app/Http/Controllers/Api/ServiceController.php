@@ -103,7 +103,7 @@ class ServiceController extends Controller
 
     public static function suggestCode(string $tenantId, ?string $categoryName): string
     {
-        $letters = preg_replace('/[^A-Z]/', '', strtoupper(Str::ascii(explode(' ', trim((string) $categoryName))[0] ?? '')));
+        $letters = preg_replace('/[^A-Z]/', '', strtoupper(Str::ascii(explode(' ', trim((string) $categoryName))[0])));
         $prefix = strlen($letters) >= 2 ? substr($letters, 0, 3) : 'SRV';
         $highest = DB::table('services')->where('tenant_id', $tenantId)->whereNotNull('code')
             ->pluck('code')
